@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+The tab picker now searches displayed tab numbers as exact tokens, fixing a gap
+between the documented behavior and the title/directory-only implementation.
+A numeric query prioritizes the matching tab number while preserving ordinary
+numeric title/path matches; mixed number/metadata queries are supported. Four
+focused matcher tests passed, including tab 3 versus 13, leading-zero rejection,
+metadata combinations and numeric title fallback. Native interaction remains pending.
+
 Tab-picker selection now retains a terminal entity ID instead of a ranked row
 number. Live title/directory changes can reorder results without changing the
 Enter target; drawing, navigation and submission resolve the same identity, with

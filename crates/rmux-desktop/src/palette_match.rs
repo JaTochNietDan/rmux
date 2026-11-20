@@ -27,11 +27,15 @@ pub fn score(title: &str, words: &[&str]) -> Option<(usize, usize, usize)> {
 
 /// Rank tab titles and directories independently for each word. Prefer title
 /// matches of equal quality, without allowing a fuzzy word to cross fields.
-pub fn tab_score(title: &str, directory: &str, words: &[&str]) -> Option<(usize, usize, usize, usize)> {
+pub fn tab_score(number: usize, title: &str, directory: &str, words: &[&str]) -> Option<(usize, usize, usize, usize)> {
     let mut total = (0, 0, 0, 0);
+    let number = number.to_string();
     for word in words {
-        let title_score = score(title, &[*word]).map(|(fuzzy, gaps, start)| (fuzzy, gaps, 0, start));
-        let directory_score = score(directory, &[*word]).map(|(fuzzy, gaps, start)| (fuzzy, gaps, 1, start));
+        // Displayed tab numbers are exact tokens, not fuzzy substrings: 3
+        // should target tab 3, rather than also matching tab 13 or tab 30.
+        if *word == number { continue; }
+        let title_score = score(title, &[*word]).map(|(fuzzy, gaps, start)| (fuzzy, gaps, 1, start));
+        let directory_score = score(directory, &[*word]).map(|(fuzzy, gaps, start)| (fuzzy, gaps, 2, start));
         let best = match (title_score, directory_score) {
             (Some(a), Some(b)) => a.min(b),
             (Some(a), None) | (None, Some(a)) => a,
@@ -50,13 +54,22 @@ mod tests {
     use super::{score, tab_score};
 
     #[test]
+    fn tab_numbers_are_exact_tokens_and_combine_with_metadata() {
+        assert!(tab_score(3, "server", "/work", &["3", "srv"]).is_some());
+        assert!(tab_score(13, "server", "/work", &["3"]).is_none());
+        assert!(tab_score(3, "server", "/work", &["03"]).is_none());
+        assert!(tab_score(3, "server", "/work", &["3"]) < tab_score(1, "server3", "", &["3"]));
+        assert!(tab_score(1, "server3", "", &["3"]).is_some());
+    }
+
+    #[test]
     fn tab_search_combines_fields_without_crossing_them() {
-        assert!(tab_score("build server", "/work/rmux", &["bld", "rmx"]).is_some());
-        assert!(tab_score("alpha", "/beta", &["ab"]).is_none());
-        assert!(tab_score("東京", "/work/café", &["東", "café"]).is_some());
-        assert!(tab_score("rmux", "/other", &["rmux"]) < tab_score("other", "/rmux", &["rmux"]));
-        assert!(tab_score("r m u x", "", &["rmux"]) > tab_score("other", "/rmux", &["rmux"]));
-        assert_eq!(tab_score("anything", "/anywhere", &[]), Some((0, 0, 0, 0)));
+        assert!(tab_score(1, "build server", "/work/rmux", &["bld", "rmx"]).is_some());
+        assert!(tab_score(1, "alpha", "/beta", &["ab"]).is_none());
+        assert!(tab_score(1, "東京", "/work/café", &["東", "café"]).is_some());
+        assert!(tab_score(1, "rmux", "/other", &["rmux"]) < tab_score(1, "other", "/rmux", &["rmux"]));
+        assert!(tab_score(1, "r m u x", "", &["rmux"]) > tab_score(1, "other", "/rmux", &["rmux"]));
+        assert_eq!(tab_score(1, "anything", "/anywhere", &[]), Some((0, 0, 0, 0)));
     }
 
     #[test]

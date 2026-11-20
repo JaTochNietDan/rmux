@@ -758,7 +758,9 @@ change result order. If that terminal no longer matches, the first result become
 the fallback; changing the query starts at the first result.
 Moving focus elsewhere dismisses the picker.
 The picker displays original tab numbers, a matching count and navigation hints.
-Numbers are searchable text; Home/End edit the search field. Page Up/Down moves
+A displayed tab number matches an exact query word: `3` prioritizes tab 3, and
+`3 server` also requires a title or directory match for “server”. Numbered titles
+and paths remain searchable normally. Home/End edit the search field. Page Up/Down moves
 the highlighted choice by eight results without activating it; Enter opens the
 choice and Escape cancels. Empty results cannot activate a terminal. The search
 field uses the shared Unicode composition and editing component.

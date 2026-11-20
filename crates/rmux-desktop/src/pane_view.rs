@@ -105,7 +105,7 @@ impl PaneView {
             let title = self.tab_title(index, cx).to_lowercase();
             let directory = self.terminals[index].read(cx).snapshot_directory.as_ref()
                 .map(|path| path.to_string_lossy().to_lowercase()).unwrap_or_default();
-            palette_match::tab_score(&title, &directory, &words).map(|score| (score, index))
+            palette_match::tab_score(index + 1, &title, &directory, &words).map(|score| (score, index))
         }).collect();
         matches.sort_by_key(|(score, index)| (*score, *index));
         matches.into_iter().map(|(_, index)| index).collect()
