@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Modifier-click hyperlink lookup now uses a nonblocking parser lock. Under output
+pressure it reports a retry message instead of waiting on the UI thread. Existing
+engine URL detection (including fully visible soft-wrapped URLs and OSC 8
+precedence) remains authoritative. The held-parser test verifies prompt return;
+the existing hyperlink tests cover detection and viewport behavior. Native click
+latency and hover feedback remain unverified/incomplete.
+
 Terminals now show a compact out-of-flow Paste pending indicator with a Cancel
 Queued Paste control. Accepted clipboard input requests a repaint; writer
 completion/cancellation wakes the existing update channel after releasing the

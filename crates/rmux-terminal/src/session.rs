@@ -816,7 +816,11 @@ impl Session {
         row: u32,
         displayed_revision: u64,
     ) -> Result<Option<String>> {
-        let mut terminal = self.terminal.lock().unwrap_or_else(|e| e.into_inner());
+        let mut terminal = match self.terminal.try_lock() {
+            Ok(terminal) => terminal,
+            Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) => anyhow::bail!("Terminal is busy; click the link again to retry."),
+        };
         if terminal.revision != displayed_revision {
             return Ok(None);
         }
@@ -1062,6 +1066,7 @@ mod tests {
         started.recv_timeout(std::time::Duration::from_secs(2))?;
         let started_at = std::time::Instant::now();
         let snapshot = session.try_frame()?;
+        assert!(session.hyperlink_at(0, 0, before.revision).unwrap_err().to_string().contains("click the link again"));
         assert!(session.try_metadata_since(0, 0, 0, 0, true).is_none(), "busy parser must not block metadata");
         assert!(session.try_render_delay().is_none(), "busy parser must not block render delay");
         assert!(session.history_export(4096)()?.is_none(), "busy parser must return no history export");

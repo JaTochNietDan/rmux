@@ -1,5 +1,9 @@
 # rmux
 
+Command-click (Control-click on Linux/Windows) opens terminal HTTP(S) links.
+If output parsing is busy, rmux reports a retry message instead of waiting; click
+again after output pressure eases.
+
 If Paste reports that the terminal is busy, no paste bytes were queued; retry
 the action after output pressure eases. A successful retry clears the message.
 Clipboard pastes retain the 1 MiB input limit and ordered bracketed delivery.
