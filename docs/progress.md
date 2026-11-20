@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Unified join-pane preflight across next-pane and directional actions. Joins now
+reject zoom, pending splits, divider drags and busy source/destination panes
+before taking tabs. Pending tab launches, close/edit prompts and terminal
+overlays therefore cannot be discarded by joining their pane. A visible reason
+leaves sessions/layout intact; same-pane and stale-index requests are no-ops.
+Desktop compilation passed. Native action/focus acceptance remains pending.
+
 Memory panel keyboard navigation now supports Page Up/Page Down using measured
 row heights and the current list viewport. Unmeasured rows use the selected row's
 height (or a fallback), and distant destinations reuse the virtual-list reveal

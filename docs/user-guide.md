@@ -536,8 +536,10 @@ neighbor in that direction, then removes the empty split. Existing destination
 tabs come first, followed by source tabs in their original order; the source's
 active terminal stays selected. Other tabs retain their unread state. The
 custom actions are `join_pane_left`, `join_pane_right`, `join_pane_up`, and
-`join_pane_down`. Like directional swaps, these do nothing at a layout edge or
-while zoomed, and have no default keybindings.
+`join_pane_down`. These do nothing at a layout edge and have no default keybindings.
+All join actions require an unzoomed, idle layout. Pending tab creation, pane
+editors, close prompts or terminal overlays in either pane prevent the join;
+an explanation appears without moving any tabs.
 
 For example, bind `last_terminal` to return to the previous live terminal across
 panes and workspaces, or `last_prompt` to jump to the newest retained shell prompt:
@@ -1452,7 +1454,8 @@ collapse; with only one workspace, the action does nothing.
 View → Join Pane into Next (also in the command palette) appends the focused
 pane's tabs to the next pane in layout order, preserves their order and active
 terminal, then collapses the empty split. The last pane wraps to the first;
-a single pane is unchanged.
+a single pane is unchanged. Like directional joins, it requires an unzoomed,
+idle layout; finish pending tab creation/editing in both panes and retry.
 View → Move Tab to Split Left / Right / Above / Below (also in the command palette) moves the
 active tab into a new adjacent pane without starting a new shell. It requires at
 least two tabs in the source pane and focuses the moved tab. A single-tab pane

@@ -2625,15 +2625,27 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if cx.global::<Shutdowns>().quitting || self.zoomed.is_some() { return; }
+        if cx.global::<Shutdowns>().quitting { return; }
         let Some(current) = self.focused_index(window, cx) else { return; };
         if let Some(next) = self.directional_neighbor(current, direction) {
             self.join_panes(current, next, window, cx);
         }
     }
     fn join_panes(&mut self, source: usize, target: usize, window: &mut Window, cx: &mut Context<Self>) {
-        let source = self.panes[source].clone();
-        let target = self.panes[target].clone();
+        if cx.global::<Shutdowns>().quitting || source == target { return; }
+        let Some(source) = self.panes.get(source).cloned() else { return; };
+        let Some(target) = self.panes.get(target).cloned() else { return; };
+        if self.zoomed.is_some() || self.spawning_split.is_some() || self.split_drag.is_some() {
+            self.error = Some("Finish resizing or splitting, and unzoom before joining panes.".into());
+            cx.notify();
+            return;
+        }
+        if source.read(cx).automation_busy(cx) || target.read(cx).automation_busy(cx) {
+            self.error = Some("Finish pending tab creation and close pane editors or overlays before joining.".into());
+            cx.notify();
+            return;
+        }
+        self.error = None;
         let (tabs, active) = source.update(cx, |pane, cx| pane.take_all_tabs(cx));
         target.update(cx, |pane, cx| pane.append_tabs(tabs, active, window, cx));
         self.remove_pane(&source, cx);
