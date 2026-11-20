@@ -1215,7 +1215,7 @@ Bash integration can currently be sourced manually from
 It reports encoded working directories and prompt boundaries, preserves existing
 `PROMPT_COMMAND` hooks, and supports `RMUX_SHELL_INTEGRATION=0`. Run
 `mise run test-bash-integration` for its focused check. Automatic Bash login startup,
-command-start/end markers and exit-status reporting are still pending; the
+and command-start markers are still pending; the
 current fixture covers macOS Bash 3.2, with modern Bash array-hook runtime
 coverage still pending.
 
