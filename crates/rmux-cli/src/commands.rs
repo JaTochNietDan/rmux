@@ -3,6 +3,7 @@ use serde_json::{Map, Value};
 use std::ffi::OsString;
 
 pub const HELP: &str = "Commands (JSON output; explicit opaque IDs required):
+  set-buffer [--name NAME] TEXT | list-buffers
   notify --surface ID [--title TITLE] [--body BODY]
   list-notifications [--window ID] [--workspace ID]
   dismiss-notification --surface ID --revision NUMBER
@@ -29,6 +30,8 @@ whole process unless narrowed with --window (workspaces/panes/panels) or
 
 pub fn help(command: &str) -> Result<String, String> {
     let (arguments, description) = match command {
+        "set-buffer" => ("[--name NAME] TEXT", "Set a process-local copy buffer; name defaults to default. Storage is bounded and never persisted or copied to the OS clipboard."),
+        "list-buffers" => ("", "List process-local copy buffer names and byte counts without their contents."),
         "read-notification" => ("--surface ID --revision NUMBER", "Mark one message read without dismissing it or focusing its terminal. Missing or already read messages return marked_read:false."),
         "dismiss-notification" => ("--surface ID --revision NUMBER", "Dismiss one retained message using its surface ID and revision from list-notifications. A missing or already dismissed message returns dismissed:false."),
         "notify" => ("--surface ID [--title TITLE] [--body BODY]", "Add a notification to a live terminal's history."),
@@ -58,6 +61,8 @@ pub fn help(command: &str) -> Result<String, String> {
 
 pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), String> {
     let (method, target, positional) = match command {
+        "set-buffer" => ("buffer.set", None, Some("text")),
+        "list-buffers" => ("buffer.list", None, None),
         "move-panel" => ("surface.move_to_workspace", Some(("--panel", "surface_id")), None),
         "move-workspace" => ("workspace.move_to_window", Some(("--workspace", "workspace_id")), None),
         "split-pane" => ("pane.split", Some(("--pane", "pane_id")), None),
@@ -126,6 +131,11 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
             continue;
         }
         if !literal && arg.starts_with('-') {
+            if command == "set-buffer" && arg == "--name" {
+                let name = args.next().ok_or("--name requires text")?.into_string().map_err(|_| "name must be UTF-8")?;
+                if params.insert("name".into(), Value::String(name)).is_some() { return Err("duplicate --name".into()); }
+                continue;
+            }
             if matches!(command, "dismiss-notification" | "read-notification") && arg == "--revision" {
                 let raw = args.next().ok_or("--revision requires an unsigned integer")?.into_string().map_err(|_| "revision must be UTF-8")?;
                 if raw.is_empty() || !raw.bytes().all(|byte| byte.is_ascii_digit()) { return Err("--revision expects an unsigned integer".into()); }
@@ -318,6 +328,16 @@ mod tests {
     use super::*;
     fn args(v: &[&str]) -> Vec<OsString> {
         v.iter().map(OsString::from).collect()
+    }
+    #[test]
+    fn copy_buffer_commands_preserve_text_and_reject_extra_arguments() {
+        let (method, params) = expand("set-buffer", args(&["--name", "build", "--", "-literal 世界\n"])).unwrap();
+        assert_eq!(method, "buffer.set");
+        assert_eq!(params, serde_json::json!({"name":"build", "text":"-literal 世界\n"}));
+        assert_eq!(expand("list-buffers", vec![]).unwrap().0, "buffer.list");
+        assert!(expand("list-buffers", args(&["--name", "x"])).is_err());
+        assert!(expand("set-buffer", args(&["--name", "x"])).is_err());
+        assert!(expand("set-buffer", args(&["--name", "x", "--name", "y", "text"])).is_err());
     }
     #[test]
     fn preserve_wraps_requires_selection_and_rejects_duplicates() {

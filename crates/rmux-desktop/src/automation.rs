@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 const MAX_REQUEST_BYTES: usize = 64 * 1024;
 const METHODS: &[&str] = &["system.ping", "system.capabilities"];
 const LIVE_METHODS: &[&str] = &[
+    "buffer.list", "buffer.get", "buffer.set", "buffer.delete",
     "system.quit",
     "system.ping",
     "system.capabilities",
@@ -304,6 +305,7 @@ pub(super) struct SurfaceKey {
 struct WorkspaceClose { workspace_id: String }
 
 struct LiveRequest {
+    buffer_command: Option<super::copy_buffers::Command>,
     list_filter: ListFilter,
     notification_change: Option<NotificationChange>,
     surface_key: Option<SurfaceKey>,
@@ -433,6 +435,10 @@ pub fn attach_live(cx: &mut gpui::App, stdio: bool, socket_directory: Option<std
                         code: -32001,
                         message: "Request expired before execution",
                     });
+                }
+                if let Some(command) = &request.buffer_command {
+                    return cx.global_mut::<super::copy_buffers::Store>().execute(command)
+                        .map_err(|message| Failure { code: -32008, message });
                 }
                 if request.method == "system.quit" {
                     super::request_quit(cx);
@@ -807,7 +813,7 @@ fn dispatch_inner(
     if notification
         && !matches!(
             method,
-            "workspace.select"
+            "buffer.set" | "buffer.delete" | "workspace.select"
                 | "surface.focus"
                 | "surface.send_text"
                 | "surface.send_key"
@@ -843,6 +849,10 @@ fn dispatch_inner(
     if !methods.contains(&method) {
         return respond(error(id, -32601, "Method not found"));
     }
+    let buffer_command = match super::copy_buffers::parse(method, request.get("params")) {
+        Ok(command) => command,
+        Err(message) => return respond(error(id, -32602, message)),
+    };
     let is_filtered_list = matches!(method, "workspace.list" | "pane.list" | "surface.list" | "notification.list");
     let list_filter = if is_filtered_list {
         let params = request.get("params").cloned().unwrap_or_else(|| json!({}));
@@ -1132,7 +1142,8 @@ fn dispatch_inner(
             _ => return respond(error(id, -32602, "Expected surface_id, workspace_id and optional activate boolean")),
         }
     } else { None };
-    if surface_memory.is_none()
+    if buffer_command.is_none()
+        && surface_memory.is_none()
         && group_create.is_none()
         && group_mutation.is_none()
         && selection.is_none()
@@ -1172,6 +1183,7 @@ fn dispatch_inner(
                 .unwrap()
                 .try_send(LiveRequest {
                     method: method.into(),
+                    buffer_command,
                     list_filter,
                     notification_change,
                     surface_key,
@@ -1258,6 +1270,31 @@ fn serve_inner(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn buffer_requests_route_through_the_live_queue() {
+        let (sender, receiver) = async_channel::bounded::<LiveRequest>(1);
+        let worker = std::thread::spawn(move || {
+            let mut store = super::super::copy_buffers::Store::default();
+            for _ in 0..4 {
+                let request = receiver.recv_blocking().unwrap();
+                assert!(request.pending.start());
+                let result = store.execute(request.buffer_command.as_ref().unwrap())
+                    .map_err(|message| Failure { code: -32008, message });
+                request.reply.send(result).unwrap();
+            }
+        });
+        for (method, params, key, expected) in [
+            ("buffer.set", json!({"text":"世界"}), "bytes", json!(6)),
+            ("buffer.get", json!({}), "text", json!("世界")),
+            ("buffer.list", json!({}), "bytes", json!(6)),
+            ("buffer.delete", json!({}), "deleted", json!(true)),
+        ] {
+            let request = json!({"jsonrpc":"2.0","id":1,"method":method,"params":params});
+            let response = dispatch_inner(&serde_json::to_vec(&request).unwrap(), Some(&sender)).unwrap();
+            assert_eq!(response["result"][key], expected, "{response}");
+        }
+        worker.join().unwrap();
+    }
     #[test]
     fn invalid_group_mutations_never_queue_ui_work() {
         let (sender, receiver) = async_channel::bounded(1);
@@ -1524,6 +1561,7 @@ mod tests {
         sender
             .try_send(LiveRequest {
                 method: "window.list".into(),
+                buffer_command: None,
                 list_filter: ListFilter::default(),
                 notification_change: None,
                 surface_key: None,

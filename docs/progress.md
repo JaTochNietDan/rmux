@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Added process-local named copy buffers, beginning with the inventoried set-buffer
+and list-buffers CLI shapes. The live RPC queue supports buffer.set/list plus
+rmux-specific buffer.get/delete; capabilities advertise them and shell completion
+includes both CLI commands. Default name is default; no persistence or OS clipboard
+mutation occurs. Storage caps 32 names, 1 MiB each and 8 MiB total text; failed
+replacements preserve existing entries and deletes release accounted bytes.
+The 64 KiB transport request cap remains in force. Two storage/protocol tests,
+a CLI parsing test and a live-queue routing test passed with desktop/CLI test
+compilation. Full upstream semantics, paste-buffer targeting, UI selection saves
+and native acceptance remain pending.
+
 Copy mode now has rectangular selection via r, alongside character and line
 modes. Anchored keyboard ranges use terminal-cell columns, highlight each row,
 and include complete graphemes touched by either edge. Copy joins retained row

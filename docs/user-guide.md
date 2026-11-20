@@ -26,7 +26,22 @@ the character cursor without shaping the entire line. Press r for rectangle mode
 then anchor with Space or Shift-movement and move across rows/columns. Rectangle
 copy uses terminal-cell columns, includes whole graphemes touched by either edge,
 and joins rows with newlines without padding short lines. r returns to character
-mode; c returns to line mode. Named copy buffers remain pending.
+mode; c returns to line mode. Named buffers can be managed through the CLI/API:
+
+```sh
+rmuxctl set-buffer --name notes 'text to retain'
+rmuxctl list-buffers
+rmuxctl buffer.get '{"name":"notes"}'
+rmuxctl buffer.delete '{"name":"notes"}'
+```
+
+Omitting a name uses `default`. Buffers are shared by windows in one rmux process,
+independent of the clipboard, and disappear when the app exits. Limits are 32
+buffers, 1 MiB per buffer and 8 MiB total text; over-limit writes fail without
+eviction. The existing 64 KiB JSON request limit further constrains CLI writes
+(including JSON escaping). Lists expose names and byte counts, not contents.
+`buffer.get` and `buffer.delete` are rmux RPC extensions. Paste-buffer targeting
+and saving selections to named buffers from the UI remain pending.
 
 **Choose Terminal Font…** searches installed font families for the current
 terminal. Type to filter, use arrows and Enter to choose, or Escape to cancel.

@@ -29,6 +29,7 @@ mod process_metrics;
 mod ports;
 mod ports_view;
 mod copy_mode;
+mod copy_buffers;
 mod drag_item;
 mod edit_history;
 mod find_bar;
@@ -3073,6 +3074,7 @@ fn main() {
     Application::new().with_assets(icons::Assets).run(move |cx: &mut App| {
         cx.set_global(Shutdowns::default());
         cx.set_global(native_notifications::Dispatcher::default());
+        cx.set_global(copy_buffers::Store::default());
         cx.set_global(preferences.confirm_close);
         cx.set_global(preferences.clone());
         recovery::install(recovery_lease.clone(), cx);

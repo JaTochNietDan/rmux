@@ -2,6 +2,8 @@
 use std::ffi::OsString;
 
 const COMMANDS: &[(&str, &[&str])] = &[
+    ("set-buffer", &["--name"]),
+    ("list-buffers", &[]),
     ("dismiss-notification", &["--surface", "--revision"]),
     ("read-notification", &["--surface", "--revision"]),
     ("notify", &["--surface", "--title", "--body"]),
