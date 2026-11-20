@@ -756,12 +756,6 @@ impl PaneView {
             .is_some_and(|terminal| terminal.read(cx).focus.contains_focused(window, cx))
     }
 
-    pub fn terminal_bounds(&self, cx: &App) -> Bounds<Pixels> {
-        self.terminals
-            .get(self.active)
-            .map(|view| view.read(cx).last_bounds)
-            .unwrap_or_default()
-    }
     /// Cached OSC directory, or explicit launch directory before the first report.
     /// New-workspace creation must not wait for the terminal parser mutex.
     pub fn cached_directory(&self, cx: &App) -> Option<std::path::PathBuf> {

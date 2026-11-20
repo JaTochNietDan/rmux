@@ -78,6 +78,35 @@ pub enum PaneTree<T> {
     },
 }
 impl<T: Clone + PartialEq> PaneTree<T> {
+    /// Resolve pane regions from current weights, independent of rendering or
+    /// terminal headers/overlays. Leaf order matches serialization and cycling.
+    pub fn neighbor(&self, target: &T, direction: Direction) -> Option<T> {
+        fn visit<'a, T>(tree: &'a PaneTree<T>, bounds: [f32; 4], out: &mut Vec<(&'a T, [f32; 4])>) {
+            match tree {
+                PaneTree::Pane(pane) => out.push((pane, bounds)),
+                PaneTree::Split { axis, children, weights } => {
+                    let total: f64 = weights.iter().map(|weight| f64::from(*weight)).sum();
+                    if children.len() != weights.len() || !total.is_finite() || total <= 0. { return; }
+                    let dimension = if *axis == Axis::Columns { 0 } else { 1 };
+                    let mut offset = 0.;
+                    for (child, weight) in children.iter().zip(weights) {
+                        let share = f64::from(*weight) / total;
+                        let mut region = bounds;
+                        region[dimension] += (f64::from(bounds[dimension + 2]) * offset) as f32;
+                        region[dimension + 2] = (f64::from(bounds[dimension + 2]) * share) as f32;
+                        visit(child, region, out);
+                        offset += share;
+                    }
+                }
+            }
+        }
+        let mut panes = Vec::new();
+        visit(self, [0., 0., 1., 1.], &mut panes);
+        let current = panes.iter().position(|(pane, _)| *pane == target)?;
+        let bounds: Vec<_> = panes.iter().map(|(_, bounds)| *bounds).collect();
+        focus_neighbor(&bounds, current, direction).map(|index| panes[index].0.clone())
+    }
+
     /// Joining two roots adds one split level without changing either subtree.
     pub fn can_merge(&self, other: &Self) -> bool {
         fn fits<T>(tree: &PaneTree<T>, depth: usize) -> bool {
@@ -416,6 +445,33 @@ mod tests {
         );
     }
     use super::*;
+    #[test]
+    fn tree_neighbors_follow_weights_and_swaps_without_rendered_bounds() {
+        let mut tree = PaneTree::Split {
+            axis: Axis::Columns, weights: vec![1., 1.],
+            children: vec![PaneTree::Pane(1), PaneTree::Split {
+                axis: Axis::Rows, weights: vec![8., 2.],
+                children: vec![PaneTree::Pane(2), PaneTree::Pane(3)],
+            }],
+        };
+        assert_eq!(tree.neighbor(&1, Direction::Right), Some(2));
+        assert_eq!(tree.neighbor(&2, Direction::Down), Some(3));
+        assert_eq!(tree.neighbor(&3, Direction::Left), Some(1));
+        assert_eq!(tree.neighbor(&1, Direction::Left), None);
+        assert_eq!(tree.neighbor(&99, Direction::Right), None);
+        if let PaneTree::Split { children, .. } = &mut tree {
+            if let PaneTree::Split { weights, .. } = &mut children[1] { *weights = vec![2., 8.]; }
+        }
+        assert_eq!(tree.neighbor(&1, Direction::Right), Some(3));
+        assert!(tree.swap(&2, &3));
+        assert_eq!(tree.neighbor(&1, Direction::Right), Some(2));
+        if let PaneTree::Split { weights, .. } = &mut tree { *weights = vec![1e30, 1e30]; }
+        assert_eq!(tree.neighbor(&1, Direction::Right), Some(2));
+        let tree = tree.remove(&2).unwrap();
+        assert_eq!(tree.neighbor(&1, Direction::Right), Some(3));
+        assert_eq!(PaneTree::Pane(1).neighbor(&1, Direction::Down), None);
+    }
+
     #[test]
     fn swap_preserves_nested_geometry_and_rejects_missing_targets() {
         let mut tree = PaneTree::Pane(1);

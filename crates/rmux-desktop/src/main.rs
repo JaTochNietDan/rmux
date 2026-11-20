@@ -2585,7 +2585,7 @@ impl Workspace {
     ) {
         if cx.global::<Shutdowns>().quitting { return; }
         let Some(current) = self.focused_index(window, cx) else { return; };
-        if let Some(next) = self.directional_neighbor(current, direction, cx) {
+        if let Some(next) = self.directional_neighbor(current, direction) {
             self.join_panes(current, next, window, cx);
         }
     }
@@ -2643,7 +2643,7 @@ impl Workspace {
     }
     fn swap_pane_direction(&mut self, direction: layout::Direction, window: &Window, cx: &mut Context<Self>) {
         let Some(current) = self.focused_index(window, cx) else { return; };
-        if let Some(next) = self.directional_neighbor(current, direction, cx) {
+        if let Some(next) = self.directional_neighbor(current, direction) {
             self.swap_panes(current, next, cx);
         }
     }
@@ -2796,21 +2796,16 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) {
         let Some(current) = self.focused_index(window, cx) else { return; };
-        if let Some(next) = self.directional_neighbor(current, direction, cx) {
+        if let Some(next) = self.directional_neighbor(current, direction) {
             self.panes[next].read(cx).focus(window, cx);
             cx.notify();
         }
     }
-    fn directional_neighbor(&self, current: usize, direction: layout::Direction, cx: &App) -> Option<usize> {
-        // Hidden panes have stale geometry while zoomed. Directional operations
-        // resume once the complete split layout is visible again.
+    fn directional_neighbor(&self, current: usize, direction: layout::Direction) -> Option<usize> {
+        // Keep directional mutations unavailable while the split layout is hidden.
         if self.zoomed.is_some() { return None; }
-        let bounds: Vec<_> = self.panes.iter().map(|pane| {
-            let bounds = pane.read(cx).terminal_bounds(cx);
-            [f32::from(bounds.origin.x), f32::from(bounds.origin.y),
-             f32::from(bounds.size.width), f32::from(bounds.size.height)]
-        }).collect();
-        layout::focus_neighbor(&bounds, current, direction)
+        let next = self.layout.as_ref()?.neighbor(self.panes.get(current)?, direction)?;
+        self.panes.iter().position(|pane| *pane == next)
     }
     fn cycle(&mut self, direction: isize, window: &mut Window, cx: &mut Context<Self>) {
         if self.panes.is_empty() {

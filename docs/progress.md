@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Directional pane focus/swap/join now resolve neighbors from the current weighted
+split tree rather than cached terminal pixel bounds. This makes selection follow
+resize, swap and collapse immediately and keeps terminal headers/overlays from
+distorting pane geometry. Normalized regions reuse the existing aligned-edge and
+center ranking; zoom guards remain unchanged. A focused model test passed nested
+directions, weight changes, swaps, collapse, missing targets, one-pane layouts
+and large proportional weights without any render pass. Native navigation and
+focus acceptance remain pending.
+
 Workspace and workspace-group context menus now reuse the shared type-to-select
 behavior, including their current Pin/Unpin labels. Tab and sidebar menus also
 use GPUI occlusion and consume middle-button presses, matching the terminal
