@@ -1004,11 +1004,22 @@ impl WorkspaceWindow {
         let Some(state) = &mut self.settings_state else { return; };
         let key = event.keystroke.key.as_str();
         if event.keystroke.modifiers.platform || event.keystroke.modifiers.control || event.keystroke.modifiers.alt { return; }
-        if let Some(index) = settings_view::next_control(state.selected, key, event.keystroke.modifiers.shift) {
+        let next = if matches!(key, "pageup" | "pagedown") {
+            command_palette::paged_result(state.selected, settings_view::KEYS.len() + 2,
+                key == "pageup", f32::from(state.scroll.bounds().size.height), |index| {
+                    let item = settings_view::scroll_index(index);
+                    let Some(bounds) = state.scroll.bounds_for_item(item) else { return 1.; };
+                    let next = state.scroll.bounds_for_item(settings_view::scroll_index(index + 1));
+                    f32::from(next.map(|next| next.top() - bounds.top()).unwrap_or(bounds.size.height)).max(1.)
+                })
+        } else {
+            settings_view::next_control(state.selected, key, event.keystroke.modifiers.shift)
+        };
+        if let Some(index) = next {
             state.selected = index;
             // The scroll container has a heading before the setting controls, then
             // the hint, Save and editor link.
-            state.scroll.scroll_to_item(if index < settings_view::KEYS.len() { index + 1 } else { index + 2 });
+            state.scroll.scroll_to_item(settings_view::scroll_index(index));
             cx.notify();
         } else if key == "escape" {
             self.toggle_settings(window, cx);

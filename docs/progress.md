@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Settings keyboard scrolling now keeps history help inside its control row,
+restoring the correct child positions for Save and Open all settings. Page
+Up/Down moves by the measured viewport and control strides, including wrapped
+rows and footer spacing. Existing arrows/Tab/Home/End retain their behavior.
+Three shared navigation tests passed and the desktop test target compiled;
+native short-window scrolling and focus acceptance remain pending.
+
 Settings now exposes the per-new-terminal scrollback budget as New terminal
 history, with 1 MiB steps bounded to 0–256 MiB and an explanation that existing
 history is preserved. Save these settings now persists this control and includes

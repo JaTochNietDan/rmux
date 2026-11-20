@@ -8,6 +8,11 @@ pub struct State {
     pub scroll: ScrollHandle,
 }
 pub const KEYS: &[&str] = &["font", "padding", "theme", "focused_cursor", "cursor", "copy", "close", "group_placement", "scrollback"];
+// Each control owns its explanatory content. Only the heading and footer hint
+// are separate non-control children of the scroll container.
+pub fn scroll_index(control: usize) -> usize {
+    control + if control < KEYS.len() { 1 } else { 2 }
+}
 pub fn next_control(selected: usize, key: &str, shift: bool) -> Option<usize> {
     let count = KEYS.len() + 2;
     match key {
@@ -117,8 +122,9 @@ pub fn panel(state: State, cx: &mut Context<window_view::WorkspaceWindow>) -> An
                 workspace_groups::Placement::Top => "First",
                 workspace_groups::Placement::End => "Last",
             }.into(), false, state.selected == 7, false))
-            .child(row("New terminal history", "scrollback", format!("{} MiB", settings.scrollback_mib), true, state.selected == 8, false))
-            .child(div().pt_2().text_xs().text_color(rgb(0xa0a0a0)).child("History budget per new terminal. 0 disables scrollback. Existing terminals keep their current history; total app memory also includes other resources."))
+            .child(div()
+                .child(row("New terminal history", "scrollback", format!("{} MiB", settings.scrollback_mib), true, state.selected == 8, false))
+                .child(div().pt_2().text_xs().text_color(rgb(0xa0a0a0)).child("History budget per new terminal. 0 disables scrollback. Existing terminals keep their current history; total app memory also includes other resources.")))
             .child(div().py_3().text_xs().text_color(rgb(0xa0a0a0)).child("Tab / ↑↓ to navigate · ←→ to change · Enter to activate · Esc to close. Changes apply to this session. Text size updates terminals using the previous default. Per-terminal zoom stays unchanged; Reset Font Size rejoins the default. Custom colors in your config override the theme."))
             .child(div().id("settings-save").border_1().border_color(if state.selected == KEYS.len() { rgb(0xffffff) } else { rgb(0x007aff) }).px_3().py_2().rounded_sm().bg(rgb(0x007aff)).hover(|s| s.bg(rgb(0x1685ff))).text_sm().cursor_pointer()
                 .on_click(|event, window, cx| { if event.standard_click() { window.dispatch_action(Box::new(SaveAppearanceSettings), cx); } }).child("Save these settings"))

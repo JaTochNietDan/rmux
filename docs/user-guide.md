@@ -206,6 +206,9 @@ not a cap on total process/GPU memory.
 Settings exposes this as New terminal history, adjustable in 1 MiB steps.
 Changes affect terminals started afterward; Save these settings persists the
 budget for future launches.
+In Settings, Page Up/Down moves through controls by the visible panel height;
+Home/End jumps to the first control or editor link. The selected control scrolls
+into view, including Save and Open all settings in shorter windows.
 
 `terminal_padding` sets the inset around terminal content in logical pixels
 (0–32, default 8). Reload Settings applies it to existing terminals and resizes
