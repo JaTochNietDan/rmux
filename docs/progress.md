@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Copy mode now saves selections to named buffers through Save Buffer… or b. A
+name field supports Enter/save and Escape/cancel; existing names are explicitly
+replaced. Line/character/rectangle formatting runs on the background executor,
+checks the 1 MiB per-buffer cap, and transfers owned text into storage without a
+second UI-thread text clone. Clipboard state is untouched. Store revisions reject
+stale completions if any buffer mutation happened during formatting; closing or
+superseding the save cancels delivery. Four buffer tests passed, including stale
+save rejection and name validation, with desktop test compilation. Native input,
+layout and broader upstream copy-mode contract acceptance remain pending.
+
 Named buffers now support paste-buffer --surface ID [--name NAME] [--bracketed]
 and buffer.paste RPC. Explicit opaque targets resolve through the same input
 routing as surface.send_text, retaining existing modal/busy/exited/backpressure

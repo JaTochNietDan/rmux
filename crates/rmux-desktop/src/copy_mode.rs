@@ -136,6 +136,9 @@ pub(super) struct CopyMode {
     buffer: Option<Arc<Buffer>>,
     search: Option<Entity<text_field::TextField>>,
     query: String,
+    buffer_name: Option<Entity<text_field::TextField>>,
+    save_job: Option<Task<()>>,
+    save_cancel: Arc<AtomicBool>,
     matches: Vec<usize>,
     search_message: String,
     search_cancel: Arc<AtomicBool>,
@@ -154,7 +157,7 @@ pub(super) struct CopyMode {
     _load: Task<()>,
 }
 impl Drop for CopyMode {
-    fn drop(&mut self) { self.search_cancel.store(true, Ordering::Release); }
+    fn drop(&mut self) { self.search_cancel.store(true, Ordering::Release); self.save_cancel.store(true, Ordering::Release); }
 }
 fn match_line(matches: &[usize], cursor: usize, reverse: bool, inclusive: bool) -> Option<usize> {
     if matches.is_empty() { return None; }
@@ -193,11 +196,80 @@ impl CopyMode {
         });
         let focus = cx.focus_handle();
         focus.focus(window);
-        Self { focus, buffer: None, search: None, query: String::new(), matches: Vec::new(),
+        Self { focus, buffer: None, search: None, query: String::new(), buffer_name: None, save_job: None, save_cancel: Arc::new(AtomicBool::new(false)), matches: Vec::new(),
             search_message: String::new(), search_cancel: Arc::new(AtomicBool::new(false)), search_job: None, copy_message: None, copy_job: None, message: "Reading terminal history…".into(), cursor: 0,
             anchor: None, characters: false, rectangular: false, column: 0, preferred_column: None, character_anchor: None, scroll: ListState::new(0, ListAlignment::Bottom, px(128.)), _load: load }
     }
+    fn open_buffer_name(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.buffer.is_none() { self.copy_message = Some("No history snapshot is available yet".into()); cx.notify(); return; }
+        self.search = None;
+        if let Some(input) = &self.buffer_name { input.read(cx).focus.focus(window); return; }
+        let input = cx.new(|cx| text_field::TextField::new("default", cx));
+        cx.subscribe_in(&input, window, |this, _, event: &text_field::EditEvent, window, cx| {
+            match event {
+                text_field::EditEvent::Submitted { text, .. } => {
+                    if let Err(error) = copy_buffers::validate_name(text) {
+                        this.copy_message = Some(error.into());
+                    } else {
+                        this.save_buffer(text.clone(), cx);
+                        this.buffer_name = None;
+                        this.focus.focus(window);
+                    }
+                }
+                text_field::EditEvent::Cancelled => { this.buffer_name = None; this.focus.focus(window); }
+                text_field::EditEvent::Changed(_) => {},
+            }
+            cx.notify();
+        }).detach();
+        input.read(cx).focus.focus(window);
+        self.buffer_name = Some(input);
+        cx.notify();
+    }
+    fn save_buffer(&mut self, name: String, cx: &mut Context<Self>) {
+        let Some(buffer) = self.buffer.clone() else { return; };
+        self.save_cancel.store(true, Ordering::Release);
+        self.save_job = None;
+        self.save_cancel = Arc::new(AtomicBool::new(false));
+        let canceled = self.save_cancel.clone();
+        let revision = cx.global::<copy_buffers::Store>().revision();
+        let (cursor, column, anchor, character_anchor, characters, rectangular) =
+            (self.cursor, self.column, self.anchor, self.character_anchor, self.characters, self.rectangular);
+        let executor = cx.background_executor().clone();
+        self.copy_message = Some(format!("Saving buffer {name}…"));
+        self.save_job = Some(cx.spawn(async move |entity, cx| {
+            let result = executor.spawn(async move {
+                if canceled.load(Ordering::Acquire) { return Ok(None); }
+                let text = if rectangular {
+                    buffer.rectangle_text(cursor, column, character_anchor, || !canceled.load(Ordering::Acquire))
+                } else {
+                    let text = if characters { &buffer.text[buffer.character_range(cursor, column, character_anchor)] }
+                        else { buffer.selected(cursor, anchor) };
+                    if text.len() > copy_buffers::MAX_BUFFER { return Err("Selection exceeds the 1 MiB buffer limit"); }
+                    Some(text.to_owned())
+                };
+                if text.as_ref().is_some_and(|text| text.len() > copy_buffers::MAX_BUFFER) { return Err("Selection exceeds the 1 MiB buffer limit"); }
+                Ok(text)
+            }).await;
+            let _ = entity.update(cx, |this, cx| {
+                this.save_job = None;
+                match result {
+                    Ok(Some(text)) => {
+                        let bytes = text.len();
+                        this.copy_message = Some(match cx.global_mut::<copy_buffers::Store>().save_if_unchanged(name.clone(), text, revision) {
+                            Ok(_) => format!("Saved {bytes} bytes to buffer {name}"),
+                            Err(error) => error.into(),
+                        });
+                    }
+                    Err(error) => this.copy_message = Some(error.into()),
+                    Ok(None) => {},
+                }
+                cx.notify();
+            });
+        }));
+        cx.notify();
+    }
     fn open_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.buffer_name = None;
         if let Some(search) = &self.search { search.read(cx).focus.focus(window); return; }
         let search = cx.new(|cx| text_field::TextField::new(&self.query, cx));
         cx.subscribe_in(&search, window, |this, _, event: &text_field::EditEvent, window, cx| {
@@ -327,6 +399,7 @@ impl CopyMode {
                     self.scroll.scroll_to_reveal_item(next);
                 } else { match key.key.as_str() {
                     "/" => self.open_search(window, cx),
+                    "b" => self.open_buffer_name(window, cx),
                     "n" | "N" => self.jump_match(key.modifiers.shift || key.key == "N", false),
                     "r" => { self.rectangular = !self.rectangular; self.characters = true; self.anchor = None; }
                     "c" => { self.rectangular = false; self.characters = !self.characters; self.anchor = None; self.character_anchor = None; self.column = 0; self.preferred_column = None; }
@@ -413,10 +486,17 @@ impl Render for CopyMode {
                 .child(div().flex_1().min_w_0().text_sm().child("Copy mode"))
                 .when_some(self.buffer.as_ref(), |header, buffer| header.child(div().text_xs().text_color(rgb(0xa0a0a0))
                     .child(format!("Line {} / {}", self.cursor + 1, buffer.lines.len()))))
+                .child(div().id("save-copy-buffer").px_2().py_1().rounded_sm().text_xs().cursor_pointer()
+                    .bg(rgb(0x353535)).hover(|s| s.bg(rgb(0x454545)))
+                    .on_click(cx.listener(|this, event: &ClickEvent, window, cx| { if event.standard_click() { this.open_buffer_name(window, cx); } }))
+                    .child("Save Buffer…"))
                 .child(pane_view::pane_control("close-copy-mode", "Close Copy Mode")
                     .on_click(cx.listener(|_, event: &ClickEvent, _, cx| { if event.standard_click() { cx.emit(Close); } }))
                     .child(icons::icon("close"))))
             .child(div().px_3().py_1().text_xs().child(self.message.clone()))
+            .when_some(self.buffer_name.clone(), |root, input| root.child(div().px_3().py_2()
+                .child(div().text_xs().mb_1().child("Buffer name · Enter saves/replaces · Esc cancels · Kept until app quits"))
+                .child(input)))
             .when_some(self.search.clone(), |root, search| root.child(div().px_3().py_2()
                 .child(div().text_xs().mb_1().child("Search snapshot · Enter to search · Shift-Enter previous"))
                 .child(search)))

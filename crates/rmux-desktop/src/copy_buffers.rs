@@ -2,7 +2,7 @@
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 const MAX_COUNT: usize = 32;
-const MAX_BUFFER: usize = 1024 * 1024;
+pub const MAX_BUFFER: usize = 1024 * 1024;
 const MAX_TOTAL: usize = 8 * 1024 * 1024;
 
 pub enum Command { List, Get(String), Delete(String), Set(String, String), Paste { name: String, surface_id: String, bracketed: bool } }
@@ -14,7 +14,7 @@ pub fn parse(method: &str, params: Option<&Value>) -> Result<Option<Command>, &'
     if params.keys().any(|key| !allowed.contains(&key.as_str())) { return Err("Unknown buffer parameter"); }
     if method == "buffer.list" { return Ok(Some(Command::List)); }
     let name = match params.get("name") { None => "default", Some(Value::String(name)) => name, _ => return Err("Expected buffer name string") };
-    if name.trim().is_empty() || name.len() > 128 || name.chars().any(char::is_control) { return Err("Buffer name must be nonempty, at most 128 bytes and contain no controls"); }
+    validate_name(name)?;
     Ok(Some(match method {
         "buffer.paste" => {
             let surface_id = params.get("surface_id").and_then(Value::as_str).filter(|id| !id.is_empty() && id.len() <= 128).ok_or("Expected explicit surface_id")?;
@@ -30,15 +30,36 @@ pub fn parse(method: &str, params: Option<&Value>) -> Result<Option<Command>, &'
         }
     }))
 }
+pub fn validate_name(name: &str) -> Result<(), &'static str> {
+    if name.trim().is_empty() || name.len() > 128 || name.chars().any(char::is_control) { return Err("Buffer name must be nonempty, at most 128 bytes and contain no controls"); }
+    Ok(())
+}
 #[derive(Default)]
-pub struct Store { entries: BTreeMap<String, String>, bytes: usize }
+pub struct Store { entries: BTreeMap<String, String>, bytes: usize, revision: u64 }
 impl gpui::Global for Store {}
 impl Store {
+    pub fn revision(&self) -> u64 { self.revision }
+    pub fn save_if_unchanged(&mut self, name: String, text: String, revision: u64) -> Result<Value, &'static str> {
+        if self.revision != revision { return Err("Buffers changed while saving; retry to apply this selection"); }
+        self.set(name, text)
+    }
     pub fn paste_input(&self, command: &Command) -> Result<Option<super::automation::SurfaceText>, &'static str> {
         let Command::Paste { name, surface_id, bracketed } = command else { return Ok(None); };
         let text = self.entries.get(name).ok_or("Buffer not found")?;
         if !bracketed && text.len() > 64 * 1024 { return Err("Raw buffer delivery exceeds 64 KiB; use bracketed paste"); }
         Ok(Some(super::automation::SurfaceText { surface_id: surface_id.clone(), text: text.clone(), paste: *bracketed }))
+    }
+    fn set(&mut self, name: String, text: String) -> Result<Value, &'static str> {
+        validate_name(&name)?;
+        let previous = self.entries.get(&name);
+        if previous.is_none() && self.entries.len() >= MAX_COUNT { return Err("Buffer count limit reached; delete a buffer first"); }
+        let next_bytes = self.bytes - previous.map_or(0, String::len) + text.len();
+        if text.len() > MAX_BUFFER || next_bytes > MAX_TOTAL { return Err("Buffer memory limit exceeded; existing buffers unchanged"); }
+        let result = json!({"name":name,"bytes":text.len()});
+        self.entries.insert(name, text);
+        self.bytes = next_bytes;
+        self.revision = self.revision.wrapping_add(1);
+        Ok(result)
     }
     pub fn execute(&mut self, command: &Command) -> Result<Value, &'static str> {
         Ok(match command {
@@ -47,24 +68,29 @@ impl Store {
             Command::Get(name) => json!({"name":name,"text":self.entries.get(name).ok_or("Buffer not found")?}),
             Command::Delete(name) => {
                 let removed = self.entries.remove(name);
-                if let Some(text) = &removed { self.bytes -= text.len(); }
+                if let Some(text) = &removed { self.bytes -= text.len(); self.revision = self.revision.wrapping_add(1); }
                 json!({"name":name,"deleted":removed.is_some()})
             }
-            Command::Set(name, text) => {
-                let previous = self.entries.get(name);
-                if previous.is_none() && self.entries.len() >= MAX_COUNT { return Err("Buffer count limit reached; delete a buffer first"); }
-                let next_bytes = self.bytes - previous.map_or(0, String::len) + text.len();
-                if text.len() > MAX_BUFFER || next_bytes > MAX_TOTAL { return Err("Buffer memory limit exceeded; existing buffers unchanged"); }
-                self.entries.insert(name.clone(), text.clone());
-                self.bytes = next_bytes;
-                json!({"name":name,"bytes":text.len()})
-            }
+            Command::Set(name, text) => return self.set(name.clone(), text.clone()),
         })
     }
 }
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn delayed_save_cannot_overwrite_newer_changes_and_invalid_names() {
+        let mut store = Store::default();
+        let revision = store.revision();
+        store.execute(&Command::Set("notes".into(), "new".into())).unwrap();
+        assert!(store.save_if_unchanged("notes".into(), "old".into(), revision).is_err());
+        assert_eq!(store.execute(&Command::Get("notes".into())).unwrap()["text"], "new");
+        let revision = store.revision();
+        assert!(store.save_if_unchanged("bad\n".into(), "bad".into(), revision).is_err());
+        assert_eq!(store.revision(), revision);
+        store.save_if_unchanged("notes".into(), "chosen".into(), revision).unwrap();
+        assert_eq!(store.execute(&Command::Get("notes".into())).unwrap()["text"], "chosen");
+    }
     #[test]
     fn buffer_paste_requires_target_and_respects_input_limits_without_consuming_text() {
         assert!(parse("buffer.paste", Some(&json!({}))).is_err());

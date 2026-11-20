@@ -47,7 +47,12 @@ at 64 KiB; `--bracketed` uses the terminal's paste encoding (including bracketed
 markers when requested by the application), up to 1 MiB. Busy/exited terminals
 and full queues report errors without automatic retry. RPC equivalent:
 `buffer.paste` with `surface_id`, optional `name`, and optional `bracketed` boolean.
-Saving selections to named buffers from the UI remains pending.
+In copy mode, click **Save Buffer…** or press b. Enter a name and press Enter to
+save or replace it; Escape cancels the name field. Line, character and rectangle
+selections are supported, up to the 1 MiB buffer limit. Formatting happens in the
+background without touching the clipboard. If any buffer changes during the
+save, rmux reports a conflict and asks you to retry; it does not overwrite newer
+state. Closing copy mode cancels pending save delivery.
 
 **Choose Terminal Font…** searches installed font families for the current
 terminal. Type to filter, use arrows and Enter to choose, or Escape to cancel.
