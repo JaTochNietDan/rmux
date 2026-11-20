@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Find navigation with zero matches now returns search-owned progress without
+acquiring the parser lock or invalidating terminal snapshots. A no-value
+navigation result also no longer increments the terminal revision. Three
+focused engine search tests passed, including a regression asserting unchanged
+revision, selection and viewport for both empty and unmatched queries. Valid
+history/Unicode/alternate-screen navigation remains covered; no GUI timing
+claim is made.
+
 Fresh macOS debug binaries passed `mise run smoke-socket` with selected-text
 wrap routing coverage. The real CLI reached the background selection exporter
 and returned empty/untruncated text for a surface without a selection. Invalid

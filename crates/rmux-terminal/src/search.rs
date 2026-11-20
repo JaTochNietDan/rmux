@@ -117,9 +117,10 @@ impl Search {
     }
 
     pub fn select(&mut self, direction: Direction) -> Result<Progress> {
+        let progress = self.progress()?;
+        if progress.matches == 0 { return Ok(progress); }
         {
             let mut terminal = self.terminal.lock().unwrap_or_else(|e| e.into_inner());
-            terminal.revision = terminal.revision.wrapping_add(1);
             // SAFETY: navigation, snapshot extraction and selection installation
             // are one transaction with no intervening terminal mutations.
             unsafe {
@@ -128,6 +129,7 @@ impl Search {
                     Direction::Newer => ghostty_search_select_prev(self.handle),
                 };
                 if result == GHOSTTY_SUCCESS {
+                    terminal.revision = terminal.revision.wrapping_add(1);
                     let mut selection = GhosttySelection::default();
                     check(ghostty_search_get(
                         self.handle,
@@ -207,6 +209,28 @@ mod tests {
             }
         }
         anyhow::bail!("small search fixture failed to converge")
+    }
+
+    #[test]
+    fn no_match_navigation_preserves_revision_selection_and_viewport() -> Result<()> {
+        let terminal = Arc::new(Mutex::new(Terminal::new(20, 3)?));
+        terminal.lock().unwrap().write(b"keep selected text");
+        terminal.lock().unwrap().select_all()?;
+        let mut search = Search::new(terminal.clone())?;
+        for query in ["absent", ""] {
+            search.set_query(query)?;
+            assert_eq!(finish(&mut search)?.matches, 0);
+            let before = terminal.lock().unwrap().frame()?;
+            let selection = terminal.lock().unwrap().selected_text()?;
+            for direction in [Direction::Older, Direction::Newer] {
+                assert_eq!(search.select(direction)?.matches, 0);
+            }
+            let after = terminal.lock().unwrap().frame()?;
+            assert_eq!(after.revision, before.revision);
+            assert_eq!(after.scrollback_offset, before.scrollback_offset);
+            assert_eq!(terminal.lock().unwrap().selected_text()?, selection);
+        }
+        Ok(())
     }
 
     #[test]
