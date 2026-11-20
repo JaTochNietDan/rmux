@@ -3145,6 +3145,8 @@ fn workspace_titlebar() -> Option<TitlebarOptions> {
 
 fn main() {
     let mut initial_directory = None;
+    let mut initial_environment = Vec::new();
+    let mut initial_command_label = None;
     let mut initial_command = Vec::new();
     let mut initial_layout = None;
     let mut initial_session = None;
@@ -3153,7 +3155,7 @@ fn main() {
         std::process::exit(2);
     });
     let live_rpc_stdio = match &command {
-        startup::Command::Launch { live_rpc_stdio, .. } | startup::Command::Layout { live_rpc_stdio, .. } | startup::Command::Session { live_rpc_stdio, .. } | startup::Command::Preset { live_rpc_stdio, .. } => *live_rpc_stdio,
+        startup::Command::Launch { live_rpc_stdio, .. } | startup::Command::Layout { live_rpc_stdio, .. } | startup::Command::Session { live_rpc_stdio, .. } | startup::Command::Preset { live_rpc_stdio, .. } | startup::Command::CustomCommand { live_rpc_stdio, .. } => *live_rpc_stdio,
         _ => false,
     };
     let preferences = if matches!(
@@ -3212,6 +3214,20 @@ fn main() {
                 Err(error) => { eprintln!("rmux: session {}: {error:#}", path.display()); std::process::exit(2); }
             }
             return;
+        }
+        startup::Command::CustomCommand { name, .. } => {
+            if std::env::var_os("RMUX_BENCH_PANES").is_some() {
+                eprintln!("rmux: --command cannot be combined with RMUX_BENCH_PANES");
+                std::process::exit(2);
+            }
+            let Some(configured) = preferences.commands.iter().find(|command| command.name == name) else {
+                eprintln!("rmux: command is not configured: {name}");
+                std::process::exit(2);
+            };
+            initial_command = configured.argv.iter().map(std::ffi::OsString::from).collect();
+            initial_environment = configured.env.iter().map(|(key, value)| (key.into(), value.into())).collect();
+            initial_directory = configured.cwd.clone().or_else(|| std::env::current_dir().ok());
+            initial_command_label = Some(name);
         }
         startup::Command::Preset { name, .. } => {
             if std::env::var_os("RMUX_BENCH_PANES").is_some() {
@@ -3320,14 +3336,15 @@ fn main() {
                     .collect::<String>()
             })
             .filter(|name| !name.is_empty());
-        match Session::command_in_with_scrollback(
+        match Session::command_in_with_environment(
             &initial_command,
             80,
             24,
             initial_directory.as_deref(),
             preferences.scrollback_bytes(),
+            &initial_environment,
         ) {
-            Ok(session) => Some((session, label)),
+            Ok(session) => Some((session, initial_command_label.or(label))),
             Err(error) => {
                 eprintln!(
                     "rmux: could not start {}: {error:#}",

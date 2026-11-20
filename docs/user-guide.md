@@ -290,6 +290,14 @@ Custom palette commands can be configured in `config.json`:
 }
 ```
 
+From a shell or launcher, use `rmux --command "Tests"` to start the configured
+command in a new rmux window. This uses the same literal argv, child environment
+overrides and configured `cwd`; without `cwd`, it inherits the launcher's current
+directory. Names are exact and case-sensitive. This explicit launch bypasses
+automatic session recovery and does not overwrite its saved file. Do not combine
+`--command` with `--preset`, layout/session options, `-d`, or a program after `--`;
+set the directory and arguments in the command definition instead.
+
 After Reload Settings, choose **Run Tests** in the palette. Each invocation
 starts a dedicated workspace with its own terminal; it does not inject text into
 an existing shell. Arguments are literal, including spaces and empty arguments;

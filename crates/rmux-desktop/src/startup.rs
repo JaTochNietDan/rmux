@@ -14,6 +14,7 @@ pub enum Command {
     CheckLayout(PathBuf),
     Session { path: PathBuf, live_rpc_stdio: bool },
     CheckSession(PathBuf),
+    CustomCommand { name: String, live_rpc_stdio: bool },
     Preset { name: String, live_rpc_stdio: bool },
     Launch {
         live_rpc_stdio: bool,
@@ -26,6 +27,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, String
     let mut directory = None;
     let mut layout = None;
     let mut preset = None;
+    let mut custom_command = None;
     let mut check_layout = false;
     let mut session = false;
     let mut argv = Vec::new();
@@ -81,6 +83,12 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, String
                 if name.trim().is_empty() || name.len() > 128 || name.chars().any(char::is_control) { return Err("preset name must be nonempty, at most 128 bytes and contain no controls".into()); }
                 preset = Some(name);
             }
+            Some("--command") => {
+                if custom_command.is_some() { return Err("--command specified more than once".into()); }
+                let name = args.next().ok_or("--command requires a configured name")?.into_string().map_err(|_| "command name must be UTF-8")?;
+                if name.trim().is_empty() || name.len() > 128 || name.chars().any(char::is_control) { return Err("command name must be nonempty, at most 128 bytes and contain no controls".into()); }
+                custom_command = Some(name);
+            }
             Some("--working-directory" | "-d") => {
                 if directory.is_some() {
                     return Err("working directory specified more than once".into());
@@ -106,7 +114,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, String
         if check_config
             || dump_config
             || layout.is_some()
-            || preset.is_some()
+            || preset.is_some() || custom_command.is_some()
             || directory.is_some()
             || !argv.is_empty()
         {
@@ -118,7 +126,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, String
         return Err("choose --check-config or --dump-config".into());
     }
     if check_config || dump_config {
-        if layout.is_some() || preset.is_some() || directory.is_some() || !argv.is_empty() {
+        if layout.is_some() || preset.is_some() || custom_command.is_some() || directory.is_some() || !argv.is_empty() {
             return Err("configuration inspection cannot be combined with launch options".into());
         }
         return Ok(if dump_config {
@@ -126,6 +134,12 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, String
         } else {
             Command::CheckConfig
         });
+    }
+    if let Some(name) = custom_command {
+        if preset.is_some() || layout.is_some() || directory.is_some() || !argv.is_empty() {
+            return Err("--command cannot be combined with presets, layout/session files, a working directory or a program; configure the command cwd instead".into());
+        }
+        return Ok(Command::CustomCommand { name, live_rpc_stdio });
     }
     if let Some(name) = preset {
         if layout.is_some() || directory.is_some() || !argv.is_empty() {
@@ -167,6 +181,7 @@ Usage: rmux [OPTIONS] [-- PROGRAM [ARG...]]
   -d, --working-directory PATH  Set the initial shell directory
       --layout PATH             Restore a saved layout with fresh shells
       --session PATH            Restore a multi-window session with fresh shells
+      --command NAME            Run a configured command in a fresh terminal
       --preset NAME             Open a configured layout/session preset with fresh shells
       --check-session PATH      Validate session structure without starting shells
       --rpc-stdio               Standalone JSON-RPC discovery over stdin/stdout
@@ -183,6 +198,17 @@ Live automation is opt-in. Set RMUX_SOCKET_DIR to a new absolute directory for U
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn configured_command_launch_preserves_name_and_rejects_conflicts() {
+        assert!(matches!(parse(["--command", "Build 世界", "--rpc-stdio-live"].map(OsString::from)), Ok(Command::CustomCommand { name, live_rpc_stdio: true }) if name == "Build 世界"));
+        for args in [
+            vec!["--command"], vec!["--command", ""], vec!["--command", "x", "--command", "y"],
+            vec!["--command", "x", "--preset", "y"], vec!["--command", "x", "--layout", "file"],
+            vec!["--command", "x", "--session", "file"], vec!["--command", "x", "-d", "/tmp"],
+            vec!["--command", "x", "--check-config"], vec!["--command", "x", "--dump-config"],
+            vec!["--command", "x", "--rpc-stdio"], vec!["--command", "x", "--", "echo"],
+        ] { assert!(parse(args.iter().map(OsString::from)).is_err(), "{args:?}"); }
+    }
     #[test]
     fn preset_launch_preserves_name_and_rejects_conflicting_modes() {
         assert!(matches!(parse(["--preset","Build 世界","--rpc-stdio-live"].map(OsString::from)), Ok(Command::Preset { name, live_rpc_stdio: true }) if name == "Build 世界"));

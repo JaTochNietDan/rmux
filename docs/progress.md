@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Added rmux --command NAME for configured custom commands. It uses the existing
+PTY command launcher with literal argv, child-only environment overrides, saved
+cwd or launcher-directory fallback, and the configured terminal label. Explicit
+command launches bypass automatic recovery ownership; unknown names and mixed
+launch modes fail before a terminal starts. Focused parser tests and desktop
+build passed. A native real-PTY smoke test passed Unicode/empty/literal arguments,
+configured and inherited cwd, environment overrides and missing-name failure.
+Native window appearance and cross-platform runtime acceptance remain pending.
+
 Replaced fixed shortcut labels on the terminal tab picker, new/cancel tab,
 split-right/down and sidebar new-workspace controls with the shared binding
 resolver. Tooltips resolve on hover against the pane's active terminal (sidebar
