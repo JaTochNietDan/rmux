@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Linux/XDG notifications now retain async action handles and share macOS's
+click-to-current-terminal routing and 16-listener admission cap. The notification
+advertises the default Open Terminal action. Waiting races a two-minute deadline;
+on expiry a CloseNotification request gets its own two-second bound before the
+handle is dropped. This avoids a thread per banner and does not trust servers to
+honor expiry hints. The pinned zbus backend supplies asynchronous signal waits.
+ARM64 Linux cross-compilation and macOS desktop compilation passed. No Linux
+notification server or display session was exercised; banner actions, dismissal,
+D-Bus disconnects and compositor focus permissions remain runtime acceptance work.
+Windows click handling remains pending as native Windows validation is deferred.
+
 macOS banners now have asynchronous click-to-terminal routing. Clicks resolve the
 surface's current workspace/window, honor modal/busy interactions, and ignore
 closed terminals, dismissed history records or a disabled notification setting.

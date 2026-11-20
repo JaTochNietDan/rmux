@@ -1,7 +1,7 @@
 use super::*;
 
 /// Resolve current ownership at click time, including detached/moved terminals.
-#[cfg(target_os = "macos")]
+#[cfg(unix)]
 pub(super) fn focus_native_notification(terminal: &WeakEntity<TerminalView>, revision: u64, cx: &mut App) {
     if !cx.global::<Preferences>().native_notifications { return; }
     if !terminal.read_with(cx, |view, _| view.notifications.contains(revision)).unwrap_or(false) { return; }

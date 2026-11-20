@@ -5,7 +5,7 @@ use super::*;
 pub(super) struct Dispatcher {
     sender: Option<async_channel::Sender<Request>>,
     active_windows: std::collections::HashSet<AnyWindowHandle>,
-    #[cfg(target_os = "macos")]
+    #[cfg(unix)]
     responses: Vec<(Arc<AtomicBool>, Task<()>)>,
 }
 impl Global for Dispatcher {}
@@ -47,7 +47,7 @@ pub(super) fn enqueue(revision: u64, cx: &mut Context<TerminalView>) {
                         .map(|record| record.message.clone())
                 }).ok().flatten();
                 let Some(message) = message else { continue; };
-                #[cfg(target_os = "macos")]
+                #[cfg(unix)]
                 if !cx.update(|cx| {
                     let pending = &mut cx.global_mut::<Dispatcher>().responses;
                     pending.retain(|(done, _)| !done.load(Ordering::Acquire));
@@ -59,9 +59,9 @@ pub(super) fn enqueue(revision: u64, cx: &mut Context<TerminalView>) {
                 }).await;
                 match result {
                     Ok(delivery) => {
-                        #[cfg(target_os = "macos")]
+                        #[cfg(unix)]
                         let _ = cx.update(|cx| observe_response(delivery, request, cx));
-                        #[cfg(not(target_os = "macos"))]
+                        #[cfg(not(unix))]
                         let _ = delivery;
                     }
                     Err(error) => {
@@ -80,22 +80,50 @@ pub(super) fn enqueue(revision: u64, cx: &mut Context<TerminalView>) {
 
 #[cfg(target_os = "macos")]
 type Delivery = mac_usernotifications::NotificationHandle;
-#[cfg(not(target_os = "macos"))]
+#[cfg(all(unix, not(target_os = "macos")))]
+type Delivery = notify_rust::NotificationHandle;
+#[cfg(not(unix))]
 type Delivery = ();
 
-#[cfg(target_os = "macos")]
+#[cfg(unix)]
 fn observe_response(delivery: Delivery, request: Request, cx: &mut App) {
     let done = Arc::new(AtomicBool::new(false));
     let completed = done.clone();
+    let executor = cx.background_executor().clone();
     let task = cx.spawn(async move |cx| {
-        if let Ok(response) = delivery.response().await {
-            if response.is_default_action() {
-                let _ = cx.update(|cx| window_view::focus_native_notification(&request.terminal, request.revision, cx));
-            }
+        if wait_for_click(delivery, executor).await {
+            let _ = cx.update(|cx| window_view::focus_native_notification(&request.terminal, request.revision, cx));
         }
         completed.store(true, Ordering::Release);
     });
     cx.global_mut::<Dispatcher>().responses.push((done, task));
+}
+
+#[cfg(target_os = "macos")]
+async fn wait_for_click(delivery: Delivery, _: BackgroundExecutor) -> bool {
+    delivery.response().await.is_ok_and(|response| response.is_default_action())
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+async fn wait_for_click(delivery: Delivery, executor: BackgroundExecutor) -> bool {
+    let response = async {
+        let clicked = std::cell::Cell::new(false);
+        delivery.wait_for_action_async(|response| clicked.set(response.is_default_action())).await;
+        Some(clicked.get())
+    };
+    let timeout = async {
+        executor.timer(std::time::Duration::from_secs(120)).await;
+        None
+    };
+    let result = futures_lite::future::or(response, timeout).await;
+    if result.is_none() {
+        // Desktop servers may ignore expiry hints. Bound CloseNotification too,
+        // so an unavailable D-Bus service cannot retain this listener forever.
+        futures_lite::future::or(delivery.close_async(), async {
+            executor.timer(std::time::Duration::from_secs(2)).await;
+        }).await;
+    }
+    result.unwrap_or(false)
 }
 
 fn deliver(title: &str, body: &str) -> Result<Delivery> {
@@ -123,9 +151,17 @@ fn deliver(title: &str, body: &str) -> Result<Delivery> {
         notification.app_id("dev.rmux.prototype");
         notification.appname("rmux")
             .summary(if title.is_empty() { "rmux" } else { &title })
-            .body(&body)
-            .show()?;
-        Ok(())
+            .body(&body);
+        #[cfg(unix)]
+        {
+            notification.action("default", "Open Terminal").timeout(120_000);
+            Ok(notification.show()?)
+        }
+        #[cfg(not(unix))]
+        {
+            notification.show()?;
+            Ok(())
+        }
     }
 }
 
