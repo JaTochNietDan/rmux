@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Added terminal-scoped shortcut text targets alongside existing actions and
+configured commands. Single/chord bindings send exact UTF-8 input through the
+normal bounded terminal writer; they add neither Return nor bracketed-paste
+markers. Validation enforces one target, terminal-only scope and 1–16,384 bytes.
+The handler requires terminal focus and rejects active copy/find/ports/prompt/quit
+states. Focused real-keymap tests passed for Unicode/control-byte preservation,
+settings-context exclusion, target ambiguity and byte bounds. Native dispatch to
+a PTY remains unverified. This extends rmux's JSON keybindings; Ghostty syntax,
+named key tables and complete action compatibility remain pending.
+
 Extended manual terminal memory diagnostics with Unix foreground process-group
 leader PID, RSS and CPU, plus foreground RSS/CPU sorting and JSON export. The
 sampler batches up to 256 shells, 256 foreground leaders and the rmux process;

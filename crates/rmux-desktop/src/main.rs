@@ -91,6 +91,11 @@ struct SetTerminalTheme { theme: preferences::TerminalTheme }
 #[action(namespace = rmux, no_json)]
 struct RunCustomCommand { name: String }
 
+#[derive(Clone, Debug, Default, PartialEq, Action)]
+#[action(namespace = rmux, no_json)]
+struct SendShortcutText { text: String }
+
+
 #[derive(Default)]
 struct Shutdowns {
     handles: Vec<rmux_terminal::session::ShutdownHandle>,
@@ -1650,6 +1655,12 @@ impl Render for TerminalView {
             .on_scroll_wheel(cx.listener(Self::wheel))
             .on_drop(cx.listener(Self::drop_files))
             .on_action(cx.listener(Self::paste))
+            .on_action(cx.listener(|this, action: &SendShortcutText, window, cx| {
+                cx.stop_propagation();
+                if !this.focus.is_focused(window) || this.copy_mode.is_some() || this.find.is_some() || this.ports.visible
+                    || cx.global::<PromptGate>().is_active() || cx.global::<Shutdowns>().quitting || cx.global::<Shutdowns>().quit_prompt { return; }
+                this.input(action.text.as_bytes(), cx);
+            }))
             .on_action(cx.listener(|this, _: &EnterCopyMode, window, cx| {
                 if let Some(mode) = &this.copy_mode { mode.read(cx).focus.focus(window); return; }
                 this.selecting = false;

@@ -316,14 +316,33 @@ Incomplete chords use GPUI's one-second timeout and replay handling; a leader
 can therefore delay its ordinary terminal behavior. A small overlay shows the
 pending keys while rmux waits for the next stroke; it does not take keyboard
 focus or resize the terminal. The limit is 128 bindings. Duplicate normalized keys in the same
-context, unknown key names/actions/commands and ambiguous action-plus-command
-definitions fail config validation. A single stroke and a two-stroke chord cannot
+context, unknown key names/actions/commands and definitions with more than one
+target fail config validation. A single stroke and a two-stroke chord cannot
 share a prefix in the same custom context (for example `ctrl-k` and
 `ctrl-k ctrl-t`); two different chords may share their first stroke. Error messages
 identify the conflicting sequences. Function keys use F1–F24, without zero padding. Reload Settings replaces prior overrides and restores
 removed bindings to defaults. Later overrides win within the same context;
 a more specific terminal context takes precedence over a global binding.
 `disabled` removes the matching app binding, allowing normal event handling.
+
+A binding may specify `text` instead of `action` or `command` to send exact UTF-8
+bytes to the focused terminal, for example:
+
+```json
+{"keybindings":[
+  {"key":"ctrl-k g","text":"git status"},
+  {"key":"ctrl-k u","text":"\u0015"}
+]}
+```
+
+The first inserts `git status` without pressing Enter; the second sends Ctrl-U.
+JSON `\r` explicitly sends Return, and `\u001b` sends Escape. These are raw input
+bytes, not bracketed paste: no newline, escaping or shell expansion is added by
+rmux. Text bindings require terminal context and 1–16,384 UTF-8 bytes. They do not
+send while a search/copy/ports overlay or confirmation prompt is active. Existing
+leader-key, override and reload rules apply. Ghostty's configuration syntax and
+named key tables are not yet imported.
+
 The palette shows shortcuts resolved for its originating focus context.
 
 Supported action names: `new_workspace`, `new_window`, `new_tab`, `split_right`,

@@ -15,6 +15,7 @@ pub struct Binding {
     pub key: String,
     pub action: Option<String>,
     pub command: Option<String>,
+    pub text: Option<String>,
     #[serde(default)]
     pub context: Scope,
 }
@@ -142,13 +143,18 @@ pub fn compile(settings: &Preferences) -> Result<Vec<KeyBinding>> {
             }
         }
         sequences.push((binding.context.context(), sequence));
-        let target = match (&binding.action, &binding.command) {
-            (Some(name), None) => action(name).ok_or_else(|| anyhow::anyhow!("unknown shortcut action: {name}"))?,
-            (None, Some(name)) => {
+        let target = match (&binding.action, &binding.command, &binding.text) {
+            (Some(name), None, None) => action(name).ok_or_else(|| anyhow::anyhow!("unknown shortcut action: {name}"))?,
+            (None, Some(name), None) => {
                 ensure!(settings.commands.iter().any(|command| command.name == *name), "shortcut command is not configured: {name}");
                 Box::new(RunCustomCommand { name: name.clone() }) as Box<dyn Action>
             }
-            _ => anyhow::bail!("keybinding requires exactly one action or command"),
+            (None, None, Some(text)) => {
+                ensure!(matches!(binding.context, Scope::Terminal), "text bindings require terminal context");
+                ensure!(!text.is_empty() && text.len() <= 16 * 1024, "shortcut text requires 1..16384 UTF-8 bytes");
+                Box::new(SendShortcutText { text: text.clone() }) as Box<dyn Action>
+            }
+            _ => anyhow::bail!("keybinding requires exactly one action, command or text"),
         };
         let context = binding.context.context().map(|context| KeyBindingContextPredicate::parse(context).unwrap().into());
         Ok(KeyBinding::load(&binding.key, target, context, false, None, &DummyKeyboardMapper)?)
@@ -233,6 +239,28 @@ mod tests {
         assert!(actions[0].action().as_any().is::<ToggleSettings>());
         let (actions, pending) = map.bindings_for_input(&prefix, &[KeyContext::parse("Settings").unwrap()]);
         assert!(actions.is_empty() && !pending);
+    }
+
+    #[test]
+    fn text_chords_preserve_bytes_and_are_terminal_only() {
+        let text = "printf '世界'\r\u{1b}[A";
+        let prefs = settings(serde_json::json!({"keybindings":[{"key":"ctrl-k t","text":text}]}));
+        let mut map = Keymap::default();
+        map.add_bindings(compile(&prefs).unwrap());
+        let keys = [Keystroke::parse("ctrl-k").unwrap(), Keystroke::parse("t").unwrap()];
+        let terminal = [KeyContext::parse("Terminal").unwrap()];
+        let (actions, pending) = map.bindings_for_input(&keys, &terminal);
+        assert!(!pending);
+        assert_eq!(actions[0].action().as_any().downcast_ref::<crate::SendShortcutText>().unwrap().text.as_bytes(), text.as_bytes());
+        assert!(map.bindings_for_input(&keys, &[KeyContext::parse("Settings").unwrap()]).0.is_empty());
+        for binding in [
+            serde_json::json!({"key":"ctrl-k t","text":""}),
+            serde_json::json!({"key":"ctrl-k t","text":"界".repeat(5462)}),
+            serde_json::json!({"key":"ctrl-k t","text":"hello","context":"window"}),
+            serde_json::json!({"key":"ctrl-k t","text":"hello","action":"settings"}),
+            serde_json::json!({"key":"ctrl-k t","text":"hello","command":"Tests"}),
+        ] { assert!(compile(&settings(serde_json::json!({"keybindings":[binding]}))).is_err()); }
+        assert!(compile(&settings(serde_json::json!({"keybindings":[{"key":"ctrl-k t","text":"x".repeat(16384)}]}))).is_ok());
     }
 
     #[test]
