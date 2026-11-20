@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Copy-mode clipboard preparation now runs on the background executor against the
+shared snapshot. The requested selection is captured at activation; subsequent
+navigation does not change what is copied. Each request uses the same global
+clipboard generation as terminal/field copies, checking before formatting and
+again before delivery so a later clipboard action wins. The view shows copying,
+empty-selection, completion or superseded feedback. One pending delivery task
+is retained per view; closing drops it. An allocation already executing remains
+bounded by the snapshot and may finish before release. Desktop test compilation
+and the focused clipboard-ordering test passed; native clipboard/UI acceptance
+remains pending.
+
 Measured and reduced copy-mode snapshot costs at the 8 MiB input limit.
 Printable ASCII rows now map byte offsets directly to cell columns without
 Unicode checkpoint construction; controls stay on the Unicode path. Truncated

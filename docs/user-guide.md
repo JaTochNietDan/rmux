@@ -6,7 +6,9 @@ Home/End to reach either end, and Page Up/Down to move approximately one visible
 moving, or press Space/v to anchor a range. Click selects a line; Shift-click
 extends. Enter/y or the platform Copy shortcut copies selected logical lines;
 Select All selects the snapshot. A copy status reports the byte count; empty
-selections leave the clipboard unchanged. The header shows the current line.
+selections leave the clipboard unchanged. Large selections are prepared in the
+background; a newer copy elsewhere takes precedence over a pending copy. Closing
+copy mode cancels pending clipboard delivery. The header shows the current line.
 Escape closes it. Paste is disabled in this
 view. The snapshot includes at most the first 8 MiB and 65,536 lines; truncation
 is labeled. Long displayed lines are clipped at 4,096 bytes, but copying includes

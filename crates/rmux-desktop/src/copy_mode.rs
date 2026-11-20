@@ -116,6 +116,7 @@ pub(super) struct CopyMode {
     search_job: Option<Task<()>>,
     message: String,
     copy_message: Option<String>,
+    copy_job: Option<Task<()>>,
     cursor: usize,
     anchor: Option<usize>,
     characters: bool,
@@ -166,7 +167,7 @@ impl CopyMode {
         let focus = cx.focus_handle();
         focus.focus(window);
         Self { focus, buffer: None, search: None, query: String::new(), matches: Vec::new(),
-            search_message: String::new(), search_cancel: Arc::new(AtomicBool::new(false)), search_job: None, copy_message: None, message: "Reading terminal history…".into(), cursor: 0,
+            search_message: String::new(), search_cancel: Arc::new(AtomicBool::new(false)), search_job: None, copy_message: None, copy_job: None, message: "Reading terminal history…".into(), cursor: 0,
             anchor: None, characters: false, column: 0, preferred_column: None, character_anchor: None, scroll: ListState::new(0, ListAlignment::Bottom, px(128.)), _load: load }
     }
     fn open_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -226,17 +227,38 @@ impl CopyMode {
         }));
     }
     fn copy(&mut self, cx: &mut Context<Self>) {
-        if let Some(buffer) = &self.buffer {
-            let text = if self.characters { &buffer.text[buffer.character_range(self.cursor, self.column, self.character_anchor)] }
-                else { buffer.selected(self.cursor, self.anchor) };
-            if text.is_empty() {
-                self.copy_message = Some("Selection is empty".into());
-            } else {
-                self.copy_message = Some(format!("Copied {} bytes", text.len()));
-                clipboard::write(ClipboardItem::new_string(text.to_owned()), cx);
-            }
-            cx.notify();
-        }
+        let Some(buffer) = self.buffer.clone() else { return; };
+        // Use the same application-wide ordering as terminal exports. A later
+        // copy from another pane, field or window must win over this worker.
+        let ticket = clipboard::begin();
+        self.copy_job = None;
+        let (cursor, column, anchor, character_anchor, characters) =
+            (self.cursor, self.column, self.anchor, self.character_anchor, self.characters);
+        let executor = cx.background_executor().clone();
+        self.copy_message = Some("Copying selection…".into());
+        self.copy_job = Some(cx.spawn(async move |entity, cx| {
+            let text = executor.spawn(async move {
+                if !clipboard::current(ticket) { return None; }
+                let selected = if characters { &buffer.text[buffer.character_range(cursor, column, character_anchor)] }
+                    else { buffer.selected(cursor, anchor) };
+                let owned = selected.to_owned();
+                clipboard::current(ticket).then_some(owned)
+            }).await;
+            let _ = entity.update(cx, |this, cx| {
+                this.copy_job = None;
+                if !clipboard::current(ticket) {
+                    this.copy_message = Some("Copy superseded by a newer clipboard action".into());
+                } else if let Some(text) = text {
+                    if text.is_empty() { this.copy_message = Some("Selection is empty".into()); }
+                    else {
+                        this.copy_message = Some(format!("Copied {} bytes", text.len()));
+                        clipboard::write(ClipboardItem::new_string(text), cx);
+                    }
+                }
+                cx.notify();
+            });
+        }));
+        cx.notify();
     }
     fn key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         if !self.focus.is_focused(window) { return; }
