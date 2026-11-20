@@ -883,6 +883,7 @@ fn dispatch_inner(
                 | "notification.mark_read"
                 | "pane.zoom.set"
                 | "pane.resize"
+                | "pane.split"
                 | "window.create"
                 | "workspace.create"
                 | "workspace.close"

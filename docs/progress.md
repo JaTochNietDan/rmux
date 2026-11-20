@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Fixed pane.split JSON-RPC notifications being silently ignored by the mutation
+allowlist. The native socket fixture reproduced the missing split before the fix,
+then passed notification-created pane count, request-plus-notification resize
+weights, unchanged identities/selection, and an invalid resize notification
+followed by a successful ping with no stray response. Desktop build and the
+updated workspace placement smoke passed. Notification behavior uses the same
+validated UI-thread mutation path as ordinary requests.
+
 Exposed directional resizing as pane.resize RPC and rmuxctl resize-pane, including
 CLI help/completion and explicit target/direction validation. It reuses the layout
 operation, reports changed/no-op, preserves selection and rejects zoomed/dragging/

@@ -30,9 +30,15 @@ for mode in ["end", "top", "after_current"]:
                     connection.settimeout(8)
                     connection.connect(str(endpoint / "rpc.sock"))
                     stream = connection.makefile("rwb", buffering=0)
-                    def call(method, fail=False, **params):
-                        stream.write((json.dumps(dict(jsonrpc="2.0", id=1, method=method, params=params)) + "\n").encode())
+                    def call(method, fail=False, notify=False, **params):
+                        request = dict(jsonrpc="2.0", method=method, params=params)
+                        if not notify:
+                            request["id"] = 1
+                        stream.write((json.dumps(request) + "\n").encode())
+                        if notify:
+                            return
                         reply = json.loads(stream.readline())
+                        assert reply.get("id") == 1, "notification unexpectedly produced a response"
                         if fail:
                             assert "error" in reply, reply
                             return
@@ -57,14 +63,18 @@ for mode in ["end", "top", "after_current"]:
                     if mode == "end":
                         pane = call("pane.list", workspace_id=original)["panes"][0]["id"]
                         assert call("pane.resize", pane_id=pane, direction="right")["changed"] is False
-                        call("pane.split", pane_id=pane, direction="right")
+                        call("pane.split", notify=True, pane_id=pane, direction="right")
+                        assert len(call("pane.list", workspace_id=original)["panes"]) == 2, "split notification was ignored"
                         def identity():
                             return [(r["id"], r.get("process_id")) for r in call("surface.list", workspace_id=original)["surfaces"]]
                         surfaces = identity()
                         selected = [r["id"] for r in rows() if r["selected"]]
                         assert call("pane.resize", pane_id=pane, direction="right")["changed"] is True
+                        call("pane.resize", notify=True, pane_id=pane, direction="right")
                         layout = next(r["layout"] for r in rows() if r["id"] == original)
-                        assert abs(layout["weights"][0] - 1.1) < 1e-5 and abs(layout["weights"][1] - .9) < 1e-5, layout
+                        assert abs(layout["weights"][0] - 1.2) < 1e-5 and abs(layout["weights"][1] - .8) < 1e-5, layout
+                        call("pane.resize", notify=True, pane_id=pane, direction="invalid")
+                        assert call("system.ping")["pong"] is True
                         assert identity() == surfaces
                         assert [r["id"] for r in rows() if r["selected"]] == selected
                         call("pane.resize", fail=True, pane_id=pane, direction="diagonal")
