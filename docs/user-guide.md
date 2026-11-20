@@ -1371,8 +1371,10 @@ stay attached to their pane, focus follows the moved pane, and split proportions
 stay attached to their positions. Swapping exits zoom to reveal the new layout.
 Cmd+Shift+Enter toggles pane zoom (Ctrl+Shift+Enter on Linux/Windows), also available
 under View. Click the restore strip or repeat the shortcut to restore the splits.
-Ctrl+Tab cycles panes while zoomed. Creating or closing a pane restores the layout;
-directional focus shortcuts apply when the split layout is visible.
+Ctrl+Tab cycles panes while zoomed. Directional focus shortcuts also switch the
+zoomed pane, following the underlying split layout; an outer edge is a no-op.
+Creating or closing a pane restores the layout. Directional swap/join operations
+still require the split layout to be visible.
 
 Drag split dividers to resize adjacent panes; double-click to give the adjacent
 branches equal space. Resizing and closing panes preserve surviving sessions.

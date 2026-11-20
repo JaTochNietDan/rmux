@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Directional focus now switches the visible pane while zoomed, using current split
+geometry and retaining zoom on the destination. This brings arrow-direction
+navigation in line with numeric focus and pane cycling; outer-edge navigation is
+a no-op. Directional swap/join retain explicit zoom guards so navigation does not
+silently enable hidden-layout mutations. Desktop cargo check passed. The neighbor
+model already has nested/resize/swap coverage; native zoom/focus acceptance is
+still pending on the locked desktop.
+
 Directional pane focus/swap/join now resolve neighbors from the current weighted
 split tree rather than cached terminal pixel bounds. This makes selection follow
 resize, swap and collapse immediately and keeps terminal headers/overlays from

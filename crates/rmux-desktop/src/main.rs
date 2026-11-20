@@ -2583,7 +2583,7 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if cx.global::<Shutdowns>().quitting { return; }
+        if cx.global::<Shutdowns>().quitting || self.zoomed.is_some() { return; }
         let Some(current) = self.focused_index(window, cx) else { return; };
         if let Some(next) = self.directional_neighbor(current, direction) {
             self.join_panes(current, next, window, cx);
@@ -2642,6 +2642,7 @@ impl Workspace {
         self.swap_panes(current, next, cx);
     }
     fn swap_pane_direction(&mut self, direction: layout::Direction, window: &Window, cx: &mut Context<Self>) {
+        if self.zoomed.is_some() { return; }
         let Some(current) = self.focused_index(window, cx) else { return; };
         if let Some(next) = self.directional_neighbor(current, direction) {
             self.swap_panes(current, next, cx);
@@ -2797,13 +2798,14 @@ impl Workspace {
     ) {
         let Some(current) = self.focused_index(window, cx) else { return; };
         if let Some(next) = self.directional_neighbor(current, direction) {
+            if self.zoomed.is_some() {
+                self.zoomed = Some(self.panes[next].entity_id());
+            }
             self.panes[next].read(cx).focus(window, cx);
             cx.notify();
         }
     }
     fn directional_neighbor(&self, current: usize, direction: layout::Direction) -> Option<usize> {
-        // Keep directional mutations unavailable while the split layout is hidden.
-        if self.zoomed.is_some() { return None; }
         let next = self.layout.as_ref()?.neighbor(self.panes.get(current)?, direction)?;
         self.panes.iter().position(|pane| *pane == next)
     }
