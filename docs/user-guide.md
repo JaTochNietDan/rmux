@@ -638,7 +638,9 @@ and cmux compatibility remain pending.
 The native GUI-to-pipe path passed a macOS smoke check covering restored layouts,
 zoom and target selection across two windows. Visual focus, OS activation and
 other-platform acceptance remain pending. Reproduce with
-`mise run smoke-live-rpc` on Unix with an existing Python 3 and usable GUI session.
+`mise run smoke-live-rpc` on Unix with a usable GUI session.
+`mise run smoke-live-sessions` additionally checks running shell state through tab,
+workspace and workspace-merge transfers, including closure of emptied windows.
 
 For opt-in Unix socket automation, launch with
 `RMUX_SOCKET_DIR=/absolute/new-directory mise run run`. The parent must exist;

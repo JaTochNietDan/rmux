@@ -299,6 +299,51 @@ def run(binary, live_shell=False):
                     wait_file(Path(directory) / f"{last_pid}.state", "last-tab-世界")
                 assert send("surface.move_to_workspace", {"surface_id": last_tab["id"], "workspace_id": last_window["selected_workspace_id"]})["error"]["code"] == -32004
                 checks.append("moving the sole tab closes its source window/workspace and preserves the shell and state")
+                def merge_and_check(source_id, destination_id):
+                    before = {item["id"]: item for item in send("workspace.list")["result"]["workspaces"]}
+                    source, destination = before[source_id], before[destination_id]
+                    terminals = send("surface.list")["result"]["surfaces"]
+                    params = {"workspace_id": source_id, "target_workspace_id": destination_id}
+                    assert send("workspace.merge", params)["result"] == {**params, "merged": True}
+                    after = {item["id"]: item for item in send("workspace.list")["result"]["workspaces"]}
+                    assert set(after) == set(before) - {source_id}
+                    merged = after[destination_id]
+                    assert merged["layout"]["axis"] == "columns"
+                    assert merged["layout"]["children"] == [destination["layout"], source["layout"]]
+                    assert merged["zoomed_pane_id"] is None
+                    retained = send("surface.list")["result"]["surfaces"]
+                    assert {item["id"]: item["process_id"] for item in retained} == {item["id"]: item["process_id"] for item in terminals}
+                    moved_ids = {item["id"] for item in terminals if item["workspace_id"] in (source_id, destination_id)}
+                    assert all(item["workspace_id"] == destination_id and item["window_id"] == destination["window_id"] for item in retained if item["id"] in moved_ids)
+                    selected = next(item for item in send("window.list")["result"]["windows"] if item["id"] == destination["window_id"])
+                    assert selected["selected_workspace_id"] == destination_id
+                    assert send("workspace.merge", params)["error"]["code"] == -32004
+                    assert {item["id"]: item for item in send("workspace.list")["result"]["workspaces"]} == after
+
+                merge_and_check(workspaces[1]["id"], workspace["id"])
+                checks.append("same-window merge preserves layout subtrees and terminal identities; stale source rejected without mutation")
+                merge_window = send("window.create", {"activate": False})["result"]
+                merge_target = merge_window["selected_workspace_id"]
+                merge_tab = next(item for item in send("surface.list")["result"]["surfaces"] if item["workspace_id"] == merge_target)
+                expected_states = {**{pid: f"state-{pid}-世界" for pid in original_processes.values()}, last_tab["process_id"]: "last-tab-世界"}
+                if live_shell:
+                    child_pids.add(merge_tab["process_id"])
+                    wait_file(Path(directory) / f'{merge_tab["process_id"]}.ready', f'alive-{merge_tab["process_id"]}')
+                    expected_states[merge_tab["process_id"]] = "initial"
+                merge_and_check(workspace["id"], merge_target)
+                merge_and_check(remote["workspace_id"], merge_target)
+                remaining = send("window.list")["result"]["windows"]
+                assert len(remaining) == 1 and remaining[0]["id"] == merge_window["id"]
+                if live_shell:
+                    for item in send("surface.list")["result"]["surfaces"]:
+                        pid = item["process_id"]
+                        assert not item["process_exited"]
+                        state = Path(directory) / f"{pid}.state"
+                        state.unlink(missing_ok=True)
+                        assert "result" in send("surface.send_text", {"surface_id": item["id"], "text": "probe\n"})
+                        wait_file(state, expected_states[pid])
+                    checks.append("seven shell PIDs and Unicode variables survive same/cross-window merges and source-window closure")
+                checks.append("cross-window merge preserves nested layouts and removes the emptied source window")
                 process.stdin.close()
                 time.sleep(0.1)
                 assert process.poll() is None, "EOF unexpectedly closed the GUI"

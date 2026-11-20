@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Extended the live RPC harness to exercise workspace merging on the actual macOS
+app with seven running fixture shells. Same-window and cross-window merges passed:
+both nested layout subtrees, all terminal IDs/PIDs and Unicode shell variables
+survive; destination selection/ownership changes correctly; stale source IDs fail
+without mutation; merging the final source workspace closes its window. The test
+also confirms every tracked child exits after terminating its own isolated app.
+Ran `mise exec -- cargo build -p rmux-desktop` and
+`mise exec -- python scripts/smoke-live-rpc.py --live-shell` successfully.
+This establishes live stdio/PTY continuity, not visual polish, native OS focus,
+unread/group/tab-order behavior, socket transport, persistence or other platforms.
+
 Extended workspace merge picker and RPC routing across app windows. Picker rows
 identify the window and workspace; stable destination handles/IDs are rechecked.
 Both window interaction guards, both split states/depths and the destination's
