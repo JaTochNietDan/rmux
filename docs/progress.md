@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Changed the terminal memory panel from eagerly constructing every sampled row to
+GPUI's virtualized list, matching the command palette's rendering approach.
+Only requested rows construct labels, formatting, tooltips and click handlers;
+sorting retains a lightweight index vector and does not clone sample/name data.
+Refresh, sort and close reset list measurements; terminal focus still uses stable
+workspace/surface IDs. Desktop compilation passed. Native scrolling, sizing and
+render-cost measurements remain unverified; no latency or RSS improvement is
+claimed from compilation alone. Also corrected the stale F08 ledger entry to
+reflect existing manual shell/app process sampling and its remaining scope.
+
 Extended the live RPC harness to exercise workspace merging on the actual macOS
 app with seven running fixture shells. Same-window and cross-window merges passed:
 both nested layout subtrees, all terminal IDs/PIDs and Unicode shell variables

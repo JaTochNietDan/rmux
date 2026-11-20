@@ -122,6 +122,7 @@ pub(super) struct WorkspaceWindow {
     workspace_scroll: ScrollHandle,
     notice: Option<String>,
     memory_rows: Option<Vec<memory_view::Row>>,
+    memory_scroll: ListState,
     memory_application: Option<process_metrics::Sample>,
     memory_sort: memory_view::Sort,
     memory_loading: bool,
@@ -284,6 +285,11 @@ impl WorkspaceWindow {
     pub(super) fn focus_memory_terminal(&mut self, workspace: EntityId, surface: EntityId, window: &mut Window, cx: &mut Context<Self>) {
         if self.automation_available(cx).is_ok() { self.focus_terminal(workspace, surface, window, cx); }
     }
+    pub(super) fn render_memory_row(&self, index: usize, cx: &mut Context<Self>) -> AnyElement {
+        self.memory_rows.as_ref().and_then(|rows| rows.get(index))
+            .map(|row| memory_view::render_row(row, index, cx))
+            .unwrap_or_else(|| div().into_any_element())
+    }
     fn refresh_memory(&mut self, cx: &mut Context<Self>) {
         if self.memory_loading { return; }
         let mut jobs = Vec::new();
@@ -328,6 +334,7 @@ impl WorkspaceWindow {
             }).await;
             let _ = entity.update(cx, |this, cx| {
                 if this.memory_generation != generation || this.memory_rows.is_none() { return; }
+                this.memory_scroll.reset(rows.0.len());
                 this.memory_rows = Some(rows.0);
                 this.memory_application = rows.1;
                 this.memory_loading = false;
@@ -2588,6 +2595,7 @@ impl WorkspaceWindow {
             workspace_scroll: ScrollHandle::new(),
             notice: None,
             memory_rows: None,
+            memory_scroll: ListState::new(0, ListAlignment::Top, px(80.)),
             memory_application: None,
             memory_sort: Default::default(),
             memory_loading: false,
@@ -2759,6 +2767,7 @@ impl WorkspaceWindow {
             workspace_scroll: ScrollHandle::new(),
             notice: None,
             memory_rows: None,
+            memory_scroll: ListState::new(0, ListAlignment::Top, px(80.)),
             memory_application: None,
             memory_sort: Default::default(),
             memory_loading: false,
@@ -3434,6 +3443,7 @@ impl Render for WorkspaceWindow {
             .on_action(cx.listener(|this, _: &RefreshTerminalMemory, _, cx| this.refresh_memory(cx)))
             .on_action(cx.listener(|this, _: &CycleTerminalMemorySort, _, cx| {
                 this.memory_sort = this.memory_sort.next();
+                this.memory_scroll.reset(this.memory_rows.as_ref().map_or(0, Vec::len));
                 cx.notify();
             }))
             .on_action(cx.listener(|this, _: &CopyTerminalMemory, _, cx| {
@@ -3445,6 +3455,7 @@ impl Render for WorkspaceWindow {
                 // still be in an OS call. An in-flight worker releases its Arc later.
                 this.process_sampler = Default::default();
                 this.memory_rows = None;
+                this.memory_scroll.reset(0);
                 this.memory_application = None;
                 this.memory_loading = false;
                 this.memory_generation = this.memory_generation.wrapping_add(1);
@@ -3750,7 +3761,7 @@ impl Render for WorkspaceWindow {
                                     .child(icons::icon("bell")))
                         ).child(gpui::div().flex_1().min_h_0().child(entry.workspace.clone()))
                     })
-                    .when_some(self.memory_rows.as_ref(), |div, rows| div.child(memory_view::panel(rows, self.memory_application, self.memory_sort, self.memory_loading, cx)))
+                    .when_some(self.memory_rows.as_ref(), |div, rows| div.child(memory_view::panel(rows, self.memory_application, self.memory_sort, self.memory_loading, self.memory_scroll.clone(), cx)))
                     .when_some(self.notice.clone(), |div, notice| div.child(gpui::div().flex().items_start().flex_shrink_0().min_w_0()
                         .gap_2().px_3().py_2().text_xs().bg(rgb(0x292929)).border_t_1().border_color(rgb(0x3b4557))
                         .child(gpui::div().id("window-notice-text").flex_1().min_w_0().max_h(px(96.)).overflow_scroll().whitespace_normal()

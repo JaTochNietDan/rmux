@@ -15,15 +15,21 @@ impl Sort {
     fn label(self) -> &'static str {
         match self { Self::Storage => "Screen storage ↓", Self::ShellMemory => "Shell RSS ↓", Self::ShellCpu => "Shell CPU ↓" }
     }
-    fn rows(self, rows: &[Row]) -> Vec<&Row> {
-        let mut rows: Vec<_> = rows.iter().collect();
-        rows.sort_by(|a, b| match self {
+    fn indices(self, rows: &[Row]) -> Vec<usize> {
+        let mut indices: Vec<_> = (0..rows.len()).collect();
+        indices.sort_by(|a, b| {
+            let (a, b) = (&rows[*a], &rows[*b]);
+            match self {
             Self::Storage => b.usage.map(|s| s.primary_resident_bytes.saturating_add(s.alternate_resident_bytes))
                 .cmp(&a.usage.map(|s| s.primary_resident_bytes.saturating_add(s.alternate_resident_bytes))),
             Self::ShellMemory => b.process.map(|s| s.resident_bytes).cmp(&a.process.map(|s| s.resident_bytes)),
             Self::ShellCpu => b.process.and_then(|s| s.cpu_percent).partial_cmp(&a.process.and_then(|s| s.cpu_percent)).unwrap_or(std::cmp::Ordering::Equal),
+            }
         });
-        rows
+        indices
+    }
+    fn rows(self, rows: &[Row]) -> Vec<&Row> {
+        self.indices(rows).into_iter().map(|index| &rows[index]).collect()
     }
 }
 
@@ -53,7 +59,9 @@ pub fn report(rows: &[Row], application: Option<process_metrics::Sample>, sort: 
     serde_json::to_string_pretty(&serde_json::json!({"scope":"ghostty_screen_storage","sample_mode":"manual","application":{"process_id":std::process::id(),"scope":"application_process","sample":application},"surfaces":rows})).expect("JSON memory report")
 }
 
-pub fn panel(rows: &[Row], application: Option<process_metrics::Sample>, sort: Sort, loading: bool, cx: &mut Context<window_view::WorkspaceWindow>) -> AnyElement {
+pub fn panel(rows: &[Row], application: Option<process_metrics::Sample>, sort: Sort, loading: bool, scroll: ListState, cx: &mut Context<window_view::WorkspaceWindow>) -> AnyElement {
+    let indices = sort.indices(rows);
+    let entity = cx.entity();
     let sampled = rows.iter().filter(|row| row.usage.is_some()).count();
     let resident: u64 = rows.iter().filter_map(|row| row.usage)
         .map(|usage| usage.primary_resident_bytes.saturating_add(usage.alternate_resident_bytes))
@@ -78,23 +86,27 @@ pub fn panel(rows: &[Row], application: Option<process_metrics::Sample>, sort: S
             .child(sort.label()))
         .child(div().px_3().pb_2().text_xs().text_color(rgb(0xa0a0a0))
             .child("Screen storage excludes app/GPU assets · shell RSS/CPU excludes descendants · up to 256 terminals · manual refresh"))
-        .child(div().id("terminal-memory-rows").flex_1().min_h_0().overflow_y_scroll().px_3()
-            .children(sort.rows(rows).into_iter().enumerate().map(|(index, row)| {
-                let workspace = row.workspace_id;
-                let surface = row.surface_id;
-                let hint: SharedString = format!("{} · Click to focus terminal", row.name).into();
-                let detail = row.usage.map(|usage| format!("Resident {} · Compressed {} · Images {} · Virtual {}",
-                    mib(usage.primary_resident_bytes.saturating_add(usage.alternate_resident_bytes)),
-                    mib(usage.compressed_bytes), mib(usage.image_bytes), mib(usage.virtual_bytes)))
-                    .unwrap_or_else(|| row.status.into());
-                div().id(("terminal-memory-row", index)).py_2().border_b_1().border_color(rgb(0x383838))
-                    .cursor_pointer().hover(|style| style.bg(rgb(0x303030)))
-                    .tooltip(move |_, cx| cx.new(|_| pane_view::ControlHint(hint.clone())).into())
-                    .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
-                        if event.standard_click() { this.focus_memory_terminal(workspace, surface, window, cx); }
-                    }))
-                    .child(div().text_sm().truncate().child(format!("{} · PID {}", row.name, row.pid.map(|pid| pid.to_string()).unwrap_or_else(|| "—".into()))))
-                    .child(div().text_xs().text_color(rgb(0xa0a0a0)).child(detail))
-                    .child(div().text_xs().text_color(rgb(0xa0a0a0)).child(row.process.map(|sample| format!("Shell RSS {} · CPU {}", mib(sample.resident_bytes), sample.cpu_percent.map(|cpu| format!("{cpu:.1}%")).unwrap_or_else(|| "— refresh after baseline".into()))).unwrap_or_else(|| "Shell process sample unavailable".into())))
-            }))).into_any_element()
+        .child(list(scroll, move |index, _, cx| {
+            entity.update(cx, |root, cx| root.render_memory_row(indices[index], cx))
+        }).with_sizing_behavior(ListSizingBehavior::Auto).flex_1().min_h_0().w_full())
+        .into_any_element()
+}
+
+pub fn render_row(row: &Row, index: usize, cx: &mut Context<window_view::WorkspaceWindow>) -> AnyElement {
+    let workspace = row.workspace_id;
+    let surface = row.surface_id;
+    let hint: SharedString = format!("{} · Click to focus terminal", row.name).into();
+    let detail = row.usage.map(|usage| format!("Resident {} · Compressed {} · Images {} · Virtual {}",
+        mib(usage.primary_resident_bytes.saturating_add(usage.alternate_resident_bytes)),
+        mib(usage.compressed_bytes), mib(usage.image_bytes), mib(usage.virtual_bytes)))
+        .unwrap_or_else(|| row.status.into());
+    div().id(("terminal-memory-row", index)).px_3().py_2().border_b_1().border_color(rgb(0x383838))
+        .cursor_pointer().hover(|style| style.bg(rgb(0x303030)))
+        .tooltip(move |_, cx| cx.new(|_| pane_view::ControlHint(hint.clone())).into())
+        .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+            if event.standard_click() { this.focus_memory_terminal(workspace, surface, window, cx); }
+        }))
+        .child(div().text_sm().truncate().child(format!("{} · PID {}", row.name, row.pid.map(|pid| pid.to_string()).unwrap_or_else(|| "—".into()))))
+        .child(div().text_xs().text_color(rgb(0xa0a0a0)).child(detail))
+        .child(div().text_xs().text_color(rgb(0xa0a0a0)).child(row.process.map(|sample| format!("Shell RSS {} · CPU {}", mib(sample.resident_bytes), sample.cpu_percent.map(|cpu| format!("{cpu:.1}%")).unwrap_or_else(|| "— refresh after baseline".into()))).unwrap_or_else(|| "Shell process sample unavailable".into()))).into_any_element()
 }
