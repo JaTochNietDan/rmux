@@ -476,6 +476,10 @@ payload before later input. Both raw and paste automation text are capped at
 terminal, pending paste or unavailable input queue returns `-32006`. No implicit
 newline is appended. Without `--paste`, input retains the existing raw behavior.
 
+The notification panel lists messages newest-first across all workspaces in the
+window, using arrival order rather than pane order. Keyboard selection remains
+attached to the same message as newer messages arrive.
+
 The notification panel owns keyboard focus while open. Up/down, Page Up/Down,
 and Tab/Shift-Tab navigate messages; Enter/Space closes the panel and opens the
 selected terminal. Delete/Backspace dismisses the selected message, and Escape

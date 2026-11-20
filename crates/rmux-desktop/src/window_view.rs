@@ -1466,12 +1466,13 @@ impl WorkspaceWindow {
                 for terminal in &pane.read(cx).terminals {
                     let view = terminal.read(cx);
                     for record in view.notifications.iter().rev().filter(|record| !unread_only || record.unread) {
-                        targets.push((entry.workspace.entity_id(), terminal.entity_id(), record.message.revision));
+                        targets.push((entry.workspace.entity_id(), terminal.entity_id(), record.message.revision, record.arrival));
                     }
                 }
             }
         }
-        targets
+        targets.sort_unstable_by_key(|row| std::cmp::Reverse(row.3));
+        targets.into_iter().map(|(workspace, terminal, revision, _)| (workspace, terminal, revision)).collect()
     }
     fn toggle_notifications(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(state) = self.notification_navigation.take() {
@@ -1546,11 +1547,13 @@ impl WorkspaceWindow {
                             pane.read(cx).tab_title(tab, cx),
                             record.unread,
                             message.clone(),
+                            record.arrival,
                         ));
                     }
                 }
             }
         }
+        messages.sort_unstable_by_key(|row| std::cmp::Reverse(row.6));
         let total_count = messages.len();
         let unread_count = messages.iter().filter(|row| row.4).count();
         if navigation.unread_only { messages.retain(|row| row.4); }
@@ -1633,7 +1636,7 @@ impl WorkspaceWindow {
                         list.child(div().p_3().text_sm().child(if navigation.unread_only { "No unread notifications" } else { "No notifications to show" }))
                     })
                     .children(messages.into_iter().map(
-                        |(workspace, terminal, name, terminal_title, unread, message)| {
+                        |(workspace, terminal, name, terminal_title, unread, message, _)| {
                             let revision = message.revision;
                             div()
                                 .id(SharedString::from(format!("notification-{terminal}-{revision}")))

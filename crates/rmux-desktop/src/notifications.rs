@@ -2,7 +2,7 @@
 use std::{collections::VecDeque, sync::{Arc, atomic::{AtomicU64, Ordering}}};
 static ARRIVAL: AtomicU64 = AtomicU64::new(0);
 use rmux_terminal::{DesktopNotification, NotificationVisibility};
-pub struct Record { pub message: Arc<DesktopNotification>, pub unread: bool, arrival: u64 }
+pub struct Record { pub message: Arc<DesktopNotification>, pub unread: bool, pub arrival: u64 }
 #[derive(Default)]
 pub struct History { records: VecDeque<Record>, revision: u64, latest_unread: Option<(u64, Arc<DesktopNotification>)> }
 impl History {

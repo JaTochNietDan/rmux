@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+The notification panel and its keyboard target list now sort by descending
+arrival sequence across the window. Both All and Unread filters share that order;
+selection remains identified by terminal/revision rather than a row index.
+Moving workspaces or panes no longer reorders the feed. Three focused history
+and arrival-order tests passed and the desktop compiled. Native selection/scroll
+behavior during incoming alerts still needs acceptance; RPC listing order is
+unchanged.
+
 Workspace notification previews now choose the newest unread message across
 all panes/tabs using a process-wide arrival sequence, instead of the first pane
 with unread history. Per-terminal cached previews include that sequence, so the
