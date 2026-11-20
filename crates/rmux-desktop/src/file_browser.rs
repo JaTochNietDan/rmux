@@ -30,6 +30,33 @@ fn check_cancel(canceled: &AtomicBool) -> anyhow::Result<()> {
     Ok(())
 }
 pub const MAX_ENTRIES: usize = 2048;
+/// A bounded display excerpt; the original retained line remains the copy source.
+pub fn preview_line_title(text: &str, query: &str) -> String {
+    let query = query.to_lowercase();
+    let mut start = 0;
+    if !query.trim().is_empty() {
+        let normalized = text.to_lowercase();
+        if let Some(found) = query.split_whitespace().filter_map(|word| normalized.find(word)).min() {
+            // Lowercasing can expand a scalar (e.g. İ); map folded bytes back
+            // to an original scalar index before choosing the excerpt.
+            let mut folded_bytes = 0;
+            let mut position: usize = 0;
+            for ch in text.chars() {
+                let width: usize = ch.to_lowercase().map(char::len_utf8).sum();
+                if folded_bytes + width > found { break; }
+                folded_bytes += width;
+                position += 1;
+            }
+            start = position.saturating_sub(32);
+        }
+    }
+    let mut chars = text.chars().skip(start);
+    let mut title = if start > 0 { "…".into() } else { String::new() };
+    title.extend(chars.by_ref().take(1024).map(|ch| if ch.is_control() { ' ' } else { ch }));
+    if chars.next().is_some() { title.push('…'); }
+    if title.is_empty() { title.push_str("(empty line)"); }
+    title
+}
 pub fn entered_directory(text: &str) -> Result<PathBuf, &'static str> {
     if text.is_empty() || text.len() > 4096 || text.contains('\0') {
         return Err("Enter a directory path of 1–4096 bytes without NUL characters");

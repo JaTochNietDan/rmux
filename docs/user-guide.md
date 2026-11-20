@@ -221,8 +221,10 @@ focus. Text previews retain up to 64 KiB and 512 lines, with explicit truncation
 labels. A final line cut by the byte limit is labeled partial; copying it includes
 only the captured text. Search numbered lines, press Enter to copy a preview line without closing
 the preview (a confirmation appears in its footer), or choose
-Back, Refresh, or Copy File Path. Display/search text is capped at 1,024 characters
-per line; copying includes the whole retained line. Preview never executes files
+Back, Refresh, or Copy File Path. Search covers the full retained line. Display
+excerpts stay capped at 1,024 characters and move near the earliest contiguous
+query-word match; fuzzy-only matches retain the opening excerpt. Copying includes
+the whole retained line. Preview never executes files
 or interprets escape sequences. Binary and non-UTF-8 files are rejected. Editing,
 remote files, rich document rendering and a persistent explorer panel remain
 unimplemented.

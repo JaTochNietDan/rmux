@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Text-preview search now indexes full retained lines instead of just their
+1,024-character display prefixes. Visible rows show bounded excerpts near an
+exact query-word match, with Unicode lowercase expansion mapped back to original
+text positions. Fuzzy-only matches keep the opening excerpt. Copy actions retain
+the original line; no reread or per-keystroke filesystem work is added. The focused
+regression covers a match beyond the display cap, expanding Unicode case folds,
+snippet bounds, control sanitization and unchanged copy text. Native visuals
+remain pending.
+
 Added system file-manager reveal actions to directory listings, text previews
 and file error recovery, plus Copy Directory Path. Labels follow the platform;
 the existing GPUI reveal API targets Finder/Explorer or Linux's directory portal

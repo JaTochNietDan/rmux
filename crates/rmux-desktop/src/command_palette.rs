@@ -49,6 +49,25 @@ pub(super) fn paged_result(selected: usize, count: usize, backwards: bool, viewp
 mod navigation_tests {
     use super::{navigated_result, paged_result, result_area_height};
     #[test]
+    fn preview_search_finds_text_beyond_display_cap_and_keeps_copy_source() {
+        let text = format!("{}\tNeedle 世界{}", "İ界".repeat(800), "z".repeat(1400));
+        let title = crate::file_browser::preview_line_title(&text, "");
+        assert!(!title.contains("Needle"));
+        let command = super::Command { title, subtitle: Some("Line 1".into()), shortcut: None,
+            target: super::PaletteEvent::Run(Box::new(crate::CopyPreviewLine { text: text.clone() })) };
+        let mut search = crate::palette_match::RankedSearch::new(vec![command.search_text()]);
+        search.update("NEEDLE 世界");
+        assert_eq!(search.matches, [0]);
+        let excerpt = crate::file_browser::preview_line_title(command.preview_line().unwrap(), "NEEDLE 世界");
+        assert!(excerpt.contains("Needle 世界"));
+        assert!(excerpt.starts_with('…') && excerpt.ends_with('…'));
+        assert!(excerpt.chars().count() <= 1026);
+        assert!(!excerpt.contains('\t'));
+        assert_eq!(command.preview_line(), Some(text.as_str()));
+        assert_eq!(crate::file_browser::preview_line_title("", ""), "(empty line)");
+        assert_eq!(crate::file_browser::preview_line_title("short", "missing"), "short");
+    }
+    #[test]
     fn paging_respects_visible_height_and_mixed_rows() {
         assert_eq!(paged_result(0, 20, false, 320., |_| 36.), Some(7));
         assert_eq!(paged_result(0, 20, false, 320., |_| 56.), Some(4));
@@ -88,6 +107,18 @@ struct Command {
     subtitle: Option<String>,
     target: PaletteEvent,
     shortcut: Option<String>,
+}
+impl Command {
+    fn preview_line(&self) -> Option<&str> {
+        match &self.target {
+            PaletteEvent::Run(action) => action.as_any().downcast_ref::<CopyPreviewLine>().map(|line| line.text.as_str()),
+            _ => None,
+        }
+    }
+    fn search_text(&self) -> String {
+        format!("{} {} {}", self.preview_line().filter(|text| !text.is_empty()).unwrap_or(&self.title), self.subtitle.as_deref().unwrap_or_default(),
+            self.shortcut.as_deref().map(shortcuts::search_terms).unwrap_or_default()).to_lowercase()
+    }
 }
 pub enum PaletteEvent {
     Run(Box<dyn Action>),
@@ -449,10 +480,7 @@ impl CommandPalette {
         commands.push(Command { title: "Refresh preview".into(), subtitle: empty.then(|| "Empty file · No text to preview".into()), shortcut: None,
             target: PaletteEvent::Run(Box::new(PreviewLocalFile { path: preview.path })) });
         commands.extend(preview.lines.into_iter().enumerate().map(|(index, text)| {
-            let mut chars = text.chars();
-            let mut title: String = chars.by_ref().take(1024).map(|ch| if ch.is_control() { ' ' } else { ch }).collect();
-            if chars.next().is_some() { title.push('…'); }
-            if title.is_empty() { title.push_str("(empty line)"); }
+            let title = file_browser::preview_line_title(&text, "");
             let copy_hint = if preview.partial_line == Some(index) { "Partial line · Enter copies only the captured text" } else { "Enter copies this preview line" };
             Command { title, subtitle: Some(format!("Line {} · {copy_hint}", index + 1)), shortcut: None,
                 target: PaletteEvent::Run(Box::new(CopyPreviewLine { text })) }
@@ -541,8 +569,7 @@ impl CommandPalette {
             input, heading, empty_message, buffer_rename: None, feedback: None, directory_input: false, location: None,
             search: palette_match::RankedSearch::new(commands
                 .iter()
-                .map(|command| format!("{} {} {}", command.title, command.subtitle.as_deref().unwrap_or_default(),
-                    command.shortcut.as_deref().map(shortcuts::search_terms).unwrap_or_default()).to_lowercase())
+                .map(Command::search_text)
                 .collect()),
             scroll: ListState::new(commands.len(), ListAlignment::Top, px(96.)),
             commands,
@@ -552,9 +579,12 @@ impl CommandPalette {
     fn render_result(&mut self, row: usize, cx: &mut Context<Self>) -> AnyElement {
         let Some(&command) = self.search.matches.get(row) else { return div().into_any_element(); };
         let selected = row == self.selected;
+        let title = self.commands[command].preview_line()
+            .map(|text| file_browser::preview_line_title(text, self.input.read(cx).value()))
+            .unwrap_or_else(|| self.commands[command].title.clone());
         let title_hint: SharedString = match &self.commands[command].subtitle {
-            Some(subtitle) => format!("{}\n{subtitle}", self.commands[command].title).into(),
-            None => self.commands[command].title.clone().into(),
+            Some(subtitle) => format!("{title}\n{subtitle}").into(),
+            None => title.clone().into(),
         };
         div()
             .id(("command", command))
@@ -581,7 +611,7 @@ impl CommandPalette {
                     .truncate()
                     .tooltip(move |_, cx| cx.new(|_| pane_view::ControlHint(title_hint.clone())).into())
                     .child(div().flex().flex_col().gap_1()
-                        .child(div().truncate().child(self.commands[command].title.clone()))
+                        .child(div().truncate().child(title))
                         .when_some(self.commands[command].subtitle.clone(), |column, subtitle| column.child(div().truncate().text_xs().line_height(px(16.)).text_color(rgb(0xa0a0a0)).child(subtitle)))),
             )
             .when_some(self.commands[command].shortcut.clone(), |row, shortcut| {
