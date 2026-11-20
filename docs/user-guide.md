@@ -1483,8 +1483,8 @@ browser (Ctrl-click on Linux/Windows). The lookup follows the displayed scrollba
 viewport and runs only on modifier-click or modifier-hover; ordinary rendering does not copy link
 URLs. Plain URLs can span soft-wrapped rows, but must be fully visible and fit
 within an 8 KiB logical line. Surrounding quotes and trailing prose punctuation
-are excluded. Explicit OSC 8 targets take precedence. Link hover feedback and
-local/remote file-path routing are still pending.
+are excluded. Explicit OSC 8 targets take precedence. Hold the link modifier while hovering to preview the target. Native hover
+acceptance and local/remote file-path routing are still pending.
 
 Cmd+F opens terminal search (Ctrl+Shift+F on Linux/Windows). A single-line selection
 of up to 4 KiB prefills a newly opened search, selected for easy replacement;
