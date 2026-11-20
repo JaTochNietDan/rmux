@@ -910,11 +910,16 @@ impl WorkspaceWindow {
         self.notice = Some("Saving appearance settings…".into());
         cx.notify();
         cx.spawn(async move |entity, cx| {
-            let result = executor.spawn(async move { settings.save_appearance() }).await;
+            let snapshot = settings.clone();
+            let result = executor.spawn(async move { snapshot.save_appearance() }).await;
             let _ = cx.update(|cx| {
                 cx.global_mut::<preferences::ReloadState>().0 = false;
                 let _ = entity.update(cx, |this, cx| {
-                    this.notice = Some(match result { Ok(path) => format!("Settings saved to {}", path.display()), Err(error) => format!("Settings not saved: {error:#}") });
+                    this.notice = Some(match result {
+                        Ok(path) if settings.same_saved_appearance(cx.global::<Preferences>()) => format!("Settings saved to {}", path.display()),
+                        Ok(_) => "Earlier settings saved. Your newer changes are not saved yet; choose Save again to keep them.".into(),
+                        Err(error) => format!("Settings not saved: {error:#}"),
+                    });
                     cx.notify();
                 });
             });

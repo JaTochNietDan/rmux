@@ -26,7 +26,7 @@ impl HexColor {
     }
 }
 
-#[derive(Clone, Copy, Default, Deserialize, Serialize)]
+#[derive(Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum TerminalTheme {
     #[default]
@@ -34,7 +34,7 @@ pub enum TerminalTheme {
     Light,
 }
 
-#[derive(Clone, Copy, Default, Deserialize, Serialize)]
+#[derive(Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum UnfocusedCursor {
     #[default]
@@ -185,6 +185,18 @@ impl Preferences {
     }
     pub fn close_policy_overridden(&self) -> bool { self.policy_override.is_some() }
 
+    /// Compare precisely the session values written by Save Settings. A close
+    /// policy supplied by the environment is intentionally not persisted.
+    pub fn same_saved_appearance(&self, other: &Self) -> bool {
+        self.font_size == other.font_size
+            && self.terminal_padding == other.terminal_padding
+            && self.terminal_theme == other.terminal_theme
+            && self.unfocused_cursor == other.unfocused_cursor
+            && self.copy_on_select == other.copy_on_select
+            && self.group_new_workspace_placement == other.group_new_workspace_placement
+            && (self.close_policy_overridden() || self.confirm_close == other.confirm_close)
+    }
+
     pub fn save_appearance(&self) -> Result<std::path::PathBuf> {
         use std::io::Write;
         let path = self.source.clone().context("No configuration path is available")?;
@@ -309,6 +321,21 @@ impl Preferences {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn saved_appearance_comparison_tracks_only_persisted_controls() {
+        let saved = Preferences::default();
+        let mut current = saved.clone();
+        assert!(saved.same_saved_appearance(&current));
+        current.font_size += 1.;
+        assert!(!saved.same_saved_appearance(&current));
+        current = saved.clone();
+        current.copy_on_select = !current.copy_on_select;
+        assert!(!saved.same_saved_appearance(&current));
+        current = saved.clone();
+        current.scrollback_mib += 1;
+        assert!(saved.same_saved_appearance(&current));
+    }
+
     #[test]
     fn group_placement_defaults_and_rejects_unknown_values() -> Result<()> {
         use crate::workspace_groups::Placement;

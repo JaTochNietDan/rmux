@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Settings save completion now compares the saved snapshot with the current
+session controls. If changes were made during the background write, the notice
+explains that the earlier values were saved and asks the user to Save again for
+the newer ones. The comparison covers exactly the persisted appearance/behavior
+controls and excludes an environment-overridden close policy. All twelve focused
+preferences tests passed, including file preservation and comparison coverage.
+Native concurrent-adjustment/save feedback remains unverified.
+
 Single-line editors now show a compact “Too long” indicator when a paste or IME
 update exceeds the existing 4096-byte limit. Its tooltip explains that existing
 text was retained; successful edits and undo/redo clear the indicator. Paste size
