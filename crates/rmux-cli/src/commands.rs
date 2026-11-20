@@ -1,9 +1,10 @@
 //! Explicit supported command subset; reject unsupported flags rather than dropping them.
 use serde_json::{Map, Value};
 use std::ffi::OsString;
+use std::io::Read;
 
 pub const HELP: &str = "Commands (JSON output; explicit opaque IDs required):
-  set-buffer [--name NAME] TEXT | list-buffers
+  set-buffer [--name NAME] [TEXT|-] | list-buffers
   paste-buffer --surface ID [--name NAME] [--bracketed]
   notify --surface ID [--title TITLE] [--body BODY]
   list-notifications [--window ID] [--workspace ID]
@@ -32,7 +33,7 @@ whole process unless narrowed with --window (workspaces/panes/panels) or
 pub fn help(command: &str) -> Result<String, String> {
     let (arguments, description) = match command {
         "paste-buffer" => ("--surface ID [--name NAME] [--bracketed]", "Queue a retained buffer to an explicit terminal without changing focus or scroll position. --bracketed uses terminal paste encoding. The buffer is retained; requests are never retried."),
-        "set-buffer" => ("[--name NAME] TEXT", "Set a process-local copy buffer; name defaults to default. Storage is bounded and never persisted or copied to the OS clipboard."),
+        "set-buffer" => ("[--name NAME] [TEXT|-]", "Set a process-local copy buffer; name defaults to default. Omitted text or - reads UTF-8 stdin exactly, including trailing newlines. Storage and request size are bounded; buffers are not persisted or copied to the OS clipboard."),
         "list-buffers" => ("", "List process-local copy buffer names and byte counts without their contents."),
         "read-notification" => ("--surface ID --revision NUMBER", "Mark one message read without dismissing it or focusing its terminal. Missing or already read messages return marked_read:false."),
         "dismiss-notification" => ("--surface ID --revision NUMBER", "Dismiss one retained message using its surface ID and revision from list-notifications. A missing or already dismissed message returns dismissed:false."),
@@ -59,6 +60,18 @@ pub fn help(command: &str) -> Result<String, String> {
     };
     let prefix = if command == "completions" { "rmuxctl" } else { "rmuxctl [--socket PATH]" };
     Ok(format!("Usage: {prefix} {command} {arguments}\n\n{description}\n\nTargets use explicit opaque IDs from list commands. RPC commands print JSON.\nExit 0: success; 1: RPC error; 2: usage/transport failure.\n"))
+}
+
+pub fn expand_with_input(command: &str, args: Vec<OsString>, mut input: impl std::io::Read) -> Result<(String, Value), String> {
+    let (method, mut params) = expand(command, args)?;
+    if command == "set-buffer" && params.get("text").is_none_or(|text| text.as_str() == Some("-")) {
+        let mut bytes = Vec::new();
+        input.by_ref().take(64 * 1024 + 1).read_to_end(&mut bytes).map_err(|error| format!("read buffer stdin: {error}"))?;
+        if bytes.len() > 64 * 1024 { return Err("buffer stdin exceeds the 64 KiB request budget".into()); }
+        let text = String::from_utf8(bytes).map_err(|_| "buffer stdin must be UTF-8")?;
+        params["text"] = Value::String(text);
+    }
+    Ok((method, params))
 }
 
 pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), String> {
@@ -133,7 +146,7 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
             literal = true;
             continue;
         }
-        if !literal && arg.starts_with('-') {
+        if !literal && arg.starts_with('-') && !(command == "set-buffer" && arg == "-") {
             if matches!(command, "set-buffer" | "paste-buffer") && arg == "--name" {
                 let name = args.next().ok_or("--name requires text")?.into_string().map_err(|_| "name must be UTF-8")?;
                 if params.insert("name".into(), Value::String(name)).is_some() { return Err("duplicate --name".into()); }
@@ -291,7 +304,7 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
         if !params.contains_key(key) { return Err(format!("{command} requires {flag}")); }
     }
     if let Some(key) = positional {
-        if !params.contains_key(key) {
+        if !params.contains_key(key) && command != "set-buffer" {
             return Err(format!("{command} requires {key}"));
         }
     }
@@ -334,6 +347,20 @@ mod tests {
         v.iter().map(OsString::from).collect()
     }
     #[test]
+    fn buffer_stdin_preserves_text_and_is_bounded_without_reading_for_literals() {
+        for flags in [vec![], args(&["--name", "notes", "-"])] {
+            let (_, params) = expand_with_input("set-buffer", flags, "first\n世界\n\n".as_bytes()).unwrap();
+            assert_eq!(params["text"], "first\n世界\n\n");
+        }
+        let mut reader = std::io::Cursor::new(b"unused");
+        let (_, params) = expand_with_input("set-buffer", args(&["literal"]), &mut reader).unwrap();
+        assert_eq!(params["text"], "literal");
+        assert_eq!(reader.position(), 0);
+        assert!(expand_with_input("set-buffer", vec![], &[0xff][..]).is_err());
+        assert!(expand_with_input("set-buffer", vec![], std::io::repeat(b'x')).is_err());
+        assert_eq!(expand_with_input("set-buffer", vec![], std::io::empty()).unwrap().1["text"], "");
+    }
+    #[test]
     fn paste_buffer_requires_an_explicit_target_and_no_implicit_activation() {
         let (method, params) = expand("paste-buffer", args(&["--surface", "42", "--name", "notes", "--bracketed"])).unwrap();
         assert_eq!(method, "buffer.paste");
@@ -349,7 +376,7 @@ mod tests {
         assert_eq!(params, serde_json::json!({"name":"build", "text":"-literal 世界\n"}));
         assert_eq!(expand("list-buffers", vec![]).unwrap().0, "buffer.list");
         assert!(expand("list-buffers", args(&["--name", "x"])).is_err());
-        assert!(expand("set-buffer", args(&["--name", "x"])).is_err());
+        assert!(expand("set-buffer", args(&["--name", "x"])).unwrap().1.get("text").is_none());
         assert!(expand("set-buffer", args(&["--name", "x", "--name", "y", "text"])).is_err());
     }
     #[test]

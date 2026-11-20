@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Reviewed the [pinned CLI contract](https://github.com/manaflow-ai/cmux/blob/a76816e4f0788003758b9434ab702068a640fb5d/docs/cli-contract.md)
+before recording work: window video capture and terminal text piping are distinct;
+copy-mode is a placeholder there. Corrected T15 scope without claiming implementation.
+Implemented the concrete set-buffer stdin gap: omitted text or dash reads UTF-8
+exactly, with a 64 KiB read ceiling and the existing serialized-request cap.
+Literal arguments never consume stdin; malformed/oversized input fails locally.
+Three focused CLI tests passed, covering newlines, empty input, invalid UTF-8,
+bounded reads and argument handling. Capture backends and native acceptance remain
+pending; no PTY logging substitute was introduced for video recording.
+
 Started T17 with local PTY input-mode sampling and an Input hidden badge for a
 focused terminal in canonical mode with echo disabled. Raw-mode TUIs are excluded;
 macOS/Linux query termios through portable-pty without taking the terminal parser

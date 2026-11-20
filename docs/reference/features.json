@@ -536,11 +536,12 @@
       "phase": "P2",
       "upstream_evidence": "I",
       "sources": [
-        "TREE"
+        "TREE",
+        "CLI"
       ],
       "acceptance": "Validate copy-mode and buffer semantics separately from ordinary clipboard operations.",
       "rmux_status": "in_progress",
-      "implementation": "Bounded asynchronous history snapshot with virtualized copy-mode rows, keyboard and mouse line-range selection, Unicode clipboard copy and Select All. Snapshot text stays stable while output continues. Submitted literal searches share the snapshot, run off the UI thread and navigate matching lines with wraparound. Keyboard character ranges preserve Unicode graphemes and highlight selected spans, with bounded long-line display following the cursor. Vertical movement retains Unicode terminal-cell columns using sparse checkpoints built off the UI thread. Rectangular keyboard selections use cell columns, preserve whole edge graphemes and format cancellably in the background. Process-local bounded named buffers support set/list CLI commands and set/list/get/delete RPC with explicit quotas and no persistence. paste-buffer CLI and buffer.paste RPC target explicit surfaces through the existing bounded input path, without consuming buffers or changing focus/viewport. Copy-mode Save Buffer formats selections in the background, enforces quotas and rejects stale saves using store revisions. A searchable named-buffer paste picker captures its originating surface and rejects changed buffer revisions before queueing. A named-buffer delete picker releases storage and rejects stale revisions.",
+      "implementation": "Bounded asynchronous history snapshot with virtualized copy-mode rows, keyboard and mouse line-range selection, Unicode clipboard copy and Select All. Snapshot text stays stable while output continues. Submitted literal searches share the snapshot, run off the UI thread and navigate matching lines with wraparound. Keyboard character ranges preserve Unicode graphemes and highlight selected spans, with bounded long-line display following the cursor. Vertical movement retains Unicode terminal-cell columns using sparse checkpoints built off the UI thread. Rectangular keyboard selections use cell columns, preserve whole edge graphemes and format cancellably in the background. Process-local bounded named buffers support set/list CLI commands and set/list/get/delete RPC with explicit quotas and no persistence. paste-buffer CLI and buffer.paste RPC target explicit surfaces through the existing bounded input path, without consuming buffers or changing focus/viewport. Copy-mode Save Buffer formats selections in the background, enforces quotas and rejects stale saves using store revisions. A searchable named-buffer paste picker captures its originating surface and rejects changed buffer revisions before queueing. A named-buffer delete picker releases storage and rejects stale revisions. set-buffer accepts omitted text or dash as bounded UTF-8 stdin without newline trimming. The pinned CLI contract describes upstream copy-mode as a placeholder; rmux copy-mode UI is additional functionality.",
       "remaining": "Native input/layout acceptance, remaining upstream CLI/RPC semantics.",
       "implementation_sources": [
         "crates/rmux-desktop/src/copy_mode.rs",
@@ -551,14 +552,16 @@
     },
     {
       "id": "T15",
-      "feature": "Terminal recording and output piping",
+      "feature": "Window video recording and terminal output piping",
       "phase": "P6",
-      "upstream_evidence": "I",
+      "upstream_evidence": "D",
       "sources": [
-        "TREE"
+        "TREE",
+        "CLI"
       ],
-      "acceptance": "Define record start, stop, notes, output retention and pipe cleanup with bounded queues.",
-      "rmux_status": "not_started"
+      "acceptance": "Capture own-window/region MP4 and GIF with start/stop/status/list, captions, duration limits and atomic final output replacement; separately pipe selected surface text with bounded queues and child cleanup.",
+      "rmux_status": "not_started",
+      "remaining": "Capture/encoder backends, recording lifecycle and notes, local-only routing, atomic output publication, pipe-pane semantics and native/performance acceptance. PTY logs do not satisfy window-video recording."
     },
     {
       "id": "T16",

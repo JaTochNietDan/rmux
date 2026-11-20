@@ -38,7 +38,7 @@ fn parse(
     if method.is_empty() || method.starts_with('-') {
         return Err("a nonempty RPC method is required".into());
     }
-    let (method, params) = commands::expand(&method, args.collect())?;
+    let (method, params) = commands::expand_with_input(&method, args.collect(), std::io::stdin().lock())?;
     let mut body =
         serde_json::to_vec(&json!({"jsonrpc":"2.0", "id":1, "method":method, "params":params}))
             .unwrap();

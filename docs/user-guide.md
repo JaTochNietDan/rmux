@@ -37,13 +37,16 @@ mode; c returns to line mode. Named buffers can be managed through the CLI/API:
 
 ```sh
 rmuxctl set-buffer --name notes 'text to retain'
+printf 'first line\nsecond line\n' | rmuxctl set-buffer --name notes -
 rmuxctl list-buffers
 rmuxctl paste-buffer --surface SURFACE_ID --name notes --bracketed
 rmuxctl buffer.get '{"name":"notes"}'
 rmuxctl buffer.delete '{"name":"notes"}'
 ```
 
-Omitting a name uses `default`. Buffers are shared by windows in one rmux process,
+Omitting a name uses `default`. Omitted text or `-` reads UTF-8 stdin exactly,
+including trailing newlines; an explicit empty string stores empty text. Stdin
+reads are bounded, and JSON serialization must fit the request limit. Buffers are shared by windows in one rmux process,
 independent of the clipboard, and disappear when the app exits. Limits are 32
 buffers, 1 MiB per buffer and 8 MiB total text; over-limit writes fail without
 eviction. The existing 64 KiB JSON request limit further constrains CLI writes
