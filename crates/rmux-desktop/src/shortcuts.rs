@@ -52,6 +52,7 @@ fn action(name: &str) -> Option<Box<dyn Action>> {
         "decrease_font_size" => Box::new(DecreaseFontSize),
         "reset_font_size" => Box::new(ResetFontSize),
         "use_configured_font" => Box::new(UseConfiguredFont),
+        "terminal_menu" => Box::new(ShowTerminalMenu),
         "tab_menu" => Box::new(ShowTabMenu),
         "workspace_menu" => Box::new(ShowWorkspaceMenu),
         "tab_picker" => Box::new(ShowTabPicker), "palette" => Box::new(ShowCommandPalette),

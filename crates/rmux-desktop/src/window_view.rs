@@ -907,7 +907,7 @@ impl WorkspaceWindow {
             || self.close_prompt.is_some() || self.rename.is_some() || self.palette.is_some() || self.workspace_menu.is_some()
             || cx.global::<Shutdowns>().quitting || cx.global::<Shutdowns>().quit_prompt
             || cx.global::<PromptGate>().is_active()
-            || self.entries.iter().any(|entry| entry.workspace.read(cx).panes.iter().any(|pane| pane.read(cx).automation_busy())) {
+            || self.entries.iter().any(|entry| entry.workspace.read(cx).panes.iter().any(|pane| pane.read(cx).automation_busy(cx))) {
             return Err(automation::Failure { code: -32003, message: "Window is busy; retry after the current interaction" });
         }
         Ok(())

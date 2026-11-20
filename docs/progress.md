@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Added a native-rendered terminal context menu for Copy, Copy with Line Breaks,
+Paste, Select All, Find, working-directory copy/reveal, and Clear Scrollback.
+Right-click opens it when the terminal application does not consume mouse input;
+Shift-right-click overrides application mouse reporting. Palette Terminal Actions
+and custom terminal_menu bindings provide keyboard entry. Arrow/Home/End keys
+navigate enabled entries, Enter/Space activate, and Escape/outside click dismiss.
+The menu uses existing action paths, restores terminal focus on dismissal, clears
+on window rebinding, and blocks conflicting automation while open. Desktop
+compilation passed. The Mac remains locked, so native visuals, hit testing and
+TUI mouse interaction are not yet verified.
+
 Modifier-click hyperlink lookup now uses a nonblocking parser lock. Under output
 pressure it reports a retry message instead of waiting on the UI thread. Existing
 engine URL detection (including fully visible soft-wrapped URLs and OSC 8

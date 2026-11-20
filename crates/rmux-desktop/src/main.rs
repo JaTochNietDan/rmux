@@ -40,6 +40,7 @@ mod snapshot;
 mod startup;
 mod status_view;
 mod text_field;
+mod terminal_menu;
 use pane_view::{PaneEmpty, PaneView};
 mod split_view;
 mod window_view;
@@ -341,6 +342,7 @@ actions!(
         Paste,
         CancelQueuedPaste,
         CopySelection,
+        ShowTerminalMenu,
         CopySelectionWithLineBreaks,
         CopyWorkingDirectory,
         RevealWorkingDirectory,
@@ -385,6 +387,8 @@ struct TerminalView {
     directory_task: Option<Task<()>>,
     directory_generation: Arc<AtomicU64>,
     rendered_paste_pending: bool,
+    terminal_menu: Option<terminal_menu::Menu>,
+    terminal_menu_blur: Option<Subscription>,
     title: String,
     custom_title: Option<String>,
     title_revision: u64,
@@ -567,6 +571,8 @@ impl TerminalView {
     }
     fn rebind_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.set_input_focus(false, cx);
+        self.terminal_menu = None;
+        self.terminal_menu_blur = None;
         // Pointer coordinates and wheel accumulation belong to the old window,
         // even when its terminal was already unfocused.
         self.mouse_button = None;
@@ -728,6 +734,8 @@ impl TerminalView {
             directory_task: None,
             directory_generation: Default::default(),
             rendered_paste_pending: false,
+            terminal_menu: None,
+            terminal_menu_blur: None,
             title: String::new(),
             custom_title: None,
             title_revision: u64::MAX,
@@ -1018,7 +1026,10 @@ impl TerminalView {
             cx.stop_propagation();
         } else {
             self.mouse_button = None;
-            if event.button == MouseButton::Left {
+            if event.button == MouseButton::Right {
+                self.show_terminal_menu(event.position, window, cx);
+                cx.stop_propagation();
+            } else if event.button == MouseButton::Left {
                 self.selecting = true;
                 self.select(
                     rmux_terminal::selection::Action::Press,
@@ -1487,6 +1498,9 @@ impl Render for TerminalView {
             .on_key_up(cx.listener(Self::key_up))
             .on_scroll_wheel(cx.listener(Self::wheel))
             .on_action(cx.listener(Self::paste))
+            .on_action(cx.listener(|this, _: &ShowTerminalMenu, window, cx| {
+                this.show_terminal_menu(this.last_bounds.origin + point(px(8.), px(8.)), window, cx);
+            }))
             .on_action(cx.listener(|this, _: &CancelQueuedPaste, _, _| this.session.cancel_queued_paste()))
             .on_action(cx.listener(Self::copy))
             .on_action(cx.listener(|this, _: &CopySelectionWithLineBreaks, _, cx| this.copy_selection(false, cx)))
@@ -1603,6 +1617,7 @@ impl Render for TerminalView {
                 cx.listener(|this, event: &ClickEvent, _, cx| {
                     if event.standard_click() { this.error = None; cx.stop_propagation(); cx.notify(); }
                 }))))
+            .when_some(self.terminal_menu.clone(), |root, menu| root.child(self.terminal_menu_element(menu, cx)))
     }
 }
 fn div_error(error: String, dismiss: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> impl IntoElement {

@@ -1,0 +1,105 @@
+//! Terminal actions share the keyboard paths and never recreate a session.
+use super::*;
+
+#[derive(Clone)]
+pub(super) struct Menu {
+    position: Point<Pixels>,
+    focus: FocusHandle,
+    selected: usize,
+}
+const LABELS: &[&str] = &["Copy", "Copy with Line Breaks", "Paste", "Select All", "Find…", "Copy Working Directory", "Reveal Working Directory", "Clear Scrollback"];
+
+impl TerminalView {
+    fn menu_enabled(&self) -> [bool; 8] {
+        let selection = self.frame.selections.iter().any(Option::is_some);
+        [selection, selection, !self.session.paste_pending(), true, true, true, true, true]
+    }
+    pub(super) fn show_terminal_menu(&mut self, position: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
+        self.selecting = false;
+        self.selection_scroll = None;
+        self.selection_pointer = None;
+        let focus = cx.focus_handle();
+        let token = focus.clone();
+        self.terminal_menu_blur = Some(cx.on_blur(&focus, window, move |this, _, cx| {
+            if this.terminal_menu.as_ref().is_some_and(|menu| menu.focus == token) {
+                this.terminal_menu = None;
+                this.terminal_menu_blur = None;
+                cx.notify();
+            }
+        }));
+        let selected = self.menu_enabled().iter().position(|enabled| *enabled).unwrap_or(0);
+        focus.focus(window);
+        self.terminal_menu = Some(Menu { position, focus, selected });
+        cx.notify();
+    }
+    fn dismiss_terminal_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let focused = self.terminal_menu.as_ref().is_some_and(|menu| menu.focus.is_focused(window));
+        self.terminal_menu = None;
+        self.terminal_menu_blur = None;
+        if focused { self.focus.focus(window); }
+        cx.notify();
+    }
+    fn activate_terminal_menu(&mut self, item: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if self.terminal_menu.is_none() || !self.menu_enabled().get(item).copied().unwrap_or(false) { return; }
+        self.dismiss_terminal_menu(window, cx);
+        match item {
+            0 => self.copy(&CopySelection, window, cx),
+            1 => self.copy_selection(false, cx),
+            2 => self.paste(&Paste, window, cx),
+            3 => self.select_all(&EditorSelectAll, window, cx),
+            4 => self.open_find(&Find, window, cx),
+            5 => self.lookup_working_directory(true, cx),
+            6 => self.lookup_working_directory(false, cx),
+            7 => self.clear_scrollback(&ClearScrollback, window, cx),
+            _ => {},
+        }
+    }
+    pub(super) fn terminal_menu_element(&self, menu: Menu, cx: &mut Context<Self>) -> AnyElement {
+        let enabled = self.menu_enabled();
+        deferred(anchored().position(menu.position).snap_to_window().child(
+            div().id("terminal-context-menu").track_focus(&menu.focus).key_context("TerminalMenu")
+                .w(px(230.)).py_1().bg(rgb(0x292929)).text_color(rgb(0xd6d6d6))
+                .border_1().border_color(rgb(0x465063)).rounded_md().shadow_md().occlude()
+                .on_mouse_down_out(cx.listener(|this, _, window, cx| this.dismiss_terminal_menu(window, cx)))
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .on_mouse_down(MouseButton::Middle, |_, _, cx| cx.stop_propagation())
+                .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
+                .on_mouse_move(|_, _, cx| cx.stop_propagation())
+                .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
+                .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                    let enabled = this.menu_enabled();
+                    let Some(menu) = this.terminal_menu.as_mut() else { return; };
+                    match event.keystroke.key.as_str() {
+                        "up" | "down" => {
+                            for step in 1..=enabled.len() {
+                                let next = (menu.selected + if event.keystroke.key == "up" { enabled.len() - step } else { step }) % enabled.len();
+                                if enabled[next] { menu.selected = next; break; }
+                            }
+                        }
+                        "home" => menu.selected = enabled.iter().position(|enabled| *enabled).unwrap_or(0),
+                        "end" => menu.selected = enabled.iter().rposition(|enabled| *enabled).unwrap_or(0),
+                        "enter" | "space" => { let selected = menu.selected; this.activate_terminal_menu(selected, window, cx); },
+                        "escape" => this.dismiss_terminal_menu(window, cx),
+                        _ => {},
+                    }
+                    cx.stop_propagation();
+                    cx.notify();
+                }))
+                .children(LABELS.iter().enumerate().map(|(index, label)| {
+                    div().id(("terminal-menu-item", index)).mx_1().px_3().py_2().rounded_sm().text_size(px(13.))
+                        .when(enabled[index], |row| row.cursor_pointer()
+                            .when(index == menu.selected, |row| row.bg(rgb(0x354969)))
+                            .on_mouse_move(cx.listener(move |this, _, _, cx| {
+                                if let Some(menu) = &mut this.terminal_menu {
+                                    if menu.selected != index { menu.selected = index; cx.notify(); }
+                                }
+                            })))
+                        .when(!enabled[index], |row| row.text_color(rgb(0x777777)))
+                        .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+                            if event.standard_click() { this.activate_terminal_menu(index, window, cx); }
+                            cx.stop_propagation();
+                        })).child(*label)
+                }))
+        )).with_priority(2).into_any_element()
+    }
+}
