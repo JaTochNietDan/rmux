@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Settings row labels now select their control and focus the panel without changing
+the value, so mouse-to-keyboard editing continues on the clicked setting. Theme
+row labels use the same selection path. Long setting button values truncate with
+hover hints; labels and control groups may shrink/wrap within a narrow panel.
+Desktop compilation passed. Native screenshots are still unavailable (Mac locked);
+click/arrow interaction, hover details and narrow-window layout remain pending.
+
 Fixed After current placement from a pinned workspace/group. New unpinned rows
 now begin the unpinned tier instead of inheriting a potentially unrelated storage
 position from the pinned anchor. Extended the native placement smoke with a group

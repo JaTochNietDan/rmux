@@ -3548,6 +3548,15 @@ impl Render for WorkspaceWindow {
                 this.notice = None;
                 cx.notify();
             }))
+            .on_action(cx.listener(|this, selected: &SelectSetting, window, cx| {
+                if let Some(state) = &mut this.settings_state {
+                    if let Some(index) = settings_view::KEYS.iter().position(|key| *key == selected.key) {
+                        state.selected = index;
+                        state.focus.focus(window);
+                        cx.notify();
+                    }
+                }
+            }))
             .on_action(cx.listener(|this, change: &AdjustSetting, window, cx| {
                 if let Some(state) = &mut this.settings_state {
                     if let Some(index) = settings_view::KEYS.iter().position(|key| *key == change.key) { state.selected = index; }

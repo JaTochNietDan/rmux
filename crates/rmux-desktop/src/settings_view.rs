@@ -63,16 +63,20 @@ pub fn adjust(settings: &mut Preferences, key: &str, delta: i32) {
     }
 }
 fn button(id: String, label: String, key: &'static str, delta: i32) -> impl IntoElement {
-    div().id(SharedString::from(id)).px_2().py_1().rounded_sm().cursor_pointer()
+    let hint: SharedString = label.clone().into();
+    div().id(SharedString::from(id)).min_w_0().max_w_full().px_2().py_1().rounded_sm().cursor_pointer()
         .bg(rgb(0x353535)).hover(|s| s.bg(rgb(0x454545))).text_size(px(12.))
         .on_click(move |event, window, cx| { if event.standard_click() { window.dispatch_action(Box::new(AdjustSetting { key: key.into(), delta }), cx); } })
-        .child(label)
+        .tooltip(move |_, cx| cx.new(|_| pane_view::ControlHint(hint.clone())).into())
+        .child(div().truncate().child(label))
 }
 fn row(label: &'static str, key: &'static str, value: String, stepper: bool, selected: bool, readonly: bool) -> impl IntoElement {
-    div().px_1().py_3().when(selected, |s| s.bg(rgb(0x303b4a))).border_b_1().border_color(rgb(0x383838))
+    div().id(SharedString::from(format!("setting-row-{key}"))).min_w_0().px_1().py_3()
+        .on_mouse_down(MouseButton::Left, move |_, window, cx| window.dispatch_action(Box::new(SelectSetting { key: key.into() }), cx))
+        .when(selected, |s| s.bg(rgb(0x303b4a))).border_b_1().border_color(rgb(0x383838))
         .flex().flex_wrap().items_center().gap_2()
-        .child(div().flex_1().min_w(px(120.)).text_size(px(13.)).child(label))
-        .child(div().flex().items_center().gap_2().max_w_full()
+        .child(div().flex_1().w(px(120.)).min_w_0().max_w_full().text_size(px(13.)).child(label))
+        .child(div().flex().flex_wrap().items_center().gap_2().min_w_0().max_w_full()
             .when(stepper, |controls| controls
                 .child(button(format!("{key}-less"), "−".into(), key, -1)))
             .child(if readonly {
@@ -104,7 +108,8 @@ pub fn panel(state: State, cx: &mut Context<window_view::WorkspaceWindow>) -> An
             .child(div().pt_3().text_xs().text_color(rgb(0xa0a0a0)).child("TERMINAL & BEHAVIOR"))
             .child(row("Default text size", "font", format!("{} pt", settings.font_size), true, state.selected == 0, false))
             .child(row("Terminal padding", "padding", format!("{} px", settings.terminal_padding), true, state.selected == 1, false))
-            .child(div().px_1().py_3().border_b_1().border_color(rgb(0x383838))
+            .child(div().id("setting-row-theme").px_1().py_3().border_b_1().border_color(rgb(0x383838))
+                .on_mouse_down(MouseButton::Left, |_, window, cx| window.dispatch_action(Box::new(SelectSetting { key: "theme".into() }), cx))
                 .when(state.selected == 2, |row| row.bg(rgb(0x303b4a)))
                 .child(div().mb_2().text_size(px(13.)).child("Terminal theme"))
                 .child(div().flex().flex_wrap().gap_2().children(
