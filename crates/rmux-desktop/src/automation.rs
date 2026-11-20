@@ -58,7 +58,7 @@ fn array_result(key: &str, values: Vec<Value>) -> Value {
     Value::Object(object)
 }
 
-fn target_id(text: &str) -> Result<gpui::EntityId, Failure> {
+pub(super) fn target_id(text: &str) -> Result<gpui::EntityId, Failure> {
     let missing = || Failure {
         code: -32004,
         message: "Target not found",

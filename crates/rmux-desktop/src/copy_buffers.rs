@@ -38,6 +38,11 @@ pub fn validate_name(name: &str) -> Result<(), &'static str> {
 pub struct Store { entries: BTreeMap<String, String>, bytes: usize, revision: u64 }
 impl gpui::Global for Store {}
 impl Store {
+    pub fn metadata(&self) -> Vec<(String, usize)> { self.entries.iter().map(|(name, text)| (name.clone(), text.len())).collect() }
+    pub fn text_at_revision(&self, name: &str, revision: u64) -> Result<&str, &'static str> {
+        if self.revision != revision { return Err("Buffers changed; reopen the picker before pasting"); }
+        self.entries.get(name).map(String::as_str).ok_or("Buffer not found")
+    }
     pub fn revision(&self) -> u64 { self.revision }
     pub fn save_if_unchanged(&mut self, name: String, text: String, revision: u64) -> Result<Value, &'static str> {
         if self.revision != revision { return Err("Buffers changed while saving; retry to apply this selection"); }
@@ -88,6 +93,8 @@ mod tests {
         let revision = store.revision();
         assert!(store.save_if_unchanged("bad\n".into(), "bad".into(), revision).is_err());
         assert_eq!(store.revision(), revision);
+        assert!(store.text_at_revision("notes", revision.wrapping_sub(1)).is_err());
+        assert_eq!(store.text_at_revision("notes", revision).unwrap(), "new");
         store.save_if_unchanged("notes".into(), "chosen".into(), revision).unwrap();
         assert_eq!(store.execute(&Command::Get("notes".into())).unwrap()["text"], "chosen");
     }

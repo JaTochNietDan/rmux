@@ -63,6 +63,10 @@ struct SetDefaultFont { family: String }
 
 #[derive(Clone, Debug, Default, PartialEq, Action)]
 #[action(namespace = rmux, no_json)]
+struct PasteNamedBuffer { name: String, revision: u64, surface_id: String }
+
+#[derive(Clone, Debug, Default, PartialEq, Action)]
+#[action(namespace = rmux, no_json)]
 struct CheckForUpdates;
 
 #[derive(Clone, Debug, Default, PartialEq, Action)]
@@ -360,6 +364,7 @@ actions!(
         CancelQueuedPaste,
         CopySelection,
         EnterCopyMode,
+        ShowBufferPicker,
         ShowTerminalMenu,
         CopySelectionWithLineBreaks,
         CopyWorkingDirectory,
@@ -3314,6 +3319,7 @@ fn main() {
                     MenuItem::action("Decrease Font Size", DecreaseFontSize),
                     MenuItem::action("Reset Font Size", ResetFontSize),
                     MenuItem::action("Enter Copy Mode", EnterCopyMode),
+                    MenuItem::action("Paste Named Buffer…", ShowBufferPicker),
                     MenuItem::action("Choose Terminal Font…", ShowFontPicker),
                     MenuItem::action("Choose Default Font…", ShowDefaultFontPicker),
                     MenuItem::action("Use Configured Font", UseConfiguredFont),

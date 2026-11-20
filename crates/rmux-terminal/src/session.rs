@@ -625,7 +625,7 @@ impl Session {
     /// Bounded automation paste. Never waits for parser access or changes viewport.
     /// False means the parser is busy and no input was queued.
     pub fn try_paste_without_scroll(&self, text: &str) -> Result<bool> {
-        anyhow::ensure!(text.len() <= 16 * 1024, "automation paste exceeds 16 KiB");
+        anyhow::ensure!(text.len() <= 1024 * 1024, "automation paste exceeds 1 MiB");
         anyhow::ensure!(self.exit_status().is_none(), "process has exited");
         let permit = PastePermit::acquire(&self.paste_pending, &self.paste_generation)?;
         let bracketed = {
@@ -636,8 +636,8 @@ impl Session {
             };
             terminal.bracketed_paste()?
         };
-        let bytes = crate::keyboard::encode_paste(text, bracketed)?;
-        self.writer.try_send(InputMessage { payload: InputPayload::Bytes(bytes), _paste: Some(permit) })
+        // Match ordinary paste: reserve order here, encode on the sole writer.
+        self.writer.try_send(InputMessage { payload: InputPayload::Paste { text: text.to_owned(), bracketed }, _paste: Some(permit) })
             .map_err(|_| anyhow::anyhow!("terminal input queue is full or closed"))?;
         Ok(true)
     }
@@ -1280,7 +1280,7 @@ mod tests {
     fn automation_paste_is_nonblocking_bracketed_and_preserves_viewport() -> Result<()> {
         let root = tempfile::tempdir()?;
         let destination = root.path().join("received");
-        let text = "世界\nsecond line";
+        let text = "世界\nsecond line".repeat(4096);
         let expected = format!("\x1b[200~{text}\x1b[201~AFTER");
         let mut command = CommandBuilder::new("/bin/sh");
         command.args(["-c", "stty raw -echo; printf '1\\n2\\n3\\n4\\n5\\n\\033[?2004hREADY'; dd bs=1 count=\"$2\" of=\"$1\" 2>/dev/null", "rmux-test"]);
@@ -1300,7 +1300,9 @@ mod tests {
             assert!(!session.try_paste_without_scroll("not sent")?);
             assert!(!session.paste_pending.load(Ordering::Acquire));
         }
-        assert!(session.try_paste_without_scroll(text)?);
+        assert!(session.try_paste_without_scroll(&"x".repeat(1024 * 1024 + 1)).is_err());
+        assert!(!session.paste_pending());
+        assert!(session.try_paste_without_scroll(&text)?);
         session.input_without_scroll(b"AFTER")?;
         assert_eq!(session.frame()?.scrollback_offset, offset);
         while session.exit_status().is_none() {

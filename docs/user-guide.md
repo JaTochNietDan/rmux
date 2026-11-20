@@ -54,6 +54,14 @@ background without touching the clipboard. If any buffer changes during the
 save, rmux reports a conflict and asks you to retry; it does not overwrite newer
 state. Closing copy mode cancels pending save delivery.
 
+After returning to a terminal, use **Paste Named Buffer…** in the command palette
+or native menu (custom action `paste_buffer`). Search by name, select with arrows,
+and press Enter to queue terminal-aware paste into the terminal that opened the
+picker. Names and byte counts are shown without previewing contents. A buffer
+change while the picker is open requires reopening it; a closed or moved target
+is never replaced with an unrelated terminal. Paste preserves the viewport and
+does not consume the saved buffer.
+
 **Choose Terminal Font…** searches installed font families for the current
 terminal. Type to filter, use arrows and Enter to choose, or Escape to cancel.
 Monospaced families suit the terminal grid best. The picker preserves text size;

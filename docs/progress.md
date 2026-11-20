@@ -2,6 +2,18 @@
 
 ## Current implementation focus
 
+Added Paste Named Buffer… to the palette/menu and paste_buffer custom binding.
+The searchable picker lists bounded name/size metadata, captures its originating
+surface, and checks store revision before terminal-aware paste. Changed buffers,
+closed/moved targets and existing input guards fail explicitly without fallback.
+While wiring it, found and fixed a mismatch: the named-buffer API permitted 1 MiB
+but try_paste_without_scroll still capped 16 KiB. That function now accepts 1 MiB
+and queues paste encoding on the writer thread; surface.send_text JSON validation
+retains its independent 16 KiB limit. A real PTY test passed with Unicode input
+above 64 KiB, bracketed markers, subsequent input ordering, unchanged viewport,
+busy-parser handling and >1 MiB rejection. Four buffer tests and the desktop test
+build passed. Picker visual/input acceptance remains pending.
+
 Copy mode now saves selections to named buffers through Save Buffer… or b. A
 name field supports Enter/save and Escape/cancel; existing names are explicitly
 replaced. Line/character/rectangle formatting runs on the background executor,

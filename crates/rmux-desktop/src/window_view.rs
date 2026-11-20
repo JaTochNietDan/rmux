@@ -2204,6 +2204,20 @@ impl WorkspaceWindow {
         });
         self.install_palette(palette, focus, window, cx);
     }
+    fn show_buffer_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.automation_available(cx).is_err() { return; }
+        let surface = self.entries.get(self.active).and_then(|entry| {
+            let workspace = entry.workspace.read(cx);
+            let index = workspace.focused_index(window, cx)?;
+            workspace.panes[index].read(cx).active_terminal_id()
+        });
+        let Some(surface) = surface else { self.notice = Some("Focus a terminal before choosing a buffer".into()); cx.notify(); return; };
+        let focus = window.focused(cx);
+        let store = cx.global::<copy_buffers::Store>();
+        let (entries, revision) = (store.metadata(), store.revision());
+        let palette = cx.new(|cx| command_palette::CommandPalette::buffers(entries, revision, surface.to_string(), window, cx));
+        self.install_palette(palette, focus, window, cx);
+    }
     fn show_font_picker(&mut self, default: bool, window: &mut Window, cx: &mut Context<Self>) {
         if self.font_picker_job.is_some() || self.automation_available(cx).is_err() { return; }
         let Some(focus) = window.focused(cx) else { return; };
@@ -3239,6 +3253,17 @@ impl Render for WorkspaceWindow {
             }).absolute().size_full())
             .on_action(cx.listener(|this, _: &CloseWindow, window, cx| this.request_close_window(window, cx)))
             .on_action(cx.listener(|this, _: &CloseWorkspace, window, cx| this.request_close_workspace(this.active, window, cx)))
+            .on_action(cx.listener(|this, _: &ShowBufferPicker, window, cx| this.show_buffer_picker(window, cx)))
+            .on_action(cx.listener(|this, action: &PasteNamedBuffer, _, cx| {
+                let result = (|| {
+                    let text = cx.global::<copy_buffers::Store>().text_at_revision(&action.name, action.revision)
+                        .map_err(|message| automation::Failure { code: -32008, message })?.to_owned();
+                    let target = automation::target_id(&action.surface_id)?;
+                    this.automation_send_text(&automation::SurfaceText { surface_id: action.surface_id.clone(), text, paste: true }, target, cx)
+                })();
+                this.notice = Some(match result { Ok(_) => format!("Queued buffer {}", action.name), Err(error) => error.message.into() });
+                cx.notify();
+            }))
             .on_action(cx.listener(|this, _: &ShowFontPicker, window, cx| this.show_font_picker(false, window, cx)))
             .on_action(cx.listener(|this, _: &ShowDefaultFontPicker, window, cx| this.show_font_picker(true, window, cx)))
             .on_action(cx.listener(|_, action: &SetDefaultFont, _, cx| {
