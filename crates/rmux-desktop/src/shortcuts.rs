@@ -62,8 +62,8 @@ pub struct Binding {
 }
 #[derive(Clone, Copy, Default, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Scope { #[default] Terminal, Window, Settings }
-impl Scope { fn context(self) -> Option<&'static str> { match self { Self::Terminal => Some("Terminal"), Self::Window => None, Self::Settings => Some("Settings") } } }
+pub enum Scope { #[default] Terminal, Window, Settings, Find }
+impl Scope { fn context(self) -> Option<&'static str> { match self { Self::Terminal => Some("Terminal"), Self::Window => None, Self::Settings => Some("Settings"), Self::Find => Some("FindInput") } } }
 struct Defaults(Vec<KeyBinding>);
 impl Global for Defaults {}
 fn action(name: &str) -> Option<Box<dyn Action>> {
@@ -269,6 +269,30 @@ mod tests {
     use crate::{preferences::Preferences, ShowCommandPalette, ToggleSettings};
     use gpui::{KeyBinding, KeyContext, Keymap, Keystroke};
     fn settings(value: serde_json::Value) -> Preferences { serde_json::from_value(value).unwrap() }
+    #[test]
+    fn find_bindings_override_only_the_search_field() {
+        let key = if cfg!(target_os = "macos") { "cmd-g" } else { "f3" };
+        let mut map = Keymap::new(vec![
+            KeyBinding::new(key, crate::FindOlder, Some("Terminal")),
+            KeyBinding::new(key, crate::FindOlder, Some("FindInput")),
+        ]);
+        let prefs = settings(serde_json::json!({"keybindings":[
+            {"key":key,"action":"disabled","context":"find"},
+            {"key":"ctrl-alt-n","action":"find_newer","context":"find"}
+        ]}));
+        map.add_bindings(compile(&prefs).unwrap());
+        let keys = [Keystroke::parse(key).unwrap()];
+        let find = [KeyContext::parse("FindInput").unwrap()];
+        let terminal = [KeyContext::parse("Terminal").unwrap()];
+        assert!(map.bindings_for_input(&keys, &find).0.is_empty());
+        assert!(map.bindings_for_input(&keys, &terminal).0[0].action().as_any().is::<crate::FindOlder>());
+        let replacement = [Keystroke::parse("ctrl-alt-n").unwrap()];
+        assert!(map.bindings_for_input(&replacement, &find).0[0].action().as_any().is::<crate::FindNewer>());
+        assert!(map.bindings_for_input(&replacement, &terminal).0.is_empty());
+        assert!(compile(&settings(serde_json::json!({"keybindings":[
+            {"key":"ctrl-alt-n","text":"shell text","context":"find"}
+        ]}))).is_err());
+    }
     #[test]
     fn settings_save_binding_is_scoped_and_can_be_disabled() {
         let key = if cfg!(target_os = "macos") { "cmd-s" } else { "ctrl-s" };

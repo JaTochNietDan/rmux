@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Custom keybindings now accept `context: "find"`, mapped to the Find input's
+actual key context. Users can disable or replace search navigation bindings
+independently of terminal bindings. A real-keymap test passed default disabling,
+replacement action selection, terminal isolation and rejection of literal shell
+text in this scope; desktop test compilation passed. The existing isolated zsh
+integration fixture also passed hook chaining, OSC markers, exit status, encoded
+directories and opt-out. Native custom Find dispatch remains pending.
+
 Terminal Find now routes Enter, mouse navigation buttons and menu/shortcut
 navigation through one method. All three record the query in bounded recent
 history and skip empty/error queries; previously buttons and menu actions

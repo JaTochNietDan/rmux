@@ -355,6 +355,10 @@ Shortcut overrides can be added alongside custom commands:
 
 The `Tests` command must exist in `commands`. Bindings default to `terminal`
 context, so they do not override text editors; `window` makes a binding global.
+Use `find` to target the terminal Find field, for example
+`{"key":"ctrl-alt-n","action":"find_newer","context":"find"}`.
+This scope supports disabling/remapping Find shortcuts without changing their
+terminal bindings. Literal `text` bindings remain restricted to `terminal`.
 Use `settings` to target only the Settings panel. While that panel is focused,
 Cmd+S on macOS or Ctrl+S elsewhere saves the settings through the same action as
 **Save these settings**. This binding leaves terminal input unchanged. Customize
