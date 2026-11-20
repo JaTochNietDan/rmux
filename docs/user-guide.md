@@ -1662,6 +1662,8 @@ Each action moves the nearest divider on that axis by 5% of its neighboring
 pair's space. It prefers the requested side; at an outer edge it moves the
 opposite shared divider in that direction, shrinking the focused pane. Nested
 splits resize locally before considering outer splits. Each neighbor retains at
-least 10% of the pair's space. Existing pane identities, tabs and unrelated split
+least 10% of the pair's space, or its existing share if it was already narrower
+from a drag or restored layout. Such narrow panes never snap in the opposite
+direction; growing them raises the minimum toward 10%. Existing pane identities, tabs and unrelated split
 weights remain intact. Restore a zoomed layout before resizing; actions are also
 ignored while a split shell is starting. **Equalize Pane Sizes** resets ratios.

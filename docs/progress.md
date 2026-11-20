@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Fixed directional keyboard resizing for pre-existing ratios below its usual 10%
+floor. The minimum now respects the smaller existing share, so shrinking an
+already-narrow pane is a no-op instead of snapping its divider backwards. Weight
+scaling does not introduce an absolute floor, and rounding cannot create a zero
+neighbor. Added regressions for narrow restored pairs, tiny equivalent weights,
+and a clamped inner split leaving its same-axis ancestor unchanged. All three
+resize-focused tests passed. Native shortcut/drag and saved-ratio round-trip
+acceptance remain pending.
+
 Added directional keyboard pane resize actions to the menu, palette and custom
 shortcut mapping (resize_pane_left/right/up/down). The layout operation chooses
 the nearest matching-axis ancestor, preferring the requested-side divider and

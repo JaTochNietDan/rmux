@@ -118,11 +118,14 @@ impl<T: Clone + PartialEq> PaneTree<T> {
         if *axis != requested || children.len() < 2 { return None; }
         let left = if positive { index.min(children.len() - 2) } else { index.saturating_sub(1) };
         let total = weights[left] + weights[left + 1];
-        let pair = resized_pair(weights[left], weights[left + 1], total * if positive { 0.05 } else { -0.05 }, total * 0.1);
-        let changed = pair != (weights[left], weights[left + 1]);
-        weights[left] = pair.0;
-        weights[left + 1] = pair.1;
-        Some(changed)
+        // Restores and pointer drags can legitimately begin below the keyboard
+        // floor. Never snap such a divider backwards while trying to shrink it.
+        let minimum = (total * 0.1).min(weights[left]).min(weights[left + 1]);
+        let next = (weights[left] + total * if positive { 0.05 } else { -0.05 }).clamp(minimum, total - minimum);
+        if next == weights[left] || next <= 0. || total - next <= 0. { return Some(false); }
+        weights[left] = next;
+        weights[left + 1] = total - next;
+        Some(true)
     }
 
     /// Give siblings equal space at every split without changing topology.
@@ -248,6 +251,23 @@ pub fn resized_pair(left: f32, right: f32, delta: f32, minimum: f32) -> (f32, f3
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn keyboard_resize_does_not_reverse_narrow_restored_dividers() {
+        let mut tree = PaneTree::Split { axis: Axis::Columns, weights: vec![0.01, 0.99], children: vec![PaneTree::Pane(1), PaneTree::Pane(2)] };
+        assert!(!tree.resize_direction(&1, Direction::Left));
+        let mut tiny = PaneTree::Split { axis: Axis::Columns, weights: vec![0.00001, 0.00099], children: vec![PaneTree::Pane(1), PaneTree::Pane(2)] };
+        assert!(!tiny.resize_direction(&1, Direction::Left));
+        assert!(tiny.resize_direction(&1, Direction::Right));
+        assert!(tree.resize_direction(&1, Direction::Right));
+        let PaneTree::Split { weights, .. } = &tree else { panic!() };
+        assert!((weights[0] - 0.06).abs() < 0.00001);
+        assert!((weights[1] - 0.94).abs() < 0.00001);
+        let mut nested = PaneTree::Split { axis: Axis::Columns, weights: vec![1., 1.], children: vec![tree, PaneTree::Pane(3)] };
+        assert!(!nested.resize_direction(&1, Direction::Left));
+        let PaneTree::Split { weights, .. } = &nested else { panic!() };
+        assert_eq!(weights, &[1., 1.], "a clamped local divider must not resize its ancestor");
+    }
+
     #[test]
     fn directional_resize_uses_nearest_axis_and_preserves_other_weights() {
         let mut tree = PaneTree::Split { axis: Axis::Columns, weights: vec![1., 1., 2.], children: vec![
