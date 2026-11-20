@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+The production PTY writer loop is now shared with a deterministic blocked-write
+regression test. It holds an earlier write, queues a bracketed paste and later
+ordinary input, cancels the paste, then releases the writer. Observed output is
+exactly BEFOREAFTER and the paste permit is released. All seven focused paste
+tests passed, including the existing real-PTY large-paste ordering test. This
+proves queue behavior with a controlled Write implementation; OS-specific PTY
+blocking/cancellation timing and native UI interaction remain unverified.
+
 Cancel Queued Paste now exposes a per-terminal cancellation generation through
 Edit, palette and custom bindings. The writer checks it before/after encoding
 and skips whole canceled paste messages while retaining ordinary queued input.

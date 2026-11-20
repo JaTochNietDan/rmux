@@ -90,6 +90,20 @@ impl From<Vec<u8>> for InputMessage {
     }
 }
 
+fn write_messages(writes: mpsc::Receiver<InputMessage>, mut writer: impl Write, mut report: impl FnMut(String)) {
+    while let Ok(message) = writes.recv() {
+        let bytes = match message.payload.encode_pending(message._paste.as_ref()) {
+            Ok(Some(bytes)) => bytes,
+            Ok(None) => continue,
+            Err(error) => { report(format!("Paste encoding failed: {error}")); continue; }
+        };
+        if let Err(error) = writer.write_all(&bytes) {
+            report(format!("Terminal input failed: {error}"));
+            break;
+        }
+    }
+}
+
 /// Coherent metadata read under one engine lock. Unchanged titles allocate nothing;
 /// a title retrieval error does not discard an independently delivered bell.
 pub struct MetadataUpdate {
@@ -200,7 +214,7 @@ impl Session {
             pixel_height: 0,
         })?;
         let mut reader = pair.master.try_clone_reader()?;
-        let mut pty_writer = pair.master.take_writer()?;
+        let pty_writer = pair.master.take_writer()?;
         let child = pair.slave.spawn_command(command).context("start process")?;
         let child_pid = child.process_id();
         let mut unstarted = UnstartedChild(Some(child));
@@ -293,22 +307,10 @@ impl Session {
         thread::Builder::new()
             .name("rmux-pty-write".into())
             .spawn(move || {
-                while let Ok(message) = writes.recv() {
-                    let bytes = match message.payload.encode_pending(message._paste.as_ref()) {
-                        Ok(Some(bytes)) => bytes,
-                        Ok(None) => continue,
-                        Err(error) => {
-                            let _ = input_error.try_send(format!("Paste encoding failed: {error}"));
-                            let _ = input_notify.try_send(());
-                            continue;
-                        }
-                    };
-                    if let Err(error) = pty_writer.write_all(&bytes) {
-                        let _ = input_error.try_send(format!("Terminal input failed: {error}"));
-                        let _ = input_notify.try_send(());
-                        break;
-                    }
-                }
+                write_messages(writes, pty_writer, |error| {
+                    let _ = input_error.try_send(error);
+                    let _ = input_notify.try_send(());
+                });
             })?;
         thread::Builder::new()
             .name("rmux-pty-read".into())
@@ -1128,6 +1130,53 @@ mod tests {
         assert!(result??.is_none(), "obsolete directory lookup waited for parser access");
         Ok(())
     }
+    #[test]
+    fn canceled_paste_behind_blocked_writer_preserves_following_input() -> Result<()> {
+        struct BlockedWriter {
+            entered: Option<mpsc::Sender<()>>,
+            release: mpsc::Receiver<()>,
+            output: Arc<Mutex<Vec<u8>>>,
+        }
+        impl Write for BlockedWriter {
+            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                if let Some(entered) = self.entered.take() {
+                    entered.send(()).unwrap();
+                    self.release.recv_timeout(std::time::Duration::from_secs(2))
+                        .map_err(|error| std::io::Error::new(std::io::ErrorKind::TimedOut, error))?;
+                }
+                self.output.lock().unwrap().extend_from_slice(bytes);
+                Ok(bytes.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> { Ok(()) }
+        }
+        let (sender, receiver) = mpsc::sync_channel(4);
+        let (entered, starting) = mpsc::channel();
+        let (release, waiting) = mpsc::channel();
+        let output = Arc::new(Mutex::new(Vec::new()));
+        let writer = BlockedWriter { entered: Some(entered), release: waiting, output: output.clone() };
+        let worker = thread::spawn(move || {
+            let mut errors = Vec::new();
+            write_messages(receiver, writer, |error| errors.push(error));
+            errors
+        });
+        sender.send(b"BEFORE".to_vec().into()).ok().unwrap();
+        starting.recv_timeout(std::time::Duration::from_secs(2))?;
+        let pending = Arc::new(AtomicBool::new(false));
+        let generation = Arc::new(AtomicU64::new(0));
+        sender.send(InputMessage {
+            payload: InputPayload::Paste { text: "discard me".into(), bracketed: true },
+            _paste: Some(PastePermit::acquire(&pending, &generation)?),
+        }).ok().unwrap();
+        sender.send(b"AFTER".to_vec().into()).ok().unwrap();
+        generation.fetch_add(1, Ordering::AcqRel);
+        drop(sender);
+        release.send(())?;
+        assert!(worker.join().unwrap().is_empty());
+        assert_eq!(*output.lock().unwrap(), b"BEFOREAFTER");
+        assert!(!pending.load(Ordering::Acquire));
+        Ok(())
+    }
+
     #[test]
     fn canceled_paste_skips_encoding_and_releases_its_slot() -> Result<()> {
         let pending = Arc::new(AtomicBool::new(false));
