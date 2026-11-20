@@ -45,19 +45,18 @@ impl Terminal {
     /// whether output was truncated. This is synchronous: callers must arrange
     /// background execution rather than hold up a UI thread for large exports.
     pub fn history_text_limited(&self, max_bytes: usize) -> Result<(String, bool)> {
+        ensure!(max_bytes <= 16 * 1024 * 1024, "history export limit exceeds 16 MiB");
         self.export_text_limited(max_bytes, false).map(|text| text.expect("history always has a screen"))
     }
 
     /// Stream only the current selection, preserving UTF-8 at the byte limit.
     pub fn selection_text_prefix(&self, max_bytes: usize) -> Result<Option<(String, bool)>> {
+        ensure!(max_bytes <= 16 * 1024 * 1024, "history export limit exceeds 16 MiB");
         self.export_text_limited(max_bytes, true)
     }
 
-    fn export_text_limited(&self, max_bytes: usize, selected: bool) -> Result<Option<(String, bool)>> {
-        ensure!(
-            max_bytes <= 16 * 1024 * 1024,
-            "history export limit exceeds 16 MiB"
-        );
+    // Shared with the complete-selection API, which rejects truncated output.
+    pub(super) fn export_text_limited(&self, max_bytes: usize, selected: bool) -> Result<Option<(String, bool)>> {
         struct Formatter(GhosttyFormatter);
         impl Drop for Formatter {
             fn drop(&mut self) {

@@ -383,61 +383,10 @@ impl Terminal {
     }
 
     pub fn selected_text_limited(&self, max_bytes: usize) -> Result<Option<String>> {
-        struct Formatter(GhosttyFormatter);
-        impl Drop for Formatter {
-            fn drop(&mut self) {
-                unsafe {
-                    ghostty_formatter_free(self.0);
-                }
-            }
-        }
-        // SAFETY: selection snapshots and formatter remain inside this immutable
-        // engine access. Output is copied before releasing the formatter.
-        unsafe {
-            let mut selection = GhosttySelection::default();
-            let result = ghostty_terminal_get(
-                self.terminal,
-                GHOSTTY_TERMINAL_DATA_SELECTION,
-                out(&mut selection),
-            );
-            if result == GHOSTTY_NO_VALUE {
-                return Ok(None);
-            }
-            check(result)?;
-            let mut formatter = Formatter(ptr::null_mut());
-            check(ghostty_formatter_terminal_new(
-                ptr::null(),
-                &mut formatter.0,
-                self.terminal,
-            ))?;
-            check(ghostty_formatter_set(
-                formatter.0,
-                GHOSTTY_FORMATTER_OPT_SELECTION,
-                input(&selection),
-            ))?;
-            check(ghostty_formatter_set(
-                formatter.0,
-                GHOSTTY_FORMATTER_OPT_UNWRAP,
-                input(&true),
-            ))?;
-            let mut needed = 0;
-            let result = ghostty_formatter_format_buf(formatter.0, ptr::null_mut(), 0, &mut needed);
-            if result != GHOSTTY_OUT_OF_SPACE {
-                check(result)?;
-            }
-            ensure!(
-                needed <= max_bytes,
-                "selection exceeds {max_bytes} byte limit"
-            );
-            let mut bytes = vec![0; needed];
-            check(ghostty_formatter_format_buf(
-                formatter.0,
-                bytes.as_mut_ptr(),
-                bytes.len(),
-                &mut needed,
-            ))?;
-            bytes.truncate(needed);
-            Ok(Some(String::from_utf8_lossy(&bytes).into_owned()))
-        }
+        let Some((text, truncated)) = self.export_text_limited(max_bytes, true)? else {
+            return Ok(None);
+        };
+        ensure!(!truncated, "selection exceeds {max_bytes} byte limit");
+        Ok(Some(text))
     }
 }

@@ -5,6 +5,10 @@ Find selection seeding uses a nonblocking parser-lock attempt and a streaming
 remembered query. Streaming avoids the previous full-selection size probe
 before enforcing the limit; this bounds emitted text rather than guaranteeing
 a particular formatting latency.
+Complete selection copying also uses this streaming formatter, avoiding a full
+size-probe pass and a second copy from a temporary byte buffer. Its 16 MiB
+default limit and rejection of partial selections remain in place; clipboard
+export continues to run in the background.
 
 Prepaint now uses opportunistic snapshot access: a busy parser keeps the cached
 frame and schedules a display-frame retry. `snapshot_busy` counts these misses

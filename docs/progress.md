@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Complete selection export now shares the streaming formatter instead of probing
+the full formatted size and then formatting a second time. The owned byte
+buffer becomes the returned String without another content copy. Oversized
+selections still return an error, exact-limit Unicode selections still succeed,
+and the default clipboard limit remains 16 MiB. Seven focused selection-related
+tests passed, covering copy limits, Unicode, alternate screens and preservation
+of viewport/selection. End-to-end clipboard timing remains unmeasured.
+
 Find selection seeding now uses the bounded streaming selection exporter. The
 previous size-limited API still formatted the whole selection once to measure
 it before rejecting oversized content. The new path stops output at 4 KB and
