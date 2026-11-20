@@ -8,7 +8,9 @@ a particular formatting latency.
 Complete selection copying also uses this streaming formatter, avoiding a full
 size-probe pass and a second copy from a temporary byte buffer. Its 16 MiB
 default limit and rejection of partial selections remain in place; clipboard
-export continues to run in the background. A focused
+export continues to run in the background. Superseded exports abandon parser
+lock contention through a 1 ms retry backoff; this is not an idle timer or a
+guarantee of cancellation latency. Formatting already in progress is not interrupted. A focused
 [selection-export comparison](benchmarks/selection-export.md) records engine-only
 timing improvements and its measurement limitations.
 

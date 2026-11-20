@@ -611,7 +611,17 @@ impl Session {
         Box::new(move || {
             if !current() { return Ok(None); }
             let terminal = terminal.upgrade().context("terminal closed before copying")?;
-            let engine = terminal.lock().unwrap_or_else(|error| error.into_inner());
+            let engine = loop {
+                match terminal.try_lock() {
+                    Ok(engine) => break engine,
+                    Err(std::sync::TryLockError::Poisoned(error)) => break error.into_inner(),
+                    Err(std::sync::TryLockError::WouldBlock) => {
+                        if !current() { return Ok(None); }
+                        // Only pending copies poll; there is no idle timer.
+                        thread::sleep(std::time::Duration::from_millis(1));
+                    }
+                }
+            };
             // Another clipboard write may have superseded us while waiting.
             if !current() { return Ok(None); }
             engine.selected_text()
@@ -999,6 +1009,24 @@ mod tests {
         assert!(thread::spawn(superseded).join().unwrap()?.is_none());
         assert_eq!(calls.load(Ordering::Relaxed), 2);
         assert_eq!(session.selected_text()?, expected, "cancellation changed selection");
+        let engine = session.terminal.lock().unwrap();
+        let canceled = Arc::new(AtomicBool::new(false));
+        let canceled_copy = canceled.clone();
+        let (started, starting) = mpsc::channel();
+        let waiting = session.clipboard_export(move || {
+            let _ = started.send(());
+            !canceled_copy.load(Ordering::Relaxed)
+        });
+        let (finished, completion) = mpsc::channel();
+        let worker = thread::spawn(move || { let _ = finished.send(waiting()); });
+        starting.recv_timeout(std::time::Duration::from_secs(2))?;
+        canceled.store(true, Ordering::Relaxed);
+        // The parser remains locked: completion must not depend on releasing it.
+        let result = completion.recv_timeout(std::time::Duration::from_secs(2));
+        drop(engine);
+        worker.join().unwrap();
+        assert!(result??.is_none(), "obsolete copy waited for parser access");
+
         let directory = session.directory_lookup();
         assert_eq!(Arc::strong_count(&session.terminal), owners, "queued directory lookup retained the engine");
         assert_eq!(thread::spawn(directory).join().unwrap()?, session.current_directory()?);

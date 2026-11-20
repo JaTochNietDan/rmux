@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Clipboard cancellation now also stops waiting for a busy parser. Pending copies
+use opportunistic lock attempts with 1 ms backoff and recheck their generation
+on contention; there is no idle polling. A focused regression held the parser
+lock, superseded the copy and observed completion before releasing the lock.
+The session test passed. Cancellation still does not interrupt formatting once
+it has started; no scheduler-latency guarantee is implied by the backoff.
+
 Background clipboard exports now check their generation before engine access
 and again after acquiring the parser lock. A newer rmux clipboard operation
 therefore skips obsolete selection formatting, including work superseded while
