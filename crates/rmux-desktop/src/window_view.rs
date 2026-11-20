@@ -101,6 +101,7 @@ pub(super) struct WorkspaceWindow {
     memory_sort: memory_view::Sort,
     memory_loading: bool,
     memory_generation: u64,
+    memory_canceled: Option<Arc<AtomicBool>>,
     process_sampler: Arc<std::sync::Mutex<process_metrics::Sampler>>,
     rename: Option<(EntityId, Entity<text_field::TextField>, MetadataField)>,
     entries: Vec<Entry>,
@@ -263,12 +264,18 @@ impl WorkspaceWindow {
         let generation = self.memory_generation;
         let executor = cx.background_executor().clone();
         let process_sampler = self.process_sampler.clone();
+        let canceled = Arc::new(AtomicBool::new(false));
+        self.memory_canceled = Some(canceled.clone());
         cx.spawn(async move |entity, cx| {
             let rows = executor.spawn(async move {
-                let processes = process_sampler.lock().unwrap_or_else(|error| error.into_inner())
-                    .sample(std::iter::once(std::process::id()).chain(jobs.iter().filter_map(|(_, _, _, pid, _)| *pid)));
+                if canceled.load(Ordering::Relaxed) { return (Vec::new(), None); }
+                let processes = {
+                    let mut sampler = process_sampler.lock().unwrap_or_else(|error| error.into_inner());
+                    if canceled.load(Ordering::Relaxed) { return (Vec::new(), None); }
+                    sampler.sample(std::iter::once(std::process::id()).chain(jobs.iter().filter_map(|(_, _, _, pid, _)| *pid)))
+                };
                 let application = processes.get(&std::process::id()).copied();
-                let rows: Vec<_> = jobs.into_iter().map(|(workspace_id, surface_id, name, pid, sample)| {
+                let rows: Vec<_> = jobs.into_iter().take_while(|_| !canceled.load(Ordering::Relaxed)).map(|(workspace_id, surface_id, name, pid, sample)| {
                     let (usage, status) = match sample() {
                         Ok(Some(usage)) => (Some(usage), "Sampled"),
                         Ok(None) => (None, "Busy · refresh to retry"),
@@ -284,6 +291,7 @@ impl WorkspaceWindow {
                 this.memory_rows = Some(rows.0);
                 this.memory_application = rows.1;
                 this.memory_loading = false;
+                this.memory_canceled = None;
                 cx.notify();
             });
         }).detach();
@@ -2411,6 +2419,7 @@ impl WorkspaceWindow {
             memory_sort: Default::default(),
             memory_loading: false,
             memory_generation: 0,
+            memory_canceled: None,
             process_sampler: Default::default(),
             workspace_menu: None,
             workspace_menu_blur: None,
@@ -2579,6 +2588,7 @@ impl WorkspaceWindow {
             memory_sort: Default::default(),
             memory_loading: false,
             memory_generation: 0,
+            memory_canceled: None,
             process_sampler: Default::default(),
             workspace_menu: None,
             workspace_menu_blur: None,
@@ -3212,6 +3222,10 @@ impl Render for WorkspaceWindow {
                 if let Some(rows) = &this.memory_rows { clipboard::write(ClipboardItem::new_string(memory_view::report(rows, this.memory_application, this.memory_sort)), cx); }
             }))
             .on_action(cx.listener(|this, _: &CloseTerminalMemory, _, cx| {
+                if let Some(canceled) = this.memory_canceled.take() { canceled.store(true, Ordering::Relaxed); }
+                // Drop cached process records without locking a sampler that may
+                // still be in an OS call. An in-flight worker releases its Arc later.
+                this.process_sampler = Default::default();
                 this.memory_rows = None;
                 this.memory_application = None;
                 this.memory_loading = false;

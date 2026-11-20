@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Closing Terminal Memory now releases the window's cached process sampler and
+signals cancellation to an in-flight sample. Workers check before OS sampling,
+after acquiring the sampler and between terminal samples; existing generation
+checks suppress stale results. Cache release never waits on the worker's mutex.
+Reopening starts a fresh CPU baseline. Desktop compilation passed. An OS query
+already in progress may finish before its worker releases the last sampler Arc;
+native close/reopen behavior and measured RSS reclamation remain unverified.
+
 Open Settings panels now observe shared preferences and settings-file activity
 across windows, including restored and detached-window construction paths.
 Save/Open show a busy state during file work instead of appearing actionable

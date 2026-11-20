@@ -1,5 +1,9 @@
 # rmux
 
+Closing the Terminal Memory panel releases its cached process samples. Reopening
+starts a fresh CPU baseline, so refresh again after the baseline interval to see
+CPU percentages. A sample already inside an OS query may finish before cleanup.
+
 Workspace directory subtitles include the Git branch or detached HEAD when
 available. Discovery runs in the background on shell directory reports. A shared
 native filesystem watcher refreshes branch badges on HEAD changes, including
