@@ -1852,7 +1852,7 @@ impl Element for TerminalElement {
                 .update(&frame, cells, &family, window, view.metrics.as_mut())
         });
         let mut cursor_text = None;
-        let cursor_shape = cx.global::<Preferences>().unfocused_cursor.shape(
+        let cursor_shape = cx.global::<Preferences>().cursor_shape(
             focused,
             !marked.is_empty(),
             frame.cursor_shape,

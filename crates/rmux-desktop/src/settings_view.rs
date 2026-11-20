@@ -7,7 +7,7 @@ pub struct State {
     pub selected: usize,
     pub scroll: ScrollHandle,
 }
-pub const KEYS: &[&str] = &["font", "padding", "theme", "cursor", "copy", "close", "group_placement"];
+pub const KEYS: &[&str] = &["font", "padding", "theme", "focused_cursor", "cursor", "copy", "close", "group_placement"];
 pub fn next_control(selected: usize, key: &str, shift: bool) -> Option<usize> {
     let count = KEYS.len() + 2;
     match key {
@@ -26,6 +26,7 @@ pub fn adjust(settings: &mut Preferences, key: &str, delta: i32) {
         "font" => settings.font_size = (settings.font_size + delta as f32).clamp(8., 40.),
         "padding" => settings.terminal_padding = (settings.terminal_padding as i32 + delta).clamp(0, 32) as u8,
         "theme" => settings.terminal_theme = settings.terminal_theme.cycle(delta),
+        "focused_cursor" => settings.focused_cursor = settings.focused_cursor.cycle(delta < 0),
         "close" if !settings.close_policy_overridden() => {
             use close_policy::ClosePolicy::{Active, Always, Never};
             settings.confirm_close = match (settings.confirm_close, delta < 0) {
@@ -104,16 +105,17 @@ pub fn panel(state: State, cx: &mut Context<window_view::WorkspaceWindow>) -> An
                             }).child(theme.label())
                     })
                 )))
-            .child(row("Unfocused cursor", "cursor", match settings.unfocused_cursor { preferences::UnfocusedCursor::Hollow => "Hollow", preferences::UnfocusedCursor::Hidden => "Hidden" }.into(), false, state.selected == 3, false))
-            .child(row("Copy on select", "copy", if settings.copy_on_select { "On" } else { "Off" }.into(), false, state.selected == 4, false))
+            .child(row("Focused cursor", "focused_cursor", settings.focused_cursor.label().into(), false, state.selected == 3, false))
+            .child(row("Unfocused cursor", "cursor", match settings.unfocused_cursor { preferences::UnfocusedCursor::Hollow => "Hollow", preferences::UnfocusedCursor::Hidden => "Hidden" }.into(), false, state.selected == 4, false))
+            .child(row("Copy on select", "copy", if settings.copy_on_select { "On" } else { "Off" }.into(), false, state.selected == 5, false))
             .child(row("Confirm before closing", "close", format!("{}{}", match settings.confirm_close {
                 close_policy::ClosePolicy::Active => "Active tasks", close_policy::ClosePolicy::Always => "Always", close_policy::ClosePolicy::Never => "Never",
-            }, if settings.close_policy_overridden() { " · Environment" } else { "" }), false, state.selected == 5, settings.close_policy_overridden()))
+            }, if settings.close_policy_overridden() { " · Environment" } else { "" }), false, state.selected == 6, settings.close_policy_overridden()))
             .child(row("New group workspace", "group_placement", match settings.group_new_workspace_placement {
                 workspace_groups::Placement::AfterCurrent => "After current",
                 workspace_groups::Placement::Top => "First",
                 workspace_groups::Placement::End => "Last",
-            }.into(), false, state.selected == 6, false))
+            }.into(), false, state.selected == 7, false))
             .child(div().py_3().text_xs().text_color(rgb(0xa0a0a0)).child("Tab / ↑↓ to navigate · ←→ to change · Enter to activate · Esc to close. Changes apply to this session. Text size updates terminals using the previous default. Per-terminal zoom stays unchanged; Reset Font Size rejoins the default. Custom colors in your config override the theme."))
             .child(div().id("settings-save").border_1().border_color(if state.selected == KEYS.len() { rgb(0xffffff) } else { rgb(0x007aff) }).px_3().py_2().rounded_sm().bg(rgb(0x007aff)).hover(|s| s.bg(rgb(0x1685ff))).text_sm().cursor_pointer()
                 .on_click(|event, window, cx| { if event.standard_click() { window.dispatch_action(Box::new(SaveAppearanceSettings), cx); } }).child("Save these settings"))

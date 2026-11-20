@@ -222,9 +222,12 @@ Windows; native text commits follow the existing UTF-8/IME path.
 
 `unfocused_cursor` is `"hollow"` by default, keeping the insertion position visible
 in inactive panes and windows. Set it to `"hidden"` to suppress inactive cursors.
-Focused terminals retain application-selected cursor shapes, and applications
-that hide their cursor remain hidden. Reload Settings applies this preference
-to existing windows; it does not add a blink timer.
+`focused_cursor` defaults to `"application"`, retaining application-selected
+shapes. Choose `"block"`, `"bar"`, or `"underline"` to override the focused
+cursor shape. Settings exposes both cursor controls, and Save these settings
+persists them. Applications that hide their cursor remain hidden, and IME
+composition uses a bar caret. Reload Settings applies these preferences to
+existing windows; neither setting adds a blink timer.
 
 `foreground_color`, `background_color` and `cursor_color` accept `"#RRGGBB"`
 strings or `null` for the selected terminal theme's defaults. For example:

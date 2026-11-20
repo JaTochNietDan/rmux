@@ -51,6 +51,30 @@ impl TerminalTheme {
 
 #[derive(Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+pub enum FocusedCursor {
+    #[default]
+    Application,
+    Block,
+    Bar,
+    Underline,
+}
+impl FocusedCursor {
+    pub fn label(self) -> &'static str {
+        match self { Self::Application => "Application", Self::Block => "Block", Self::Bar => "Bar", Self::Underline => "Underline" }
+    }
+    pub fn cycle(self, backwards: bool) -> Self {
+        let choices = [Self::Application, Self::Block, Self::Bar, Self::Underline];
+        let index = choices.iter().position(|choice| *choice == self).unwrap_or(0);
+        choices[(index + if backwards { 3 } else { 1 }) % choices.len()]
+    }
+    fn shape(self, application: rmux_terminal::CursorShape) -> rmux_terminal::CursorShape {
+        use rmux_terminal::CursorShape;
+        match self { Self::Application => application, Self::Block => CursorShape::Block, Self::Bar => CursorShape::Bar, Self::Underline => CursorShape::Underline }
+    }
+}
+
+#[derive(Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum UnfocusedCursor {
     #[default]
     Hollow,
@@ -99,6 +123,7 @@ pub struct Preferences {
     pub copy_on_select: bool,
     pub macos_option_as_alt: bool,
     pub unfocused_cursor: UnfocusedCursor,
+    pub focused_cursor: FocusedCursor,
     pub foreground_color: Option<HexColor>,
     pub background_color: Option<HexColor>,
     pub cursor_color: Option<HexColor>,
@@ -126,6 +151,7 @@ impl Default for Preferences {
             copy_on_select: false,
             macos_option_as_alt: true,
             unfocused_cursor: UnfocusedCursor::default(),
+            focused_cursor: FocusedCursor::default(),
             foreground_color: None,
             background_color: None,
             cursor_color: None,
@@ -151,6 +177,9 @@ impl gpui::Global for Preferences {}
 pub struct ReloadState(pub bool);
 impl gpui::Global for ReloadState {}
 impl Preferences {
+    pub fn cursor_shape(&self, focused: bool, composing: bool, application: rmux_terminal::CursorShape) -> Option<rmux_terminal::CursorShape> {
+        self.unfocused_cursor.shape(focused, composing, self.focused_cursor.shape(application))
+    }
     pub fn terminal_palette(&self) -> Option<[rmux_terminal::Color; 16]> {
         self.ansi_palette.map(|colors| colors.map(HexColor::rgb)).or_else(|| {
             match self.terminal_theme {
@@ -216,6 +245,7 @@ impl Preferences {
             && self.terminal_padding == other.terminal_padding
             && self.terminal_theme == other.terminal_theme
             && self.unfocused_cursor == other.unfocused_cursor
+            && self.focused_cursor == other.focused_cursor
             && self.copy_on_select == other.copy_on_select
             && self.group_new_workspace_placement == other.group_new_workspace_placement
             && (self.close_policy_overridden() || self.confirm_close == other.confirm_close)
@@ -236,6 +266,7 @@ impl Preferences {
         latest.terminal_padding = self.terminal_padding;
         latest.terminal_theme = self.terminal_theme;
         latest.unfocused_cursor = self.unfocused_cursor;
+        latest.focused_cursor = self.focused_cursor;
         latest.copy_on_select = self.copy_on_select;
         latest.group_new_workspace_placement = self.group_new_workspace_placement;
         if !self.close_policy_overridden() { latest.confirm_close = self.confirm_close; }
@@ -441,14 +472,25 @@ mod tests {
         let defaults = Preferences::decode(b"{}")?;
         let hidden = Preferences::decode(br#"{"unfocused_cursor":"hidden"}"#)?;
         for shape in [CursorShape::Block, CursorShape::Bar, CursorShape::Underline, CursorShape::Hollow] {
-            assert_eq!(defaults.unfocused_cursor.shape(true, false, shape), Some(shape));
-            assert_eq!(hidden.unfocused_cursor.shape(true, false, shape), Some(shape));
-            assert_eq!(defaults.unfocused_cursor.shape(true, true, shape), Some(CursorShape::Bar));
-            assert_eq!(defaults.unfocused_cursor.shape(false, false, shape), Some(CursorShape::Hollow));
-            assert_eq!(hidden.unfocused_cursor.shape(false, false, shape), None);
+            assert_eq!(defaults.cursor_shape(true, false, shape), Some(shape));
+            assert_eq!(hidden.cursor_shape(true, false, shape), Some(shape));
+            assert_eq!(defaults.cursor_shape(true, true, shape), Some(CursorShape::Bar));
+            assert_eq!(defaults.cursor_shape(false, false, shape), Some(CursorShape::Hollow));
+            assert_eq!(hidden.cursor_shape(false, false, shape), None);
         }
         assert!(Preferences::decode(br#"{"unfocused_cursor":"blink"}"#).is_err());
         assert!(Preferences::decode(br#"{"unfocused_cursor":false}"#).is_err());
+        for (name, expected) in [("block", CursorShape::Block), ("bar", CursorShape::Bar), ("underline", CursorShape::Underline)] {
+            let value = serde_json::json!({"focused_cursor":name, "unfocused_cursor":"hidden"});
+            let settings = Preferences::decode(&serde_json::to_vec(&value)?)?;
+            assert_eq!(settings.cursor_shape(true, false, CursorShape::Hollow), Some(expected));
+            assert_eq!(settings.cursor_shape(true, true, CursorShape::Block), Some(CursorShape::Bar));
+            assert_eq!(settings.cursor_shape(false, false, CursorShape::Block), None);
+            assert!(!settings.same_saved_appearance(&hidden));
+            assert_eq!(serde_json::to_value(&settings)?["focused_cursor"], name);
+            assert!(settings.focused_cursor.cycle(false).cycle(true) == settings.focused_cursor);
+        }
+        assert!(Preferences::decode(br#"{"focused_cursor":"unknown"}"#).is_err());
         Ok(())
     }
     #[test]

@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Focused cursor shape can now be set to Application (default), Block, Bar or
+Underline through configuration and Settings, with explicit Save persistence.
+The renderer combines this preference with the existing unfocused hide/hollow
+policy and IME bar caret; engine-hidden cursors remain hidden. No blink timer
+was added. The focused cursor test passed for default application behavior,
+explicit shapes, composition/unfocused precedence, serialization and change
+detection; desktop test compilation passed. Native cursor rendering and settings
+keyboard/layout acceptance remain pending.
+
 Settings now exposes all four terminal themes as direct, wrapping choices with
 a selected-state border, rather than requiring repeated clicks through a cycle.
 Keyboard Left/Right cycling remains available. Named Terminal Theme palette
