@@ -452,6 +452,11 @@ as messages arrive; the panel and Settings are mutually exclusive.
 `notify --surface ID --title TITLE --body BODY` posts into rmux's existing
 notification panel and unread indicators without changing focus. Each surface
 retains up to 32 notifications, newest first within each terminal.
+`dismiss-notification --surface ID --revision NUMBER` removes one message using
+the exact identifiers returned by `list-notifications`. It returns
+`dismissed:false` for an unknown, evicted, or already dismissed revision; it does
+not clear newer messages or switch focus. Revisions are unsigned 64-bit integers.
+
 `list-notifications` lists non-dismissed messages
 and accepts optional `--window`/`--workspace` filters. These are in-app messages;
 native OS notification delivery is not implemented yet. The raw methods are

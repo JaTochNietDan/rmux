@@ -105,7 +105,9 @@ with tempfile.TemporaryDirectory(prefix="rmux-socket-") as tmp:
             assert newest["revision"] > old_revision
             retained = call(first, "notification.list", {"workspace_id":original["id"]})["notifications"]
             assert [message["revision"] for message in retained] == [newest["revision"], old_revision], retained
-            assert call(first, "notification.dismiss", {"surface_id":surface,"revision":old_revision})["dismissed"]
+            dismissal = subprocess.run([cli, "dismiss-notification", "--surface", surface, "--revision", str(old_revision)], env=env, capture_output=True, text=True, timeout=8)
+            assert dismissal.returncode == 0, (dismissal.stdout, dismissal.stderr)
+            assert json.loads(dismissal.stdout)["result"]["dismissed"]
             assert not call(first, "notification.dismiss", {"surface_id":surface,"revision":old_revision})["dismissed"]
             messages = call(first, "notification.list", {"workspace_id":original["id"]})["notifications"]
             assert len(messages) == 1 and messages[0]["body"] == "Review ready", messages

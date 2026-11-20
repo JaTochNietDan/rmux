@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Added `rmuxctl dismiss-notification --surface ID --revision NUMBER`, with local
+help and completion flags. Revision parsing preserves unsigned 64-bit precision
+and rejects fractional, negative, overflowed, missing and duplicate values.
+Eleven CLI tests passed. The new client command also passed the native socket
+smoke against the existing app build, removing an older retained message while
+preserving the newer one; repeated dismissal returns false via the shared RPC.
+
 Font increase/decrease, reset size and Use Configured Font now have configurable
 shortcut action names and route to the same terminal handlers as menus/palette.
 The guide now correctly distinguishes resetting to the configured size (rather
