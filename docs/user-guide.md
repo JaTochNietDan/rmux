@@ -171,6 +171,12 @@ does not consume the saved buffer. **Delete Named Buffer…** in the palette/men
 the chosen buffer and releases its storage. If buffers changed while the picker
 was open, reopen it before deleting.
 
+Rename a buffer with `rmuxctl rename-buffer --name OLD NEW_NAME` (source defaults
+to `default`), or RPC `buffer.rename` with `name` and required `new_name`.
+Renaming moves the retained text without cloning it and preserves its byte count.
+An existing destination is rejected; renaming to the same name is a no-op.
+Successful renames invalidate open buffer pickers, which must be reopened.
+
 **Choose Terminal Font…** searches installed font families for the current
 terminal. Type to filter, use arrows and Enter to choose, or Escape to cancel.
 Monospaced families suit the terminal grid best. The picker preserves text size;

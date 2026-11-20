@@ -3,6 +3,7 @@ use std::ffi::OsString;
 
 const COMMANDS: &[(&str, &[&str])] = &[
     ("set-buffer", &["--name"]),
+    ("rename-buffer", &["--name"]),
     ("list-buffers", &[]),
     ("paste-buffer", &["--surface", "--name", "--bracketed"]),
     ("dismiss-notification", &["--surface", "--revision"]),

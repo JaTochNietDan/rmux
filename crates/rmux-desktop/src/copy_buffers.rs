@@ -14,17 +14,22 @@ fn preview(text: &str) -> String {
     preview
 }
 
-pub enum Command { List, Get(String), Delete(String), Set(String, String), Paste { name: String, surface_id: String, bracketed: bool } }
+pub enum Command { List, Get(String), Delete(String), Set(String, String), Rename(String, String), Paste { name: String, surface_id: String, bracketed: bool } }
 pub fn parse(method: &str, params: Option<&Value>) -> Result<Option<Command>, &'static str> {
-    if !matches!(method, "buffer.list" | "buffer.get" | "buffer.delete" | "buffer.set" | "buffer.paste") { return Ok(None); }
+    if !matches!(method, "buffer.list" | "buffer.get" | "buffer.delete" | "buffer.set" | "buffer.paste" | "buffer.rename") { return Ok(None); }
     let empty = json!({});
     let params = params.unwrap_or(&empty).as_object().ok_or("Expected object params")?;
-    let allowed: &[&str] = match method { "buffer.list" => &[], "buffer.set" => &["name", "text"], "buffer.paste" => &["name", "surface_id", "bracketed"], _ => &["name"] };
+    let allowed: &[&str] = match method { "buffer.list" => &[], "buffer.rename" => &["name", "new_name"], "buffer.set" => &["name", "text"], "buffer.paste" => &["name", "surface_id", "bracketed"], _ => &["name"] };
     if params.keys().any(|key| !allowed.contains(&key.as_str())) { return Err("Unknown buffer parameter"); }
     if method == "buffer.list" { return Ok(Some(Command::List)); }
     let name = match params.get("name") { None => "default", Some(Value::String(name)) => name, _ => return Err("Expected buffer name string") };
     validate_name(name)?;
     Ok(Some(match method {
+        "buffer.rename" => {
+            let new_name = params.get("new_name").and_then(Value::as_str).ok_or("Expected new_name string")?;
+            validate_name(new_name)?;
+            Command::Rename(name.into(), new_name.into())
+        }
         "buffer.paste" => {
             let surface_id = params.get("surface_id").and_then(Value::as_str).filter(|id| !id.is_empty() && id.len() <= 128).ok_or("Expected explicit surface_id")?;
             let bracketed = match params.get("bracketed") { None => false, Some(Value::Bool(value)) => *value, _ => return Err("Expected bracketed boolean") };
@@ -83,6 +88,18 @@ impl Store {
     }
     pub fn execute(&mut self, command: &Command) -> Result<Value, &'static str> {
         Ok(match command {
+            Command::Rename(name, new_name) => {
+                validate_name(new_name)?;
+                let bytes = self.entries.get(name).ok_or("Buffer not found")?.len();
+                let changed = name != new_name;
+                if changed {
+                    if self.entries.contains_key(new_name) { return Err("Destination buffer already exists"); }
+                    let text = self.entries.remove(name).expect("source checked");
+                    self.entries.insert(new_name.clone(), text);
+                    self.revision = self.revision.wrapping_add(1);
+                }
+                json!({"name":new_name,"previous_name":name,"bytes":bytes,"changed":changed})
+            }
             Command::Paste { .. } => return Err("Buffer paste requires a live terminal target"),
             Command::List => json!({"buffers":self.entries.iter().map(|(name, text)| json!({"name":name,"bytes":text.len()})).collect::<Vec<_>>(), "bytes":self.bytes,"max_buffers":MAX_COUNT,"max_bytes":MAX_TOTAL,"max_buffer_bytes":MAX_BUFFER}),
             Command::Get(name) => json!({"name":name,"text":self.entries.get(name).ok_or("Buffer not found")?}),
@@ -98,6 +115,30 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn rename_preserves_storage_and_rejects_collisions_atomically() {
+        let mut store = Store::default();
+        store.execute(&Command::Set("default".into(), "世界".repeat(1000))).unwrap();
+        store.execute(&Command::Set("taken".into(), "keep".into())).unwrap();
+        let revision = store.revision();
+        let bytes = store.bytes;
+        let pointer = store.entries["default"].as_ptr();
+        assert!(store.execute(&Command::Rename("default".into(), "taken".into())).is_err());
+        assert!(store.execute(&Command::Rename("missing".into(), "new".into())).is_err());
+        assert!(store.execute(&Command::Rename("default".into(), "\n".into())).is_err());
+        assert_eq!(store.revision(), revision);
+        assert_eq!(store.execute(&Command::Rename("default".into(), "default".into())).unwrap()["changed"], false);
+        assert_eq!(store.revision(), revision);
+        let command = parse("buffer.rename", Some(&json!({"new_name":"build 世界"}))).unwrap().unwrap();
+        assert_eq!(store.execute(&command).unwrap()["changed"], true);
+        assert_eq!(store.entries["build 世界"].as_ptr(), pointer);
+        assert_eq!(store.bytes, bytes);
+        assert!(!store.entries.contains_key("default"));
+        assert!(store.text_at_revision("build 世界", revision).is_err());
+        for params in [json!({}), json!({"new_name":42}), json!({"new_name":""}), json!({"new_name":"x", "overwrite":true})] {
+            assert!(parse("buffer.rename", Some(&params)).is_err());
+        }
+    }
     #[test]
     fn picker_previews_are_bounded_unicode_text_without_mutating_buffers() {
         assert_eq!(preview("line\n世界\tend\u{1b}"), "line 世界 end ");

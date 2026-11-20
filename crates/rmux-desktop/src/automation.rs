@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 const MAX_REQUEST_BYTES: usize = 64 * 1024;
 const METHODS: &[&str] = &["system.ping", "system.capabilities"];
 const LIVE_METHODS: &[&str] = &[
-    "buffer.list", "buffer.get", "buffer.set", "buffer.delete", "buffer.paste",
+    "buffer.list", "buffer.get", "buffer.set", "buffer.delete", "buffer.paste", "buffer.rename",
     "system.quit",
     "system.ping",
     "system.capabilities",
@@ -907,7 +907,7 @@ fn dispatch_inner(
     if notification
         && !matches!(
             method,
-            "buffer.set" | "buffer.delete" | "buffer.paste" | "workspace.select"
+            "buffer.set" | "buffer.delete" | "buffer.paste" | "buffer.rename" | "workspace.select"
                 | "surface.focus"
                 | "surface.send_text"
                 | "surface.send_key"
@@ -1432,7 +1432,7 @@ mod tests {
         let (sender, receiver) = async_channel::bounded::<LiveRequest>(1);
         let worker = std::thread::spawn(move || {
             let mut store = super::super::copy_buffers::Store::default();
-            for _ in 0..4 {
+            for _ in 0..5 {
                 let request = receiver.recv_blocking().unwrap();
                 assert!(request.pending.start());
                 let result = store.execute(request.buffer_command.as_ref().unwrap())
@@ -1444,7 +1444,8 @@ mod tests {
             ("buffer.set", json!({"text":"世界"}), "bytes", json!(6)),
             ("buffer.get", json!({}), "text", json!("世界")),
             ("buffer.list", json!({}), "bytes", json!(6)),
-            ("buffer.delete", json!({}), "deleted", json!(true)),
+            ("buffer.rename", json!({"new_name":"renamed 世界"}), "changed", json!(true)),
+            ("buffer.delete", json!({"name":"renamed 世界"}), "deleted", json!(true)),
         ] {
             let request = json!({"jsonrpc":"2.0","id":1,"method":method,"params":params});
             let response = dispatch_inner(&serde_json::to_vec(&request).unwrap(), Some(&sender)).unwrap();

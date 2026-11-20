@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Added `buffer.rename` RPC and `rmuxctl rename-buffer [--name NAME] NEW_NAME`,
+including capability discovery, notification routing, CLI help and completions.
+Rename moves the stored String allocation without duplicating buffer contents;
+byte/count budgets stay unchanged. Collisions, invalid names and missing sources
+fail before mutation; same-name requests are no-ops. Changed names advance the
+revision so stale pickers cannot act. Focused store tests verified allocation
+identity, accounting and atomic failures; CLI parsing and live-queue routing
+tests passed. Native socket acceptance and a graphical rename flow remain open.
+
 Named-buffer paste/delete pickers now show searchable content previews alongside
 names and byte counts. Preview construction reads at most 97 Unicode scalar
 values per buffer and retains at most 96 plus an ellipsis, avoiding full-buffer

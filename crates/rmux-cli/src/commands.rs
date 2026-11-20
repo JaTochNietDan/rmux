@@ -5,6 +5,7 @@ use std::io::Read;
 
 pub const HELP: &str = "Commands (JSON output except pipe-pane; explicit opaque IDs required):
   set-buffer [--name NAME] [TEXT|-] | list-buffers
+  rename-buffer [--name NAME] NEW_NAME
   paste-buffer --surface ID [--name NAME] [--bracketed]
   notify --surface ID [--title TITLE] [--body BODY]
   list-notifications [--window ID] [--workspace ID]
@@ -40,6 +41,7 @@ pub fn help(command: &str) -> Result<String, String> {
     let (arguments, description) = match command {
         "pipe-pane" => ("--surface ID [--command SHELL_COMMAND | SHELL_COMMAND]", "Capture retained history (up to 1 MiB) and feed it once to a local /bin/sh command via stdin. Truncated captures are rejected. Runs in the CLI working directory, forwards command stdout/stderr and returns its exit status. The CLI waits for the command; use normal shell interruption for long-running commands. Does not stream future output."),
         "paste-buffer" => ("--surface ID [--name NAME] [--bracketed]", "Queue a retained buffer to an explicit terminal without changing focus or scroll position. --bracketed uses terminal paste encoding. The buffer is retained; requests are never retried."),
+        "rename-buffer" => ("[--name NAME] NEW_NAME", "Rename a retained buffer without copying its contents. Source defaults to default; an existing destination is never overwritten."),
         "set-buffer" => ("[--name NAME] [TEXT|-]", "Set a process-local copy buffer; name defaults to default. Omitted text or - reads UTF-8 stdin exactly, including trailing newlines. Storage and request size are bounded; buffers are not persisted or copied to the OS clipboard."),
         "list-buffers" => ("", "List process-local copy buffer names and byte counts without their contents."),
         "read-notification" => ("--surface ID --revision NUMBER", "Mark one message read without dismissing it or focusing its terminal. Missing or already read messages return marked_read:false."),
@@ -91,6 +93,7 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
         "pipe-pane" => ("surface.read_text", Some(("--surface", "surface_id")), Some("command")),
         "paste-buffer" => ("buffer.paste", Some(("--surface", "surface_id")), None),
         "set-buffer" => ("buffer.set", None, Some("text")),
+        "rename-buffer" => ("buffer.rename", None, Some("new_name")),
         "list-buffers" => ("buffer.list", None, None),
         "move-panel" => ("surface.move_to_workspace", Some(("--panel", "surface_id")), None),
         "merge-workspace" => ("workspace.merge", Some(("--workspace", "workspace_id")), None),
@@ -176,7 +179,7 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
                 if params.insert("command".into(), Value::String(text)).is_some() { return Err("duplicate pipe command".into()); }
                 continue;
             }
-            if matches!(command, "set-buffer" | "paste-buffer") && arg == "--name" {
+            if matches!(command, "set-buffer" | "paste-buffer" | "rename-buffer") && arg == "--name" {
                 let name = args.next().ok_or("--name requires text")?.into_string().map_err(|_| "name must be UTF-8")?;
                 if params.insert("name".into(), Value::String(name)).is_some() { return Err("duplicate --name".into()); }
                 continue;
@@ -390,6 +393,15 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn rename_buffer_requires_one_destination_and_preserves_unicode() {
+        assert_eq!(expand("rename-buffer", args(&["--name", "old", "build 世界"])).unwrap(),
+            ("buffer.rename".into(), serde_json::json!({"name":"old", "new_name":"build 世界"})));
+        assert_eq!(expand("rename-buffer", args(&["new"])).unwrap().1, serde_json::json!({"new_name":"new"}));
+        for input in [vec![], vec!["one", "two"], vec!["--name", "a", "--name", "b", "new"], vec!["--overwrite", "new"]] {
+            assert!(expand("rename-buffer", args(&input)).is_err());
+        }
+    }
     fn args(v: &[&str]) -> Vec<OsString> {
         v.iter().map(OsString::from).collect()
     }
