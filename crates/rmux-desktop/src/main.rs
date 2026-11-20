@@ -10,6 +10,8 @@ mod cell_metrics;
 mod icons;
 #[cfg(unix)]
 mod file_drop;
+#[cfg(unix)]
+mod image_paste;
 mod git_context;
 mod git_watch;
 mod clipboard;
@@ -415,6 +417,10 @@ struct TerminalView {
     selection_pointer: Option<(Point<Pixels>, bool)>,
     selection_scroll: Option<Task<()>>,
     clipboard_task: Option<Task<()>>,
+    #[cfg(unix)]
+    image_paste_task: Option<Task<()>>,
+    #[cfg(unix)]
+    pasted_images: Vec<image_paste::Prepared>,
     directory_task: Option<Task<()>>,
     directory_generation: Arc<AtomicU64>,
     rendered_paste_pending: bool,
@@ -777,6 +783,10 @@ impl TerminalView {
             selection_pointer: None,
             selection_scroll: None,
             clipboard_task: None,
+            #[cfg(unix)]
+            image_paste_task: None,
+            #[cfg(unix)]
+            pasted_images: Vec::new(),
             directory_task: None,
             directory_generation: Default::default(),
             rendered_paste_pending: false,
@@ -1300,23 +1310,57 @@ impl TerminalView {
             return;
         }
         #[cfg(unix)]
-        let result = file_drop::quoted_paths(paths.paths()).and_then(|text| self.session.paste_owned(text));
+        let result = {
+            self.image_paste_task = None;
+            file_drop::quoted_paths(paths.paths()).and_then(|text| self.session.paste_owned(text))
+        };
         #[cfg(not(unix))]
         let result: anyhow::Result<()> = { let _ = paths; Err(anyhow::anyhow!("File drops need Windows shell quoting support")) };
         self.error = result.err().map(|error| error.to_string());
         self.refresh_input_mode(cx);
         cx.notify();
     }
-    fn paste(&mut self, _: &Paste, _: &mut Window, cx: &mut Context<Self>) {
+    #[cfg(unix)]
+    fn paste_image(&mut self, image: Image, window: &mut Window, cx: &mut Context<Self>) {
+        if self.image_paste_task.is_some() { self.error = Some("An image paste is already being prepared".into()); cx.notify(); return; }
+        if !self.focus.is_focused(window) || self.copy_mode.is_some() || self.find.is_some() || self.ports.visible
+            || cx.global::<PromptGate>().is_active() || cx.global::<Shutdowns>().quitting || cx.global::<Shutdowns>().quit_prompt { return; }
+        let reservation = match image_paste::Reservation::acquire(image.bytes.len()) {
+            Ok(reservation) => reservation,
+            Err(error) => { self.error = Some(error.to_string()); cx.notify(); return; }
+        };
+        let focus = self.focus.clone();
+        let executor = cx.background_executor().clone();
+        self.image_paste_task = Some(cx.spawn_in(window, async move |entity, cx| {
+            let prepared = executor.spawn(async move { image_paste::Prepared::write(image, reservation) }).await;
+            let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
+                this.image_paste_task = None;
+                if !focus.is_focused(window) || this.copy_mode.is_some() || this.find.is_some() || this.ports.visible
+                    || cx.global::<PromptGate>().is_active() || cx.global::<Shutdowns>().quitting || cx.global::<Shutdowns>().quit_prompt { return; }
+                let result = prepared.and_then(|file| {
+                    let text = file_drop::quoted_paths(&[file.path().to_owned()])?;
+                    this.session.paste_owned(text)?;
+                    this.pasted_images.push(file);
+                    Ok(())
+                });
+                this.error = result.err().map(|error: anyhow::Error| error.to_string());
+                cx.notify();
+            }));
+        }));
+    }
+    fn paste(&mut self, _: &Paste, window: &mut Window, cx: &mut Context<Self>) {
         self.refresh_input_mode(cx);
-        if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
-            if let Err(error) = self.session.paste_owned(text) {
-                self.error = Some(error.to_string());
-                cx.notify();
-            } else {
-                self.error = None;
-                cx.notify();
-            }
+        let Some(item) = cx.read_from_clipboard() else { return; };
+        if let Some(text) = item.text() {
+            #[cfg(unix)]
+            { self.image_paste_task = None; }
+            self.error = self.session.paste_owned(text).err().map(|error| error.to_string());
+            cx.notify();
+        } else {
+            #[cfg(unix)]
+            if let Some(ClipboardEntry::Image(image)) = item.into_entries().next() { self.paste_image(image, window, cx); }
+            #[cfg(not(unix))]
+            { let _ = window; self.error = Some("Image paste needs Windows shell quoting support".into()); cx.notify(); }
         }
     }
     fn select(

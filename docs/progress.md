@@ -2,6 +2,19 @@
 
 ## Current implementation focus
 
+Extended T11 to image-only clipboard paste on macOS/Linux. The pinned GPUI API
+has no copied-file clipboard representation, so Finder copied-file support was
+not claimed. Supported clipboard images are moved into a background writer,
+retaining original format/bytes without decoding or another image clone. Private
+temporary files are retained by the target terminal, with 16 MiB per-image and
+app-wide 32-file/64 MiB reservations, and removed on terminal drop. Focus/overlay
+state is rechecked before queueing the quoted path; newer text paste/file drop
+cancels pending image delivery. Desktop test compilation and storage tests passed
+for contents, mode 0600, unlink-on-drop and released/rejected quotas. Native image
+clipboard/focus acceptance, crash-orphan cleanup, copied-file clipboard support,
+Windows quoting and remote upload remain pending. GPUI's initial clipboard read
+can allocate before rmux applies its image limit; no RSS bound is claimed.
+
 Started T11 with local external file-drop insertion on macOS/Linux. Focused
 terminals accept absolute paths as POSIX-quoted text through the existing bounded
 paste queue, preserving bracketed paste and adding no Enter. Overlays, unfocused
