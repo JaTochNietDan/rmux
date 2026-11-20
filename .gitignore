@@ -10,3 +10,6 @@ mise.local.toml
 *.p12
 *.p8
 *.key
+
+/vendor/mac-usernotifications/target/
+/vendor/mac-usernotifications/Cargo.lock

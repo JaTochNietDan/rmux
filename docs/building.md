@@ -115,3 +115,15 @@ Source and archive layout follow the [official Ghostty installation documentatio
 macOS workspace builds, terminal tests and native smoke checks have run. Windows archive checksum and layout were inspected on macOS, but the PowerShell scripts and application have not run on Windows. Full Linux/Windows runtime checks, IME, DPI, output pressure and teardown are still required before P0 can pass.
 
 The x86_64 Linux GNU source cross-build completed successfully on macOS using the pinned mise Zig 0.17.0. It produced `libghostty-vt.a`, an x86-64 ELF shared library, headers and pkg-config metadata. This is library compilation evidence only. The session tests now have Unix and Windows command branches, so a future native Windows test run will exercise ConPTY output, interactive resize/input and exit status rather than skipping the entire session module.
+
+### Vendored macOS notification response cleanup
+
+`vendor/mac-usernotifications` pins 0.3.1 with a response-guard lifetime fix.
+See its `RMUX-PATCHES.md` for provenance. Focused tests do not contact the OS:
+
+```sh
+mise exec -- cargo test --manifest-path vendor/mac-usernotifications/Cargo.toml --target-dir target --lib pending_response
+```
+
+The standalone dependency test package is excluded from workspace tests so Linux
+and Windows workspace commands do not attempt to compile Apple frameworks.

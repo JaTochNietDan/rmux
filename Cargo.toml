@@ -1,6 +1,7 @@
 [workspace]
 members = ["crates/rmux-terminal", "crates/rmux-desktop", "crates/rmux-cli"]
 resolver = "3"
+exclude = ["vendor/mac-usernotifications"]
 
 [workspace.package]
 version = "0.1.0"
@@ -19,6 +20,7 @@ debug = 1
 
 [patch.crates-io]
 xattr = { path = "vendor/xattr" }
+mac-usernotifications = { path = "vendor/mac-usernotifications" }
 
 [profile.release]
 lto = "thin"

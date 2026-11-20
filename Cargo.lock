@@ -3147,8 +3147,6 @@ dependencies = [
 [[package]]
 name = "mac-usernotifications"
 version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08adbb1b9e11709f9ce628dd7471208e5dd3ad35a245dbc81e59a36dce3f3780"
 dependencies = [
  "block2",
  "futures-channel",
@@ -4599,6 +4597,7 @@ dependencies = [
  "async-channel 2.5.0",
  "futures-lite 2.6.1",
  "gpui",
+ "mac-usernotifications",
  "notify",
  "notify-rust",
  "objc",

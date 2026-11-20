@@ -669,7 +669,7 @@
       ],
       "acceptance": "Implement OS adapters; respect focused-surface and app-wide suppression settings.",
       "rmux_status": "in_progress",
-      "implementation": "Opt-in native_notifications setting and Settings toggle; lazy single dispatcher with eight queued weak terminal references, one delivery per second, configurable unfocused-terminal/background-app policy and read/dismissed/closed suppression before dispatch, bounded plain-text payloads, and asynchronous error reporting. notify-rust uses modern macOS Notification Center, XDG and Windows backends; Windows uses rmux AppUserModelID and still needs installer registration. OS permission/delivery/click routing and native multi-window focus/platform acceptance remain incomplete.",
+      "implementation": "Opt-in native_notifications setting and Settings toggle; lazy single dispatcher with eight queued weak terminal references, one delivery per second, configurable unfocused-terminal/background-app policy and read/dismissed/closed suppression before dispatch, bounded plain-text payloads, and asynchronous error reporting. notify-rust uses modern macOS Notification Center, XDG and Windows backends; Windows uses rmux AppUserModelID and still needs installer registration. macOS click routing resolves current terminal ownership with up to 16 async response listeners and two-minute expiry; the vendored adapter fixes canceled-response registration cleanup. Native permission/delivery/click behavior, Linux/Windows click routing and multi-window focus/platform acceptance remain incomplete.",
       "progress_record": "docs/progress.md"
     },
     {

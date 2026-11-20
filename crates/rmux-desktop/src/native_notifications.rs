@@ -5,6 +5,8 @@ use super::*;
 pub(super) struct Dispatcher {
     sender: Option<async_channel::Sender<Request>>,
     active_windows: std::collections::HashSet<AnyWindowHandle>,
+    #[cfg(target_os = "macos")]
+    responses: Vec<(Arc<AtomicBool>, Task<()>)>,
 }
 impl Global for Dispatcher {}
 struct Request {
@@ -45,15 +47,29 @@ pub(super) fn enqueue(revision: u64, cx: &mut Context<TerminalView>) {
                         .map(|record| record.message.clone())
                 }).ok().flatten();
                 let Some(message) = message else { continue; };
+                #[cfg(target_os = "macos")]
+                if !cx.update(|cx| {
+                    let pending = &mut cx.global_mut::<Dispatcher>().responses;
+                    pending.retain(|(done, _)| !done.load(Ordering::Acquire));
+                    pending.len() < 16
+                }).unwrap_or(false) { continue; }
                 if !rate.admit(std::time::Instant::now()) { continue; }
                 let result = cx.background_executor().spawn(async move {
                     deliver(&message.title, &message.body)
                 }).await;
-                if let Err(error) = result {
-                    let _ = request.terminal.update(cx, |terminal, cx| {
-                        terminal.error = Some(format!("Desktop notification failed: {error}"));
-                        cx.notify();
-                    });
+                match result {
+                    Ok(delivery) => {
+                        #[cfg(target_os = "macos")]
+                        let _ = cx.update(|cx| observe_response(delivery, request, cx));
+                        #[cfg(not(target_os = "macos"))]
+                        let _ = delivery;
+                    }
+                    Err(error) => {
+                        let _ = request.terminal.update(cx, |terminal, cx| {
+                            terminal.error = Some(format!("Desktop notification failed: {error}"));
+                            cx.notify();
+                        });
+                    }
                 }
             }
         }).detach();
@@ -62,7 +78,27 @@ pub(super) fn enqueue(revision: u64, cx: &mut Context<TerminalView>) {
     let _ = cx.global::<Dispatcher>().sender.as_ref().unwrap().try_send(Request { terminal: cx.weak_entity(), revision });
 }
 
-fn deliver(title: &str, body: &str) -> Result<()> {
+#[cfg(target_os = "macos")]
+type Delivery = mac_usernotifications::NotificationHandle;
+#[cfg(not(target_os = "macos"))]
+type Delivery = ();
+
+#[cfg(target_os = "macos")]
+fn observe_response(delivery: Delivery, request: Request, cx: &mut App) {
+    let done = Arc::new(AtomicBool::new(false));
+    let completed = done.clone();
+    let task = cx.spawn(async move |cx| {
+        if let Ok(response) = delivery.response().await {
+            if response.is_default_action() {
+                let _ = cx.update(|cx| window_view::focus_native_notification(&request.terminal, request.revision, cx));
+            }
+        }
+        completed.store(true, Ordering::Release);
+    });
+    cx.global_mut::<Dispatcher>().responses.push((done, task));
+}
+
+fn deliver(title: &str, body: &str) -> Result<Delivery> {
     #[cfg(target_os = "macos")]
     {
         notify_rust::check_bundle()?;
@@ -70,17 +106,27 @@ fn deliver(title: &str, body: &str) -> Result<()> {
     }
     let title = bounded_text(title, 256);
     let body = bounded_text(body, 4096);
-    // XDG notification bodies permit markup; terminal output is always plain text.
-    #[cfg(all(unix, not(target_os = "macos")))]
-    let body = body.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
-    let mut notification = notify_rust::Notification::new();
-    #[cfg(target_os = "windows")]
-    notification.app_id("dev.rmux.prototype");
-    notification.appname("rmux")
-        .summary(if title.is_empty() { "rmux" } else { &title })
-        .body(&body)
-        .show()?;
-    Ok(())
+    #[cfg(target_os = "macos")]
+    return Ok(mac_usernotifications::Notification::new()
+        .title(if title.is_empty() { "rmux" } else { &title })
+        .message(&body)
+        .timeout(std::time::Duration::from_secs(120))
+        .send_blocking()?);
+    #[cfg(not(target_os = "macos"))]
+    {
+
+        // XDG notification bodies permit markup; terminal output is always plain text.
+        #[cfg(all(unix, not(target_os = "macos")))]
+        let body = body.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+        let mut notification = notify_rust::Notification::new();
+        #[cfg(target_os = "windows")]
+        notification.app_id("dev.rmux.prototype");
+        notification.appname("rmux")
+            .summary(if title.is_empty() { "rmux" } else { &title })
+            .body(&body)
+            .show()?;
+        Ok(())
+    }
 }
 
 #[derive(Default)]

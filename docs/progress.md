@@ -2,6 +2,23 @@
 
 ## Current implementation focus
 
+macOS banners now have asynchronous click-to-terminal routing. Clicks resolve the
+surface's current workspace/window, honor modal/busy interactions, and ignore
+closed terminals, dismissed history records or a disabled notification setting.
+At most 16 response listeners are retained; further OS deliveries are skipped
+until a listener finishes. Each listener has a two-minute timeout that removes
+its banner; no per-banner blocked thread or recurring polling is used.
+
+Before enabling this path, inspection found mac-usernotifications 0.3.1 consumes
+PendingGuard via ManuallyDrop, leaking its request-id String and abandoning
+registration cleanup while waiting. A vendored patch keeps the guard alive and
+borrows the receiver instead. Both polled-cancellation and unpolled-drop tests
+passed without touching Notification Center; desktop compilation passed. Current
+fire-and-forget delivery did not exercise that flawed response path. Vendored
+provenance and test scope are in vendor/mac-usernotifications/RMUX-PATCHES.md.
+Actual macOS banner clicks, timeout removal and moved-window routing remain
+unverified; Linux/Windows click handling remains pending.
+
 Native notification Settings now distinguish Terminal unfocused from App in
 background. The persisted notification_focus policy is checked both before
 queue admission and before OS dispatch; focused terminals remain suppressed in

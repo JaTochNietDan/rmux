@@ -1,5 +1,28 @@
 use super::*;
 
+/// Resolve current ownership at click time, including detached/moved terminals.
+#[cfg(target_os = "macos")]
+pub(super) fn focus_native_notification(terminal: &WeakEntity<TerminalView>, revision: u64, cx: &mut App) {
+    if !cx.global::<Preferences>().native_notifications { return; }
+    if !terminal.read_with(cx, |view, _| view.notifications.contains(revision)).unwrap_or(false) { return; }
+    let target = terminal.entity_id();
+    for handle in cx.windows() {
+        let Some(handle) = handle.downcast::<WorkspaceWindow>() else { continue; };
+        let focused = handle.update(cx, |root, window, cx| {
+            if root.automation_available(cx).is_err() { return false; }
+            let workspace = root.entries.iter().find(|entry| entry.workspace.read(cx).panes.iter().any(|pane| {
+                pane.read(cx).terminals.iter().any(|terminal| terminal.entity_id() == target)
+            })).map(|entry| entry.workspace.entity_id());
+            let Some(workspace) = workspace else { return false; };
+            root.focus_terminal(workspace, target, window, cx);
+            window.activate_window();
+            cx.activate(true);
+            true
+        }).unwrap_or(false);
+        if focused { break; }
+    }
+}
+
 /// Notification visibility is structural, not a scan of terminal/parser state.
 /// An inactive OS window, inactive workspace/tab or a zoom-hidden pane is invisible.
 pub(super) fn terminal_is_visible(terminal: EntityId, cx: &mut App) -> bool {

@@ -8,9 +8,11 @@ terminal and the entire app being in the background (`"notification_focus":
 Center permission when prompted. Delivery failures appear in the terminal.
 Banners are limited to one per second and a bounded queue; the in-app notification
 history remains available independently. Turning the setting off skips queued
-requests but does not recall a banner already submitted to the OS. Clicking an OS banner does not yet jump
-to its terminal. Windows installer registration and native platform acceptance
-remain pending.
+requests but does not recall a banner already submitted to the OS. On macOS, banner clicks route to the terminal’s current workspace/window unless
+a modal interaction is active. Click listeners are capped at 16; banners expire
+after two minutes. Native click behavior still needs validation. Linux/Windows
+click routing, Windows installer registration and platform acceptance remain
+pending.
 
 Right-click terminal content for Copy, Paste, Find, selection, directory actions
 and Clear Scrollback. Use Shift-right-click when a terminal app handles mouse
