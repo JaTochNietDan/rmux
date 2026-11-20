@@ -2,6 +2,7 @@ use gpui::{prelude::*, *};
 use rmux_terminal::{Color, CursorShape, Frame, Scroll, session::Session};
 use std::ops::Range;
 use std::sync::Arc;
+mod app_menu;
 mod updater;
 mod attention;
 mod cell_metrics;
@@ -2832,6 +2833,7 @@ fn main() {
                 Some("Terminal"),
             )
         }));
+        app_menu::initialize(cx);
         shortcuts::initialize(cx);
         cx.on_action(|_: &Quit, cx| request_quit(cx));
         cx.on_action(|_: &NewWindow, cx| {
@@ -2844,15 +2846,7 @@ fn main() {
         cx.set_menus(vec![
             Menu {
                 name: "rmux".into(),
-                items: {
-                    let mut items = Vec::new();
-                    if updater_available {
-                        items.push(MenuItem::action("Check for Updates…", CheckForUpdates));
-                        items.push(MenuItem::separator());
-                    }
-                    items.push(MenuItem::action("Quit rmux", Quit));
-                    items
-                },
+                items: app_menu::items(updater_available),
             },
             Menu {
                 name: "File".into(),
@@ -2876,7 +2870,6 @@ fn main() {
                     MenuItem::action("Edit Workspace Description", EditWorkspaceDescription),
                     MenuItem::action("Save Layout…", SaveLayout),
                     MenuItem::action("Save Session…", SaveSession),
-                    MenuItem::action("Settings…", ToggleSettings),
                     MenuItem::action("Reload Settings", ReloadSettings),
                     MenuItem::action("Open Settings File", OpenSettingsFile),
                     MenuItem::action("Open Layout in New Window…", OpenLayout),

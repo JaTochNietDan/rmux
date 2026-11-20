@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Follow-up after v0.1.0: moved Settings into the application menu and added native
+macOS About, Hide, Hide Others and Show All commands. Cmd-H and Cmd-Option-H use
+GPUI's platform operations; defaults are registered before custom shortcuts so
+reload retains the usual override behavior. About uses AppKit's standard panel
+and bundled version metadata. The focused desktop check passed; native panel/menu
+interaction remains unverified. The published v0.1.0 archive remains unchanged.
+Mouse-focus investigation found an existing focus-first handler; the earlier
+capture alone does not establish a defect, so no speculative mouse change was made.
+
 Prepared the first public macOS preview with a user-facing README and real app
 screenshot. Added Sparkle's native updater/controller and Check for Updates menu,
 public feed/key metadata, separate distribution bundle identity, Developer ID
