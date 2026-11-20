@@ -174,7 +174,7 @@ struct TabMenu {
     selected: usize,
     scroll: ScrollHandle,
 }
-const TAB_MENU_LABELS: &[&str] = &["Rename Tab", "Copy Working Directory", "Reveal Working Directory", "Move Tab Left", "Move Tab Right", "Close Tab", "Close Other Tabs…", "Close Tabs to the Right…"];
+const TAB_MENU_LABELS: &[&str] = &["Rename Tab", "Copy Working Directory", "Reveal Working Directory", "Move Tab Left", "Move Tab Right", "Close Tab", "Close Other Tabs…", "Close Tabs to the Right…", "Close Finished Tabs…"];
 
 pub(super) struct PaneView {
     // Metadata repaints preserve this offset; selection and structural edits
@@ -245,10 +245,13 @@ impl PaneView {
         cx.notify();
     }
 
-    fn tab_menu_enabled(&self, target: EntityId) -> [bool; 8] {
-        let Some(index) = self.terminals.iter().position(|terminal| terminal.entity_id() == target) else { return [false; 8]; };
+    fn finished_tab_count(&self, keep: EntityId, cx: &App) -> usize {
+        self.terminals.iter().filter(|terminal| terminal.entity_id() != keep && terminal.read(cx).process_exit.is_some()).count()
+    }
+    fn tab_menu_enabled(&self, target: EntityId, cx: &App) -> [bool; 9] {
+        let Some(index) = self.terminals.iter().position(|terminal| terminal.entity_id() == target) else { return [false; 9]; };
         let batch_available = self.spawning_tab.is_none();
-        [true, true, true, index > 0, index + 1 < self.terminals.len(), true, batch_available && self.terminals.len() > 1, batch_available && index + 1 < self.terminals.len()]
+        [true, true, true, index > 0, index + 1 < self.terminals.len(), true, batch_available && self.terminals.len() > 1, batch_available && index + 1 < self.terminals.len(), batch_available && self.finished_tab_count(target, cx) > 0]
     }
 
     fn show_active_tab_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -259,7 +262,7 @@ impl PaneView {
 
     fn activate_tab_menu(&mut self, item: usize, window: &mut Window, cx: &mut Context<Self>) {
         let Some(menu) = self.tab_menu.clone() else { return; };
-        if !self.tab_menu_enabled(menu.target).get(item).copied().unwrap_or(false) { return; }
+        if !self.tab_menu_enabled(menu.target, cx).get(item).copied().unwrap_or(false) { return; }
         self.dismiss_tab_menu(window, cx);
         let Some(index) = self.terminals.iter().position(|terminal| terminal.entity_id() == menu.target) else { return; };
         self.select(index, window, cx);
@@ -272,14 +275,15 @@ impl PaneView {
             5 => self.close(index, window, cx),
             6 => self.close_tabs(TabCloseScope::Others, window, cx),
             7 => self.close_tabs(TabCloseScope::Right, window, cx),
+            8 => self.close_tabs(TabCloseScope::Finished, window, cx),
             _ => {},
         }
     }
 
     fn tab_menu_element(&self, menu: TabMenu, window: &Window, cx: &mut Context<Self>) -> AnyElement {
-        let enabled = self.tab_menu_enabled(menu.target);
+        let enabled = self.tab_menu_enabled(menu.target, cx);
         let focus = self.terminals.iter().find(|terminal| terminal.entity_id() == menu.target).map(|terminal| terminal.read(cx).focus.clone());
-        let actions: [Box<dyn Action>; 8] = [Box::new(RenameTab), Box::new(CopyWorkingDirectory), Box::new(RevealWorkingDirectory), Box::new(MoveTabLeft), Box::new(MoveTabRight), Box::new(ClosePane), Box::new(CloseOtherTabs), Box::new(CloseTabsToRight)];
+        let actions: [Box<dyn Action>; 9] = [Box::new(RenameTab), Box::new(CopyWorkingDirectory), Box::new(RevealWorkingDirectory), Box::new(MoveTabLeft), Box::new(MoveTabRight), Box::new(ClosePane), Box::new(CloseOtherTabs), Box::new(CloseTabsToRight), Box::new(CloseFinishedTabs)];
         let hints: Vec<_> = actions.iter().map(|action| focus.as_ref().and_then(|focus| shortcuts::hint(action.as_ref(), focus, window))).collect();
         deferred(anchored().position(menu.position).snap_to_window().child(
             div().id("tab-context-menu").track_focus(&menu.focus).key_context("TabMenu")
@@ -290,7 +294,7 @@ impl PaneView {
                 .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
                 .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                     let Some(target) = this.tab_menu.as_ref().map(|menu| menu.target) else { return; };
-                    let enabled = this.tab_menu_enabled(target);
+                    let enabled = this.tab_menu_enabled(target, cx);
                     let menu = this.tab_menu.as_mut().expect("open tab menu");
                     match event.keystroke.key.as_str() {
                         "up" | "down" => {
@@ -314,6 +318,7 @@ impl PaneView {
                     .max_h((window.viewport_size().height - px(26.)).max(px(1.)))
                     .overflow_y_scroll().track_scroll(&menu.scroll)
                     .children(TAB_MENU_LABELS.iter().enumerate().map(|(index, label)| {
+                    let label = if index == 8 { format!("Close Finished Tabs ({})…", self.finished_tab_count(menu.target, cx)) } else { (*label).to_owned() };
                     div().id(("tab-menu-item", index)).mx_1().px_3().py_2().rounded_sm().text_size(px(13.)).flex().items_center().gap_3()
                         .when(enabled[index], |row| row.cursor_pointer()
                             .when(index == menu.selected, |row| row.bg(rgb(0x354969)))
@@ -330,7 +335,7 @@ impl PaneView {
                             if event.standard_click() { this.activate_tab_menu(index, window, cx); }
                             cx.stop_propagation();
                         }))
-                        .child(div().flex_1().min_w_0().truncate().child(*label))
+                        .child(div().flex_1().min_w_0().truncate().child(label))
                         .when_some(hints[index].clone(), |row, hint| row.child(
                             div().id(("tab-menu-shortcut", index)).max_w(px(120.)).flex_shrink_0().truncate().text_xs().text_color(rgb(0xa0a0a0))
                                 .tooltip({ let hint = hint.clone(); move |_, cx| cx.new(|_| ControlHint(hint.clone().into())).into() })

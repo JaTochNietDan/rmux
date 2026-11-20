@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Added Close Finished Tabs to the tab context menu with the current eligible-tab
+count, disabled when no other finished tabs exist or a tab launch is pending.
+The clicked tab remains the keeper; execution uses the existing identity-based,
+policy-aware close path. Keyboard menu navigation skips the disabled entry and
+the row shows resolved custom shortcut hints. Desktop cargo check passed. Native
+UI access was checked again and the Mac remains locked, so menu/visual acceptance
+is still pending.
+
 Added --live-shell to the focused workspace/layout smoke. The native socket run
 passed retained PID and Unicode shell-state probes across divider resize,
 left/up split insertion and workspace equalization. Newly created split shells
