@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Copy/Reveal Working Directory now resolve the terminal's reported path on a
+background executor instead of taking the parser mutex on the UI thread. One
+lookup per terminal is allowed in flight; queued lookups hold only a weak engine
+reference. Directory copies participate in the shared clipboard generation guard,
+so newer rmux copy requests win over a delayed lookup. Missing/remote paths retain
+the existing error behavior. Desktop compilation and the focused live-PTY session
+test passed, including lookup result parity and queued ownership checks. Native
+clipboard/Finder interaction and end-to-end latency remain unverified.
+
 Search workers now check query revision after initialization and again before
 queued navigation. A query superseded while registration waited for the parser
 is skipped instead of scanning and installing an obsolete selection. Four focused

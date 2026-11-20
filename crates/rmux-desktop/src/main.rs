@@ -369,6 +369,7 @@ struct TerminalView {
     selection_pointer: Option<(Point<Pixels>, bool)>,
     selection_scroll: Option<Task<()>>,
     clipboard_task: Option<Task<()>>,
+    directory_task: Option<Task<()>>,
     title: String,
     custom_title: Option<String>,
     title_revision: u64,
@@ -681,6 +682,7 @@ impl TerminalView {
             selection_pointer: None,
             selection_scroll: None,
             clipboard_task: None,
+            directory_task: None,
             title: String::new(),
             custom_title: None,
             title_revision: u64::MAX,
@@ -1272,15 +1274,7 @@ impl TerminalView {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(path) = self.reported_directory(cx) {
-            if let Some(text) = path.to_str() {
-                clipboard::write(ClipboardItem::new_string(text.to_owned()), cx);
-            } else {
-                self.error =
-                    Some("Working directory cannot be represented as clipboard text.".into());
-                cx.notify();
-            }
-        }
+        self.lookup_working_directory(true, cx);
     }
     fn reveal_working_directory(
         &mut self,
@@ -1288,23 +1282,33 @@ impl TerminalView {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(path) = self.reported_directory(cx) {
-            cx.reveal_path(&path);
-        }
+        self.lookup_working_directory(false, cx);
     }
-    fn reported_directory(&mut self, cx: &mut Context<Self>) -> Option<std::path::PathBuf> {
-        match self.session.current_directory() {
-            Ok(Some(path)) => return Some(path),
-            Ok(None) => {
-                self.error = Some("No local working directory reported by this terminal.".into());
+    fn lookup_working_directory(&mut self, copy: bool, cx: &mut Context<Self>) {
+        if self.directory_task.is_some() { return; }
+        let ticket = copy.then(clipboard::begin);
+        let lookup = self.session.directory_lookup();
+        let executor = cx.background_executor().clone();
+        self.directory_task = Some(cx.spawn(async move |entity, cx| {
+            let result = executor.spawn(async move { lookup() }).await;
+            let _ = entity.update(cx, |this, cx| {
+                this.directory_task = None;
+                if ticket.is_some_and(|ticket| !clipboard::current(ticket)) { return; }
+                match result {
+                    Ok(Some(path)) if copy => {
+                        if let Some(text) = path.to_str() {
+                            clipboard::write(ClipboardItem::new_string(text.to_owned()), cx);
+                        } else {
+                            this.error = Some("Working directory cannot be represented as clipboard text.".into());
+                        }
+                    }
+                    Ok(Some(path)) => cx.reveal_path(&path),
+                    Ok(None) => this.error = Some("No local working directory reported by this terminal.".into()),
+                    Err(error) => this.error = Some(error.to_string()),
+                }
                 cx.notify();
-            }
-            Err(error) => {
-                self.error = Some(error.to_string());
-                cx.notify();
-            }
-        }
-        None
+            });
+        }));
     }
     fn select_all(&mut self, _: &EditorSelectAll, _: &mut Window, cx: &mut Context<Self>) {
         self.clipboard_task = None;

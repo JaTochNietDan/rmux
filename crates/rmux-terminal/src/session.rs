@@ -614,6 +614,15 @@ impl Session {
             engine.selected_text()
         })
     }
+    /// Deferred directory lookup without retaining the terminal while queued.
+    pub fn directory_lookup(&self) -> Box<dyn FnOnce() -> Result<Option<std::path::PathBuf>> + Send> {
+        let terminal = Arc::downgrade(&self.terminal);
+        Box::new(move || {
+            let terminal = terminal.upgrade().context("terminal closed before directory lookup")?;
+            let engine = terminal.lock().unwrap_or_else(|error| error.into_inner());
+            engine.current_directory()
+        })
+    }
     fn text_export(&self, max_bytes: usize, selected: bool) -> HistoryExport {
         let terminal = Arc::downgrade(&self.terminal);
         Box::new(move || {
@@ -976,6 +985,9 @@ mod tests {
         let clipboard = session.clipboard_export();
         assert_eq!(Arc::strong_count(&session.terminal), owners, "queued clipboard export retained the engine");
         assert_eq!(thread::spawn(clipboard).join().unwrap()?, expected);
+        let directory = session.directory_lookup();
+        assert_eq!(Arc::strong_count(&session.terminal), owners, "queued directory lookup retained the engine");
+        assert_eq!(thread::spawn(directory).join().unwrap()?, session.current_directory()?);
         Ok(())
     }
     #[test]
