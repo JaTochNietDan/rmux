@@ -2214,7 +2214,7 @@ impl WorkspaceWindow {
         let palette = cx.new(|cx| command_palette::CommandPalette::workspace_merge(entries, source, window, cx));
         self.install_palette(palette, focus, window, cx);
     }
-    fn merge_workspaces(&mut self, source: EntityId, destination: EntityId, window: &mut Window, cx: &mut Context<Self>) -> Result<()> {
+    pub(super) fn merge_workspaces(&mut self, source: EntityId, destination: EntityId, window: &mut Window, cx: &mut Context<Self>) -> Result<()> {
         self.automation_available(cx).map_err(|failure| anyhow::anyhow!(failure.message))?;
         anyhow::ensure!(source != destination, "Choose another workspace");
         let source_index = self.entries.iter().position(|entry| entry.workspace.entity_id() == source).ok_or_else(|| anyhow::anyhow!("Source workspace closed"))?;

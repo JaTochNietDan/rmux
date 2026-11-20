@@ -10,6 +10,14 @@ both trees are visible. Escape cancels. The custom shortcut action is
 transfer. Native session/focus/group acceptance and cross-window merging remain
 pending.
 
+CLI: `rmuxctl merge-workspace --workspace SOURCE_ID --target-workspace DEST_ID`
+uses the same guarded transfer path. It selects the destination inside the
+app; add `--activate` to activate the OS window. Raw RPC is `workspace.merge`
+with `workspace_id`, `target_workspace_id` and optional `activate`. Both IDs are
+required; self-targets, unknown fields and stale/cross-window targets fail without
+transfer. This is an rmux extension; no corresponding merge command appears in
+the pinned cmux CLI/RPC inventory.
+
 On macOS, **Copy** files in Finder and **Paste** into a focused terminal to insert
 quoted absolute paths. Finder's file-URL metadata takes precedence over filename
 text or image representations. This reads paths only, without opening files or

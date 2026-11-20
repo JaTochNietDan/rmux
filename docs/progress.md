@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Added rmux workspace.merge RPC and merge-workspace CLI/help/completion with
+explicit source/destination IDs and optional OS activation. The UI handler
+resolves the source window, requires the destination in that same window and
+calls the existing guarded merge implementation. Distinct-ID/unknown-field/type
+validation occurs before queueing; notification mutation routing and capability
+listing include the method. Focused RPC invalid-request/no-queue and valid-route
+checks passed, as did the CLI argument check. These tests do not establish live
+PTY continuity or native focus behavior. The pinned CLI/RPC inventory contains
+no merge command, so this is explicitly an rmux extension. Live socket, groups,
+focus, persistence, cross-window and full upstream behavioral acceptance remain.
+
 Started W15 with a same-window Merge Workspace into… picker, menu/palette action
 and merge_workspace custom shortcut. Source/destination IDs are captured and
 revalidated after picker dismissal. Existing interaction guards plus split-launch,

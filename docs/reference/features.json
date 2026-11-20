@@ -305,8 +305,8 @@
       ],
       "acceptance": "Move all source surfaces atomically and preserve their order and sessions.",
       "rmux_status": "in_progress",
-      "implementation": "Merge Workspace into menu/palette picker chooses a same-window destination by stable entity ID. Preflight rejects stale/self/busy/depth-limit cases; a synchronous ownership transfer preserves pane/terminal entities and both nested trees, appending the source on the right, reassigning pane ownership/subscriptions and removing the emptied source entry. Destination metadata is retained and zoom clears. Desktop test compilation and split-depth checks pass.",
-      "remaining": "Live PID/state/order/unread continuity, group/anchor/focus/stale-target and persistence acceptance; cross-window merge, CLI/RPC routing and exact upstream semantics.",
+      "implementation": "Merge Workspace into menu/palette picker chooses a same-window destination by stable entity ID. Preflight rejects stale/self/busy/depth-limit cases; a synchronous ownership transfer preserves pane/terminal entities and both nested trees, appending the source on the right, reassigning pane ownership/subscriptions and removing the emptied source entry. Destination metadata is retained and zoom clears. Desktop test compilation and split-depth checks pass. rmux workspace.merge RPC and merge-workspace CLI route through the same guarded same-window implementation with explicit distinct IDs and opt-in OS activation; malformed-request queue exclusion and CLI argument tests pass. This is an rmux extension, not a pinned upstream command-name claim.",
+      "remaining": "Live PID/state/order/unread continuity, group/anchor/focus/stale-target, live socket and persistence acceptance; cross-window merge and exact upstream semantics.",
       "implementation_sources": [
         "crates/rmux-desktop/src/window_view.rs",
         "crates/rmux-desktop/src/main.rs",

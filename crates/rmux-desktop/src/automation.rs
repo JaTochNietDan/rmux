@@ -43,6 +43,7 @@ const LIVE_METHODS: &[&str] = &[
     "workspace.group.set_anchor",
     "workspace.group.new_workspace",
     "workspace.move_to_window",
+    "workspace.merge",
 ];
 
 #[derive(Debug)]
@@ -215,6 +216,15 @@ pub(super) struct WorkspaceRename {
 
 #[derive(serde::Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
+struct WorkspaceMerge {
+    workspace_id: String,
+    target_workspace_id: String,
+    #[serde(default)]
+    activate: bool,
+}
+
+#[derive(serde::Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 struct WorkspaceMove {
     workspace_id: String,
     window_id: String,
@@ -340,6 +350,7 @@ struct LiveRequest {
     group_mutation: Option<GroupMutation>,
     group_create: Option<GroupCreate>,
     workspace_move: Option<WorkspaceMove>,
+    workspace_merge: Option<WorkspaceMerge>,
     pending: Arc<Pending>,
     reply: std::sync::mpsc::SyncSender<RpcResult>,
 }
@@ -576,6 +587,25 @@ pub fn attach_live(cx: &mut gpui::App, stdio: bool, socket_directory: Option<std
                         }
                     }
                     return Err(Failure { code: -32004, message: "Window not found" });
+                }
+                if let Some(merge) = &request.workspace_merge {
+                    let source = target_id(&merge.workspace_id)?;
+                    let destination = target_id(&merge.target_workspace_id)?;
+                    for handle in cx.windows() {
+                        let Some(handle) = handle.downcast::<super::window_view::WorkspaceWindow>() else { continue; };
+                        if handle.read(cx).is_ok_and(|view| view.automation_contains_workspace(source)) {
+                            return handle.update(cx, |view, window, cx| {
+                                if !view.automation_contains_workspace(destination) {
+                                    return Err(Failure { code: -32004, message: "Merge destination must exist in the source window" });
+                                }
+                                view.merge_workspaces(source, destination, window, cx)
+                                    .map_err(|_| Failure { code: -32003, message: "Merge unavailable: workspace busy or layout depth limit reached" })?;
+                                if merge.activate { window.activate_window(); }
+                                Ok(json!({"workspace_id":merge.workspace_id,"target_workspace_id":merge.target_workspace_id,"merged":true}))
+                            }).unwrap_or(Err(Failure { code: -32004, message: "Workspace window closed" }));
+                        }
+                    }
+                    return Err(Failure { code: -32004, message: "Source workspace not found" });
                 }
                 if let Some(movement) = &request.workspace_move {
                     let workspace_id = target_id(&movement.workspace_id)?;
@@ -843,6 +873,7 @@ fn dispatch_inner(
                 | "workspace.group.set_anchor"
                 | "workspace.group.new_workspace"
                 | "workspace.move_to_window"
+                | "workspace.merge"
                 | "surface.move_to_workspace"
                 | "system.quit"
         )
@@ -1070,6 +1101,14 @@ fn dispatch_inner(
     } else {
         None
     };
+    let workspace_merge = if method == "workspace.merge" {
+        match request.get("params").cloned().and_then(|params| serde_json::from_value::<WorkspaceMerge>(params).ok()) {
+            Some(merge) if !merge.workspace_id.is_empty() && merge.workspace_id.len() <= 128
+                && !merge.target_workspace_id.is_empty() && merge.target_workspace_id.len() <= 128
+                && merge.workspace_id != merge.target_workspace_id => Some(merge),
+            _ => return respond(error(id, -32602, "Expected distinct workspace_id and target_workspace_id strings, and optional activate boolean")),
+        }
+    } else { None };
     let workspace_move = if method == "workspace.move_to_window" {
         match request
             .get("params")
@@ -1162,6 +1201,7 @@ fn dispatch_inner(
         && surface_read.is_none()
         && surface_text.is_none()
         && workspace_move.is_none()
+        && workspace_merge.is_none()
         && workspace_rename.is_none()
         && workspace_close.is_none()
         && surface_key.is_none()
@@ -1213,6 +1253,7 @@ fn dispatch_inner(
                     group_mutation,
                     group_create,
                     workspace_move,
+                    workspace_merge,
                     pending: pending.clone(),
                     reply,
                 })
@@ -1281,6 +1322,29 @@ fn serve_inner(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn workspace_merge_validates_before_queueing_and_routes_once() {
+        let (sender, receiver) = async_channel::bounded::<LiveRequest>(1);
+        for params in [json!({}), json!({"workspace_id":"a","target_workspace_id":"a"}),
+            json!({"workspace_id":"a","target_workspace_id":"b","activate":"yes"}),
+            json!({"workspace_id":"a","target_workspace_id":"b","force":true})] {
+            let response = dispatch_inner(&serde_json::to_vec(&json!({"jsonrpc":"2.0","id":1,"method":"workspace.merge","params":params})).unwrap(), Some(&sender)).unwrap();
+            assert_eq!(response["error"]["code"], -32602);
+            assert!(receiver.is_empty());
+        }
+        let worker = std::thread::spawn(move || {
+            let request = receiver.recv_blocking().unwrap();
+            assert!(request.pending.start());
+            let merge = request.workspace_merge.unwrap();
+            assert_eq!(merge.workspace_id, "a");
+            assert_eq!(merge.target_workspace_id, "b");
+            assert!(!merge.activate);
+            request.reply.send(Ok(json!({"routed":true}))).unwrap();
+        });
+        let response = dispatch_inner(&serde_json::to_vec(&json!({"jsonrpc":"2.0","id":1,"method":"workspace.merge","params":{"workspace_id":"a","target_workspace_id":"b"}})).unwrap(), Some(&sender)).unwrap();
+        assert_eq!(response["result"]["routed"], true);
+        worker.join().unwrap();
+    }
     #[test]
     fn buffer_requests_route_through_the_live_queue() {
         let (sender, receiver) = async_channel::bounded::<LiveRequest>(1);
@@ -1591,6 +1655,7 @@ mod tests {
                 group_mutation: None,
                 group_create: None,
                 workspace_move: None,
+                workspace_merge: None,
                 pending: Arc::new(Pending::new()),
                 reply,
             })

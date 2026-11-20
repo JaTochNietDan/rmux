@@ -19,6 +19,7 @@ pub const HELP: &str = "Commands (JSON output except pipe-pane; explicit opaque 
   rename-workspace --workspace ID NAME
   focus-panel --panel ID [--activate]
   move-panel --panel ID --workspace ID [--activate]
+  merge-workspace --workspace ID --target-workspace ID [--activate]
   move-workspace --workspace ID --window ID [--activate]
   split-pane --pane ID --direction right|down [--cwd PATH] [--focus true|false] [--activate]
   set-pane-zoom --pane ID --zoomed true|false
@@ -56,6 +57,7 @@ pub fn help(command: &str) -> Result<String, String> {
         "capture-pane" => ("--surface ID [--scrollback] [--lines N]", "Capture visible text, or retained history with --scrollback. --lines N implies history and requests the last 1–65536 logical text lines; unused trailing screen rows are omitted and soft wraps are joined. Returns JSON with text and truncation status, bounded to 1 MiB."),
         "read-screen" => ("--surface ID [--scrollback | --selection [--preserve-wraps]]", "Read visible text by default, retained history with --scrollback, or selected text with --selection; add --preserve-wraps to keep soft-wrap line breaks."),
         "move-panel" => ("--panel ID --workspace ID [--activate]", "Move a live terminal to another workspace, preserving its process. Destination selection changes; window activation requires --activate."),
+        "merge-workspace" => ("--workspace ID --target-workspace ID [--activate]", "Merge into another workspace in the same window, retaining live panes and nested splits. Selects the destination and removes the source entry; keeps destination metadata. OS activation requires --activate."),
         "move-workspace" => ("--workspace ID --window ID [--activate]", "Move a workspace and its live terminals to another window. Window activation requires --activate."),
         "split-pane" => ("--pane ID --direction right|down [--cwd PATH] [--focus true|false] [--activate]", "Create a terminal beside an explicit pane. Inherits its directory and font; focus and OS activation are opt-in."),
         "set-pane-zoom" => ("--pane ID --zoomed true|false", "Set pane zoom explicitly without toggling. Zooming selects its terminal within the window, without OS window activation."),
@@ -85,6 +87,7 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
         "set-buffer" => ("buffer.set", None, Some("text")),
         "list-buffers" => ("buffer.list", None, None),
         "move-panel" => ("surface.move_to_workspace", Some(("--panel", "surface_id")), None),
+        "merge-workspace" => ("workspace.merge", Some(("--workspace", "workspace_id")), None),
         "move-workspace" => ("workspace.move_to_window", Some(("--workspace", "workspace_id")), None),
         "split-pane" => ("pane.split", Some(("--pane", "pane_id")), None),
         "set-pane-zoom" => ("pane.zoom.set", Some(("--pane", "pane_id")), None),
@@ -178,6 +181,7 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
             }
             let destination = match (command, arg.as_str()) {
                 ("move-panel", "--workspace") => Some("workspace_id"),
+                ("merge-workspace", "--target-workspace") => Some("target_workspace_id"),
                 ("move-workspace", "--window") => Some("window_id"),
                 _ => None,
             };
@@ -282,7 +286,7 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
                 ("paste-buffer", "--bracketed") => ("bracketed", Value::Bool(true)),
                 ("send", "--paste") => ("paste", Value::Bool(true)),
                 (
-                    "select-workspace" | "focus-panel" | "new-window" | "new-workspace" | "move-panel" | "move-workspace" | "split-pane",
+                    "select-workspace" | "focus-panel" | "new-window" | "new-workspace" | "move-panel" | "move-workspace" | "merge-workspace" | "split-pane",
                     "--activate",
                 ) => ("activate", Value::Bool(true)),
                 ("read-screen" | "capture-pane", "--scrollback") => ("scope", Value::String("history".into())),
@@ -317,6 +321,7 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
         "dismiss-notification" | "read-notification" => Some(("revision", "--revision")),
         "split-pane" => Some(("direction", "--direction")),
         "move-panel" => Some(("workspace_id", "--workspace")),
+        "merge-workspace" => Some(("target_workspace_id", "--target-workspace")),
         "move-workspace" => Some(("window_id", "--window")),
         "set-pane-zoom" => Some(("zoomed", "--zoomed")),
         _ => None,
@@ -371,6 +376,14 @@ mod tests {
     use super::*;
     fn args(v: &[&str]) -> Vec<OsString> {
         v.iter().map(OsString::from).collect()
+    }
+    #[test]
+    fn merge_workspace_requires_two_explicit_targets() {
+        assert_eq!(expand("merge-workspace", args(&["--workspace", "a", "--target-workspace", "b", "--activate"])).unwrap(),
+            ("workspace.merge".into(), serde_json::json!({"workspace_id":"a","target_workspace_id":"b","activate":true})));
+        for flags in [vec!["--workspace", "a"], vec!["--target-workspace", "b"], vec!["--workspace", "a", "--target-workspace", ""]] {
+            assert!(expand("merge-workspace", args(&flags)).is_err());
+        }
     }
     #[test]
     fn capture_pane_routes_bounded_tail_and_rejects_invalid_counts() {

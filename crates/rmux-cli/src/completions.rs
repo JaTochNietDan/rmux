@@ -25,6 +25,7 @@ const COMMANDS: &[(&str, &[&str])] = &[
     ("capture-pane", &["--surface", "--scrollback", "--lines"]),
     ("read-screen", &["--surface", "--scrollback", "--selection", "--preserve-wraps"]),
     ("move-panel", &["--panel", "--workspace", "--activate"]),
+    ("merge-workspace", &["--workspace", "--target-workspace", "--activate"]),
     ("move-workspace", &["--workspace", "--window", "--activate"]),
     ("split-pane", &["--pane", "--direction", "--cwd", "--focus", "--activate"]),
     ("set-pane-zoom", &["--pane", "--zoomed"]),
