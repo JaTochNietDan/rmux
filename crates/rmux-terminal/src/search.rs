@@ -98,6 +98,35 @@ impl Search {
         self.progress()
     }
 
+    /// Feed without waiting behind terminal output. None means retry later;
+    /// it does not change selection or move the viewport.
+    pub fn try_refresh(&mut self) -> Result<Option<Progress>> {
+        {
+            let _terminal = match self.terminal.try_lock() {
+                Ok(guard) => guard,
+                Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),
+                Err(std::sync::TryLockError::WouldBlock) => return Ok(None),
+            };
+            // SAFETY: the feed is serialized with all terminal access.
+            check(unsafe { ghostty_search_feed(self.handle) })?;
+        }
+        self.progress().map(Some)
+    }
+
+    /// One incremental scan tick, with opportunistic access when a feed is needed.
+    pub fn try_step(&mut self) -> Result<Option<Progress>> {
+        let mut status = self.status()?;
+        if status == GHOSTTY_SEARCH_STATUS_FEED_REQUIRED {
+            if self.try_refresh()?.is_none() { return Ok(None); }
+            status = self.status()?;
+        }
+        if status == GHOSTTY_SEARCH_STATUS_RUNNING {
+            // SAFETY: only copied search-owned data is scanned by this owner.
+            check(unsafe { ghostty_search_tick(self.handle, &mut status) })?;
+        }
+        self.progress().map(Some)
+    }
+
     /// Do at most one bounded feed and one bounded scan tick. Callers should yield
     /// between steps and cancel/drop superseded searches rather than run to completion
     /// on the UI thread. The scan itself does not hold the terminal mutex.
@@ -215,6 +244,35 @@ mod tests {
             }
         }
         anyhow::bail!("small search fixture failed to converge")
+    }
+
+    #[test]
+    fn opportunistic_feed_yields_to_parser_and_resumes_without_selection_changes() -> Result<()> {
+        let terminal = Arc::new(Mutex::new(Terminal::new(20, 3)?));
+        terminal.lock().unwrap().write(b"needle\r\nother\r\nneedle");
+        terminal.lock().unwrap().select_all()?;
+        let mut search = Search::new(terminal.clone())?;
+        search.set_query("needle")?;
+        let mut guard = terminal.lock().unwrap();
+        let before = guard.frame()?;
+        let selected = guard.selected_text()?;
+        assert!(search.try_refresh()?.is_none());
+        assert!(search.try_step()?.is_none());
+        drop(guard);
+        let mut complete = false;
+        for _ in 0..1000 {
+            if let Some(progress) = search.try_step()? {
+                if !progress.pending { assert_eq!(progress.matches, 2); complete = true; break; }
+            }
+        }
+        assert!(complete);
+        let mut guard = terminal.lock().unwrap();
+        let after = guard.frame()?;
+        assert_eq!(after.revision, before.revision);
+        assert_eq!(after.scrollback_offset, before.scrollback_offset);
+        assert_eq!(guard.selected_text()?, selected);
+        drop(guard);
+        Ok(())
     }
 
     #[test]

@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Added opportunistic incremental search feed/step APIs and switched Find's worker
+to them. Busy parser feeds keep pending refresh/navigation state, back off 1 ms
+and recheck cancellation/supersession; idle searches still sleep on the command
+channel. This supplies a nonblocking feed primitive for future full-history
+multi-terminal search. Ten engine/search-worker tests passed, including held-lock
+resumption with unchanged selection/viewport, superseded queries and queued
+navigation. Query-setting, selection and cleanup locking remain separate work;
+global output search still has its documented snapshot cap.
+
 Search-result navigation now prepares the Find worker before selecting the
 destination terminal or dismissing an existing Find session. If worker-thread
 creation fails, the caller receives an error and does not activate the target

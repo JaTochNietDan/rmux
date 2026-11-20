@@ -67,7 +67,7 @@ impl SearchWorker {
                             std::mem::take(&mut pending.navigation),
                         )
                     };
-                    let result = (|| -> Result<Progress> {
+                    let result = (|| -> Result<Option<Progress>> {
                         if search.is_none() {
                             search = Some(Search::new_cancellable(terminal.clone(), &canceled)?);
                         }
@@ -75,7 +75,7 @@ impl SearchWorker {
                         // Initialization can wait behind output while the user
                         // edits again. Do not scan or select the obsolete query.
                         if pending.lock().unwrap_or_else(|e| e.into_inner()).revision != revision {
-                            return search.progress();
+                            return search.progress().map(Some);
                         }
                         if let Some(query) = query {
                             navigation = 0;
@@ -83,9 +83,12 @@ impl SearchWorker {
                         }
                         navigation = (navigation + movement).clamp(-64, 64);
                         if refresh {
-                            search.refresh()?;
+                            if search.try_refresh()?.is_none() {
+                                pending.lock().unwrap_or_else(|e| e.into_inner()).refresh = true;
+                                return Ok(None);
+                            }
                         }
-                        let mut progress = search.step()?;
+                        let Some(mut progress) = search.try_step()? else { return Ok(None); };
                         // Navigation queued while scanning applies to that result
                         // set. Do not carry it into later output if nothing matched.
                         if !progress.pending && progress.matches == 0 { navigation = 0; }
@@ -106,8 +109,18 @@ impl SearchWorker {
                                     && pending.lock().unwrap_or_else(|e| e.into_inner()).revision == revision
                             })?;
                         }
-                        Ok(progress)
+                        Ok(Some(progress))
                     })();
+                    let result = match result {
+                        Ok(Some(progress)) => Ok(progress),
+                        Ok(None) => {
+                            if canceled.load(Ordering::Acquire) { break; }
+                            busy = true;
+                            std::thread::sleep(std::time::Duration::from_millis(1));
+                            continue;
+                        }
+                        Err(error) => Err(error),
+                    };
                     busy = result
                         .as_ref()
                         .is_ok_and(|progress| progress.pending || navigation != 0);

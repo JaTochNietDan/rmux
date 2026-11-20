@@ -1,5 +1,13 @@
 # rmux performance acceptance plan
 
+Incremental Find feeds now use opportunistic parser locking. A busy feed retains
+the refresh request, backs off for 1 ms and rechecks cancellation/supersession
+instead of waiting inside the feed mutex acquisition. Completed searches still
+sleep on their command channel. Query replacement, explicit match selection and
+search cleanup retain their existing lock behavior; this is not a claim that
+every search operation is nonblocking. A contention regression verifies that
+the scan resumes without changing terminal selection or viewport.
+
 Manual process-tree sampling baseline (`22dc885` plus harness/shared-index change,
 macOS arm64, debug profile): at 1/8/32 shells, warm medians were
 29.025/27.865/29.464 ms after sharing parent-child indexes across terminal roots,
