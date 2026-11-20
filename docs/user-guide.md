@@ -107,6 +107,14 @@ default bindings; choose keys in your configuration. For example:
 ]}
 ```
 
+Directional swaps are available as **Swap Pane Left/Right/Up/Down** in the View
+menu and command palette, or through `swap_pane_left`, `swap_pane_right`,
+`swap_pane_up`, and `swap_pane_down` custom bindings. They choose the neighboring
+pane using the same geometry as directional focus, exchange entire panes
+(including all tabs), and retain focus on the moved terminal. Split proportions
+stay fixed. At a layout edge, or while zoomed, they do nothing. No default keys
+are assigned.
+
 For example, bind `last_terminal` to return to the previous live terminal across
 panes and workspaces, or `last_prompt` to jump to the newest retained shell prompt:
 

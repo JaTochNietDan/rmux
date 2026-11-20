@@ -264,6 +264,10 @@ actions!(
         TogglePaneZoom,
         EqualizePanes,
         SwapPaneNext,
+        SwapPaneLeft,
+        SwapPaneRight,
+        SwapPaneUp,
+        SwapPaneDown,
         BreakTabRight,
         BreakTabBelow,
         JoinPaneNext,
@@ -2122,6 +2126,15 @@ impl Workspace {
             return;
         };
         let next = (current + 1) % self.panes.len();
+        self.swap_panes(current, next, cx);
+    }
+    fn swap_pane_direction(&mut self, direction: layout::Direction, window: &Window, cx: &mut Context<Self>) {
+        let Some(current) = self.focused_index(window, cx) else { return; };
+        if let Some(next) = self.directional_neighbor(current, direction, cx) {
+            self.swap_panes(current, next, cx);
+        }
+    }
+    fn swap_panes(&mut self, current: usize, next: usize, cx: &mut Context<Self>) {
         let Some(tree) = &mut self.layout else {
             return;
         };
@@ -2257,32 +2270,22 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        // Only the zoomed pane has current visible geometry. Cycle shortcuts
-        // can select another pane while retaining zoom; directional focus
-        // resumes when the split layout is visible again.
-        if self.zoomed.is_some() {
-            return;
-        }
-        let Some(current) = self.focused_index(window, cx) else {
-            return;
-        };
-        let bounds: Vec<_> = self
-            .panes
-            .iter()
-            .map(|pane| {
-                let bounds = pane.read(cx).terminal_bounds(cx);
-                [
-                    f32::from(bounds.origin.x),
-                    f32::from(bounds.origin.y),
-                    f32::from(bounds.size.width),
-                    f32::from(bounds.size.height),
-                ]
-            })
-            .collect();
-        if let Some(next) = layout::focus_neighbor(&bounds, current, direction) {
+        let Some(current) = self.focused_index(window, cx) else { return; };
+        if let Some(next) = self.directional_neighbor(current, direction, cx) {
             self.panes[next].read(cx).focus(window, cx);
             cx.notify();
         }
+    }
+    fn directional_neighbor(&self, current: usize, direction: layout::Direction, cx: &App) -> Option<usize> {
+        // Hidden panes have stale geometry while zoomed. Directional operations
+        // resume once the complete split layout is visible again.
+        if self.zoomed.is_some() { return None; }
+        let bounds: Vec<_> = self.panes.iter().map(|pane| {
+            let bounds = pane.read(cx).terminal_bounds(cx);
+            [f32::from(bounds.origin.x), f32::from(bounds.origin.y),
+             f32::from(bounds.size.width), f32::from(bounds.size.height)]
+        }).collect();
+        layout::focus_neighbor(&bounds, current, direction)
     }
     fn cycle(&mut self, direction: isize, window: &mut Window, cx: &mut Context<Self>) {
         if self.panes.is_empty() {
@@ -2453,6 +2456,18 @@ impl Render for Workspace {
             .on_action(
                 cx.listener(|view, _: &SwapPaneNext, window, cx| view.swap_pane_next(window, cx)),
             )
+            .on_action(cx.listener(|view, _: &SwapPaneLeft, window, cx| {
+                view.swap_pane_direction(layout::Direction::Left, window, cx)
+            }))
+            .on_action(cx.listener(|view, _: &SwapPaneRight, window, cx| {
+                view.swap_pane_direction(layout::Direction::Right, window, cx)
+            }))
+            .on_action(cx.listener(|view, _: &SwapPaneUp, window, cx| {
+                view.swap_pane_direction(layout::Direction::Up, window, cx)
+            }))
+            .on_action(cx.listener(|view, _: &SwapPaneDown, window, cx| {
+                view.swap_pane_direction(layout::Direction::Down, window, cx)
+            }))
             .on_action(
                 cx.listener(|view, _: &JoinPaneNext, window, cx| view.join_pane_next(window, cx)),
             )
@@ -2998,6 +3013,10 @@ fn main() {
                     MenuItem::action("Scroll to Top", ScrollToTop),
                     MenuItem::action("Scroll to Bottom", ScrollToBottom),
                     MenuItem::action("Swap Pane with Next", SwapPaneNext),
+                    MenuItem::action("Swap Pane Left", SwapPaneLeft),
+                    MenuItem::action("Swap Pane Right", SwapPaneRight),
+                    MenuItem::action("Swap Pane Up", SwapPaneUp),
+                    MenuItem::action("Swap Pane Down", SwapPaneDown),
                     MenuItem::action("Move Tab to Split Right", BreakTabRight),
                     MenuItem::action("Move Tab to Split Below", BreakTabBelow),
                     MenuItem::action("Join Pane into Next", JoinPaneNext),

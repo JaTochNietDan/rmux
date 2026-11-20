@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Directional pane swapping is now available from the View menu, command palette
+and four custom shortcut actions. Swaps share directional focus's geometric
+neighbor selection and the existing identity-preserving tree swap; pane order
+stays aligned with the tree for cycling and persistence. Edge/zoomed operations
+are no-ops. The desktop compiled and all seven focused layout tests passed,
+covering nested geometry, swaps and saved indices. Native interaction and
+cross-platform acceptance remain pending.
+
 Fifteen existing layout/workspace actions now accept custom shortcut bindings:
 equalize, swap, break in either direction, join, tab/workspace movement and
 detachment, rename, pin and metadata editors. They dispatch existing typed menu
