@@ -310,7 +310,9 @@ impl WorkspaceWindow {
         let modifiers = event.keystroke.modifiers;
         if modifiers.control || modifiers.platform || modifiers.alt { return; }
         let count = self.memory_rows.as_ref().map_or(0, Vec::len);
-        match event.keystroke.key.as_str() {
+        let key = event.keystroke.key.as_str();
+        let navigation = matches!(key, "up" | "down" | "home" | "end" | "pageup" | "pagedown");
+        match key {
             "escape" => self.close_memory(window, cx),
             "r" => self.refresh_memory(window, cx),
             "s" => self.sort_memory(cx),
@@ -319,13 +321,22 @@ impl WorkspaceWindow {
             "down" if count > 0 => self.memory_selected = (self.memory_selected + 1) % count,
             "home" => self.memory_selected = 0,
             "end" => self.memory_selected = count.saturating_sub(1),
+            "pageup" | "pagedown" => {
+                let fallback = self.memory_scroll.bounds_for_item(self.memory_selected)
+                    .map(|bounds| f32::from(bounds.size.height)).unwrap_or(100.).max(1.);
+                if let Some(selected) = command_palette::paged_result(self.memory_selected, count, key == "pageup",
+                    f32::from(self.memory_scroll.viewport_bounds().size.height), |index| {
+                        self.memory_scroll.bounds_for_item(index).map(|bounds| f32::from(bounds.size.height)).unwrap_or(fallback).max(1.)
+                    }) { self.memory_selected = selected; }
+            },
             "enter" => {
                 let target = self.memory_rows.as_ref().and_then(|rows| self.memory_sort.indices(rows).get(self.memory_selected).map(|index| (rows[*index].workspace_id, rows[*index].surface_id)));
                 if let Some((workspace, surface)) = target { self.focus_memory_terminal(workspace, surface, window, cx); }
             },
             _ => {},
         }
-        if count > 0 && self.memory_rows.is_some() { crate::list_navigation::reveal(&self.memory_scroll, self.memory_selected); }
+        // Copying or typing an unrelated key must not undo a manual wheel scroll.
+        if navigation && count > 0 && self.memory_rows.is_some() { crate::list_navigation::reveal(&self.memory_scroll, self.memory_selected); }
         cx.stop_propagation();
         cx.notify();
     }

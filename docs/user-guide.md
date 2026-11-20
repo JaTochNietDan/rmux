@@ -1095,7 +1095,9 @@ and child-process memory, and are not total application RSS. A busy parser retur
 `-32007` for retry. No periodic sampler runs when the endpoint is unused.
 The View menu and command palette also offer Show / Refresh Terminal Memory.
 Opening or refreshing focuses the panel. Use ↑/↓, Home/End to select a row,
-Enter to focus its terminal, R to refresh, S to cycle sorting, C to copy the JSON
+or Page Up/Page Down to move by the visible list height (using measured row sizes).
+Copying a report preserves a manually scrolled position.
+Use Enter to focus its terminal, R to refresh, S to cycle sorting, C to copy the JSON
 report, and Esc to close. Selection follows the terminal through sorting and
 refreshes while it remains in the sample; Esc restores prior focus when the panel
 still owns focus. Rows are virtualized for larger terminal lists.

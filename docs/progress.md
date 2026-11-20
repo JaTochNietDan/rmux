@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Memory panel keyboard navigation now supports Page Up/Page Down using measured
+row heights and the current list viewport. Unmeasured rows use the selected row's
+height (or a fallback), and distant destinations reuse the virtual-list reveal
+path. Copy and unrelated keys preserve manual wheel position instead of snapping
+back to selection. Updated the panel key hint and guide. Desktop compilation
+passed. Native UI access was rechecked; the Mac remains locked, so screenshots
+and interactive acceptance are still pending.
+
 Measured and reduced process-tree sampling overhead. Parent-child indexes are
 built once per refresh snapshot rather than repeatedly for each terminal root;
 aggregation no longer allocates a temporary sample vector per tree. Added
