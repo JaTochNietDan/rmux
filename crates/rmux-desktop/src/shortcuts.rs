@@ -83,13 +83,13 @@ pub fn compile(settings: &Preferences) -> Result<Vec<KeyBinding>> {
         ensure!(binding.key.len() <= 128, "keybinding exceeds 128 bytes");
         let strokes = binding.key.split_whitespace().map(Keystroke::parse).collect::<std::result::Result<Vec<_>, _>>()?;
         ensure!((1..=2).contains(&strokes.len()), "keybinding requires one or two strokes");
-        for stroke in &strokes {
+        for (index, stroke) in strokes.iter().enumerate() {
             ensure!(!stroke.key.chars().any(char::is_control) && rmux_terminal::keyboard::key_identity(&stroke.key).is_some(), "unknown shortcut key: {}", stroke.key);
             if let Some(number) = stroke.key.strip_prefix('f').and_then(|text| text.parse::<u8>().ok()) {
                 ensure!(stroke.key == format!("f{number}"), "use canonical function-key spelling: f{number}");
             }
             let function = stroke.key.strip_prefix('f').and_then(|n| n.parse::<u8>().ok()).is_some_and(|n| (1..=24).contains(&n));
-            ensure!(stroke.modifiers.control || stroke.modifiers.platform || stroke.modifiers.alt || function, "custom strokes require Ctrl/Cmd/Alt or a function key");
+            ensure!(index > 0 || stroke.modifiers.control || stroke.modifiers.platform || stroke.modifiers.alt || function, "the first custom stroke requires Ctrl/Cmd/Alt or a function key");
         }
         let sequence: Vec<_> = strokes.iter().map(ToString::to_string).collect();
         let canonical = sequence.join(" ");
@@ -150,9 +150,34 @@ mod tests {
         assert!(map.bindings_for_input(&keys, &terminal).0[0].action().as_any().is::<ShowCommandPalette>());
     }
     #[test]
+    fn leader_chords_accept_plain_suffixes_without_binding_plain_typing() {
+        let prefs = settings(serde_json::json!({"keybindings":[
+            {"key":"ctrl-k t","action":"settings"},
+            {"key":"ctrl-k p","action":"palette"}
+        ]}));
+        let mut map = Keymap::default();
+        map.add_bindings(compile(&prefs).unwrap());
+        let context = [KeyContext::parse("Terminal").unwrap()];
+        let prefix = [Keystroke::parse("ctrl-k").unwrap()];
+        let (actions, pending) = map.bindings_for_input(&prefix, &context);
+        assert!(actions.is_empty());
+        assert!(pending);
+        let suffix = Keystroke::parse("t").unwrap();
+        let (actions, pending) = map.bindings_for_input(&[suffix.clone()], &context);
+        assert!(actions.is_empty() && !pending);
+        let (actions, pending) = map.bindings_for_input(&[prefix[0].clone(), suffix], &context);
+        assert!(!pending);
+        assert!(actions[0].action().as_any().is::<ToggleSettings>());
+        let (actions, pending) = map.bindings_for_input(&prefix, &[KeyContext::parse("Settings").unwrap()]);
+        assert!(actions.is_empty() && !pending);
+    }
+
+    #[test]
     fn invalid_and_ambiguous_shortcuts_are_rejected() {
         for value in [
             serde_json::json!([{"key":"x","action":"settings"}]),
+            serde_json::json!([{"key":"x t","action":"settings"}]),
+            serde_json::json!([{"key":"ctrl-k entter","action":"settings"}]),
             serde_json::json!([{"key":"","action":"settings"}]),
             serde_json::json!([{"key":"ctrl-x","action":"missing"}]),
             serde_json::json!([{"key":"ctrl-entter","action":"settings"}]),

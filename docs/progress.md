@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Custom two-stroke shortcuts now allow an unmodified suffix, such as `ctrl-k t`,
+while retaining the modified/function-key leader requirement and key/prefix
+validation. Three focused shortcut tests passed using GPUI's real keymap:
+leader pending state, completed action dispatch, bare suffix non-binding and
+context isolation, plus existing validation/override checks. Installed GPUI
+source confirms a one-second incomplete-chord timer and replay path; native
+timeout, mismatch replay, focus changes and terminal input acceptance remain
+pending. This does not implement Ghostty key-table/config import parity.
+
 Closing Terminal Memory now releases the window's cached process sampler and
 signals cancellation to an in-flight sample. Workers check before OS sampling,
 after acquiring the sampler and between terminal samples; existing generation
