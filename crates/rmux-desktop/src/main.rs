@@ -483,6 +483,7 @@ struct TerminalView {
     composition: composition::Composition,
     last_bounds: Bounds<Pixels>,
     error: Option<String>,
+    process_exit: Option<String>,
     _updates: Task<()>,
     render_hold_timer: Option<Task<()>>,
     compression_task: Option<Task<()>>,
@@ -699,8 +700,11 @@ impl TerminalView {
                 match entity
                     .update(cx, |view, cx| {
                         if !retry && let Some(metrics) = &mut view.metrics { metrics.notifications += 1; }
-                        if let Some(status) = view.session.exit_status() {
-                            view.error = Some(status);
+                        if view.process_exit.is_none() {
+                            if let Some(status) = view.session.exit_status() {
+                                view.process_exit = Some(status);
+                                cx.notify();
+                            }
                         }
                         if !retry { view.refresh_input_mode(cx); }
                         if view.rendered_paste_pending != view.session.paste_pending() { cx.notify(); }
@@ -861,6 +865,7 @@ impl TerminalView {
             composition: composition::Composition::default(),
             last_bounds: Bounds::default(),
             error: color_error,
+            process_exit: None,
             _updates: task,
             render_hold_timer: None,
             compression_task: None,
@@ -1855,6 +1860,36 @@ impl Render for TerminalView {
                     .child(pane_view::pane_control("cancel-paste", "Cancel Queued Paste")
                         .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
                             if event.standard_click() { this.cancel_paste(cx); }
+                            cx.stop_propagation();
+                        })).child(icons::icon("close")))
+            ))
+            .when_some(self.process_exit.clone(), |root, status| root.child(
+                div().id("process-exit-status").flex().flex_wrap().items_center().gap_2()
+                    .px_2().py_1().flex_shrink_0().min_w_0().bg(rgb(0x292929))
+                    .border_t_1().border_color(rgb(0x414141)).text_xs().text_color(rgb(0xb8b8b8))
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .on_mouse_down(MouseButton::Middle, |_, _, cx| cx.stop_propagation())
+                    .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
+                    .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
+                    .child(div().id("process-exit-message").flex_1().min_w_0().truncate()
+                        .tooltip({ let hint: SharedString = status.clone().into(); move |_, cx| cx.new(|_| pane_view::ControlHint(hint.clone())).into() })
+                        .child(status))
+                    .child(div().id("new-shell-after-exit").px_2().py_1().rounded_sm().bg(rgb(0x383838))
+                        .cursor_pointer().hover(|style| style.bg(rgb(0x484848)))
+                        .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("Open a fresh shell in a new tab, keeping this terminal's output".into())).into())
+                        .on_click(cx.listener(|this, event: &ClickEvent, window, cx| {
+                            if event.standard_click() {
+                                this.focus.focus(window);
+                                window.dispatch_action(Box::new(NewTab), cx);
+                            }
+                            cx.stop_propagation();
+                        })).child("New shell"))
+                    .child(pane_view::pane_control("close-exited-terminal", "Close finished terminal")
+                        .on_click(cx.listener(|this, event: &ClickEvent, window, cx| {
+                            if event.standard_click() {
+                                this.focus.focus(window);
+                                window.dispatch_action(Box::new(ClosePane), cx);
+                            }
                             cx.stop_propagation();
                         })).child(icons::icon("close")))
             ))

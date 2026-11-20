@@ -1675,3 +1675,10 @@ Scripts can invoke the same directional resize operation with
 or a clamped divider. It does not change workspace selection or OS focus. Zoomed
 layouts, active divider drags and pending split launches are rejected as busy.
 Use `workspace.list` to read the updated split weights.
+
+When a terminal process exits, its output stays available and a status strip shows
+the exit message. **New shell** opens a fresh tab through the normal new-tab path,
+using its directory/font inheritance; it does not replay the exited command.
+The adjacent close button closes the finished terminal through the normal close
+policy. Input, rendering and other operational errors retain their separate error
+messages.

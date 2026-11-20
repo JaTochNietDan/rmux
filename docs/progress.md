@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Separated process exit state from terminal operational errors. Finished terminals
+now retain their output with a neutral status strip, complete-message hover hint,
+New shell button and Close finished terminal control. New shell routes through
+existing new-tab preparation/inheritance without command replay; Close uses the
+normal close action/policy. Exit state is captured once rather than overwriting
+unrelated errors on subsequent output notifications. Desktop build and native
+workspace smoke with immediately exiting fixture shells passed. Actual button
+interaction, focus behavior and screenshot acceptance remain pending.
+
 Unified pointer/keyboard divider clamping so a narrow restored pane does not jump
 backward on drag start or when pushed against its minimum. The shared helper uses
 relative weight units, preserves the smaller starting share, avoids zero neighbors
