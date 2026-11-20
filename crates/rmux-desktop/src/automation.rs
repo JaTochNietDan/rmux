@@ -1282,6 +1282,51 @@ mod tests {
     }
     use super::*;
     #[test]
+    fn notification_mutations_validate_before_queueing_and_keep_revision_precision() {
+        // Use a canonical generation-bearing ID so invalid-field cases exercise
+        // their own validation rather than failing surface ID validation first.
+        let (sender, receiver) = async_channel::bounded::<LiveRequest>(1);
+        for method in ["notification.mark_read", "notification.dismiss"] {
+            for params in [
+                json!({"surface_id":"4294967297"}),
+                json!({"surface_id":"4294967297","revision":null}),
+                json!({"surface_id":"4294967297","revision":-1}),
+                json!({"surface_id":"4294967297","revision":1.5}),
+                json!({"surface_id":"4294967297","revision":"1"}),
+                json!({"surface_id":"4294967297","revision":1,"title":"unexpected"}),
+                json!({"surface_id":"4294967297","revision":1,"body":"unexpected"}),
+                json!({"surface_id":"4294967297","revision":1,"mark_read":true}),
+                json!({"surface_id":"04294967297","revision":1}),
+            ] {
+                let request = json!({"jsonrpc":"2.0","id":9,"method":method,"params":params});
+                let response = dispatch_inner(&serde_json::to_vec(&request).unwrap(), Some(&sender)).unwrap();
+                assert_eq!(response["error"]["code"], -32602, "{request}: {response}");
+                assert!(receiver.try_recv().is_err(), "invalid mutation reached UI queue");
+            }
+        }
+        let worker = std::thread::spawn(move || {
+            for mark_read in [true, false] {
+                let request = receiver.recv_blocking().unwrap();
+                assert!(request.pending.start());
+                let change = request.notification_change.unwrap();
+                assert_eq!(change.mark_read, mark_read);
+                assert_eq!(change.revision, Some(u64::MAX));
+                assert_eq!(change.surface_id, "4294967297");
+                assert!(change.title.is_none() && change.body.is_none());
+                request.reply.send(Ok(json!({"revision":change.revision}))).unwrap();
+            }
+        });
+        for method in ["notification.mark_read", "notification.dismiss"] {
+            let request = json!({"jsonrpc":"2.0","id":"notification-test","method":method,
+                "params":{"surface_id":"4294967297","revision":u64::MAX}});
+            let response = dispatch_inner(&serde_json::to_vec(&request).unwrap(), Some(&sender)).unwrap();
+            assert_eq!(response["id"], "notification-test");
+            assert_eq!(response["result"]["revision"].as_u64(), Some(u64::MAX), "{response}");
+        }
+        worker.join().unwrap();
+    }
+
+    #[test]
     fn target_ids_preserve_generations_and_reject_alternate_spellings() {
         let first = gpui::EntityId::from(0x100000001);
         let later = gpui::EntityId::from(0x300000001);

@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Notification mutation routing now has a focused contract test for both
+`notification.mark_read` and `notification.dismiss`: missing/null, negative,
+fractional and string revisions, unexpected content/internal fields, and
+noncanonical surface IDs are rejected before queueing UI work. Valid requests
+retain `u64::MAX` revision precision, preserve the request ID, and route to the
+correct operation. The test passed after correcting its fixture to use a
+generation-bearing surface ID; no production precision defect was found.
+
 Fresh macOS debug binaries passed `mise run smoke-socket` with the new
 `read-notification` CLI scenario. The live app retained both messages, cleared only
 the targeted unread flag, preserved Unicode title content, returned false for
