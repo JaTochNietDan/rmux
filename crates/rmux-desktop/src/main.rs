@@ -331,6 +331,7 @@ actions!(
         MoveTabRight,
         Paste,
         CopySelection,
+        CopySelectionWithLineBreaks,
         CopyWorkingDirectory,
         RevealWorkingDirectory,
         ClearScrollback,
@@ -1257,9 +1258,12 @@ impl TerminalView {
         cx.notify();
     }
     fn copy(&mut self, _: &CopySelection, _: &mut Window, cx: &mut Context<Self>) {
+        self.copy_selection(true, cx);
+    }
+    fn copy_selection(&mut self, unwrap: bool, cx: &mut Context<Self>) {
         if self.clipboard_task.is_some() { return; }
         let ticket = clipboard::begin();
-        let export = self.session.clipboard_export(move || clipboard::current(ticket));
+        let export = self.session.clipboard_export(unwrap, move || clipboard::current(ticket));
         let executor = cx.background_executor().clone();
         self.clipboard_task = Some(cx.spawn(async move |entity, cx| {
             let result = executor.spawn(async move { export() }).await;
@@ -1437,6 +1441,7 @@ impl Render for TerminalView {
             .on_scroll_wheel(cx.listener(Self::wheel))
             .on_action(cx.listener(Self::paste))
             .on_action(cx.listener(Self::copy))
+            .on_action(cx.listener(|this, _: &CopySelectionWithLineBreaks, _, cx| this.copy_selection(false, cx)))
             .on_action(cx.listener(Self::select_all))
             .on_action(cx.listener(Self::copy_working_directory))
             .on_action(cx.listener(Self::reveal_working_directory))
@@ -3036,6 +3041,7 @@ fn main() {
                 name: "Edit".into(),
                 items: vec![
                     MenuItem::action("Copy", CopySelection),
+                    MenuItem::action("Copy with Line Breaks", CopySelectionWithLineBreaks),
                     MenuItem::action("Cut", EditorCut),
                     MenuItem::action("Undo", EditorUndo),
                     MenuItem::action("Redo", EditorRedo),

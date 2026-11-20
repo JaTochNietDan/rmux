@@ -597,7 +597,7 @@
       ],
       "acceptance": "Preserve user-selected copy policy and restore session history without duplicating prompt execution.",
       "rmux_status": "in_progress",
-      "implementation": "Copy formatter unwraps terminal soft wraps.",
+      "implementation": "Ordinary Copy unwraps terminal soft wraps. Copy with Line Breaks preserves them through the Edit menu, palette and copy_with_line_breaks shortcut action. Both use bounded background streaming exports; engine tests cover wrap modes, limits and selection/viewport preservation.",
       "remaining": "Per-session shell history and broader reflow acceptance.",
       "implementation_sources": [
         "crates/rmux-terminal/src/selection.rs"

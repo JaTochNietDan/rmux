@@ -58,6 +58,7 @@ fn action(name: &str) -> Option<Box<dyn Action>> {
         "edit_workspace_icon" => Box::new(EditWorkspaceIcon), "edit_workspace_color" => Box::new(EditWorkspaceColor),
         "settings" => Box::new(ToggleSettings), "notifications" => Box::new(ToggleNotifications),
         "mark_all_read" => Box::new(MarkAllRead),
+        "copy_with_line_breaks" => Box::new(CopySelectionWithLineBreaks),
         "new_group" => Box::new(NewWorkspaceGroup),
         "group_selected" => Box::new(GroupSelectedWorkspaces),
         "rename_group" => Box::new(RenameWorkspaceGroup),

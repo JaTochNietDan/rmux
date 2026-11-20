@@ -22,6 +22,21 @@ pub struct Event {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn copy_can_preserve_soft_wraps_without_changing_selection() -> anyhow::Result<()> {
+        let mut terminal = super::Terminal::new(5, 4)?;
+        terminal.write(b"abcdefghij\r\nnext");
+        terminal.select_all()?;
+        let before = terminal.frame()?;
+        assert_eq!(terminal.selected_text_with_wraps(100, true)?.as_deref(), Some("abcdefghij\nnext"));
+        assert_eq!(terminal.selected_text_with_wraps(100, false)?.as_deref(), Some("abcde\nfghij\nnext"));
+        assert!(terminal.selected_text_with_wraps(15, false).is_err());
+        assert_eq!(terminal.selected_text_with_wraps(16, false)?.unwrap().len(), 16);
+        let after = terminal.frame()?;
+        assert_eq!(after.selections, before.selections);
+        assert_eq!(after.scrollback_offset, before.scrollback_offset);
+        Ok(())
+    }
     use super::*;
     fn click(terminal: &mut Terminal, column: f32, row: f32, clicks: usize) -> Result<()> {
         terminal
@@ -383,7 +398,12 @@ impl Terminal {
     }
 
     pub fn selected_text_limited(&self, max_bytes: usize) -> Result<Option<String>> {
-        let Some((text, truncated)) = self.export_text_limited(max_bytes, true)? else {
+        self.selected_text_with_wraps(max_bytes, true)
+    }
+
+    /// When `unwrap` is false, retain line breaks at terminal soft-wrap boundaries.
+    pub fn selected_text_with_wraps(&self, max_bytes: usize, unwrap: bool) -> Result<Option<String>> {
+        let Some((text, truncated)) = self.export_text_with_wraps(max_bytes, true, unwrap)? else {
             return Ok(None);
         };
         ensure!(!truncated, "selection exceeds {max_bytes} byte limit");

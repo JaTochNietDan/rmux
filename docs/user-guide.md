@@ -1091,7 +1091,11 @@ Drag to select terminal text, double-click a word, or triple-click a line.
 Alt-drag selects a rectangular block. Cmd+C copies the selection on macOS;
 Ctrl+Shift+C copies on Linux/Windows. Hold Shift to select locally when a terminal
 application has enabled mouse reporting. Copy uses Ghostty's text extraction,
-including Unicode and soft-wrapped lines. Drag above/below the terminal to extend
+including Unicode, joining soft-wrapped lines. Choose **Copy with Line Breaks**
+from the Edit menu or command palette to retain those visual line boundaries.
+It can be bound using `copy_with_line_breaks` in the `terminal` context; no default
+shortcut is assigned. Both modes preserve explicit newlines and reject selections
+above 16 MiB instead of copying a partial result. Drag above/below the terminal to extend
 selection through scrollback; scrolling stops on release or at the history edge.
 
 Cmd-click an OSC 8 hyperlink or plain-text HTTP(S) URL to open it in the default

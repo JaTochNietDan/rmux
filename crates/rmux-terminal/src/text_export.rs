@@ -57,6 +57,10 @@ impl Terminal {
 
     // Shared with the complete-selection API, which rejects truncated output.
     pub(super) fn export_text_limited(&self, max_bytes: usize, selected: bool) -> Result<Option<(String, bool)>> {
+        self.export_text_with_wraps(max_bytes, selected, true)
+    }
+
+    pub(super) fn export_text_with_wraps(&self, max_bytes: usize, selected: bool, unwrap: bool) -> Result<Option<(String, bool)>> {
         struct Formatter(GhosttyFormatter);
         impl Drop for Formatter {
             fn drop(&mut self) {
@@ -89,7 +93,7 @@ impl Terminal {
             check(ghostty_formatter_set(
                 formatter.0,
                 GHOSTTY_FORMATTER_OPT_UNWRAP,
-                input(&true),
+                input(&unwrap),
             ))?;
             let result = ghostty_formatter_format(
                 formatter.0,

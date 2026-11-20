@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+T19 now includes an explicit Copy with Line Breaks action in the Edit menu,
+command palette and configurable terminal shortcuts. It preserves soft-wrap
+boundaries while ordinary Copy continues to unwrap them. Both modes share
+the 16 MiB background streaming exporter and cancellation guards. A focused
+engine regression passed for both modes, exact/over-limit output and unchanged
+selection/viewport; desktop compilation passed. Native clipboard acceptance,
+full reflow parity and per-session shell history remain open.
+
 Tab-picker selection now reconciles against title/directory metadata changes.
 If the chosen tab stops matching, the first remaining result becomes the stored
 selection and is revealed; the former tab cannot reclaim selection merely by

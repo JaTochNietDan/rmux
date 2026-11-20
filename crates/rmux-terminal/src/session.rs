@@ -606,7 +606,7 @@ impl Session {
     }
     /// Bounded clipboard formatting for a background executor. Construction never
     /// acquires the parser lock or keeps a closed terminal alive.
-    pub fn clipboard_export(&self, current: impl Fn() -> bool + Send + 'static) -> Box<dyn FnOnce() -> Result<Option<String>> + Send> {
+    pub fn clipboard_export(&self, unwrap: bool, current: impl Fn() -> bool + Send + 'static) -> Box<dyn FnOnce() -> Result<Option<String>> + Send> {
         let terminal = Arc::downgrade(&self.terminal);
         Box::new(move || {
             if !current() { return Ok(None); }
@@ -624,7 +624,7 @@ impl Session {
             };
             // Another clipboard write may have superseded us while waiting.
             if !current() { return Ok(None); }
-            engine.selected_text()
+            engine.selected_text_with_wraps(16 * 1024 * 1024, unwrap)
         })
     }
     /// Deferred directory lookup without retaining the terminal while queued.
@@ -999,13 +999,13 @@ mod tests {
         assert_eq!(selected, (expected.clone(), false));
         assert_eq!(session.selected_text()?, Some(expected));
         let expected = session.selected_text()?;
-        let clipboard = session.clipboard_export(|| true);
+        let clipboard = session.clipboard_export(true, || true);
         assert_eq!(Arc::strong_count(&session.terminal), owners, "queued clipboard export retained the engine");
         assert_eq!(thread::spawn(clipboard).join().unwrap()?, expected);
-        assert!(session.clipboard_export(|| false)()?.is_none());
+        assert!(session.clipboard_export(true, || false)()?.is_none());
         let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let seen = calls.clone();
-        let superseded = session.clipboard_export(move || seen.fetch_add(1, Ordering::Relaxed) == 0);
+        let superseded = session.clipboard_export(true, move || seen.fetch_add(1, Ordering::Relaxed) == 0);
         assert!(thread::spawn(superseded).join().unwrap()?.is_none());
         assert_eq!(calls.load(Ordering::Relaxed), 2);
         assert_eq!(session.selected_text()?, expected, "cancellation changed selection");
@@ -1013,7 +1013,7 @@ mod tests {
         let canceled = Arc::new(AtomicBool::new(false));
         let canceled_copy = canceled.clone();
         let (started, starting) = mpsc::channel();
-        let waiting = session.clipboard_export(move || {
+        let waiting = session.clipboard_export(true, move || {
             let _ = started.send(());
             !canceled_copy.load(Ordering::Relaxed)
         });

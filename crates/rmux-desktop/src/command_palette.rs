@@ -217,6 +217,7 @@ impl CommandPalette {
         command!("Find Older Match", FindOlder);
         command!("Find Newer Match", FindNewer);
         command!("Select All", EditorSelectAll);
+        command!("Copy with Line Breaks", CopySelectionWithLineBreaks);
         command!("Copy Working Directory", CopyWorkingDirectory);
         command!("Reveal Working Directory", RevealWorkingDirectory);
         command!("Clear Scrollback", ClearScrollback);
