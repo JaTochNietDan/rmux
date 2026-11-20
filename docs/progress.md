@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Font increase/decrease, reset size and Use Configured Font now have configurable
+shortcut action names and route to the same terminal handlers as menus/palette.
+The guide now correctly distinguishes resetting to the configured size (rather
+than hard-coded 14), preserving a custom font family, and restoring both family
+and size. Focused shortcut tests passed; native custom-binding acceptance remains
+pending. Existing per-terminal inheritance and persistence behavior is unchanged.
+
 Terminal, pane and workspace errors now share a compact banner with copy and
 dismiss icon controls. Text scrolls within a 96px cap, controls retain 28px hit
 areas, and banner pointer events are isolated from terminal input/selection.

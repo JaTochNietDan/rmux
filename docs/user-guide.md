@@ -84,7 +84,8 @@ Supported action names: `new_workspace`, `new_window`, `new_tab`, `split_right`,
 `next_pane`, `previous_pane`, `next_tab`, `previous_tab`, `tab_picker`,
 `move_tab_left`, `move_tab_right`, `move_workspace_up`, `move_workspace_down`,
 `previous_prompt`, `next_prompt`, `last_prompt`, `scroll_to_top`, `scroll_to_bottom`,
-`find_older`, `find_newer`,
+`find_older`, `find_newer`, `increase_font_size`, `decrease_font_size`,
+`reset_font_size`, `use_configured_font`,
 `palette`, `toggle_zoom`, `toggle_sidebar`, `settings`, `notifications`,
 `next_unread`, `mark_all_read`, `find`, `reload_settings`, and `disabled`. Graphical binding editing,
 full conflict explanations and complete upstream shortcut coverage remain pending.
@@ -928,11 +929,16 @@ pins; older layouts open unpinned.
 View → Last Workspace (also in the palette) toggles between the current and most
 recently visited workspace. Reordering preserves the target; closing it clears
 the remembered destination. This history is per window and is not saved.
-Cmd+= / Cmd+- change the focused terminal's font size; Cmd+0 resets it to 14.
+Cmd+= / Cmd+- change the focused terminal's font size; Cmd+0 resets it to the
+configured font size (14 by default).
 Linux/Windows use Ctrl+= / Ctrl+- / Ctrl+0. These controls are also in Edit and the
 command palette. Zoom is per terminal, ranges from 8 to 40, and follows a moved
 tab. New tabs and splits inherit the source terminal's size; a new workspace starts
-at 14. Save/Open Layout preserves each terminal's size; older layouts default to 14.
+at the configured size. Save/Open Layout preserves each terminal's size; older
+layouts without a saved size default to 14. Reset Font Size preserves that
+terminal's font family; Use Configured Font restores both the configured family
+and size. Custom shortcuts can bind these separately as `reset_font_size` and
+`use_configured_font`, or use `increase_font_size`/`decrease_font_size` for steps.
 Cmd+Shift+P opens the command palette (Ctrl+Shift+P on Linux/Windows). Type words
 to filter implemented actions and workspace names (abbreviations such as `splt blw`
 also match, with contiguous matches ranked first), use Up/Down and Enter to run
