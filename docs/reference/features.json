@@ -83,7 +83,7 @@
       ],
       "acceptance": "Keep window, workspace, pane and surface identities distinct through all operations.",
       "rmux_status": "in_progress",
-      "implementation": "Sidebar workspaces and per-pane terminal tabs.",
+      "implementation": "Sidebar workspaces and per-pane terminal tabs. Close Other Tabs provides a policy-aware batch close with stable target identities, keeper preservation and menu/palette/shortcut access.",
       "remaining": "Full identity and interaction parity acceptance.",
       "implementation_sources": [
         "crates/rmux-desktop/src/pane_view.rs"

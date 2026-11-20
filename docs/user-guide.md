@@ -1030,6 +1030,11 @@ and allows only 100 ms to await completion; the normal Quit action retains its
 confirmation policy and three-second cleanup deadline.
 
 Cmd+T creates a tab in the focused pane; Cmd+Shift+[ / ] switches tabs.
+Close Other Tabs in the menu/palette keeps the chosen terminal and closes the
+other tabs in that pane, using one confirmation when the close policy requires
+it. The `close_other_tabs` shortcut action has no default binding. The prompt
+captures its targets: tabs added afterward are spared, and the operation aborts
+if the terminal being kept leaves the pane before confirmation.
 New tabs start in the background. The Starting… indicator has a cancel button;
 Cancel New Terminal Tab is also available in the menu/palette and as the
 `cancel_new_tab` shortcut action. Cancellation preserves existing tabs and focus.

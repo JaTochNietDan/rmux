@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Close Other Tabs is now available in the menu, command palette and configurable
+shortcuts. It preserves the selected terminal, applies the shared active/always/
+never close policy once for the batch, and captures target identities before
+confirmation. Reordered targets still resolve correctly; newly added tabs are
+excluded, and a missing keeper aborts the operation. Focus-preserving removal
+reuses the existing tab-close path. Two close-policy tests and two tab-order
+tests passed; native prompt, process cleanup and focus acceptance remain pending.
+
 Asynchronous tab completion now reconciles inherited font size/family against
 settings changes made during startup. Values matching the launch-time defaults
 adopt current defaults; custom size/family choices remain intact. This avoids

@@ -13,13 +13,26 @@ fn prepare_tab_launch(
     TerminalView::prepare(session, colors, palette)
 }
 
+fn other_tab_close_indices<T: Copy + Eq>(current: &[T], keep: T, targets: &[T]) -> Vec<usize> {
+    if !current.contains(&keep) { return Vec::new(); }
+    current.iter().enumerate().rev()
+        .filter_map(|(index, id)| (*id != keep && targets.contains(id)).then_some(index)).collect()
+}
+
 fn tab_drop_index(from: usize, target: usize) -> usize {
     target.saturating_sub(usize::from(from < target))
 }
 
 #[cfg(test)]
 mod tab_order_tests {
-    use super::tab_drop_index;
+    use super::{tab_drop_index, other_tab_close_indices};
+    #[test]
+    fn batch_close_preserves_keeper_and_excludes_new_tabs_after_reordering() {
+        assert_eq!(other_tab_close_indices(&[3, 4, 2, 1], 2, &[1, 3]), vec![3, 0]);
+        assert!(other_tab_close_indices(&[3, 4, 1], 2, &[1, 3]).is_empty());
+        assert_eq!(other_tab_close_indices(&[1, 2, 4], 2, &[1, 2, 3]), vec![0]);
+    }
+
     #[test]
     fn drops_insert_before_target_from_either_direction() {
         for (from, target, expected) in [
@@ -679,6 +692,44 @@ impl PaneView {
         self.select(index, window, cx);
     }
 
+    fn close_other_tabs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.automation_busy() || cx.global::<Shutdowns>().quitting { return; }
+        let Some(keep) = self.active_terminal_id() else { return; };
+        let targets: Vec<_> = self.terminals.iter().filter(|terminal| terminal.entity_id() != keep)
+            .map(Entity::entity_id).collect();
+        if targets.is_empty() { return; }
+        let confirms = cx.global::<ClosePolicy>().confirms(true, || {
+            self.terminals.iter().filter(|terminal| targets.contains(&terminal.entity_id()))
+                .any(|terminal| terminal.read(cx).has_active_work())
+        });
+        if !confirms {
+            self.close_tab_targets(keep, &targets, window, cx);
+            return;
+        }
+        let Some(permit) = cx.global::<PromptGate>().acquire() else { return; };
+        self.close_prompt = Some(keep);
+        let detail = format!("Close {} other terminal tabs in this pane? Their processes will stop and output history will be discarded. The current terminal will remain open.", targets.len());
+        let answer = window.prompt(PromptLevel::Warning, "Close other terminal tabs?", Some(&detail), &["Cancel", "Close Other Tabs"], cx);
+        cx.spawn_in(window, async move |entity, cx| {
+            let confirmed = matches!(answer.await, Ok(1));
+            drop(permit);
+            let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
+                if this.close_prompt != Some(keep) { return; }
+                this.close_prompt = None;
+                if confirmed { this.close_tab_targets(keep, &targets, window, cx); }
+            }));
+        }).detach();
+    }
+
+    fn close_tab_targets(&mut self, keep: EntityId, targets: &[EntityId], window: &mut Window, cx: &mut Context<Self>) {
+        // Resolve identities at confirmation time; new or moved-in tabs were not
+        // part of the prompt. Abort if the terminal we promised to retain left.
+        let current: Vec<_> = self.terminals.iter().map(Entity::entity_id).collect();
+        for index in other_tab_close_indices(&current, keep, targets) {
+            self.close_confirmed(index, window, cx);
+        }
+    }
+
     fn close(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
         let Some(terminal) = self.terminals.get(index) else {
             return;
@@ -775,6 +826,7 @@ impl Render for PaneView {
             .min_h_0()
             .when(!self.benchmark, |pane| pane.border_1().border_color(if attention { rgb(0xf0b85b).into() } else { gpui::transparent_black() }))
             .on_action(cx.listener(|this, _: &NewTab, window, cx| this.add(window, cx)))
+            .on_action(cx.listener(|this, _: &CloseOtherTabs, window, cx| this.close_other_tabs(window, cx)))
             .on_action(cx.listener(|this, _: &CancelNewTab, _, cx| this.cancel_tab_launch(cx)))
             .on_action(cx.listener(|this, _: &RenameTab, window, cx| this.rename_tab(window, cx)))
             .on_action(cx.listener(|this, _: &NextTab, window, cx| this.cycle(1, window, cx)))
