@@ -8,7 +8,9 @@ a particular formatting latency.
 Complete selection copying also uses this streaming formatter, avoiding a full
 size-probe pass and a second copy from a temporary byte buffer. Its 16 MiB
 default limit and rejection of partial selections remain in place; clipboard
-export continues to run in the background.
+export continues to run in the background. A focused
+[selection-export comparison](benchmarks/selection-export.md) records engine-only
+timing improvements and its measurement limitations.
 
 Prepaint now uses opportunistic snapshot access: a busy parser keeps the cached
 frame and schedules a display-frame retry. `snapshot_busy` counts these misses

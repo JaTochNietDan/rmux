@@ -97,6 +97,10 @@ run = "cargo build --release -p rmux-terminal --example engine_bench && for pane
 description = "Release input/response timings under PTY output pressure at 1/4/8/16 panes"
 run = "cargo run --release -p rmux-terminal --example pty_bench -- all"
 
+[tasks.bench-selection]
+description = "Release selection formatting timings at 4/64 MiB retention"
+run = "cargo run --release -p rmux-terminal --example selection_bench"
+
 [tasks.bench-history]
 description = "Release history export lock-duration baseline at 4/64 MiB retention"
 run = "cargo run --release -p rmux-terminal --example history_bench"

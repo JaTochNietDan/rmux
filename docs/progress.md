@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+A reproducible `mise run bench-selection` fixture now measures bounded rejection
+and complete selection formatting at 4/64 MiB retention. A same-host comparison
+against the previous two-pass implementation recorded complete-export medians
+about 47–51% lower; the large-selection 4 KB rejection dropped from 11,200 to
+23 µs. [Raw results and limitations](benchmarks/selection-export.md) are recorded.
+These are single-run engine observations, not clipboard/UI or multi-pane gates.
+
 Complete selection export now shares the streaming formatter instead of probing
 the full formatted size and then formatting a second time. The owned byte
 buffer becomes the returned String without another content copy. Oversized
