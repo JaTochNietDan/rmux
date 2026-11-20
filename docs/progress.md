@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Native macOS buffer rename passed against the rebuilt desktop app using isolated
+config and short-lived `/usr/bin/true` terminals. The new `smoke-buffers.py`
+scenario verifies advertised capabilities, collision preservation, Unicode
+content, removal of the old name, same-name no-op, invalid-name rejection,
+unchanged byte accounting and notification routing without extra replies.
+The app exits via normal Quit. Native UI access was rechecked and remains
+locked; graphical picker/editor appearance and focus acceptance are still open.
+
 Added graphical Rename Named Buffer through the native menu, command palette
 and `rename_buffer` custom action. The searchable buffer picker transitions into
 a prefilled, selected-name editor within the same palette overlay, preserving
