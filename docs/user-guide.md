@@ -3,6 +3,9 @@
 If Paste reports that the terminal is busy, no paste bytes were queued; retry
 the action after output pressure eases. A successful retry clears the message.
 Clipboard pastes retain the 1 MiB input limit and ordered bracketed delivery.
+Accepted clipboard paste text is encoded on the PTY writer thread, keeping
+subsequent keystrokes behind it. Asynchronous encoding/write failures appear as
+terminal errors; accepted input is not a guarantee that the child consumed it.
 
 Closing the Terminal Memory panel releases its cached process samples. Reopening
 starts a fresh CPU baseline, so refresh again after the baseline interval to see

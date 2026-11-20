@@ -615,6 +615,10 @@ impl TerminalView {
                         if let Some(status) = view.session.exit_status() {
                             view.error = Some(status);
                         }
+                        if let Some(error) = view.session.take_input_error() {
+                            view.error = Some(error);
+                            cx.notify();
+                        }
                         let Some(metadata) = view.session.try_metadata_since(
                             view.title_revision,
                             view.directory_revision,
@@ -1221,7 +1225,7 @@ impl TerminalView {
     }
     fn paste(&mut self, _: &Paste, _: &mut Window, cx: &mut Context<Self>) {
         if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
-            if let Err(error) = self.session.paste(&text) {
+            if let Err(error) = self.session.paste_owned(text) {
                 self.error = Some(error.to_string());
                 cx.notify();
             } else {

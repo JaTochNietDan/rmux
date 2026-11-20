@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Native clipboard paste now queues its owned text plus captured bracketed mode
+before encoding on the sole PTY writer thread. Later keystrokes stay behind that
+queue slot, and the paste permit remains held through encoding/write completion.
+UI dispatch retains bounded size/mode checks without payload normalization or a
+second clipboard-text copy. A bounded input-error channel reports asynchronous
+encoding/write failures. Desktop compilation and five focused paste tests passed,
+including large-paste ordering, sanitation/limits, automation viewport and permit
+lifecycle. Native latency/output-pressure measurements and active-write cancel
+semantics remain pending; cancellation during write_all is not implemented.
+
 Native paste no longer waits on the terminal parser mutex to read bracketed
 paste mode. Busy-parser rejection queues no input, releases its paste permit
 and displays an explicit retry message; successful retry clears the error.

@@ -20,6 +20,7 @@ pub struct Session {
     terminal: Arc<Mutex<Terminal>>,
     master: Box<dyn MasterPty + Send>,
     writer: mpsc::SyncSender<InputMessage>,
+    input_errors: async_channel::Receiver<String>,
     paste_pending: Arc<AtomicBool>,
     follow_output_pending: AtomicBool,
     shutdown: ShutdownHandle,
@@ -49,14 +50,26 @@ impl Drop for PastePermit {
     }
 }
 
+enum InputPayload {
+    Bytes(Vec<u8>),
+    Paste { text: String, bracketed: bool },
+}
+impl InputPayload {
+    fn encode(self) -> Result<Vec<u8>> {
+        match self {
+            Self::Bytes(bytes) => Ok(bytes),
+            Self::Paste { text, bracketed } => crate::keyboard::encode_paste(&text, bracketed),
+        }
+    }
+}
 struct InputMessage {
-    bytes: Vec<u8>,
+    payload: InputPayload,
     // Held through write_all, and released on encoding, enqueue or write failure.
     _paste: Option<PastePermit>,
 }
 impl From<Vec<u8>> for InputMessage {
     fn from(bytes: Vec<u8>) -> Self {
-        Self { bytes, _paste: None }
+        Self { payload: InputPayload::Bytes(bytes), _paste: None }
     }
 }
 
@@ -197,6 +210,8 @@ impl Session {
         let output_bytes = Arc::new(AtomicU64::new(0));
         let read_bytes = output_bytes.clone();
         let (writer, writes) = mpsc::sync_channel::<InputMessage>(32);
+        let (input_error, input_errors) = async_channel::bounded(1);
+        let input_notify = notify.clone();
         let (completion, completed) = async_channel::bounded(1);
         let reply_writer = writer.clone();
         let session = Self {
@@ -207,6 +222,7 @@ impl Session {
             terminal,
             master: pair.master,
             writer,
+            input_errors,
             paste_pending: Arc::new(AtomicBool::new(false)),
             follow_output_pending: AtomicBool::new(false),
             shutdown: ShutdownHandle {
@@ -260,7 +276,17 @@ impl Session {
             .name("rmux-pty-write".into())
             .spawn(move || {
                 while let Ok(message) = writes.recv() {
-                    if pty_writer.write_all(&message.bytes).is_err() {
+                    let bytes = match message.payload.encode() {
+                        Ok(bytes) => bytes,
+                        Err(error) => {
+                            let _ = input_error.try_send(format!("Paste encoding failed: {error}"));
+                            let _ = input_notify.try_send(());
+                            continue;
+                        }
+                    };
+                    if let Err(error) = pty_writer.write_all(&bytes) {
+                        let _ = input_error.try_send(format!("Terminal input failed: {error}"));
+                        let _ = input_notify.try_send(());
                         break;
                     }
                 }
@@ -528,6 +554,14 @@ impl Session {
     }
     pub fn paste(&self, text: &str) -> Result<()> {
         anyhow::ensure!(text.len() <= 1024 * 1024, "paste exceeds 1 MiB input limit");
+        self.paste_owned(text.to_owned())
+    }
+    pub fn take_input_error(&self) -> Option<String> {
+        self.input_errors.try_recv().ok()
+    }
+    /// Reserve queue order before encoding on the sole PTY writer thread.
+    pub fn paste_owned(&self, text: String) -> Result<()> {
+        anyhow::ensure!(text.len() <= 1024 * 1024, "paste exceeds 1 MiB input limit");
         anyhow::ensure!(self.exit_status().is_none(), "process has exited");
         let permit = PastePermit::acquire(&self.paste_pending)?;
         let bracketed = {
@@ -538,9 +572,8 @@ impl Session {
             };
             terminal.bracketed_paste()?
         };
-        let bytes = crate::keyboard::encode_paste(text, bracketed)?;
         self.writer
-            .try_send(InputMessage { bytes, _paste: Some(permit) })
+            .try_send(InputMessage { payload: InputPayload::Paste { text, bracketed }, _paste: Some(permit) })
             .map_err(|_| anyhow::anyhow!("terminal input queue is full or closed"))?;
         self.follow_output()
     }
@@ -559,7 +592,7 @@ impl Session {
             terminal.bracketed_paste()?
         };
         let bytes = crate::keyboard::encode_paste(text, bracketed)?;
-        self.writer.try_send(InputMessage { bytes, _paste: Some(permit) })
+        self.writer.try_send(InputMessage { payload: InputPayload::Bytes(bytes), _paste: Some(permit) })
             .map_err(|_| anyhow::anyhow!("terminal input queue is full or closed"))?;
         Ok(true)
     }
@@ -1076,7 +1109,7 @@ mod tests {
         let pending = Arc::new(AtomicBool::new(false));
         let (sender, receiver) = mpsc::sync_channel(1);
         sender.try_send(InputMessage {
-            bytes: vec![1],
+            payload: InputPayload::Bytes(vec![1]),
             _paste: Some(PastePermit::acquire(&pending)?),
         }).ok().unwrap();
         assert!(PastePermit::acquire(&pending).is_err());
@@ -1085,7 +1118,7 @@ mod tests {
         drop(message);
         sender.try_send(vec![2].into()).ok().unwrap();
         let rejected = sender.try_send(InputMessage {
-            bytes: vec![3],
+            payload: InputPayload::Bytes(vec![3]),
             _paste: Some(PastePermit::acquire(&pending)?),
         });
         assert!(rejected.is_err());
