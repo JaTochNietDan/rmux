@@ -1667,3 +1667,11 @@ from a drag or restored layout. Such narrow panes never snap in the opposite
 direction; growing them raises the minimum toward 10%. Existing pane identities, tabs and unrelated split
 weights remain intact. Restore a zoomed layout before resizing; actions are also
 ignored while a split shell is starting. **Equalize Pane Sizes** resets ratios.
+
+Scripts can invoke the same directional resize operation with
+`rmuxctl resize-pane --pane PANE_ID --direction left|right|up|down`, or JSON-RPC
+`pane.resize` with `pane_id` and `direction`. The response contains `pane_id`,
+`workspace_id` and `changed`; `changed: false` covers a single pane, missing axis
+or a clamped divider. It does not change workspace selection or OS focus. Zoomed
+layouts, active divider drags and pending split launches are rejected as busy.
+Use `workspace.list` to read the updated split weights.

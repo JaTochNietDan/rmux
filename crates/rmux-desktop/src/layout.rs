@@ -7,7 +7,8 @@ pub enum Axis {
     Rows,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Direction {
     Left,
     Right,

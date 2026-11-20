@@ -54,6 +54,27 @@ for mode in ["end", "top", "after_current"]:
                     assert [r["id"] for r in rows() if r["selected"]] == [fourth], rows()
                     call("workspace.close", workspace_id=fourth)
                     assert [r["id"] for r in rows()] == expected, rows()
+                    if mode == "end":
+                        pane = call("pane.list", workspace_id=original)["panes"][0]["id"]
+                        assert call("pane.resize", pane_id=pane, direction="right")["changed"] is False
+                        call("pane.split", pane_id=pane, direction="right")
+                        def identity():
+                            return [(r["id"], r.get("process_id")) for r in call("surface.list", workspace_id=original)["surfaces"]]
+                        surfaces = identity()
+                        selected = [r["id"] for r in rows() if r["selected"]]
+                        assert call("pane.resize", pane_id=pane, direction="right")["changed"] is True
+                        layout = next(r["layout"] for r in rows() if r["id"] == original)
+                        assert abs(layout["weights"][0] - 1.1) < 1e-5 and abs(layout["weights"][1] - .9) < 1e-5, layout
+                        assert identity() == surfaces
+                        assert [r["id"] for r in rows() if r["selected"]] == selected
+                        call("pane.resize", fail=True, pane_id=pane, direction="diagonal")
+                        call("pane.resize", fail=True, pane_id="999999999", direction="left")
+                        call("pane.zoom.set", pane_id=pane, zoomed=True)
+                        call("pane.resize", fail=True, pane_id=pane, direction="left")
+                        assert next(r["layout"] for r in rows() if r["id"] == original) == layout
+                        call("pane.zoom.set", pane_id=pane, zoomed=False)
+                        assert call("pane.resize", pane_id=pane, direction="left")["changed"] is True
+                        print("PASS: pane.resize weights, identity, selection, single-pane no-op and rejection paths")
                     if mode == "after_current":
                         group = call("workspace.group.create", window_id=window, name="Placement", workspace_ids=[second, original])
                         call("workspace.select", workspace_id=original)

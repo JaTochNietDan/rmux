@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Exposed directional resizing as pane.resize RPC and rmuxctl resize-pane, including
+CLI help/completion and explicit target/direction validation. It reuses the layout
+operation, reports changed/no-op, preserves selection and rejects zoomed/dragging/
+starting-split workspaces. Native macOS RPC smoke passed actual weight changes,
+surface identity/selection continuity, single-pane no-op, invalid direction/target
+and zoom rejection, plus resumed resizing after unzoom. CLI parsing test and
+desktop build passed. The fixture uses immediately exiting shells; it does not
+prove live-process continuity, OS focus, saved-ratio round trips or Windows runtime.
+
 Fixed directional keyboard resizing for pre-existing ratios below its usual 10%
 floor. The minimum now respects the smaller existing share, so shrinking an
 already-narrow pane is a no-op instead of snapping its divider backwards. Weight

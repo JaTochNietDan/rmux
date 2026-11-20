@@ -21,6 +21,7 @@ pub const HELP: &str = "Commands (JSON output except pipe-pane; explicit opaque 
   move-panel --panel ID --workspace ID [--activate]
   merge-workspace --workspace ID --target-workspace ID [--activate]
   move-workspace --workspace ID --window ID [--activate]
+  resize-pane --pane ID --direction left|right|up|down
   split-pane --pane ID --direction right|down [--cwd PATH] [--focus true|false] [--activate]
   set-pane-zoom --pane ID --zoomed true|false
   send-key --surface ID KEY  (Enter, Up, Ctrl-c, Alt-Left, Shift-Tab)
@@ -59,6 +60,7 @@ pub fn help(command: &str) -> Result<String, String> {
         "move-panel" => ("--panel ID --workspace ID [--activate]", "Move a live terminal to another workspace, preserving its process. Destination selection changes; window activation requires --activate."),
         "merge-workspace" => ("--workspace ID --target-workspace ID [--activate]", "Merge into another workspace in any window of the connected app, retaining live panes and nested splits. Selects the destination and removes the source entry; keeps destination metadata. OS activation requires --activate."),
         "move-workspace" => ("--workspace ID --window ID [--activate]", "Move a workspace and its live terminals to another window. Window activation requires --activate."),
+        "resize-pane" => ("--pane ID --direction left|right|up|down", "Move a shared divider one step without changing focus. Rejects zoomed or busy layouts."),
         "split-pane" => ("--pane ID --direction right|down [--cwd PATH] [--focus true|false] [--activate]", "Create a terminal beside an explicit pane. Inherits its directory and font; focus and OS activation are opt-in."),
         "set-pane-zoom" => ("--pane ID --zoomed true|false", "Set pane zoom explicitly without toggling. Zooming selects its terminal within the window, without OS window activation."),
         "completions" => ("bash|zsh|fish", "Print an offline shell completion script. No app connection is made."),
@@ -89,6 +91,7 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
         "move-panel" => ("surface.move_to_workspace", Some(("--panel", "surface_id")), None),
         "merge-workspace" => ("workspace.merge", Some(("--workspace", "workspace_id")), None),
         "move-workspace" => ("workspace.move_to_window", Some(("--workspace", "workspace_id")), None),
+        "resize-pane" => ("pane.resize", Some(("--pane", "pane_id")), None),
         "split-pane" => ("pane.split", Some(("--pane", "pane_id")), None),
         "set-pane-zoom" => ("pane.zoom.set", Some(("--pane", "pane_id")), None),
         "list-notifications" => ("notification.list", None, None),
@@ -191,9 +194,9 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
                 if params.insert(key.into(), Value::String(value)).is_some() { return Err("duplicate destination".into()); }
                 continue;
             }
-            if command == "split-pane" && arg == "--direction" {
-                let value = args.next().ok_or("--direction requires right or down")?.into_string().map_err(|_| "direction must be UTF-8")?;
-                if !matches!(value.as_str(), "right" | "down") { return Err("--direction expects right or down".into()); }
+            if matches!(command, "split-pane" | "resize-pane") && arg == "--direction" {
+                let value = args.next().ok_or("--direction requires a value")?.into_string().map_err(|_| "direction must be UTF-8")?;
+                if !matches!(value.as_str(), "right" | "down") && !(command == "resize-pane" && matches!(value.as_str(), "left" | "up")) { return Err("invalid direction for this command".into()); }
                 if params.insert("direction".into(), Value::String(value)).is_some() { return Err("duplicate --direction".into()); }
                 continue;
             }
@@ -319,7 +322,7 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
     }
     let required = match command {
         "dismiss-notification" | "read-notification" => Some(("revision", "--revision")),
-        "split-pane" => Some(("direction", "--direction")),
+        "split-pane" | "resize-pane" => Some(("direction", "--direction")),
         "move-panel" => Some(("workspace_id", "--workspace")),
         "merge-workspace" => Some(("target_workspace_id", "--target-workspace")),
         "move-workspace" => Some(("window_id", "--window")),
@@ -377,6 +380,17 @@ mod tests {
     fn args(v: &[&str]) -> Vec<OsString> {
         v.iter().map(OsString::from).collect()
     }
+    #[test]
+    fn resize_pane_requires_explicit_target_and_cardinal_direction() {
+        for direction in ["left", "right", "up", "down"] {
+            assert_eq!(expand("resize-pane", args(&["--pane", "12", "--direction", direction])).unwrap(),
+                ("pane.resize".into(), serde_json::json!({"pane_id":"12", "direction":direction})));
+        }
+        for input in [vec!["--pane", "12"], vec!["--direction", "left"], vec!["--pane", "12", "--direction", "diagonal"], vec!["--pane", "12", "--direction", "up", "--activate"]] {
+            assert!(expand("resize-pane", args(&input)).is_err());
+        }
+    }
+
     #[test]
     fn merge_workspace_requires_two_explicit_targets() {
         assert_eq!(expand("merge-workspace", args(&["--workspace", "a", "--target-workspace", "b", "--activate"])).unwrap(),
