@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Paste encoding now allocates one output buffer instead of separate mutable-input
+and output buffers. Ghostty's documented null-output size query sanitizes the
+payload in place; rmux adds bracketed delimiters in the same allocation and checks
+the reported length. This removes a payload-sized temporary allocation and copy
+(up to 1 MiB per accepted interactive paste), without duplicating sanitization
+rules. Six focused paste tests passed, including differential comparison with
+Ghostty's regular output API for every ASCII byte, Unicode, empty input, newlines
+and embedded delimiters in both modes, plus existing live PTY ordering checks.
+No end-to-end latency improvement is claimed without measurement.
+
 Paste captures bracketed-paste mode under the terminal mutex, then allocates and
 encodes its bounded payload after releasing that mutex. Both interactive and
 nonblocking automation paths use the same standalone Ghostty encoder; the single

@@ -310,23 +310,49 @@ impl Terminal {
 /// allocation and normalization need not retain the terminal/parser mutex.
 pub(crate) fn encode_paste(text: &str, bracketed: bool) -> Result<Vec<u8>> {
     ensure!(text.len() <= 1024 * 1024, "paste exceeds 1 MiB input limit");
-    let mut data = text.as_bytes().to_vec();
-    let mut bytes = vec![0; data.len() + 12];
+    let prefix: &[u8] = if bracketed { b"\x1b[200~" } else { b"" };
+    let suffix: &[u8] = if bracketed { b"\x1b[201~" } else { b"" };
+    let length = prefix.len() + text.len() + suffix.len();
+    let mut bytes = Vec::with_capacity(length);
+    bytes.extend_from_slice(prefix);
+    bytes.extend_from_slice(text.as_bytes());
     let mut written = 0;
-    // SAFETY: both buffers are owned and sized for payload plus delimiters.
-    unsafe {
-        check(ghostty_paste_encode(
-            data.as_mut_ptr().cast(), data.len(), bracketed,
-            bytes.as_mut_ptr(), bytes.len(), &mut written,
-        ))?;
-    }
-    bytes.truncate(written);
+    // SAFETY: Ghostty's documented size-query mode sanitizes the mutable input
+    // even on OUT_OF_SPACE. Only the initialized payload is passed, with no
+    // output buffer; input/output never alias. Delimiters are added separately.
+    let result = unsafe {
+        ghostty_paste_encode(
+            bytes.as_mut_ptr().add(prefix.len()).cast(), text.len(), bracketed,
+            ptr::null_mut(), 0, &mut written,
+        )
+    };
+    if result != GHOSTTY_OUT_OF_SPACE { check(result)?; }
+    ensure!(written == length, "unexpected encoded paste length");
+    bytes.extend_from_slice(suffix);
     Ok(bytes)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn single_buffer_paste_matches_ghostty_output() -> Result<()> {
+        let controls: String = (0u8..=127).map(char::from).collect();
+        for text in ["", "hello", "界é🙂\r\n", "\x1b[201~\0\x03", controls.as_str()] {
+            for bracketed in [false, true] {
+                let mut input = text.as_bytes().to_vec();
+                let mut expected = vec![0; input.len() + 12];
+                let mut written = 0;
+                unsafe {
+                    check(ghostty_paste_encode(input.as_mut_ptr().cast(), input.len(), bracketed,
+                        expected.as_mut_ptr(), expected.len(), &mut written))?;
+                }
+                expected.truncate(written);
+                assert_eq!(encode_paste(text, bracketed)?, expected);
+            }
+        }
+        Ok(())
+    }
     #[test]
     fn paste_limit_preserves_complete_bracketed_payload() -> Result<()> {
         let mut terminal = Terminal::new(20, 3)?;
