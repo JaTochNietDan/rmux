@@ -6,6 +6,8 @@ Clipboard pastes retain the 1 MiB input limit and ordered bracketed delivery.
 Accepted clipboard paste text is encoded on the PTY writer thread, keeping
 subsequent keystrokes behind it. Asynchronous encoding/write failures appear as
 terminal errors; accepted input is not a guarantee that the child consumed it.
+A compact Paste pending overlay stays visible until the writer releases the
+paste slot; its close control requests cancellation.
 Cancel Queued Paste in the Edit menu/palette (custom action `cancel_queued_paste`)
 discards paste payloads when cancellation is observed before writing starts.
 It does not recall bytes already being written or interrupt their closing

@@ -90,18 +90,31 @@ impl From<Vec<u8>> for InputMessage {
     }
 }
 
-fn write_messages(writes: mpsc::Receiver<InputMessage>, mut writer: impl Write, mut report: impl FnMut(String)) {
+fn write_messages(writes: mpsc::Receiver<InputMessage>, mut writer: impl Write, mut report: impl FnMut(String), mut finished: impl FnMut()) {
     while let Ok(message) = writes.recv() {
-        let bytes = match message.payload.encode_pending(message._paste.as_ref()) {
-            Ok(Some(bytes)) => bytes,
-            Ok(None) => continue,
-            Err(error) => { report(format!("Paste encoding failed: {error}")); continue; }
-        };
-        if let Err(error) = writer.write_all(&bytes) {
-            report(format!("Terminal input failed: {error}"));
+        let paste = message._paste.is_some();
+        let keep_writing = write_message(message, &mut writer, &mut report);
+        // The permit must be released before waking a quiet terminal's UI.
+        if paste { finished(); }
+        if !keep_writing {
+            drop(writes); // Release any paste queued behind the failed write.
+            finished();
             break;
         }
     }
+}
+
+fn write_message(message: InputMessage, writer: &mut impl Write, report: &mut impl FnMut(String)) -> bool {
+    let bytes = match message.payload.encode_pending(message._paste.as_ref()) {
+        Ok(Some(bytes)) => bytes,
+        Ok(None) => return true,
+        Err(error) => { report(format!("Paste encoding failed: {error}")); return true; }
+    };
+    if let Err(error) = writer.write_all(&bytes) {
+        report(format!("Terminal input failed: {error}"));
+        return false;
+    }
+    true
 }
 
 /// Coherent metadata read under one engine lock. Unchanged titles allocate nothing;
@@ -310,7 +323,7 @@ impl Session {
                 write_messages(writes, pty_writer, |error| {
                     let _ = input_error.try_send(error);
                     let _ = input_notify.try_send(());
-                });
+                }, || { let _ = input_notify.try_send(()); });
             })?;
         thread::Builder::new()
             .name("rmux-pty-read".into())
@@ -579,6 +592,9 @@ impl Session {
     }
     pub fn take_input_error(&self) -> Option<String> {
         self.input_errors.try_recv().ok()
+    }
+    pub fn paste_pending(&self) -> bool {
+        self.paste_pending.load(Ordering::Acquire)
     }
     pub fn cancel_queued_paste(&self) {
         if self.paste_pending.load(Ordering::Acquire) {
@@ -1154,14 +1170,20 @@ mod tests {
         let (release, waiting) = mpsc::channel();
         let output = Arc::new(Mutex::new(Vec::new()));
         let writer = BlockedWriter { entered: Some(entered), release: waiting, output: output.clone() };
+        let pending = Arc::new(AtomicBool::new(false));
+        let observed = pending.clone();
         let worker = thread::spawn(move || {
             let mut errors = Vec::new();
-            write_messages(receiver, writer, |error| errors.push(error));
+            let mut completions = 0;
+            write_messages(receiver, writer, |error| errors.push(error), || {
+                assert!(!observed.load(Ordering::Acquire));
+                completions += 1;
+            });
+            assert_eq!(completions, 1);
             errors
         });
         sender.send(b"BEFORE".to_vec().into()).ok().unwrap();
         starting.recv_timeout(std::time::Duration::from_secs(2))?;
-        let pending = Arc::new(AtomicBool::new(false));
         let generation = Arc::new(AtomicU64::new(0));
         sender.send(InputMessage {
             payload: InputPayload::Paste { text: "discard me".into(), bracketed: true },

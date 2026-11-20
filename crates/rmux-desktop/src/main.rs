@@ -384,6 +384,7 @@ struct TerminalView {
     clipboard_task: Option<Task<()>>,
     directory_task: Option<Task<()>>,
     directory_generation: Arc<AtomicU64>,
+    rendered_paste_pending: bool,
     title: String,
     custom_title: Option<String>,
     title_revision: u64,
@@ -616,6 +617,7 @@ impl TerminalView {
                         if let Some(status) = view.session.exit_status() {
                             view.error = Some(status);
                         }
+                        if view.rendered_paste_pending != view.session.paste_pending() { cx.notify(); }
                         if let Some(error) = view.session.take_input_error() {
                             view.error = Some(error);
                             cx.notify();
@@ -725,6 +727,7 @@ impl TerminalView {
             clipboard_task: None,
             directory_task: None,
             directory_generation: Default::default(),
+            rendered_paste_pending: false,
             title: String::new(),
             custom_title: None,
             title_revision: u64::MAX,
@@ -1230,8 +1233,8 @@ impl TerminalView {
                 self.error = Some(error.to_string());
                 cx.notify();
             } else {
-                let had_error = self.error.take().is_some();
-                if had_error || self.frame.scrollback_offset > 0 { cx.notify(); }
+                self.error = None;
+                cx.notify();
             }
         }
     }
@@ -1471,7 +1474,9 @@ impl Focusable for TerminalView {
 impl Render for TerminalView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let entity = cx.weak_entity();
+        self.rendered_paste_pending = self.session.paste_pending();
         div()
+            .relative()
             .size_full()
             .flex()
             .flex_col()
@@ -1578,6 +1583,22 @@ impl Render for TerminalView {
                 root.child(status_view::panel(records, cx))
             })
             .child(TerminalElement { view: cx.entity() })
+            .when(self.rendered_paste_pending, |root| root.child(
+                div().id("paste-status").absolute().bottom(px(8.)).right(px(8.))
+                    .max_w_full().px_2().h(px(28.)).flex().items_center().gap_2()
+                    .occlude().rounded_md().border_1().border_color(rgb(0x465063))
+                    .text_xs().text_color(rgb(0xc6cdd8)).bg(rgb(0x292929))
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .on_mouse_down(MouseButton::Middle, |_, _, cx| cx.stop_propagation())
+                    .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
+                    .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
+                    .child(div().min_w_0().truncate().child("Paste pending…"))
+                    .child(pane_view::pane_control("cancel-paste", "Cancel Queued Paste")
+                        .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
+                            if event.standard_click() { this.session.cancel_queued_paste(); }
+                            cx.stop_propagation();
+                        })).child(icons::icon("close")))
+            ))
             .when_some(self.error.clone(), |div, error| div.child(div_error(error,
                 cx.listener(|this, event: &ClickEvent, _, cx| {
                     if event.standard_click() { this.error = None; cx.stop_propagation(); cx.notify(); }

@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Terminals now show a compact out-of-flow Paste pending indicator with a Cancel
+Queued Paste control. Accepted clipboard input requests a repaint; writer
+completion/cancellation wakes the existing update channel after releasing the
+paste permit, so quiet children do not leave stale status. No polling timer or
+terminal resize is introduced. The blocked-writer test now verifies that its
+completion callback sees the released permit. All seven focused paste tests and
+desktop compilation passed. Native appearance/hit testing remains unverified;
+cancellation still cannot interrupt a write already in progress.
+
 The production PTY writer loop is now shared with a deterministic blocked-write
 regression test. It holds an earlier write, queues a bracketed paste and later
 ordinary input, cancels the paste, then releases the writer. Observed output is
