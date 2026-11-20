@@ -819,21 +819,22 @@ impl WorkspaceWindow {
         if event.keystroke.modifiers.platform || event.keystroke.modifiers.control || event.keystroke.modifiers.alt { return; }
         if let Some(index) = settings_view::next_control(state.selected, key, event.keystroke.modifiers.shift) {
             state.selected = index;
-            // The scroll container has a heading before the five controls, then
+            // The scroll container has a heading before the setting controls, then
             // the hint, Save and editor link.
-            state.scroll.scroll_to_item(if index < 5 { index + 1 } else { index + 2 });
+            state.scroll.scroll_to_item(if index < settings_view::KEYS.len() { index + 1 } else { index + 2 });
             cx.notify();
         } else if key == "escape" {
             self.toggle_settings(window, cx);
         } else if matches!(key, "left" | "right" | "enter" | "space") {
             let selected = state.selected;
-            if selected < 5 {
+            if selected < settings_view::KEYS.len() {
                 let mut settings = cx.global::<Preferences>().clone();
                 settings_view::adjust(&mut settings, settings_view::KEYS[selected], if key == "left" { -1 } else { 1 });
+                cx.set_global(settings.confirm_close);
                 cx.set_global(settings);
                 cx.notify();
             } else if matches!(key, "enter" | "space") {
-                if selected == 5 { self.save_appearance_settings(cx); } else { self.open_settings_file(cx); }
+                if selected == settings_view::KEYS.len() { self.save_appearance_settings(cx); } else { self.open_settings_file(cx); }
             }
         }
         // Plain typing belongs to this panel, never the shell behind it.
@@ -2799,6 +2800,7 @@ impl Render for WorkspaceWindow {
                 }
                 let mut settings = cx.global::<Preferences>().clone();
                 settings_view::adjust(&mut settings, &change.key, change.delta);
+                cx.set_global(settings.confirm_close);
                 cx.set_global(settings);
                 this.notice = None;
                 cx.notify();

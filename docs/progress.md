@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Added close confirmation to Settings with Active tasks / Always / Never choices,
+forward/backward keyboard cycling and immediate application across close scopes.
+Saving persists the choice while preserving unrelated config. An environment
+policy override stays authoritative and is not written into the saved preference.
+Settings navigation now derives its control count from the settings list. Focused
+settings tests pass; native panel interaction and appearance remain pending.
+
 Git branch badges now subscribe to native HEAD changes, including atomic checkout
 replacement. One watcher serves the application with shared repository watches,
 capacity-one event channels and background discovery; idle terminals add no polling

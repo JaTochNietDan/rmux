@@ -18,7 +18,9 @@ from this project to build and open it. Full cmux parity remains in development.
 
 Open Settings with Cmd+, on macOS (Ctrl+, elsewhere), the app menu or palette.
 The side panel adjusts text-size defaults, terminal padding/theme, unfocused
-cursor and copy-on-select. Changes apply for the session; Save persists those
+cursor, copy-on-select and close confirmation. Choose Active tasks, Always or Never
+for close confirmation; an `RMUX_CONFIRM_CLOSE` override remains authoritative
+and is not saved into your config. Active tasks uses reported task status. Changes apply for the session; Save persists those
 fields while preserving other configuration options. Font defaults update matching terminals live while retaining custom size/family
 values. Reset Font Size returns the focused terminal to the size default. The editor link exposes the remaining settings. Tab/Shift-Tab or up/down navigate
 the panel; left/right adjust, Enter/Space activate, and Escape closes it. Opening

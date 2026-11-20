@@ -183,6 +183,8 @@ impl Preferences {
         }
         Ok(path)
     }
+    pub fn close_policy_overridden(&self) -> bool { self.policy_override.is_some() }
+
     pub fn save_appearance(&self) -> Result<std::path::PathBuf> {
         use std::io::Write;
         let path = self.source.clone().context("No configuration path is available")?;
@@ -194,6 +196,7 @@ impl Preferences {
         latest.terminal_theme = self.terminal_theme;
         latest.unfocused_cursor = self.unfocused_cursor;
         latest.copy_on_select = self.copy_on_select;
+        if !self.close_policy_overridden() { latest.confirm_close = self.confirm_close; }
         let bytes = serde_json::to_vec_pretty(&latest)?;
         Self::decode(&bytes)?;
         let parent = path.parent().context("Configuration path has no parent")?;
@@ -418,6 +421,7 @@ mod tests {
         preferences.font_size = 19.;
         preferences.terminal_padding = 12;
         preferences.copy_on_select = true;
+        preferences.confirm_close = ClosePolicy::Never;
         std::fs::write(&path, br##"{"font_family":"Custom Mono","scrollback_mib":16,"background_color":"#112233","confirm_close":"always"}"##)?;
         preferences.save_appearance()?;
         let saved = Preferences::read(&path, true)?;
@@ -426,7 +430,13 @@ mod tests {
         assert!(saved.copy_on_select);
         assert_eq!(saved.font_family, "Custom Mono");
         assert_eq!(saved.scrollback_mib, 16);
-        assert_eq!(saved.confirm_close, ClosePolicy::Always);
+        assert_eq!(saved.confirm_close, ClosePolicy::Never);
+        preferences.policy_override = Some(ClosePolicy::Always);
+        preferences.confirm_close = ClosePolicy::Always;
+        crate::settings_view::adjust(&mut preferences, "close", 1);
+        assert_eq!(preferences.confirm_close, ClosePolicy::Always);
+        preferences.save_appearance()?;
+        assert_eq!(Preferences::read(&path, true)?.confirm_close, ClosePolicy::Never);
         assert_eq!(saved.terminal_colors()[1], Some(rmux_terminal::Color(0x11, 0x22, 0x33)));
         std::fs::write(&path, b"unfinished user edit")?;
         assert!(preferences.save_appearance().is_err());

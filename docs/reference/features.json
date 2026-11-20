@@ -249,7 +249,7 @@
       "acceptance": "Respect configured warnings and distinguish closing a view from terminating owned work.",
       "rmux_status": "in_progress",
       "implementation": "Tab, workspace and window close requests prompt when any reported task is working or blocked. Window actions and native close callbacks share the warning path; the Quit rmux action scans all windows and confirms once before process cleanup. Confirmation resolves original entity IDs, with tab focus-handle validation; transfers do not ask to terminate processes.",
-      "remaining": "OS-originated quit routing outside the rmux action, persistent policy settings UI, non-reporting foreground process detection and native confirmation/cancellation acceptance. Startup policy is configurable through RMUX_CONFIRM_CLOSE=active|always|never.",
+      "remaining": "OS-originated quit routing outside the rmux action, non-reporting foreground process detection and native confirmation/cancellation acceptance. Settings now offers persistent Active tasks/Always/Never close confirmation; RMUX_CONFIRM_CLOSE=active|always|never overrides it without changing the saved policy.",
       "implementation_sources": ["crates/rmux-desktop/src/pane_view.rs"],
       "progress_record": "docs/progress.md"
     },
@@ -464,7 +464,7 @@
       "acceptance": "Update the correct workspace asynchronously with bounded polling and explicit unknown states.",
       "rmux_status": "in_progress",
       "implementation": "Sidebar branch/detached-HEAD context reads bounded Git metadata in background on directory reports, with worktree indirection and coalesced requests.",
-      "remaining": "PR and listening-port metadata, manual or filesystem-triggered branch refresh, failure/unknown presentation and native visual acceptance.",
+      "remaining": "PR and listening-port metadata, failure/unknown presentation and native visual acceptance. Manual refresh and shared native HEAD watching are implemented; prompt refresh remains available on filesystems without native events.",
       "progress_record": "docs/progress.md"
     },
     {

@@ -7,14 +7,15 @@ pub struct State {
     pub selected: usize,
     pub scroll: ScrollHandle,
 }
-pub const KEYS: &[&str] = &["font", "padding", "theme", "cursor", "copy"];
+pub const KEYS: &[&str] = &["font", "padding", "theme", "cursor", "copy", "close"];
 pub fn next_control(selected: usize, key: &str, shift: bool) -> Option<usize> {
+    let count = KEYS.len() + 2;
     match key {
-        "up" => Some((selected + 6) % 7),
-        "down" => Some((selected + 1) % 7),
-        "tab" => Some((selected + if shift { 6 } else { 1 }) % 7),
+        "up" => Some((selected + count - 1) % count),
+        "down" => Some((selected + 1) % count),
+        "tab" => Some((selected + if shift { count - 1 } else { 1 }) % count),
         "home" => Some(0),
-        "end" => Some(6),
+        "end" => Some(count - 1),
         _ => None,
     }
 }
@@ -25,6 +26,14 @@ pub fn adjust(settings: &mut Preferences, key: &str, delta: i32) {
         "font" => settings.font_size = (settings.font_size + delta as f32).clamp(8., 40.),
         "padding" => settings.terminal_padding = (settings.terminal_padding as i32 + delta).clamp(0, 32) as u8,
         "theme" => settings.terminal_theme = match settings.terminal_theme { preferences::TerminalTheme::Dark => preferences::TerminalTheme::Light, preferences::TerminalTheme::Light => preferences::TerminalTheme::Dark },
+        "close" if !settings.close_policy_overridden() => {
+            use close_policy::ClosePolicy::{Active, Always, Never};
+            settings.confirm_close = match (settings.confirm_close, delta < 0) {
+                (Active, false) | (Never, true) => Always,
+                (Always, false) | (Active, true) => Never,
+                _ => Active,
+            };
+        }
         "copy" => settings.copy_on_select = !settings.copy_on_select,
         "cursor" => settings.unfocused_cursor = match settings.unfocused_cursor { preferences::UnfocusedCursor::Hollow => preferences::UnfocusedCursor::Hidden, preferences::UnfocusedCursor::Hidden => preferences::UnfocusedCursor::Hollow },
         _ => {}
@@ -55,31 +64,40 @@ pub fn panel(state: State, cx: &mut Context<window_view::WorkspaceWindow>) -> An
             .child(pane_view::pane_control("close-settings", "Close Settings")
                 .on_click(|event, window, cx| { if event.standard_click() { window.dispatch_action(Box::new(ToggleSettings), cx); } }).child(icons::icon("close"))))
         .child(div().id("settings-scroll").flex_1().min_h_0().overflow_y_scroll().track_scroll(&state.scroll).px_3()
-            .child(div().pt_3().text_xs().text_color(rgb(0xa0a0a0)).child("APPEARANCE"))
+            .child(div().pt_3().text_xs().text_color(rgb(0xa0a0a0)).child("TERMINAL & BEHAVIOR"))
             .child(row("Default text size", "font", format!("{} pt", settings.font_size), true, state.selected == 0))
             .child(row("Terminal padding", "padding", format!("{} px", settings.terminal_padding), true, state.selected == 1))
             .child(row("Terminal theme", "theme", match settings.terminal_theme { preferences::TerminalTheme::Dark => "Dark", preferences::TerminalTheme::Light => "Light" }.into(), false, state.selected == 2))
             .child(row("Unfocused cursor", "cursor", match settings.unfocused_cursor { preferences::UnfocusedCursor::Hollow => "Hollow", preferences::UnfocusedCursor::Hidden => "Hidden" }.into(), false, state.selected == 3))
             .child(row("Copy on select", "copy", if settings.copy_on_select { "On" } else { "Off" }.into(), false, state.selected == 4))
+            .child(row("Confirm before closing", "close", if settings.close_policy_overridden() { "Environment override".into() } else { match settings.confirm_close {
+                close_policy::ClosePolicy::Active => "Active tasks", close_policy::ClosePolicy::Always => "Always", close_policy::ClosePolicy::Never => "Never",
+            }.into() }, false, state.selected == 5))
             .child(div().py_3().text_xs().text_color(rgb(0xa0a0a0)).child("Tab / ↑↓ to navigate · ←→ to change · Enter to activate · Esc to close. Changes apply to this session. Text size updates terminals using the previous default. Per-terminal zoom stays unchanged; Reset Font Size rejoins the default. Custom colors in your config override the theme."))
-            .child(div().id("settings-save").border_1().border_color(if state.selected == 5 { rgb(0xffffff) } else { rgb(0x007aff) }).px_3().py_2().rounded_sm().bg(rgb(0x007aff)).hover(|s| s.bg(rgb(0x1685ff))).text_sm().cursor_pointer()
+            .child(div().id("settings-save").border_1().border_color(if state.selected == KEYS.len() { rgb(0xffffff) } else { rgb(0x007aff) }).px_3().py_2().rounded_sm().bg(rgb(0x007aff)).hover(|s| s.bg(rgb(0x1685ff))).text_sm().cursor_pointer()
                 .on_click(|event, window, cx| { if event.standard_click() { window.dispatch_action(Box::new(SaveAppearanceSettings), cx); } }).child("Save these settings"))
-            .child(div().id("settings-json").when(state.selected == 6, |s| s.bg(rgb(0x303b4a))).py_3().text_sm().text_color(rgb(0x8ebfff)).cursor_pointer()
+            .child(div().id("settings-json").when(state.selected == KEYS.len() + 1, |s| s.bg(rgb(0x303b4a))).py_3().text_sm().text_color(rgb(0x8ebfff)).cursor_pointer()
                 .on_click(|event, window, cx| { if event.standard_click() { window.dispatch_action(Box::new(OpenSettingsFile), cx); } }).child("Open all settings in editor")))
         .into_any_element()
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{adjust, next_control, Preferences};
+    use super::{adjust, next_control, Preferences, close_policy};
     #[test]
     fn keyboard_navigation_wraps_and_adjustments_stay_in_bounds() {
-        assert_eq!(next_control(0, "tab", true), Some(6));
-        assert_eq!(next_control(6, "down", false), Some(0));
-        assert_eq!(next_control(3, "end", false), Some(6));
+        assert_eq!(next_control(0, "tab", true), Some(7));
+        assert_eq!(next_control(7, "down", false), Some(0));
+        assert_eq!(next_control(3, "end", false), Some(7));
         assert_eq!(next_control(3, "a", false), None);
         let mut prefs = Preferences::default();
         for _ in 0..100 { adjust(&mut prefs, "font", 1); adjust(&mut prefs, "padding", -1); }
+        adjust(&mut prefs, "close", 1);
+        assert_eq!(prefs.confirm_close, close_policy::ClosePolicy::Always);
+        adjust(&mut prefs, "close", -1);
+        assert_eq!(prefs.confirm_close, close_policy::ClosePolicy::Active);
+        adjust(&mut prefs, "close", -1);
+        assert_eq!(prefs.confirm_close, close_policy::ClosePolicy::Never);
         assert_eq!(prefs.font_size, 40.);
         assert_eq!(prefs.terminal_padding, 0);
     }
