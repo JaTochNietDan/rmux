@@ -1,21 +1,21 @@
 # rmux
 
 **Merge Workspace into…** in the menu or command palette searches other
-workspaces in the current window. Enter moves the source's existing panes into
+workspaces across this app’s windows, labeled by window. Enter moves the source's existing panes into
 the destination, preserving both nested split trees with the source on the right,
 then removes the source workspace entry. Destination labels, pin/group membership
 and metadata remain; source workspace metadata is discarded. Pane zoom clears so
 both trees are visible. Escape cancels. The custom shortcut action is
 `merge_workspace`. Busy/stale destinations and excessive split depth reject before
-transfer. Native session/focus/group acceptance and cross-window merging remain
-pending.
+transfer. Cross-window merges rebind terminal input/focus to the destination; an
+empty source window closes. Native session/focus/group acceptance remains pending.
 
 CLI: `rmuxctl merge-workspace --workspace SOURCE_ID --target-workspace DEST_ID`
 uses the same guarded transfer path. It selects the destination inside the
 app; add `--activate` to activate the OS window. Raw RPC is `workspace.merge`
 with `workspace_id`, `target_workspace_id` and optional `activate`. Both IDs are
-required; self-targets, unknown fields and stale/cross-window targets fail without
-transfer. This is an rmux extension; no corresponding merge command appears in
+required; self-targets, unknown fields and stale targets fail without transfer.
+Cross-window merges also reject destinations that would exceed 256 terminals. This is an rmux extension; no corresponding merge command appears in
 the pinned cmux CLI/RPC inventory.
 
 On macOS, **Copy** files in Finder and **Paste** into a focused terminal to insert

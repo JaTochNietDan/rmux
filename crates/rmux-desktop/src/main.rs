@@ -2296,7 +2296,7 @@ impl EventEmitter<WorkspaceEmpty> for Workspace {}
 struct WorkspaceMetadataChanged;
 impl EventEmitter<WorkspaceMetadataChanged> for Workspace {}
 impl Workspace {
-    fn absorb_workspace(&mut self, source: &Entity<Self>, window: &mut Window, cx: &mut Context<Self>) -> Result<()> {
+    fn absorb_workspace(&mut self, source: &Entity<Self>, rebind: bool, window: &mut Window, cx: &mut Context<Self>) -> Result<()> {
         let other = source.read(cx);
         anyhow::ensure!(source.entity_id() != cx.entity_id(), "Cannot merge a workspace into itself");
         anyhow::ensure!(!self.benchmark && !other.benchmark && self.spawning_split.is_none() && other.spawning_split.is_none()
@@ -2322,7 +2322,15 @@ impl Workspace {
         });
         for pane in &panes {
             let owner = cx.entity_id();
-            pane.update(cx, |pane, cx| pane.set_workspace_owner(owner, cx));
+            pane.update(cx, |pane, cx| {
+                pane.set_workspace_owner(owner, cx);
+                if rebind { pane.reset_window_editors(); }
+            });
+            if rebind {
+                for terminal in pane.read(cx).terminals.clone() {
+                    terminal.update(cx, |terminal, cx| terminal.rebind_window(window, cx));
+                }
+            }
             self.observe_pane(pane, window, cx);
         }
         self.panes.extend(panes);

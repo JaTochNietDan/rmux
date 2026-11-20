@@ -2,6 +2,18 @@
 
 ## Current implementation focus
 
+Extended workspace merge picker and RPC routing across app windows. Picker rows
+identify the window and workspace; stable destination handles/IDs are rechecked.
+Both window interaction guards, both split states/depths and the destination's
+256-terminal budget are validated before moving ownership. Moved terminal entities
+retain sessions and image-file ownership while rebinding native focus/input
+subscriptions and resetting old-window pointer/editor state. Destination selection
+is shared with same-window merging; OS activation stays opt-in for RPC. Source
+entry/group/last-window cleanup runs only after destination ownership succeeds.
+Desktop test compilation and focused RPC validation/routing passed. These are not
+live cross-window tests: PID/state/unread/order, source-close focus, groups and
+restore/native acceptance remain pending.
+
 Added rmux workspace.merge RPC and merge-workspace CLI/help/completion with
 explicit source/destination IDs and optional OS activation. The UI handler
 resolves the source window, requires the destination in that same window and

@@ -2207,12 +2207,52 @@ impl WorkspaceWindow {
         if self.automation_available(cx).is_err() { return; }
         let Some(source) = self.entries.get(self.active).map(|entry| entry.workspace.entity_id()) else { return; };
         let focus = window.focused(cx);
-        let entries = self.workspace_order(true).into_iter().filter_map(|index| {
+        let current = window.window_handle();
+        let mut entries: Vec<_> = self.workspace_order(true).into_iter().filter_map(|index| {
             let entry = &self.entries[index];
-            (entry.workspace.entity_id() != source).then(|| (entry.workspace.entity_id(), entry.name.clone()))
+            (entry.workspace.entity_id() != source).then(|| (current, entry.workspace.entity_id(), format!("This window / {}", entry.name)))
         }).collect();
+        for (number, handle) in cx.windows().into_iter().enumerate() {
+            if handle == current { continue; }
+            let Some(handle) = handle.downcast::<Self>() else { continue; };
+            let Ok(root) = handle.read(cx) else { continue; };
+            if root.benchmark { continue; }
+            for index in root.workspace_order(true) {
+                let entry = &root.entries[index];
+                entries.push((handle.into(), entry.workspace.entity_id(), format!("Window {} / {}", number + 1, entry.name)));
+            }
+        }
         let palette = cx.new(|cx| command_palette::CommandPalette::workspace_merge(entries, source, window, cx));
         self.install_palette(palette, focus, window, cx);
+    }
+    pub(super) fn merge_workspace_to_window(&mut self, source_id: EntityId, destination_id: EntityId, target: AnyWindowHandle, activate: bool, window: &mut Window, cx: &mut Context<Self>) -> Result<()> {
+        if target == window.window_handle() {
+            self.merge_workspaces(source_id, destination_id, window, cx)?;
+            if activate { window.activate_window(); }
+            return Ok(());
+        }
+        self.automation_available(cx).map_err(|failure| anyhow::anyhow!(failure.message))?;
+        let source_index = self.entries.iter().position(|entry| entry.workspace.entity_id() == source_id)
+            .ok_or_else(|| anyhow::anyhow!("Source workspace closed"))?;
+        let source = self.entries[source_index].workspace.clone();
+        let target = target.downcast::<Self>().ok_or_else(|| anyhow::anyhow!("Invalid destination window"))?;
+        target.update(cx, |destination, window, cx| -> Result<()> {
+            destination.automation_available(cx).map_err(|failure| anyhow::anyhow!(failure.message))?;
+            let index = destination.entries.iter().position(|entry| entry.workspace.entity_id() == destination_id)
+                .ok_or_else(|| anyhow::anyhow!("Destination workspace closed"))?;
+            let count_tabs = |workspace: &Entity<Workspace>| workspace.read(cx).panes.iter().map(|pane| pane.read(cx).terminals.len()).sum::<usize>();
+            let tabs = count_tabs(&source) + destination.entries.iter().map(|entry| count_tabs(&entry.workspace)).sum::<usize>();
+            anyhow::ensure!(tabs <= 256, "Destination window would exceed 256 terminals");
+            let workspace = destination.entries[index].workspace.clone();
+            workspace.update(cx, |workspace, cx| workspace.absorb_workspace(&source, true, window, cx))?;
+            destination.select(index, window, cx);
+            if activate { window.activate_window(); }
+            Ok(())
+        })??;
+        // The destination now owns every pane; removing this entry cannot stop
+        // their PTYs. Existing cleanup handles source groups and the last window.
+        self.close_workspace(source_index, window, cx);
+        Ok(())
     }
     pub(super) fn merge_workspaces(&mut self, source: EntityId, destination: EntityId, window: &mut Window, cx: &mut Context<Self>) -> Result<()> {
         self.automation_available(cx).map_err(|failure| anyhow::anyhow!(failure.message))?;
@@ -2221,7 +2261,7 @@ impl WorkspaceWindow {
         let destination_index = self.entries.iter().position(|entry| entry.workspace.entity_id() == destination).ok_or_else(|| anyhow::anyhow!("Destination workspace closed"))?;
         let source = self.entries[source_index].workspace.clone();
         let destination = self.entries[destination_index].workspace.clone();
-        destination.update(cx, |workspace, cx| workspace.absorb_workspace(&source, window, cx))?;
+        destination.update(cx, |workspace, cx| workspace.absorb_workspace(&source, false, window, cx))?;
         self.select(destination_index, window, cx);
         self.close_workspace(source_index, window, cx);
         Ok(())
@@ -2310,8 +2350,8 @@ impl WorkspaceWindow {
                             cx.notify();
                         }
                     }
-                    command_palette::PaletteEvent::MergeWorkspaces(source, destination) => {
-                        if let Err(error) = this.merge_workspaces(*source, *destination, window, cx) {
+                    command_palette::PaletteEvent::MergeWorkspaces(source, destination, target) => {
+                        if let Err(error) = this.merge_workspace_to_window(*source, *destination, *target, true, window, cx) {
                             this.notice = Some(format!("Merge workspace: {error}")); cx.notify();
                         }
                     }

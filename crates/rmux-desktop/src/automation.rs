@@ -591,16 +591,17 @@ pub fn attach_live(cx: &mut gpui::App, stdio: bool, socket_directory: Option<std
                 if let Some(merge) = &request.workspace_merge {
                     let source = target_id(&merge.workspace_id)?;
                     let destination = target_id(&merge.target_workspace_id)?;
-                    for handle in cx.windows() {
+                    let windows = cx.windows();
+                    let target = windows.iter().copied().find(|handle| {
+                        handle.downcast::<super::window_view::WorkspaceWindow>()
+                            .is_some_and(|handle| handle.read(cx).is_ok_and(|view| view.automation_contains_workspace(destination)))
+                    }).ok_or(Failure { code: -32004, message: "Merge destination not found" })?;
+                    for handle in windows {
                         let Some(handle) = handle.downcast::<super::window_view::WorkspaceWindow>() else { continue; };
                         if handle.read(cx).is_ok_and(|view| view.automation_contains_workspace(source)) {
                             return handle.update(cx, |view, window, cx| {
-                                if !view.automation_contains_workspace(destination) {
-                                    return Err(Failure { code: -32004, message: "Merge destination must exist in the source window" });
-                                }
-                                view.merge_workspaces(source, destination, window, cx)
-                                    .map_err(|_| Failure { code: -32003, message: "Merge unavailable: workspace busy or layout depth limit reached" })?;
-                                if merge.activate { window.activate_window(); }
+                                view.merge_workspace_to_window(source, destination, target, merge.activate, window, cx)
+                                    .map_err(|_| Failure { code: -32003, message: "Merge unavailable: workspace busy, destination changed, or layout/terminal limit reached" })?;
                                 Ok(json!({"workspace_id":merge.workspace_id,"target_workspace_id":merge.target_workspace_id,"merged":true}))
                             }).unwrap_or(Err(Failure { code: -32004, message: "Workspace window closed" }));
                         }

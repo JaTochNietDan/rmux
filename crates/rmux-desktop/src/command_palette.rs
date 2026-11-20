@@ -98,7 +98,7 @@ pub enum PaletteEvent {
     MoveTabToWorkspace(EntityId),
     MoveTabToWindowWorkspace(AnyWindowHandle, EntityId),
     MoveWorkspaceToWindow(EntityId, AnyWindowHandle),
-    MergeWorkspaces(EntityId, EntityId),
+    MergeWorkspaces(EntityId, EntityId, AnyWindowHandle),
     Close,
 }
 pub struct CommandPalette {
@@ -362,11 +362,11 @@ impl CommandPalette {
         }).collect();
         Self::with_commands(commands, if deleting { "Delete named buffer" } else { "Paste named buffer" }, "No matching buffers · Save a selection in Copy Mode first", window, cx)
     }
-    pub fn workspace_merge(entries: Vec<(EntityId, String)>, source: EntityId, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let empty = if entries.is_empty() { "No other workspaces in this window" } else { "No matching workspaces" };
-        let commands = entries.into_iter().map(|(destination, title)| Command {
+    pub fn workspace_merge(entries: Vec<(AnyWindowHandle, EntityId, String)>, source: EntityId, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let empty = if entries.is_empty() { "No other workspaces available" } else { "No matching workspaces" };
+        let commands = entries.into_iter().map(|(target, destination, title)| Command {
             title, subtitle: Some("Keep destination metadata · Add source splits on the right".into()), shortcut: None,
-            target: PaletteEvent::MergeWorkspaces(source, destination),
+            target: PaletteEvent::MergeWorkspaces(source, destination, target),
         }).collect();
         Self::with_commands(commands, "Merge workspace into…", empty, window, cx)
     }
@@ -480,7 +480,7 @@ impl CommandPalette {
                 PaletteEvent::SelectWindowTerminal(window, workspace, terminal) => PaletteEvent::SelectWindowTerminal(*window, *workspace, *terminal),
                 PaletteEvent::MoveTabToWorkspace(id) => PaletteEvent::MoveTabToWorkspace(*id),
                 PaletteEvent::MoveTabToWindowWorkspace(window, workspace) => PaletteEvent::MoveTabToWindowWorkspace(*window, *workspace),
-                PaletteEvent::MergeWorkspaces(source, destination) => PaletteEvent::MergeWorkspaces(*source, *destination),
+                PaletteEvent::MergeWorkspaces(source, destination, target) => PaletteEvent::MergeWorkspaces(*source, *destination, *target),
                 PaletteEvent::MoveWorkspaceToWindow(source, destination) => {
                     PaletteEvent::MoveWorkspaceToWindow(*source, *destination)
                 }
