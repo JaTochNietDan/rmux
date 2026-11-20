@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Port ownership now compares fresh process snapshots before and after socket
+enumeration. Listener rows survive only when the PID's start time and parent,
+and its entire ancestry back to the terminal root, remain unchanged. Reused,
+reparented or vanished ancestors exclude their descendants; root changes fail
+the scan. A notice explains when displayed candidates were discarded. Three
+focused tests passed, including synthetic ownership changes and live macOS
+loopback discovery. This adds a second manual process snapshot, not polling.
+Process times have second resolution and socket observations are not atomic;
+this reduces stale attribution without claiming to eliminate every reuse race.
+
 T09 now includes Show Listening Ports: an explicit local TCP listener snapshot
 for the terminal shell and its descendant process tree, displayed in a compact
 panel with refresh, address copy and close actions. Palette/custom bindings also

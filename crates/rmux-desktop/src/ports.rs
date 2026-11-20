@@ -12,7 +12,26 @@ impl Permit {
 impl Drop for Permit { fn drop(&mut self) { SCANNING.store(false, Ordering::Release); } }
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Listener { pub address: SocketAddr, pub pid: u32 }
-pub struct Report { pub listeners: Vec<Listener>, pub truncated: bool }
+pub struct Report { pub listeners: Vec<Listener>, pub truncated: bool, pub ownership_changed: bool }
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct Identity { parent: Option<u32>, started: u64 }
+fn process_snapshot() -> HashMap<u32, Identity> {
+    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
+    // A fresh sampler excludes dead entries retained by filtered refreshes.
+    let mut system = System::new();
+    system.refresh_processes_specifics(ProcessesToUpdate::All, ProcessRefreshKind::new());
+    system.processes().iter().map(|(pid, process)| (pid.as_u32(), Identity {
+        parent: process.parent().map(|parent| parent.as_u32()), started: process.start_time(),
+    })).collect()
+}
+fn stable_owned(root: u32, before: &HashMap<u32, Identity>, after: &HashMap<u32, Identity>) -> Result<HashSet<u32>> {
+    let original = before.get(&root).ok_or_else(|| anyhow::anyhow!("Terminal process is no longer running"))?;
+    ensure!(original.started != 0 && after.get(&root) == Some(original), "Terminal process changed during port scan");
+    // A stable child is insufficient if one of its ancestors exited, was
+    // reparented or reused. Only traverse the unchanged portion of the tree.
+    descendants(root, before.iter().filter(|(pid, identity)| identity.started != 0 && after.get(pid) == Some(identity))
+        .map(|(pid, identity)| (*pid, identity.parent)))
+}
 
 fn descendants(root: u32, processes: impl IntoIterator<Item = (u32, Option<u32>)>) -> Result<HashSet<u32>> {
     let mut children: HashMap<u32, Vec<u32>> = HashMap::new();
@@ -30,13 +49,9 @@ fn descendants(root: u32, processes: impl IntoIterator<Item = (u32, Option<u32>)
 
 pub fn scan(root: u32) -> Result<Report> {
     use netstat2::{AddressFamilyFlags, ProtocolFlags, ProtocolSocketInfo, TcpState};
-    use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System};
-    let mut system = System::new();
-    system.refresh_processes_specifics(ProcessesToUpdate::All, ProcessRefreshKind::new());
-    let root_pid = Pid::from_u32(root);
-    let Some(process) = system.process(root_pid) else { anyhow::bail!("Terminal process is no longer running"); };
-    let started = process.start_time();
-    let owned = descendants(root, system.processes().iter().map(|(pid, process)| (pid.as_u32(), process.parent().map(|parent| parent.as_u32()))))?;
+    let before = process_snapshot();
+    ensure!(before.contains_key(&root), "Terminal process is no longer running");
+    let owned = descendants(root, before.iter().map(|(pid, identity)| (*pid, identity.parent)))?;
     let mut listeners = BTreeSet::new();
     let mut truncated = false;
     let sockets = netstat2::iterate_sockets_info(AddressFamilyFlags::IPV4 | AddressFamilyFlags::IPV6, ProtocolFlags::TCP)?;
@@ -51,11 +66,11 @@ pub fn scan(root: u32) -> Result<Report> {
         }
         if truncated { break; }
     }
-    // Exclude a vanished/reused root. Process/socket observations are still not
-    // atomic; child ownership can change during the scan.
-    ensure!(system.refresh_processes_specifics(ProcessesToUpdate::Some(&[root_pid]), ProcessRefreshKind::new()) == 1
-        && system.process(root_pid).is_some_and(|process| process.start_time() == started), "Terminal process changed during port scan");
-    Ok(Report { listeners: listeners.into_iter().collect(), truncated })
+    let stable = stable_owned(root, &before, &process_snapshot())?;
+    let count = listeners.len();
+    listeners.retain(|listener| stable.contains(&listener.pid));
+    let ownership_changed = listeners.len() != count;
+    Ok(Report { listeners: listeners.into_iter().collect(), truncated, ownership_changed })
 }
 
 #[cfg(test)]
@@ -65,6 +80,25 @@ mod tests {
     fn process_tree_includes_descendants_and_handles_cycles() -> Result<()> {
         let owned = descendants(10, [(10, Some(30)), (20, Some(10)), (30, Some(20)), (99, Some(1))])?;
         assert_eq!(owned, HashSet::from([10,20,30]));
+        Ok(())
+    }
+    #[test]
+    fn ownership_recheck_rejects_reused_reparented_and_vanished_ancestors() -> Result<()> {
+        let before = HashMap::from([
+            (10, Identity { parent: Some(1), started: 100 }),
+            (20, Identity { parent: Some(10), started: 200 }),
+            (30, Identity { parent: Some(20), started: 300 }),
+            (40, Identity { parent: Some(10), started: 400 }),
+        ]);
+        assert_eq!(stable_owned(10, &before, &before)?, HashSet::from([10,20,30,40]));
+        for changed in [Some(Identity { parent: Some(10), started: 201 }), Some(Identity { parent: Some(1), started: 200 }), None] {
+            let mut after = before.clone();
+            if let Some(identity) = changed { after.insert(20, identity); } else { after.remove(&20); }
+            assert_eq!(stable_owned(10, &before, &after)?, HashSet::from([10,40]));
+        }
+        let mut after = before.clone();
+        after.get_mut(&10).unwrap().started += 1;
+        assert!(stable_owned(10, &before, &after).is_err());
         Ok(())
     }
     #[test]

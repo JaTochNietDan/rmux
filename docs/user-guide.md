@@ -5,7 +5,8 @@ TCP listeners owned by the current terminal’s shell and descendants. Refresh
 manually and copy an address from its row. **Close Listening Ports** is also in
 the palette; custom actions are `listening_ports` and `close_listening_ports`.
 The panel does not discover remote-host ports or assume that a listener serves
-HTTP. Results can change immediately as processes and sockets come and go.
+HTTP. Results can change immediately as processes and sockets come and go. A
+refresh notice appears if process ownership changed during the scan.
 
 **Desktop notifications** in Settings enables optional OS banners for unfocused
 terminals. Save settings to keep the choice (`"native_notifications": true` in

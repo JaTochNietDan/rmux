@@ -68,6 +68,7 @@ pub(super) fn panel(state: &State, cx: &mut Context<TerminalView>) -> AnyElement
             .when_some(state.error.clone(), |list, error| list.child(div().text_color(rgb(0xf2a5a5)).child(error)))
             .when_some(state.report.as_ref(), |list, report| list
                 .when(report.listeners.is_empty(), |list| list.child("No local TCP listeners found for this terminal."))
+                .when(report.ownership_changed, |list| list.child("Some process ownership changed during the scan; refresh for current results."))
                 .when(report.truncated, |list| list.child("Scan limit reached; results are incomplete."))
                 .children(report.listeners.iter().enumerate().map(|(index, row)| {
                     let address = row.address.to_string();
