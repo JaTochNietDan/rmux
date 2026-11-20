@@ -72,6 +72,11 @@ impl SearchWorker {
                             search = Some(Search::new_cancellable(terminal.clone(), &canceled)?);
                         }
                         let search = search.as_mut().expect("initialized search");
+                        // Initialization can wait behind output while the user
+                        // edits again. Do not scan or select the obsolete query.
+                        if pending.lock().unwrap_or_else(|e| e.into_inner()).revision != revision {
+                            return search.progress();
+                        }
                         if let Some(query) = query {
                             navigation = 0;
                             search.set_query(&query)?;
@@ -83,7 +88,10 @@ impl SearchWorker {
                         let mut progress = search.step()?;
                         // Resolve pending navigation once the current snapshot has
                         // been scanned, rather than dropping Enter during a search.
-                        if !progress.pending && navigation != 0 {
+                        if !progress.pending && navigation != 0
+                            && !canceled.load(Ordering::Acquire)
+                            && pending.lock().unwrap_or_else(|e| e.into_inner()).revision == revision
+                        {
                             let direction = if navigation > 0 {
                                 Direction::Older
                             } else {
@@ -242,6 +250,27 @@ mod tests {
         drop(guard);
         assert!(stopped_while_locked, "canceled search waited for the parser");
         assert!(updates.try_recv().is_err(), "canceled query published a result");
+        Ok(())
+    }
+
+    #[test]
+    fn superseded_initial_query_does_not_install_a_selection() -> Result<()> {
+        let terminal = Arc::new(Mutex::new(Terminal::new(30, 3)?));
+        let mut guard = terminal.lock().unwrap();
+        guard.write(b"needle");
+        let worker = SearchWorker::new(terminal.clone())?;
+        worker.set_query("needle".into())?;
+        worker.navigate(Direction::Older);
+        let deadline = Instant::now() + Duration::from_secs(1);
+        while worker.pending.lock().unwrap().query.is_some() {
+            assert!(Instant::now() < deadline, "worker did not consume initial query");
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        let revision = worker.set_query("missing".into())?;
+        drop(guard);
+        assert_eq!(wait_for(&worker, revision, false).result.unwrap().matches, 0);
+        assert_eq!(terminal.lock().unwrap().selected_text()?, None,
+            "superseded navigation changed the terminal selection");
         Ok(())
     }
 

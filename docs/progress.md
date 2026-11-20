@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Search workers now check query revision after initialization and again before
+queued navigation. A query superseded while registration waited for the parser
+is skipped instead of scanning and installing an obsolete selection. Four focused
+worker tests passed, including a lock-contention regression that queues an old
+match/navigation, replaces it with a no-match query, then verifies the terminal
+has no stale selection. Navigation already in progress when an edit arrives is
+not made atomic with that edit by this change.
+
 Search-worker initialization now checks cancellation while waiting for the
 parser lock, using a 1 ms backoff only during registration contention. Closing
 Find can terminate an unregistered worker without waiting for the parser to
