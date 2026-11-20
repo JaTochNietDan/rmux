@@ -223,6 +223,7 @@ impl WorkspaceWindow {
             }
         };
         self.groups.get_mut(id).unwrap().external_id = create.external_id.clone();
+        self.groups.get_mut(id).unwrap().cwd = create.cwd.clone();
         // A source group may contribute several members; preserve its slot once.
         let mut preserved = Vec::new();
         for slot in slots {
@@ -333,6 +334,8 @@ impl WorkspaceWindow {
             let group = snapshot["groups"].as_array().unwrap().iter().find(|group| group["id"] == change.group_id).cloned();
             return Ok(serde_json::json!({"window_id":change.window_id,"workspace_id":workspace_id,"group":group}));
         }
+        if let Some(cwd) = &change.cwd { group.cwd = Some(cwd.clone()); }
+        if change.clear_cwd == Some(true) { group.cwd = None; }
         if let Some(name) = &change.name { group.name = name.clone(); }
         if let Some(collapsed) = change.collapsed { group.collapsed = collapsed; }
         if let Some(pinned) = change.pinned { group.pinned = pinned; }
@@ -340,6 +343,24 @@ impl WorkspaceWindow {
         cx.notify();
         let result = self.automation_snapshot(change.window_id.clone(), false, cx);
         Ok(result["groups"].as_array().unwrap().iter().find(|group| group["id"] == change.group_id).unwrap().clone())
+    }
+
+    fn set_group_directory(&mut self, reset: bool, window: &Window, cx: &mut Context<Self>) {
+        let Some(entry) = self.entries.get(self.active) else { return; };
+        let Some(id) = self.groups.containing(entry.workspace.entity_id()).map(|group| group.id) else {
+            self.notice = Some("Select a workspace in a group first.".into()); cx.notify(); return;
+        };
+        let directory = if reset { None } else {
+            let workspace = entry.workspace.read(cx);
+            let Some(directory) = workspace.focused_index(window, cx).and_then(|index| workspace.panes.get(index))
+                .and_then(|pane| pane.read(cx).cached_directory(cx)) else {
+                self.notice = Some("The current terminal has not reported its directory yet.".into()); cx.notify(); return;
+            };
+            Some(directory)
+        };
+        self.notice = Some(directory.as_ref().map_or_else(|| "New group workspaces will follow the anchor directory.".into(), |path| format!("New group workspaces will start in {}", path.display())));
+        self.groups.get_mut(id).unwrap().cwd = directory;
+        cx.notify();
     }
 
     fn group_anchor_slot(&self, member: EntityId) -> Option<(u64, EntityId, usize)> {
@@ -748,6 +769,7 @@ impl WorkspaceWindow {
             "external_id":group.external_id,
             "icon":group.icon, "pinned":group.pinned, "collapsed":group.collapsed,
             "generated_anchor":group.generated_anchor,
+            "cwd":group.cwd,
             "anchor_workspace_id":group.members.first().map(|id| id.to_string()),
             "workspace_ids":group.members.iter().map(|id| id.to_string()).collect::<Vec<_>>(),
         })).collect();
@@ -2421,7 +2443,7 @@ impl WorkspaceWindow {
             .and_then(|group| group.members.first())
             .and_then(|anchor| self.entries.iter().find(|entry| entry.workspace.entity_id() == *anchor))
             .or_else(|| self.entries.get(self.active));
-        let directory = directory_override.or_else(|| directory_entry.and_then(|entry| {
+        let directory = directory_override.or_else(|| parent_group.and_then(|(_, member)| self.groups.containing(member)).and_then(|group| group.cwd.clone())).or_else(|| directory_entry.and_then(|entry| {
             let workspace = entry.workspace.read(cx);
             workspace.panes.iter().find(|pane| Some(pane.entity_id()) == entry.last_pane)
                 .or_else(|| workspace.panes.first())
@@ -2839,6 +2861,8 @@ impl Render for WorkspaceWindow {
             .on_action(cx.listener(|this, _: &ToggleGroupPin, _, cx| this.toggle_group_pin(cx)))
             .on_action(cx.listener(|this, action: &MoveWorkspaceToGroup, _, cx| this.move_workspace_to_group(action.group, cx)))
             .on_action(cx.listener(|this, _: &RemoveWorkspaceFromGroup, _, cx| this.remove_workspace_from_group(cx)))
+            .on_action(cx.listener(|this, _: &UseCurrentDirectoryForGroup, window, cx| this.set_group_directory(false, window, cx)))
+            .on_action(cx.listener(|this, _: &ResetGroupDirectory, window, cx| this.set_group_directory(true, window, cx)))
             .on_action(cx.listener(|this, _: &SetGroupAnchor, _, cx| this.set_group_anchor(cx)))
             .on_action(cx.listener(|this, action: &SelectWorkspaceNumber, window, cx| {
                 let order = this.workspace_order(true);

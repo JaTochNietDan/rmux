@@ -228,6 +228,8 @@ impl Pending {
 #[derive(serde::Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub(super) struct GroupMutation {
+    pub cwd: Option<std::path::PathBuf>,
+    pub clear_cwd: Option<bool>,
     pub remove_generated_anchor: Option<bool>,
     pub window_id: String,
     pub group_id: String,
@@ -947,7 +949,7 @@ fn dispatch_inner(
         let Some(name) = super::window_view::normalized_workspace_name(&create.name) else { return respond(error(id, -32602, "Group name must not be empty")); };
         create.name = name;
         if create.window_id.is_empty() || create.window_id.len() > 128
-            || create.cwd.as_ref().is_some_and(|path| !path.is_absolute() || path.as_os_str().len() > 8192 || create.workspace_ids.is_some())
+            || create.cwd.as_ref().is_some_and(|path| !path.is_absolute() || path.as_os_str().len() > 8192)
             || create.workspace_ids.as_ref().is_some_and(|ids| ids.is_empty() || ids.len() > 64 || ids.iter().enumerate().any(|(index, id)| id.is_empty() || id.len() > 128 || ids[..index].contains(id)))
             || create.external_id.as_ref().is_some_and(|id| id.trim().is_empty() || id.len() > 1024 || id.chars().any(char::is_control)) {
             return respond(error(id, -32602, "Invalid group creation parameters"));
@@ -963,7 +965,11 @@ fn dispatch_inner(
         if !valid_group || change.window_id.is_empty() || change.window_id.len() > 128 {
             return respond(error(id, -32602, "Invalid window_id or group_id"));
         }
-        let has_changes = change.name.is_some() || change.collapsed.is_some() || change.pinned.is_some();
+        if change.cwd.as_ref().is_some_and(|path| !path.is_absolute() || path.as_os_str().len() > 8192)
+            || (change.cwd.is_some() && change.clear_cwd == Some(true)) {
+            return respond(error(id, -32602, "Invalid or conflicting group directory"));
+        }
+        let has_changes = change.cwd.is_some() || change.clear_cwd.is_some() || change.name.is_some() || change.collapsed.is_some() || change.pinned.is_some();
         if has_changes != (method == "workspace.group.update") {
             return respond(error(id, -32602, "Update requires changes; ungroup accepts only IDs"));
         }
@@ -1216,6 +1222,9 @@ mod tests {
             ("workspace.group.create", json!({"window_id":"42","name":"Build","workspace_ids":[]})),
             ("workspace.group.create", json!({"window_id":"42","name":"Build","workspace_ids":["43","43"]})),
             ("workspace.group.update", json!({"window_id":"42","group_id":"workspace_group:1"})),
+            ("workspace.group.update", json!({"window_id":"42","group_id":"workspace_group:1","cwd":"relative"})),
+            ("workspace.group.update", json!({"window_id":"42","group_id":"workspace_group:1","cwd":std::env::temp_dir(),"clear_cwd":true})),
+            ("workspace.group.new_workspace", json!({"window_id":"42","group_id":"workspace_group:1","clear_cwd":true})),
             ("workspace.group.update", json!({"window_id":"42","group_id":"workspace_group:01","pinned":true})),
             ("workspace.group.update", json!({"window_id":"42","group_id":"workspace_group:1","collapsed":"yes"})),
             ("workspace.group.update", json!({"window_id":"42","group_id":"workspace_group:1","name":" "})),

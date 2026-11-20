@@ -193,7 +193,7 @@
       "acceptance": "Create, collapse, pin, regroup and ungroup; closing the anchor promotes a member without closing siblings.",
       "rmux_status": "in_progress",
       "implementation": "Window-local ownership and validated layout/session persistence with anchor promotion on close/detach. Sidebar anchor headers, indented/collapsible members, create/rename/pin/ungroup actions, new-group shortcut and header add button. New workspaces join the active group after the active member. Focused model/format tests and desktop compilation pass; native UI acceptance pending.",
-      "remaining": "Sidebar multi-selection, configurable new-workspace placement, explicit group cwd override and generated-anchor cleanup; native visual/keyboard/drag acceptance. Group create/update/ungroup/add/remove/set-anchor RPC and persistent external identity are implemented and smoke-tested. Ordering, member drag/drop, styling and anchor-position preservation are implemented; native appearance remains unverified.",
+      "remaining": "Sidebar multi-selection, configurable new-workspace placement, native acceptance of group cwd overrides and generated-anchor cleanup; native visual/keyboard/drag acceptance. Group create/update/ungroup/add/remove/set-anchor RPC and persistent external identity are implemented and smoke-tested. Ordering, member drag/drop, styling and anchor-position preservation are implemented; native appearance remains unverified.",
       "progress_record": "docs/progress.md"
     },
     {

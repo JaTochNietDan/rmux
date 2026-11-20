@@ -89,9 +89,12 @@ Workspace groups are available from the File menu and command palette: create
 an empty group (Ctrl-Cmd-G on macOS, Ctrl-Alt-G elsewhere), group the current
 workspace, rename, pin or ungroup. Headers represent the anchor terminal;
 their chevron collapses members and `+` adds a workspace. New workspaces within
-a group inherit the anchor's cached working directory and appear after the
+a group inherit the anchor's cached working directory by default and appear after the
 active member. Closing the anchor promotes the next member. Groups are saved
-with layouts and sessions. Use the palette's “Move Workspace to Group” commands
+with layouts and sessions. “Use Current Terminal Directory for Group” in the
+palette fixes the starting directory for new members; “Reset Group Directory to
+Follow Anchor” restores the default. Existing shells keep their directories.
+Use the palette's “Move Workspace to Group” commands
 to regroup existing workspaces. File-menu/palette actions can remove one member
 or make it the anchor without restarting terminals. Multi-selection, group drag/drop, configurable
 placement and group automation are still in progress. Group color and icon
@@ -418,7 +421,9 @@ Use the group handle together with its window ID; handles can repeat in another
 window. `workspace.list` adds nullable `group_id` and boolean `group_anchor`.
 Its `index` follows logical sidebar order, including collapsed members.
 `workspace.group.update` requires `window_id`, `group_id` and at least one of
-`name`, `collapsed` or `pinned`; it returns the updated group record.
+`name`, `collapsed`, `pinned`, absolute `cwd` or `clear_cwd: true`; it returns the
+updated group record. `cwd` and `clear_cwd: true` cannot be combined. Clearing the
+override restores inheritance from the anchor. Group records expose nullable `cwd`.
 `workspace.group.ungroup` accepts only those two IDs and removes the container,
 returning its `workspace_ids` without closing terminals. Both respect busy-state
 guards and support notifications. `workspace.group.add`, `workspace.group.remove`
@@ -433,8 +438,9 @@ Omitting it starts and selects a fresh anchor using the active workspace's cache
 directory. Optional `external_id` is a persistent, window-scoped retry key:
 repeating it returns the existing group without changing it or starting a shell.
 Creating from existing workspaces preserves selection. Optional `cwd` supplies
-an absolute directory for a fresh anchor; it cannot be combined with
-`workspace_ids`. Members subsequently inherit that anchor's directory.
+an absolute directory for a fresh anchor and stores a group override for future
+members. It can also be set when grouping existing workspaces; their shells are
+unchanged. The override survives layout/session save and restore.
 `workspace.group.ungroup` optionally accepts `remove_generated_anchor: true`.
 This closes only a sole anchor explicitly created by rmux; it rejects groups with
 other members and user-selected/promoted anchors. Close-policy confirmation

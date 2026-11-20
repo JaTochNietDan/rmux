@@ -115,6 +115,8 @@ impl CommandPalette {
         command!("New Empty Workspace Group", NewWorkspaceGroup);
         command!("New Group from Current Workspace", GroupCurrentWorkspace);
         command!("Group Selected Workspaces", GroupSelectedWorkspaces);
+        command!("Use Current Terminal Directory for Group", UseCurrentDirectoryForGroup);
+        command!("Reset Group Directory to Follow Anchor", ResetGroupDirectory);
         command!("Rename Workspace Group", RenameWorkspaceGroup);
         command!("Edit Group Color", EditGroupColor);
         command!("Edit Group Icon", EditGroupIcon);

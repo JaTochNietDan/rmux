@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Workspace groups now retain an optional starting directory independently of anchor
+shell navigation. Palette actions capture the focused terminal directory or reset
+to following the anchor. Group create/update RPC accepts an absolute cwd, update
+supports clear_cwd, and snapshots/layouts/sessions preserve the override. New group
+members prefer the override while existing terminals are untouched. Fifteen focused
+group tests passed, including mapping/restore and invalid/conflicting RPC input.
+Native palette interaction and live spawned-shell directory acceptance are pending.
+
 Added close confirmation to Settings with Active tasks / Always / Never choices,
 forward/backward keyboard cycling and immediate application across close scopes.
 Saving persists the choice while preserving unrelated config. An environment

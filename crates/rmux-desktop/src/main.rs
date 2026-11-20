@@ -275,6 +275,8 @@ actions!(
         CopyTerminalMemory,
         CycleTerminalMemorySort,
         NewWorkspaceGroup,
+        UseCurrentDirectoryForGroup,
+        ResetGroupDirectory,
         GroupCurrentWorkspace,
         GroupSelectedWorkspaces,
         RenameWorkspaceGroup,

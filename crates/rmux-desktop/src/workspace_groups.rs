@@ -32,6 +32,8 @@ pub struct Group<W> {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub external_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<std::path::PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon: Option<String>,
@@ -50,7 +52,7 @@ impl<W> Group<W> {
     pub fn map_members<T>(&self, mut map: impl FnMut(&W) -> Result<T>) -> Result<Group<T>> {
         Ok(Group {
             id: self.id, name: self.name.clone(),
-            external_id: self.external_id.clone(),
+            external_id: self.external_id.clone(), cwd: self.cwd.clone(),
             color: self.color, icon: self.icon.clone(),
             members: self.members.iter().map(&mut map).collect::<Result<_>>()?,
             collapsed: self.collapsed, pinned: self.pinned,
@@ -101,6 +103,7 @@ impl<W: Copy + Eq> Groups<W> {
                 ensure!(!id.trim().is_empty() && id.len() <= 1024 && !id.chars().any(char::is_control) && !external_ids.contains(id), "invalid or duplicate external group identity");
                 external_ids.push(id.clone());
             }
+            ensure!(group.cwd.as_ref().is_none_or(|path| path.is_absolute() && path.as_os_str().len() <= 8192), "invalid group directory");
             ensure!(group.color.is_none_or(|color| color <= 0xffffff), "invalid group color");
             ensure!(group.icon.as_deref().is_none_or(crate::snapshot::valid_workspace_icon), "invalid group icon");
             ensure!(group.id > 0 && group.id < u64::MAX && !ids.contains(&group.id), "invalid or duplicate group identity");
@@ -136,7 +139,7 @@ impl<W: Copy + Eq> Groups<W> {
         let next_id = id.checked_add(1).ok_or_else(|| anyhow::anyhow!("group identity exhausted"))?;
         for member in &members { self.remove(*member); }
         self.next_id = next_id;
-        self.entries.push(Group { id, name, external_id: None, color: None, icon: None, members, collapsed: false, pinned: false, generated_anchor });
+        self.entries.push(Group { id, name, external_id: None, cwd: None, color: None, icon: None, members, collapsed: false, pinned: false, generated_anchor });
         Ok(id)
     }
 
@@ -228,6 +231,21 @@ impl<W: Copy + Eq> Groups<W> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn directory_override_survives_member_mapping_and_restore() {
+        let mut groups = super::Groups::default();
+        let id = groups.create("Project".into(), vec![1u64], false).unwrap();
+        let directory = std::env::temp_dir().join("rmux-group-project");
+        groups.get_mut(id).unwrap().cwd = Some(directory.clone());
+        let mapped = groups.entries()[0].map_members(|id| Ok(id + 10)).unwrap();
+        let bytes = serde_json::to_vec(&mapped).unwrap();
+        let restored: super::Group<u64> = serde_json::from_slice(&bytes).unwrap();
+        let mut groups = super::Groups::from_entries(vec![restored], |id| id == 11).unwrap();
+        assert_eq!(groups.entries()[0].cwd.as_ref(), Some(&directory));
+        groups.get_mut(id).unwrap().cwd = Some("relative".into());
+        assert!(super::Groups::from_entries(groups.entries().to_vec(), |_| true).is_err());
+    }
+
     use super::*;
 
     #[test]
