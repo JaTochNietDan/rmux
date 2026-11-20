@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Custom shortcuts now expose numbered tab, pane and workspace navigation actions
+for 1–9, dispatching the existing typed commands without changing their ordering
+or target semantics. Canonical one-digit suffix validation rejects zero, leading
+zeros, negatives and values above nine. A focused test passed for all 27 action/
+number combinations and invalid cases; the desktop test target compiled. Native
+chord navigation/focus acceptance remains pending.
+
 Pending shortcut chords now show their keystrokes and Waiting for next key in
 a small out-of-flow window overlay. It observes GPUI pending-input changes,
 adds no polling timer, and neither moves keyboard focus nor participates in

@@ -102,6 +102,12 @@ Supported action names: `new_workspace`, `new_window`, `new_tab`, `split_right`,
 `palette`, `toggle_zoom`, `toggle_sidebar`, `settings`, `notifications`,
 `next_unread`, `mark_all_read`, `find`, `reload_settings`, and `disabled`. Graphical binding editing,
 full conflict explanations and complete upstream shortcut coverage remain pending.
+Numbered navigation is also configurable: `select_tab_1`…`select_tab_9`,
+`select_pane_1`…`select_pane_9`, and `select_workspace_1`…`select_workspace_9`.
+For example, `{"key":"ctrl-k 3","action":"select_tab_3"}` selects the third
+tab in the focused pane. These dispatch the existing numbered commands and keep
+their ordering and missing-target behavior; zero, leading zeros and numbers
+above nine are rejected.
 
 Layout and workspace editing also support these action names:
 `equalize_panes`, `swap_pane_next`, `break_tab_right`, `break_tab_down`,

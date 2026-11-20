@@ -17,6 +17,17 @@ impl Scope { fn context(self) -> Option<&'static str> { match self { Self::Termi
 struct Defaults(Vec<KeyBinding>);
 impl Global for Defaults {}
 fn action(name: &str) -> Option<Box<dyn Action>> {
+    if let Some((kind, digit)) = name.rsplit_once('_') {
+        if digit.len() == 1 && matches!(digit.as_bytes()[0], b'1'..=b'9') {
+            let number = usize::from(digit.as_bytes()[0] - b'0');
+            match kind {
+                "select_tab" => return Some(Box::new(SelectTabNumber { number })),
+                "select_pane" => return Some(Box::new(SelectPaneNumber { number })),
+                "select_workspace" => return Some(Box::new(SelectWorkspaceNumber { number })),
+                _ => {},
+            }
+        }
+    }
     Some(match name {
         "new_workspace" => Box::new(NewWorkspace), "new_window" => Box::new(NewWindow),
         "cancel_new_tab" => Box::new(CancelNewTab),
@@ -149,6 +160,28 @@ mod tests {
         assert_eq!(map.bindings().len(), 1);
         assert!(map.bindings_for_input(&keys, &terminal).0[0].action().as_any().is::<ShowCommandPalette>());
     }
+    #[test]
+    fn numbered_navigation_actions_preserve_the_requested_number() {
+        for number in 1..=9 {
+            for kind in ["select_tab", "select_pane", "select_workspace"] {
+                let prefs = settings(serde_json::json!({"keybindings":[{
+                    "key":format!("ctrl-k {number}"), "action":format!("{kind}_{number}")
+                }]}));
+                let bindings = compile(&prefs).unwrap();
+                let action = bindings[0].action().as_any();
+                let actual = match kind {
+                    "select_tab" => action.downcast_ref::<crate::SelectTabNumber>().unwrap().number,
+                    "select_pane" => action.downcast_ref::<crate::SelectPaneNumber>().unwrap().number,
+                    _ => action.downcast_ref::<crate::SelectWorkspaceNumber>().unwrap().number,
+                };
+                assert_eq!(actual, number);
+            }
+        }
+        for name in ["select_tab_0", "select_tab_10", "select_pane_01", "select_workspace_-1", "select_tab_x"] {
+            assert!(compile(&settings(serde_json::json!({"keybindings":[{"key":"ctrl-k t","action":name}]}))).is_err());
+        }
+    }
+
     #[test]
     fn leader_chords_accept_plain_suffixes_without_binding_plain_typing() {
         let prefs = settings(serde_json::json!({"keybindings":[
