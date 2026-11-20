@@ -2451,6 +2451,10 @@ impl WorkspaceWindow {
     fn browse_directory(&mut self, path: std::path::PathBuf, window: &mut Window, cx: &mut Context<Self>) {
         if self.file_browser_job.is_some() || self.automation_available(cx).is_err() { return; }
         let Some(focus) = window.focused(cx) else { return; };
+        let permit = match file_browser::Permit::acquire() {
+            Ok(permit) => permit,
+            Err(error) => { self.notice = Some(error.to_string()); cx.notify(); return; }
+        };
         self.notice = Some("Loading local directory…".into());
         let executor = cx.background_executor().clone();
         let cancellation = file_browser::Cancellation::default();
@@ -2458,7 +2462,7 @@ impl WorkspaceWindow {
         self.file_browser_cancel = Some(cancellation);
         self.file_browser_job = Some(cx.spawn_in(window, async move |entity, cx| {
             let target = path.clone();
-            let result = executor.spawn(async move { file_browser::list_cancellable(path, &canceled) }).await;
+            let result = executor.spawn(async move { let _permit = permit; file_browser::list_cancellable(path, &canceled) }).await;
             let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
                 this.file_browser_job = None;
                 this.file_browser_cancel = None;
@@ -2483,6 +2487,10 @@ impl WorkspaceWindow {
     fn preview_local_file(&mut self, path: std::path::PathBuf, window: &mut Window, cx: &mut Context<Self>) {
         if self.file_browser_job.is_some() || self.automation_available(cx).is_err() { return; }
         let Some(focus) = window.focused(cx) else { return; };
+        let permit = match file_browser::Permit::acquire() {
+            Ok(permit) => permit,
+            Err(error) => { self.notice = Some(error.to_string()); cx.notify(); return; }
+        };
         let executor = cx.background_executor().clone();
         self.notice = Some("Loading text preview…".into());
         let cancellation = file_browser::Cancellation::default();
@@ -2490,7 +2498,7 @@ impl WorkspaceWindow {
         self.file_browser_cancel = Some(cancellation);
         self.file_browser_job = Some(cx.spawn_in(window, async move |entity, cx| {
             let target = path.clone();
-            let result = executor.spawn(async move { file_browser::preview_cancellable(path, &canceled) }).await;
+            let result = executor.spawn(async move { let _permit = permit; file_browser::preview_cancellable(path, &canceled) }).await;
             let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
                 this.file_browser_job = None;
                 this.file_browser_cancel = None;

@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Local directory and preview reads now share a four-job process-wide permit
+budget, acquired before scheduling. The worker owns its permit until filesystem
+work exits, so cancel/retry cannot bypass the cap while an OS read is still
+blocked. Saturation reports a retry notice without adding queued work. A focused
+test passed saturation, retained permits and release/reacquisition; desktop
+cargo check passed. Native slow-filesystem and multi-window measurements remain
+pending.
+
 Directory and preview loading now have cancellation ownership tied to the
 window. Dropping the owner on cancel, completion or window teardown signals the
 background worker. The loading notice replaces ordinary dismissal with Cancel;

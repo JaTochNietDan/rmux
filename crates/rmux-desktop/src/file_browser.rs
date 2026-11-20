@@ -1,6 +1,25 @@
 //! On-demand local directory snapshots and bounded inert text previews.
 use std::path::PathBuf;
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
+#[derive(Default)]
+struct LoadLimit(AtomicUsize);
+pub struct Permit(&'static LoadLimit);
+impl LoadLimit {
+    fn acquire(&'static self) -> anyhow::Result<Permit> {
+        self.0.try_update(Ordering::AcqRel, Ordering::Acquire, |count| (count < 4).then_some(count + 1))
+            .map_err(|_| anyhow::anyhow!("Four file reads are still running; retry after one finishes"))?;
+        Ok(Permit(self))
+    }
+}
+impl Permit {
+    pub fn acquire() -> anyhow::Result<Self> {
+        static LIMIT: LoadLimit = LoadLimit(AtomicUsize::new(0));
+        LIMIT.acquire()
+    }
+}
+impl Drop for Permit {
+    fn drop(&mut self) { self.0.0.fetch_sub(1, Ordering::AcqRel); }
+}
 #[derive(Default)]
 pub struct Cancellation(pub Arc<AtomicBool>);
 impl Drop for Cancellation {
@@ -77,6 +96,21 @@ pub fn list_cancellable(path: PathBuf, canceled: &AtomicBool) -> anyhow::Result<
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn file_reads_share_a_bounded_budget_until_workers_release_it() {
+        static LIMIT: super::LoadLimit = super::LoadLimit(super::AtomicUsize::new(0));
+        let mut active: Vec<_> = (0..4).map(|_| LIMIT.acquire().unwrap()).collect();
+        assert!(LIMIT.acquire().is_err());
+        let canceled = super::Cancellation::default();
+        drop(canceled);
+        assert!(LIMIT.acquire().is_err(), "cancel request must not release a still-running worker's permit");
+        active.pop();
+        let replacement = LIMIT.acquire().unwrap();
+        assert!(LIMIT.acquire().is_err());
+        drop(active);
+        drop(replacement);
+        assert_eq!(LIMIT.0.load(super::Ordering::Acquire), 0);
+    }
     #[test]
     fn dropping_load_owner_cancels_before_filesystem_access() {
         let owner = super::Cancellation::default();

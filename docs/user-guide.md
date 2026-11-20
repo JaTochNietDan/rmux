@@ -210,6 +210,9 @@ While a directory or preview is loading, its notice's close control cancels
 remaining work. Closing the window also cancels it. Cancellation is checked
 between directory entries and preview read chunks; an OS call already in
 progress may finish first.
+At most four directory/preview reads may run across all windows. A canceled read
+keeps its slot until the worker exits; if all slots are occupied, rmux asks you
+to retry rather than queuing more work.
 
 **Choose Terminal Font…** searches installed font families for the current
 terminal. Type to filter, use arrows and Enter to choose, or Escape to cancel.
