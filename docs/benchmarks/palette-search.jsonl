@@ -1,0 +1,9 @@
+{"candidates": 128, "sample": 0, "full_us_per_query": 4.253, "incremental_us_per_query": 2.152, "ratio": 0.506}
+{"candidates": 128, "sample": 1, "full_us_per_query": 4.19, "incremental_us_per_query": 2.204, "ratio": 0.526}
+{"candidates": 128, "sample": 2, "full_us_per_query": 4.079, "incremental_us_per_query": 2.049, "ratio": 0.502}
+{"candidates": 1024, "sample": 0, "full_us_per_query": 29.256, "incremental_us_per_query": 14.871, "ratio": 0.508}
+{"candidates": 1024, "sample": 1, "full_us_per_query": 25.758, "incremental_us_per_query": 14.417, "ratio": 0.56}
+{"candidates": 1024, "sample": 2, "full_us_per_query": 24.835, "incremental_us_per_query": 12.805, "ratio": 0.516}
+{"candidates": 8192, "sample": 0, "full_us_per_query": 190.64, "incremental_us_per_query": 106.073, "ratio": 0.556}
+{"candidates": 8192, "sample": 1, "full_us_per_query": 191.377, "incremental_us_per_query": 105.937, "ratio": 0.554}
+{"candidates": 8192, "sample": 2, "full_us_per_query": 189.887, "incremental_us_per_query": 106.457, "ratio": 0.561}

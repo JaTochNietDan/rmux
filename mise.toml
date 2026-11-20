@@ -137,3 +137,7 @@ run = "python3 scripts/smoke-socket-rpc.py --app target/debug/rmux.app/Contents/
 [tasks.release-macos]
 description = "Build, Developer ID sign, notarize, staple and Sparkle-sign the macOS release"
 run = "sh scripts/release-macos.sh"
+
+[tasks.bench-palette-search]
+description = "Compare optimized palette filtering with full rescans, without a GUI"
+run = ["mkdir -p target", "rustc --edition=2024 -O scripts/bench-palette-search.rs -o target/bench-palette-search", "./target/bench-palette-search"]

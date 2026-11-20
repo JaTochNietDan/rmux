@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Added a standalone optimized palette-search benchmark using the real matcher.
+On Apple M4 Max, the synthetic edit sequence measured median 2.152 vs 4.190 µs
+at 128 candidates, 14.417 vs 25.758 µs at 1,024, and 106.073 vs 190.640 µs at
+8,192 for incremental versus full rescans. Three alternating-order samples
+validated identical ranked results; the harness runs through
+`mise run bench-palette-search`. [Method and raw samples](benchmarks/palette-search.md).
+These are computation timings, not native input/render latency or memory gates.
+
 Palette filtering now keeps an immutable search snapshot and reusable ranking
 buffer for the palette's lifetime. Appending to the normalized query rescans only
 previous matches; deletion/replacement rescans all candidates, and an empty query
