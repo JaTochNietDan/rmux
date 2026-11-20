@@ -608,7 +608,7 @@ impl Session {
     }
     pub fn paste(&self, text: &str) -> Result<()> {
         anyhow::ensure!(text.len() <= 1024 * 1024, "paste exceeds 1 MiB input limit");
-        self.paste_owned(text.to_owned())
+        self.paste_input(std::borrow::Cow::Borrowed(text))
     }
     pub fn take_input_error(&self) -> Option<String> {
         self.input_errors.try_recv().ok()
@@ -624,25 +624,19 @@ impl Session {
     /// Reserve queue order before encoding on the sole PTY writer thread.
     pub fn paste_owned(&self, text: String) -> Result<()> {
         anyhow::ensure!(text.len() <= 1024 * 1024, "paste exceeds 1 MiB input limit");
-        anyhow::ensure!(self.exit_status().is_none(), "process has exited");
-        let permit = PastePermit::acquire(&self.paste_pending, &self.paste_generation)?;
-        let bracketed = {
-            let terminal = match self.terminal.try_lock() {
-                Ok(terminal) => terminal,
-                Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),
-                Err(std::sync::TryLockError::WouldBlock) => anyhow::bail!("Terminal is busy; paste again to retry. No paste input was queued."),
-            };
-            terminal.bracketed_paste()?
-        };
-        self.writer
-            .try_send(InputMessage { payload: InputPayload::Paste { text, bracketed }, _paste: Some(permit) })
-            .map_err(|_| anyhow::anyhow!("terminal input queue is full or closed"))?;
+        self.paste_input(std::borrow::Cow::Owned(text))
+    }
+    fn paste_input(&self, text: std::borrow::Cow<'_, str>) -> Result<()> {
+        anyhow::ensure!(self.queue_paste(text)?, "Terminal is busy; paste again to retry. No paste input was queued.");
         self.follow_output()
     }
     /// Bounded automation paste. Never waits for parser access or changes viewport.
     /// False means the parser is busy and no input was queued.
     pub fn try_paste_without_scroll(&self, text: &str) -> Result<bool> {
         anyhow::ensure!(text.len() <= 1024 * 1024, "automation paste exceeds 1 MiB");
+        self.queue_paste(std::borrow::Cow::Borrowed(text))
+    }
+    fn queue_paste(&self, text: std::borrow::Cow<'_, str>) -> Result<bool> {
         anyhow::ensure!(self.exit_status().is_none(), "process has exited");
         let permit = PastePermit::acquire(&self.paste_pending, &self.paste_generation)?;
         let bracketed = {
@@ -653,8 +647,9 @@ impl Session {
             };
             terminal.bracketed_paste()?
         };
-        // Match ordinary paste: reserve order here, encode on the sole writer.
-        self.writer.try_send(InputMessage { payload: InputPayload::Paste { text: text.to_owned(), bracketed }, _paste: Some(permit) })
+        // Borrowed input is copied only after admission; owned clipboard/image
+        // paths move their existing allocation. No parser guard spans the copy.
+        self.writer.try_send(InputMessage { payload: InputPayload::Paste { text: text.into_owned(), bracketed }, _paste: Some(permit) })
             .map_err(|_| anyhow::anyhow!("terminal input queue is full or closed"))?;
         Ok(true)
     }

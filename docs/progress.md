@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Removed eager payload copying from borrowed paste calls. Ordinary borrowed,
+owned clipboard/image-path and automation paste now share the same admission and
+queue path via Cow: parser-busy rejection drops its permit before any borrowed
+payload allocation, while owned strings move unchanged. The parser guard ends
+before copying; the existing bounded writer, one-paste permit, cancellation,
+bracketing and viewport-follow differences remain. All nine paste-focused tests
+passed, including real-PTY large input under concurrent output, ordering,
+automation viewport preservation and cancellation. No native clipboard or measured
+RSS/latency claim is inferred from this allocation-path change.
+
 Added a real-PTY concurrent output/paste regression: a raw receiver records a
 896 KiB Unicode multiline paste and following input while a bounded background
 producer emits more than 250 KB of terminal output. The focused macOS run passed
