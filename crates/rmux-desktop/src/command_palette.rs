@@ -4,6 +4,18 @@ pub(super) fn top_inset(height: f32) -> f32 {
     if height >= 480. { 48. } else { 8. }
 }
 
+fn result_row_height(has_subtitle: bool) -> f32 {
+    if has_subtitle { 56. } else { 36. }
+}
+fn result_area_height(rows: impl IntoIterator<Item = bool>) -> f32 {
+    let mut height = 0.;
+    for subtitle in rows {
+        height += result_row_height(subtitle);
+        if height >= 320. { return 320.; }
+    }
+    height
+}
+
 pub(super) fn navigated_result(selected: usize, count: usize, key: &str) -> Option<usize> {
     if count == 0 { return None; }
     let selected = selected.min(count - 1);
@@ -18,7 +30,15 @@ pub(super) fn navigated_result(selected: usize, count: usize, key: &str) -> Opti
 
 #[cfg(test)]
 mod navigation_tests {
-    use super::navigated_result;
+    use super::{navigated_result, result_area_height};
+    #[test]
+    fn palette_result_height_is_stable_and_bounded() {
+        assert_eq!(result_area_height([]), 0.);
+        assert_eq!(result_area_height([false]), 36.);
+        assert_eq!(result_area_height([false, true]), 92.);
+        assert_eq!(result_area_height(std::iter::repeat(false)), 320.);
+        assert_eq!(result_area_height(std::iter::repeat(true)), 320.);
+    }
     #[test]
     fn arrows_wrap_and_page_keys_clamp() {
         assert_eq!(navigated_result(0, 0, "down"), None);
@@ -324,8 +344,8 @@ impl CommandPalette {
         div()
             .id(("command", command))
             .px_3()
-            .py_2()
-            .text_sm()
+            .h(px(result_row_height(self.commands[command].subtitle.is_some())))
+            .text_sm().line_height(px(20.))
             .flex()
             .items_center()
             .gap_3()
@@ -347,7 +367,7 @@ impl CommandPalette {
                     .tooltip(move |_, cx| cx.new(|_| pane_view::ControlHint(title_hint.clone())).into())
                     .child(div().flex().flex_col().gap_1()
                         .child(div().truncate().child(self.commands[command].title.clone()))
-                        .when_some(self.commands[command].subtitle.clone(), |column, subtitle| column.child(div().truncate().text_xs().text_color(rgb(0xa0a0a0)).child(subtitle)))),
+                        .when_some(self.commands[command].subtitle.clone(), |column, subtitle| column.child(div().truncate().text_xs().line_height(px(16.)).text_color(rgb(0xa0a0a0)).child(subtitle)))),
             )
             .when_some(self.commands[command].shortcut.clone(), |row, shortcut| {
                 row.child(
@@ -426,8 +446,10 @@ impl Render for CommandPalette {
                 list(self.scroll.clone(), move |row, _, cx| {
                     entity.update(cx, |palette, cx| palette.render_result(row, cx))
                 })
-                .with_sizing_behavior(ListSizingBehavior::Infer)
-                .w_full().min_h_0().max_h(px(320.)).into_any_element()
+                .with_sizing_behavior(ListSizingBehavior::Auto)
+                .w_full().min_h_0()
+                .h(px(result_area_height(self.matches.iter().map(|index| self.commands[*index].subtitle.is_some()))))
+                .into_any_element()
             })
             .when(!compact, |palette| palette.child(
                 div()

@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Palette virtual-list sizing now uses explicit 36px title rows and 56px subtitle
+rows with 20px/16px line heights. The results area sums only enough rows to reach
+its 320px cap, avoiding first-frame height inference from a partially measured
+list and preserving short-result shrinkage. Both focused palette sizing and
+navigation tests passed. Native clipping, small-window behavior and measured
+render performance remain pending; this is not visual parity acceptance.
+
 Command-palette results now use GPUI's variable-height virtual list rather than
 building elements for every match on each render. Existing title/subtitle rows,
 shortcuts, stable command click targets and empty state remain; filtering resets
