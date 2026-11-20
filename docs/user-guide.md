@@ -15,7 +15,8 @@ Search works on the full retained text, including clipped portions of long lines
 Escape in the search field returns to navigation. Press c to toggle character
 selection; ←/→ or h/l also enter character mode. Shift-movement or Space/v anchors
 a character range; Enter copies it. Navigation and copy preserve complete Unicode
-graphemes, including combined emoji and accents. Press c to return to line mode;
+graphemes, including combined emoji and accents. Vertical movement retains the
+desired terminal-cell column across wide characters and short lines. Press c to return to line mode;
 clicking a row or Select All also returns to line mode. Long-line display follows
 the character cursor without shaping the entire line. Rectangle selection and
 named copy buffers remain pending.

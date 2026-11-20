@@ -1,6 +1,7 @@
 //! Stable, bounded history inspection; no per-frame history formatting.
 use super::*;
-use unicode_segmentation::GraphemeCursor;
+use unicode_segmentation::{GraphemeCursor, UnicodeSegmentation};
+use unicode_width::UnicodeWidthStr;
 const MAX_BYTES: usize = 8 * 1024 * 1024;
 const MAX_LINES: usize = 65_536;
 
@@ -8,6 +9,8 @@ struct Buffer {
     text: String,
     lines: Vec<Range<usize>>,
     truncated: bool,
+    column_marks: Vec<(u32, u32)>,
+    column_ranges: Vec<Range<usize>>,
 }
 impl Buffer {
     fn new(mut text: String, mut truncated: bool) -> Self {
@@ -24,7 +27,25 @@ impl Buffer {
             truncated |= start < text.len();
             text.truncate(start);
         } else { lines.push(start..text.len()); }
-        Self { text, lines, truncated }
+        // Sparse checkpoints are built with the snapshot on the worker. Avoid
+        // rescanning long prefixes for every vertical key press.
+        let mut column_marks = Vec::new();
+        let mut column_ranges = Vec::with_capacity(lines.len());
+        for range in &lines {
+            let first = column_marks.len();
+            column_marks.push((0, 0));
+            let mut cells = 0;
+            let mut previous = 0;
+            for (byte, grapheme) in text[range.clone()].grapheme_indices(true) {
+                if byte - previous >= 256 {
+                    column_marks.push((byte as u32, cells as u32));
+                    previous = byte;
+                }
+                cells += UnicodeWidthStr::width(grapheme);
+            }
+            column_ranges.push(first..column_marks.len());
+        }
+        Self { text, lines, truncated, column_marks, column_ranges }
     }
     fn find_lines(&self, query: &str, canceled: &AtomicBool) -> Option<Vec<usize>> {
         let mut matches = Vec::new();
@@ -36,6 +57,23 @@ impl Buffer {
         Some(matches)
     }
     fn line(&self, row: usize) -> &str { &self.text[self.lines[row].clone()] }
+    fn visual_column(&self, row: usize, byte: usize) -> usize {
+        let marks = &self.column_marks[self.column_ranges[row].clone()];
+        let (start, cells) = marks[marks.partition_point(|(start, _)| *start as usize <= byte).saturating_sub(1)];
+        cells as usize + UnicodeWidthStr::width(&self.line(row)[start as usize..byte])
+    }
+    fn byte_at_column(&self, row: usize, goal: usize) -> usize {
+        let marks = &self.column_marks[self.column_ranges[row].clone()];
+        let (start, cells) = marks[marks.partition_point(|(_, cells)| (*cells as usize) < goal).saturating_sub(1)];
+        let line = self.line(row);
+        let mut cells = cells as usize;
+        for (byte, grapheme) in line[start as usize..].grapheme_indices(true) {
+            let width = UnicodeWidthStr::width(grapheme);
+            if cells >= goal || cells + width > goal { return start as usize + byte; }
+            cells += width;
+        }
+        line.len()
+    }
     fn character_range(&self, row: usize, column: usize, anchor: Option<(usize, usize)>) -> Range<usize> {
         let here = self.lines[row].start + column;
         let (anchor_row, anchor_column) = anchor.unwrap_or((row, column));
@@ -57,13 +95,6 @@ fn next_grapheme(text: &str, offset: usize) -> usize {
 fn previous_grapheme(text: &str, offset: usize) -> usize {
     GraphemeCursor::new(offset, text.len(), true).prev_boundary(text, 0).expect("complete grapheme context").unwrap_or(0)
 }
-fn clamp_grapheme(text: &str, offset: usize) -> usize {
-    let mut offset = offset.min(text.len());
-    while !text.is_char_boundary(offset) { offset -= 1; }
-    let mut cursor = GraphemeCursor::new(offset, text.len(), true);
-    if cursor.is_boundary(text, 0).expect("complete grapheme context") { offset }
-    else { cursor.prev_boundary(text, 0).expect("complete grapheme context").unwrap_or(0) }
-}
 
 pub(super) struct CopyMode {
     pub focus: FocusHandle,
@@ -79,6 +110,7 @@ pub(super) struct CopyMode {
     anchor: Option<usize>,
     characters: bool,
     column: usize,
+    preferred_column: Option<usize>,
     character_anchor: Option<(usize, usize)>,
     scroll: ListState,
     _load: Task<()>,
@@ -125,7 +157,7 @@ impl CopyMode {
         focus.focus(window);
         Self { focus, buffer: None, search: None, query: String::new(), matches: Vec::new(),
             search_message: String::new(), search_cancel: Arc::new(AtomicBool::new(false)), search_job: None, message: "Reading terminal history…".into(), cursor: 0,
-            anchor: None, characters: false, column: 0, character_anchor: None, scroll: ListState::new(0, ListAlignment::Bottom, px(128.)), _load: load }
+            anchor: None, characters: false, column: 0, preferred_column: None, character_anchor: None, scroll: ListState::new(0, ListAlignment::Bottom, px(128.)), _load: load }
     }
     fn open_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(search) = &self.search { search.read(cx).focus.focus(window); return; }
@@ -148,7 +180,7 @@ impl CopyMode {
     fn jump_match(&mut self, reverse: bool, inclusive: bool) {
         if let Some(index) = match_line(&self.matches, self.cursor, reverse, inclusive) {
             self.cursor = index;
-            self.column = 0;
+            self.column = 0; self.preferred_column = None;
             self.character_anchor = None;
             self.anchor = None;
             self.scroll.scroll_to_reveal_item(index);
@@ -203,6 +235,7 @@ impl CopyMode {
                     let buffer = self.buffer.as_ref().unwrap();
                     let line = buffer.line(self.cursor);
                     self.column = if matches!(key.key.as_str(), "left" | "h") { previous_grapheme(line, self.column) } else { next_grapheme(line, self.column) };
+                    self.preferred_column = None;
                     cx.stop_propagation(); cx.notify(); return;
                 }
                 let next = match key.key.as_str() {
@@ -215,14 +248,16 @@ impl CopyMode {
                 if let Some(next) = next {
                     if self.characters {
                         if key.modifiers.shift && self.character_anchor.is_none() { self.character_anchor = Some((self.cursor, self.column)); }
-                        self.column = clamp_grapheme(self.buffer.as_ref().unwrap().line(next), self.column);
+                        let buffer = self.buffer.as_ref().unwrap();
+                        let goal = *self.preferred_column.get_or_insert_with(|| buffer.visual_column(self.cursor, self.column));
+                        self.column = buffer.byte_at_column(next, goal);
                     } else if key.modifiers.shift && self.anchor.is_none() { self.anchor = Some(self.cursor); }
                     self.cursor = next;
                     self.scroll.scroll_to_reveal_item(next);
                 } else { match key.key.as_str() {
                     "/" => self.open_search(window, cx),
                     "n" | "N" => self.jump_match(key.modifiers.shift || key.key == "N", false),
-                    "c" => { self.characters = !self.characters; self.anchor = None; self.character_anchor = None; self.column = 0; }
+                    "c" => { self.characters = !self.characters; self.anchor = None; self.character_anchor = None; self.column = 0; self.preferred_column = None; }
                     "space" | "v" => {
                         if self.characters { self.character_anchor = if self.character_anchor.is_some() { None } else { Some((self.cursor, self.column)) }; }
                         else { self.anchor = if self.anchor.is_some() { None } else { Some(self.cursor) }; }
@@ -260,7 +295,7 @@ impl CopyMode {
             .when(selected && !self.characters, |row| row.bg(rgb(0x354969)))
             .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
                 if event.standard_click() {
-                    this.characters = false; this.character_anchor = None; this.column = 0;
+                    this.characters = false; this.character_anchor = None; this.column = 0; this.preferred_column = None;
                     if event.modifiers().shift && this.anchor.is_none() { this.anchor = Some(this.cursor); }
                     else if !event.modifiers().shift { this.anchor = None; }
                     this.cursor = index;
@@ -283,7 +318,7 @@ impl Render for CopyMode {
             .on_action(|_: &Paste, _, cx| cx.stop_propagation())
             .on_action(cx.listener(|this, _: &EditorSelectAll, _, cx| {
                 if let Some(buffer) = &this.buffer {
-                    this.characters = false; this.character_anchor = None; this.column = 0;
+                    this.characters = false; this.character_anchor = None; this.column = 0; this.preferred_column = None;
                     this.anchor = Some(0);
                     this.cursor = buffer.lines.len() - 1;
                     this.scroll.scroll_to_reveal_item(this.cursor);
@@ -318,7 +353,7 @@ impl Render for CopyMode {
 
 #[cfg(test)]
 mod tests {
-    use super::{Buffer, MAX_LINES, match_line, next_grapheme, previous_grapheme, clamp_grapheme};
+    use super::{Buffer, MAX_LINES, match_line, next_grapheme, previous_grapheme};
     use std::sync::atomic::AtomicBool;
     #[test]
     fn snapshot_search_matches_unicode_lines_and_wraps_in_both_directions() {
@@ -334,6 +369,22 @@ mod tests {
         assert_eq!(match_line(&[], 0, false, false), None);
     }
     #[test]
+    fn vertical_columns_preserve_width_across_unicode_short_and_long_lines() {
+        let buffer = Buffer::new("a界z\n👩‍💻e\u{301}x\nx\nabcdef".into(), false);
+        assert_eq!(buffer.visual_column(0, "a界".len()), 3);
+        assert_eq!(buffer.byte_at_column(1, 3), "👩‍💻e\u{301}".len());
+        assert_eq!(buffer.byte_at_column(1, 1), 0, "inside wide grapheme selects its start");
+        assert_eq!(buffer.byte_at_column(2, 3), 1);
+        assert_eq!(buffer.byte_at_column(3, 3), 3, "original goal survives a short line");
+        let long = Buffer::new("界a".repeat(10_000), false);
+        for column in [0, 255, 256, 257, 9999, 29_999, 30_000] {
+            let byte = long.byte_at_column(0, column);
+            let actual = long.visual_column(0, byte);
+            assert!(actual <= column && column - actual <= 1);
+        }
+        assert!(long.column_marks.len() < 200, "index must stay sparse");
+    }
+    #[test]
     fn character_selection_preserves_graphemes_across_lines_and_reverse_ranges() {
         let text = "a👩‍💻e\u{301}界";
         let woman_end = next_grapheme(text, 1);
@@ -341,7 +392,6 @@ mod tests {
         let accent_end = next_grapheme(text, woman_end);
         assert_eq!(&text[woman_end..accent_end], "e\u{301}");
         assert_eq!(previous_grapheme(text, accent_end), woman_end);
-        assert_eq!(clamp_grapheme(text, 5), 1);
         let buffer = Buffer::new(format!("{text}\n界"), false);
         let range = buffer.character_range(0, 1, Some((1, 0)));
         assert_eq!(&buffer.text[range.clone()], "👩‍💻e\u{301}界\n界");

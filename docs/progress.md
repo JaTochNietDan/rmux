@@ -2,6 +2,18 @@
 
 ## Current implementation focus
 
+Copy-mode vertical navigation now uses Unicode terminal-cell widths instead of
+UTF-8 byte offsets and retains the preferred column across short lines. Sparse
+byte/cell checkpoints are built during background snapshot loading; lookups
+binary-search those checkpoints rather than rescan whole long-line prefixes.
+Indices use compact u32 byte/cell pairs within the existing 8 MiB snapshot cap,
+with at most one checkpoint per 256 bytes plus one per retained line. This is
+not a measured native latency claim; pathological giant graphemes can still
+require scanning their full context. Five focused copy-mode tests passed,
+including CJK, combined emoji, short-line transitions and sparse long-line
+lookups. The desktop test build passed. Native rendering/input validation,
+rectangle selection and named buffers remain pending.
+
 Copy mode now supports character ranges alongside line selection. c toggles the
 mode; horizontal arrows or h/l enter character navigation, and Shift or Space/v
 anchors ranges across lines. GraphemeCursor keeps combined emoji, accents and
