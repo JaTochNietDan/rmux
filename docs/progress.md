@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Find now allows its query and compact navigation/status group to wrap in narrow
+panes instead of reserving a fixed-height single row. Truncated status text has a
+full tooltip and errors use a distinct tint; navigation/close require standard
+clicks. Rejected query edits clear the previous worker query, preventing stale
+highlights/navigation from remaining behind an oversized draft. Oversized input
+keeps its error instead of accepting a clear-query progress update; Enter/buttons
+do not navigate while an error is displayed. Desktop test compilation and existing
+query-history tests passed. Native narrow-pane, invalid-query and click acceptance
+remain pending; history tests do not cover the new visual/error transitions.
+
 Added per-terminal Find query history with Alt+Up/Down recall, editable drafts and
 return-to-draft navigation. Submit/close remembers queries; exact duplicates move
 to the front, with eight-entry/16 KiB retained-text limits and 4 KiB per query.

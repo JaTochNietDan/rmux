@@ -53,6 +53,7 @@ pub(super) struct FindBar {
     pub worker: SearchWorker,
     input: Entity<TextField>,
     status: String,
+    status_error: bool,
     history: QueryHistory,
     _updates: Task<()>,
 }
@@ -90,26 +91,33 @@ impl FindBar {
         cx: &mut Context<Self>,
     ) -> Self {
         let input = cx.new(|cx| TextField::new(initial_query, cx));
+        let mut status_error = false;
         let status = if initial_query.is_empty() {
             "Find in terminal".into()
         } else {
             match worker.set_query(initial_query.to_owned()) {
                 Ok(_) => "Searching…".into(),
-                Err(error) => error.to_string(),
+                Err(error) => { status_error = true; error.to_string() },
             }
         };
         let focus = input.read(cx).focus.clone();
         cx.subscribe(&input, |view, _, event: &EditEvent, cx| match event {
             EditEvent::Changed(text) => {
                 view.history.edited(text);
+                view.status_error = false;
                 view.status = if text.is_empty() { "Find in terminal" } else { "Searching…" }.into();
                 if let Err(error) = view.worker.set_query(text.clone()) {
+                    view.status_error = true;
                     view.status = error.to_string();
+                    // Clear the previous query instead of leaving its highlights
+                    // and queued navigation active behind an invalid new draft.
+                    let _ = view.worker.set_query(String::new());
                 }
                 cx.notify();
             }
             EditEvent::Submitted { text, reverse } => {
                 view.history.remember(text);
+                if view.status_error { return; }
                 view.worker.navigate(if *reverse { Direction::Newer } else { Direction::Older });
             },
             EditEvent::Cancelled => cx.emit(Closed),
@@ -121,6 +129,8 @@ impl FindBar {
                 if entity
                     .update(cx, |view, cx| {
                         if let Some(update) = view.worker.latest() {
+                            if view.input.read(cx).value().len() > 4096 { return; }
+                            view.status_error = update.result.is_err();
                             view.status = match update.result {
                                 Ok(_) if view.input.read(cx).value().is_empty() => "Find in terminal".into(),
                                 Ok(p) if p.matches == 0 => if p.pending { "Searching…" } else { "No matches" }.into(),
@@ -147,6 +157,7 @@ impl FindBar {
             worker,
             input,
             status,
+            status_error,
             history,
             _updates: task,
         }
@@ -157,12 +168,12 @@ impl Render for FindBar {
         div()
             .key_context("FindInput")
             .on_key_down(cx.listener(Self::history_key))
-            .h(px(34.))
+            .min_h(px(34.))
             .flex_shrink_0()
-            .flex()
+            .flex().flex_wrap().min_w_0()
             .items_center()
-            .gap_2()
-            .px_2()
+            .gap_1()
+            .px_2().py_1()
             .bg(rgb(0x242424))
             .border_b_1()
             .border_color(rgb(0x353535))
@@ -177,33 +188,28 @@ impl Render for FindBar {
             .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
             .on_mouse_move(|_, _, cx| cx.stop_propagation())
             .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
-            .child(div().id("find-query").flex_1().min_w_0()
+            .child(div().id("find-query").flex_1().min_w(px(80.)).max_w_full()
                 .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("Find in terminal · Alt+↑/↓ recalls recent searches · Enter / Shift+Enter navigates matches".into())).into())
                 .child(self.input.clone()))
-            .child(
-                div()
+            .child(div().flex().items_center().gap_1().min_w_0().max_w_full()
+                .child(div().id("find-status").min_w_0().max_w(px(140.))
                     .text_xs()
-                    .max_w(px(140.))
-                    .flex_shrink_0()
-                    .text_color(rgb(0xa0a0a0))
+                    .text_color(rgb(if self.status_error { 0xf08080 } else { 0xa0a0a0 }))
                     .truncate()
-                    .child(self.status.clone()),
-            )
-            .child(
-                pane_view::pane_control("find-older", "Older match · Enter")
-                    .on_click(cx.listener(|this, _, _, _| this.worker.navigate(Direction::Older)))
-                    .child(icons::icon("chevron-up")),
-            )
-            .child(
-                pane_view::pane_control("find-newer", "Newer match · Shift+Enter")
-                    .on_click(cx.listener(|this, _, _, _| this.worker.navigate(Direction::Newer)))
-                    .child(icons::icon("chevron-down")),
-            )
-            .child(
-                pane_view::pane_control("find-close", "Close Find · Escape")
-                    .on_click(cx.listener(|_, _, _, cx| cx.emit(Closed)))
-                    .child(icons::icon("close")),
-            )
+                    .tooltip({ let status: SharedString = self.status.clone().into(); move |_, cx| cx.new(|_| pane_view::ControlHint(status.clone())).into() })
+                    .child(self.status.clone()))
+                .child(pane_view::pane_control("find-older", "Older match · Enter")
+                    .on_click(cx.listener(|this, event: &ClickEvent, _, _| {
+                        if event.standard_click() && !this.status_error { this.worker.navigate(Direction::Older); }
+                    })).child(icons::icon("chevron-up")))
+                .child(pane_view::pane_control("find-newer", "Newer match · Shift+Enter")
+                    .on_click(cx.listener(|this, event: &ClickEvent, _, _| {
+                        if event.standard_click() && !this.status_error { this.worker.navigate(Direction::Newer); }
+                    })).child(icons::icon("chevron-down")))
+                .child(pane_view::pane_control("find-close", "Close Find · Escape")
+                    .on_click(cx.listener(|_, event: &ClickEvent, _, cx| {
+                        if event.standard_click() { cx.emit(Closed); }
+                    })).child(icons::icon("close"))))
     }
 }
 
