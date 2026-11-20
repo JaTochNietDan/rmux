@@ -34,3 +34,29 @@ Reproduce:
 ```sh
 mise exec -- cargo test --release -p rmux-terminal notification_stream_boundary_throughput -- --ignored --nocapture
 ```
+
+## Conservative prefix fast path
+
+A subsequent optimization selects the original bulk API only when no OSC is
+being captured, a chunk has no `9`, and it does not end in a possible OSC
+introducer byte. All other chunks retain boundary parsing. This excludes complete
+and split literal `99;` prefixes without adding a second VT parser.
+
+The same alternating three-sample comparison after this change:
+
+| Workload | Panes | Previous raw path | Optimized path | Change |
+|---|---:|---:|---:|---:|
+| plain | 1 | 1073.5 | 1036.5 | -3.5% |
+| ansi_unicode | 1 | 332.2 | 329.4 | -0.9% |
+| shell_metadata | 1 | 431.4 | 427.9 | -0.8% |
+| plain | 8 | 1204.3 | 1174.0 | -2.5% |
+| ansi_unicode | 8 | 330.8 | 331.0 | +0.0% |
+| shell_metadata | 8 | 436.8 | 442.7 | +1.3% |
+
+[Optimized raw samples](notification-prefix-fast-path.jsonl). Engine-resident
+bytes still match in every pair. The shell-metadata fixture contains no digit 9,
+so it exercises the shortcut; metadata containing that digit still takes the
+slower path. These measurements do not establish a universal overhead reduction.
+Differential tests compare notification revisions/content and screen text against
+the boundary-only path at every split of mixed streams, including cancelled and
+UTF-8 sequences and OSC-like content inside DCS.

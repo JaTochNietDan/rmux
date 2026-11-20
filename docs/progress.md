@@ -2,6 +2,19 @@
 
 ## Current implementation focus
 
+Added a conservative OSC 99 prefix fast path after the boundary benchmark exposed
+OSC-heavy overhead. Chunks without `9`, without a potentially split introducer,
+and without an active capture use Ghostty's original bulk writer. Differential
+framing tests compare every split of mixed control streams with the boundary-only
+path. In the same one/eight-pane benchmark, the no-digit-9 shell-metadata fixture
+moved from 25–28% slower to within roughly 1% of the prior raw path; ANSI/Unicode
+was within 1%, plain text 2–4% slower, and engine-resident bytes matched. Chunks
+containing `9` conservatively retain the boundary path, so remaining overhead is
+workload-dependent. See [measurements](benchmarks/notification-boundaries.md).
+Validation: 77 terminal tests passed in the combined run; one existing shell
+resize test hit a transient `openpty` allocation error and passed on its focused
+retry. The manual throughput benchmark is ignored during ordinary test runs.
+
 Measured OSC 99 stream-boundary overhead against the prior raw writer in one
 release executable, alternating three samples at one/eight panes. ANSI/Unicode
 throughput stayed within 1% in the original comparison; plain text varied by

@@ -571,6 +571,20 @@ impl Terminal {
     pub fn write(&mut self, bytes: &[u8]) {
         self.revision = self.revision.wrapping_add(1);
         self.mouse.refresh = true;
+        // A supported notification starts with literal OSC + "99;". A chunk
+        // without '9' cannot contain it. Keep the boundary path if an OSC is
+        // already captured, or if an introducer could be split at this suffix.
+        // Other OSCs can remain entirely on Ghostty's normal bulk path.
+        let partial_introducer = bytes.last().is_some_and(|byte| matches!(byte, 0x1b | b']' | 0x9d));
+        if self.osc_capture.is_none() && !partial_introducer && memchr::memchr(b'9', bytes).is_none() {
+            // SAFETY: exclusively owned terminal and valid borrowed input.
+            unsafe { ghostty_terminal_vt_write(self.terminal, bytes.as_ptr(), bytes.len()); }
+        } else {
+            self.write_with_osc_boundaries(bytes);
+        }
+    }
+
+    fn write_with_osc_boundaries(&mut self, bytes: &[u8]) {
         let mut remaining = bytes;
         while !remaining.is_empty() {
             let mut stop = GhosttyTerminalWriteStop { size: std::mem::size_of::<GhosttyTerminalWriteStop>(), ..Default::default() };
@@ -1403,6 +1417,31 @@ mod tests {
                         for terminal in &mut terminals { black_box(terminal.frame()?); }
                     }
                 }
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn osc_fast_path_matches_boundary_path_at_every_chunk_split() -> Result<()> {
+        let streams: &[&[u8]] = &[
+            b"plain\x1b]7;file://localhost/tmp\x1b\\\x1b]99;i=x:d=0;Build\x1b\\\x1b]99;i=x:p=body;Done\x07tail",
+            b"\x1b]2;known99title\x07\x1b]99;;\xe4\xb8\x96\xe7\x95\x8c\x1b\\",
+            b"\x1bPignored]99;;fake\x1b\\\x1b]99;;actual\x07",
+            b"\x1b]99;i=x:d=0;keep\x07\x1b]99;;cancel\x18\x1b]99;i=x:p=body;body\x07",
+            b"\x1b]\0\x07\x1b]\x18\x1b]\x9d99;;C1\x07",
+        ];
+        for stream in streams {
+            for split in 0..=stream.len() {
+                let mut optimized = Terminal::new(80, 4)?;
+                let mut reference = Terminal::new(80, 4)?;
+                for chunk in [&stream[..split], &stream[split..]] {
+                    optimized.write(chunk);
+                    reference.write_with_osc_boundaries(chunk);
+                }
+                let message = |terminal: &Terminal| terminal.notification_since(0).map(|n| (n.revision, n.title.clone(), n.body.clone()));
+                assert_eq!(message(&optimized), message(&reference), "split {split} in {stream:?}");
+                assert_eq!(optimized.frame()?.text(), reference.frame()?.text());
             }
         }
         Ok(())

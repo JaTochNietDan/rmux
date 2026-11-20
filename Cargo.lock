@@ -4521,6 +4521,7 @@ dependencies = [
  "base64",
  "bindgen 0.72.1",
  "libc",
+ "memchr",
  "portable-pty",
  "smol_str",
  "tempfile",
