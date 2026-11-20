@@ -117,10 +117,16 @@ impl Search {
     }
 
     pub fn select(&mut self, direction: Direction) -> Result<Progress> {
+        self.select_if(direction, || true)
+    }
+
+    /// Recheck supersession after acquiring the parser, before moving selection.
+    pub(crate) fn select_if(&mut self, direction: Direction, current: impl FnOnce() -> bool) -> Result<Progress> {
         let progress = self.progress()?;
         if progress.matches == 0 { return Ok(progress); }
         {
             let mut terminal = self.terminal.lock().unwrap_or_else(|e| e.into_inner());
+            if !current() { return self.progress(); }
             // SAFETY: navigation, snapshot extraction and selection installation
             // are one transaction with no intervening terminal mutations.
             unsafe {

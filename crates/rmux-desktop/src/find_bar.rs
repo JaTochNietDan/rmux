@@ -109,9 +109,6 @@ impl FindBar {
                 if let Err(error) = view.worker.set_query(text.clone()) {
                     view.status_error = true;
                     view.status = error.to_string();
-                    // Clear the previous query instead of leaving its highlights
-                    // and queued navigation active behind an invalid new draft.
-                    let _ = view.worker.set_query(String::new());
                 }
                 cx.notify();
             }

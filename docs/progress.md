@@ -2,11 +2,22 @@
 
 ## Current implementation focus
 
+Moved invalid-query supersession into SearchWorker: even an oversized edit advances
+the revision, clears pending navigation/refresh, schedules an empty query and
+returns its validation error. Removed the Find bar's duplicate reset. Search
+navigation rechecks revision/cancellation after taking the parser lock, before
+installing a selection. A focused regression holds the parser while rejecting a
+query, verifies old results disappear, no queued selection is installed, results
+clear, and a later valid query navigates successfully. All six search-worker tests
+and desktop cargo check passed. Existing user/previously installed terminal
+selection is not erased by this result-set reset; native visual acceptance remains
+pending.
+
 Find now allows its query and compact navigation/status group to wrap in narrow
 panes instead of reserving a fixed-height single row. Truncated status text has a
 full tooltip and errors use a distinct tint; navigation/close require standard
 clicks. Rejected query edits clear the previous worker query, preventing stale
-highlights/navigation from remaining behind an oversized draft. Oversized input
+results/queued navigation from remaining behind an oversized draft. Oversized input
 keeps its error instead of accepting a clear-query progress update; Enter/buttons
 do not navigate while an error is displayed. Desktop test compilation and existing
 query-history tests passed. Native narrow-pane, invalid-query and click acceptance

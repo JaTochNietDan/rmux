@@ -101,7 +101,10 @@ impl SearchWorker {
                                 Direction::Newer
                             };
                             navigation -= navigation.signum();
-                            progress = search.select(direction)?;
+                            progress = search.select_if(direction, || {
+                                !canceled.load(Ordering::Acquire)
+                                    && pending.lock().unwrap_or_else(|e| e.into_inner()).revision == revision
+                            })?;
                         }
                         Ok(progress)
                     })();
@@ -133,17 +136,20 @@ impl SearchWorker {
         Ok(this)
     }
 
+    /// Every edit supersedes prior work. Invalid input schedules an empty query
+    /// before returning its error, so old results/navigation cannot remain current.
     pub fn set_query(&self, query: String) -> Result<u64> {
-        ensure!(query.len() <= 4096, "search query exceeds 4096 bytes");
+        let valid = query.len() <= 4096;
         let revision = {
             let mut pending = self.pending.lock().unwrap_or_else(|e| e.into_inner());
             pending.revision = pending.revision.wrapping_add(1);
-            pending.query = Some(query);
+            pending.query = Some(if valid { query } else { String::new() });
             pending.navigation = 0;
             pending.refresh = false;
             pending.revision
         };
         let _ = self.wake.try_send(());
+        ensure!(valid, "search query exceeds 4096 bytes");
         Ok(revision)
     }
 
@@ -209,6 +215,32 @@ mod tests {
             assert!(Instant::now() < deadline, "search worker did not finish");
             std::thread::sleep(Duration::from_millis(1));
         }
+    }
+
+    #[test]
+    fn rejected_query_supersedes_results_and_pending_navigation() -> Result<()> {
+        let terminal = Arc::new(Mutex::new(Terminal::new(30, 3)?));
+        terminal.lock().unwrap().write(b"needle needle\r\n");
+        let worker = SearchWorker::new(terminal.clone())?;
+        let initial = worker.set_query("needle".into())?;
+        assert_eq!(wait_for(&worker, initial, false).result.unwrap().matches, 2);
+        // Hold parsing to make the supersession observable before clear executes.
+        let guard = terminal.lock().unwrap();
+        worker.navigate(Direction::Older);
+        assert!(worker.set_query("x".repeat(4097)).is_err());
+        assert!(worker.latest().is_none());
+        let revision = worker.pending.lock().unwrap().revision;
+        assert_ne!(revision, initial);
+        assert_eq!(worker.pending.lock().unwrap().navigation, 0);
+        drop(guard);
+        let cleared = wait_for(&worker, revision, false).result.unwrap();
+        assert_eq!(cleared.matches, 0);
+        assert_eq!(cleared.selected, None);
+        assert!(terminal.lock().unwrap().selected_text()?.is_none());
+        let next = worker.set_query("needle".into())?;
+        worker.navigate(Direction::Older);
+        assert_eq!(wait_for(&worker, next, true).result.unwrap().matches, 2);
+        Ok(())
     }
 
     #[test]
