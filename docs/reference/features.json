@@ -492,7 +492,14 @@
         "R"
       ],
       "acceptance": "Transfer to the correct host, quote resulting paths, and clean bounded temporary storage.",
-      "rmux_status": "not_started"
+      "rmux_status": "in_progress",
+      "implementation": "macOS/Linux external file drops into a focused terminal paste POSIX-quoted absolute paths through the bounded bracketed-paste queue without reading contents or adding Enter. Focus/overlay/quit guards, 256-path and 64 KiB limits, UTF-8/control validation and a real POSIX shell quoting fixture are implemented.",
+      "remaining": "Native Finder/file-manager drag acceptance, Windows shell quoting, image clipboard materialization, remote upload/routing and full platform/protocol acceptance.",
+      "implementation_sources": [
+        "crates/rmux-desktop/src/file_drop.rs",
+        "crates/rmux-desktop/src/main.rs"
+      ],
+      "progress_record": "docs/progress.md"
     },
     {
       "id": "T12",

@@ -1,5 +1,12 @@
 # rmux
 
+On macOS/Linux, drop files into a **focused terminal** to insert their absolute
+paths using POSIX shell quoting. A space follows each path; no Enter is sent.
+Close terminal overlays first. Drops support at most 256 paths and 64 KiB of
+quoted text; invalid UTF-8 or control characters are rejected. This inserts local
+path text only—it does not upload files, read images or detect a remote shell.
+Windows file-drop quoting is not implemented yet.
+
 In **Listening Ports**, select a row and press **O**, or click its external-link
 button, to open it as HTTP in your default browser. Enter still copies the raw
 listener address. Wildcard bindings (`0.0.0.0` and `::`) open through IPv4/IPv6

@@ -8,6 +8,8 @@ mod updater;
 mod attention;
 mod cell_metrics;
 mod icons;
+#[cfg(unix)]
+mod file_drop;
 mod git_context;
 mod git_watch;
 mod clipboard;
@@ -1288,6 +1290,23 @@ impl TerminalView {
         }
         cx.stop_propagation();
     }
+    fn drop_files(&mut self, paths: &ExternalPaths, window: &mut Window, cx: &mut Context<Self>) {
+        cx.stop_propagation();
+        if !self.focus.is_focused(window) || self.copy_mode.is_some() || self.find.is_some()
+            || self.ports.visible || cx.global::<PromptGate>().is_active()
+            || cx.global::<Shutdowns>().quitting || cx.global::<Shutdowns>().quit_prompt {
+            self.error = Some("Focus the terminal and close its overlays before dropping files".into());
+            cx.notify();
+            return;
+        }
+        #[cfg(unix)]
+        let result = file_drop::quoted_paths(paths.paths()).and_then(|text| self.session.paste_owned(text));
+        #[cfg(not(unix))]
+        let result: anyhow::Result<()> = { let _ = paths; Err(anyhow::anyhow!("File drops need Windows shell quoting support")) };
+        self.error = result.err().map(|error| error.to_string());
+        self.refresh_input_mode(cx);
+        cx.notify();
+    }
     fn paste(&mut self, _: &Paste, _: &mut Window, cx: &mut Context<Self>) {
         self.refresh_input_mode(cx);
         if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
@@ -1548,6 +1567,7 @@ impl Render for TerminalView {
             .on_key_down(cx.listener(Self::key))
             .on_key_up(cx.listener(Self::key_up))
             .on_scroll_wheel(cx.listener(Self::wheel))
+            .on_drop(cx.listener(Self::drop_files))
             .on_action(cx.listener(Self::paste))
             .on_action(cx.listener(|this, _: &EnterCopyMode, window, cx| {
                 if let Some(mode) = &this.copy_mode { mode.read(cx).focus.focus(window); return; }

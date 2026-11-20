@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Started T11 with local external file-drop insertion on macOS/Linux. Focused
+terminals accept absolute paths as POSIX-quoted text through the existing bounded
+paste queue, preserving bracketed paste and adding no Enter. Overlays, unfocused
+terminals and active quit/prompt guards reject delivery. Files are never opened;
+256-path/64 KiB caps and UTF-8/control checks apply before queueing. Desktop test
+compilation and a focused real-/bin/sh round-trip passed for spaces, apostrophes,
+Unicode and literal shell syntax, plus invalid/oversized input rejection. Native
+Finder/file-manager acceptance, Windows quoting, image paste and remote upload
+remain pending; T11 is partial, not verified. No native UI claim is made while
+the Mac remains locked.
+
 Added an explicit Open as HTTP external-link control and O shortcut to the local
 Listening Ports panel. Wildcard IPv4/IPv6 addresses map to their loopback address;
 explicit addresses and ports are preserved. Scoped IPv6 and port-zero entries
