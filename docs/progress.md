@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Added New Workspace Here to local directory browsing. The action uses the
+existing asynchronous workspace/PTY launch path with an explicit directory,
+normal group inheritance and configured placement. Explicit cwd takes precedence
+over a group's directory override. Busy/shutdown state and the 64-workspace
+window limit are checked before creation. No shell `cd` text is injected.
+Desktop cargo check passed; native picker-to-workspace cwd/focus acceptance
+remains pending.
+
 Local listings, previews and error recovery now retain a visible path line above
 search, so filtering away the Copy Path/Back rows does not hide the current
 location. It truncates with a full-path hover hint and remains present in compact

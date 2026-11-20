@@ -386,6 +386,8 @@ impl CommandPalette {
         let mut commands = Vec::new();
         commands.push(Command { title: "Go to Directory…".into(), subtitle: Some(listing.path.display().to_string()), shortcut: None,
             target: PaletteEvent::Run(Box::new(EnterDirectory { path: listing.path.clone() })) });
+        commands.push(Command { title: "New Workspace Here".into(), subtitle: Some(listing.path.display().to_string()), shortcut: None,
+            target: PaletteEvent::Run(Box::new(NewWorkspaceInDirectory { path: listing.path.clone() })) });
         if let Some(parent) = listing.path.parent() {
             commands.push(Command { title: ".. · Parent directory".into(), subtitle: Some(parent.display().to_string()), shortcut: None,
                 target: PaletteEvent::Run(Box::new(BrowseDirectory { path: parent.to_owned() })) });

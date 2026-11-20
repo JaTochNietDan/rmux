@@ -197,6 +197,9 @@ are labeled explicitly.
 Choose **Go to Directory…** to enter an absolute path directly. Enter or Open
 loads it; Escape or Cancel dismisses the editor. Paths are literal (no `~`,
 environment-variable or shell expansion), with a 4,096-byte input limit.
+Choose **New Workspace Here** to start a fresh terminal in the displayed
+directory. It follows normal workspace placement and group membership, while
+the browsed path takes precedence over the group's default directory.
 Directory reads run in the background and retain at most 2,048 entries per
 snapshot, sorted directories-first within that subset. A limit notice identifies
 partial listings. Switching focus during loading prevents the result from taking

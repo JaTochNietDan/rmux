@@ -3667,6 +3667,13 @@ impl Render for WorkspaceWindow {
                 else { this.notice = Some("The current terminal has not reported a local directory yet.".into()); cx.notify(); }
             }))
             .on_action(cx.listener(|this, action: &BrowseDirectory, window, cx| this.browse_directory(action.path.clone(), window, cx)))
+            .on_action(cx.listener(|this, action: &NewWorkspaceInDirectory, window, cx| {
+                if this.automation_available(cx).is_err() { return; }
+                if this.entries.len() >= 64 {
+                    this.notice = Some("Window workspace limit reached".into()); cx.notify(); return;
+                }
+                this.add_with_directory(1, true, None, Some(action.path.clone()), window, cx);
+            }))
             .on_action(cx.listener(|this, action: &PreviewLocalFile, window, cx| this.preview_local_file(action.path.clone(), window, cx)))
             .on_action(cx.listener(|this, action: &CopyLocalPath, _, cx| {
                 this.notice = Some(match action.path.to_str() {
