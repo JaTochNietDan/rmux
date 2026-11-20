@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Added a same-pane keyboard/output contention mode to the PTY benchmark and
+mise bench-keyboard task. It records press, release and native-text dispatch call
+timings into the output-flooding target at 1/4/8/16 panes, with per-size child
+cleanup. Local release run passed all sizes; key-press p99 ranged 0.016–0.216 ms,
+maximum observed 0.244 ms. Raw results and limits are recorded in the PTY baseline.
+The existing raw-input responder benchmark did not exercise this parser lock.
+No mutex rewrite is justified by this sample; UI latency, Kitty-mode transitions
+and sustained worst-case acceptance remain unproven.
+
 Bound shared control tooltips to the window's available width/height, with a
 380px width ceiling, 120px height ceiling, five-line wrapping/ellipsis and clipped
 overflow. Explicit line spacing and a subtle border distinguish hints from dark

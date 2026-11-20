@@ -119,12 +119,60 @@ fn benchmark(panes: usize) -> Result<()> {
     Ok(())
 }
 
+// Unlike the responder benchmark, input targets a terminal actively parsing output.
+// This measures caller stalls, not rendering latency or child response latency.
+fn keyboard_benchmark(panes: usize) -> Result<()> {
+    let sessions: Vec<_> = (0..panes).map(|_| spawn("--flood")).collect::<Result<_>>()?;
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while sessions.iter().any(|session| session.output_bytes() == 0) {
+        ensure!(Instant::now() < deadline, "keyboard flood workloads did not become ready");
+        thread::sleep(Duration::from_millis(5));
+    }
+    let before: u64 = sessions.iter().map(Session::output_bytes).sum();
+    let mut presses = Vec::with_capacity(128);
+    let mut releases = Vec::with_capacity(128);
+    let mut text = Vec::with_capacity(128);
+    let started = Instant::now();
+    for _ in 0..128 {
+        let target = &sessions[0];
+        let time = Instant::now();
+        ensure!(target.key("up", Default::default(), false)?, "up key was not encoded");
+        presses.push(time.elapsed().as_nanos());
+        let time = Instant::now();
+        target.key_release("up", Default::default())?;
+        releases.push(time.elapsed().as_nanos());
+        let time = Instant::now();
+        ensure!(!target.key_with_text("a", Default::default(), false, Some("a"))?, "ordinary text should use native composition");
+        text.push(time.elapsed().as_nanos());
+        thread::sleep(Duration::from_millis(5));
+    }
+    presses.sort_unstable(); releases.sort_unstable(); text.sort_unstable();
+    let parsed = sessions.iter().map(Session::output_bytes).sum::<u64>() - before;
+    ensure!(parsed > 0, "output stopped during keyboard sampling");
+    println!(
+        "{{\"mode\":\"keyboard_same_pane_output\",\"panes\":{panes},\"samples\":128,\"elapsed_seconds\":{:.6},\"parsed_flood_bytes\":{parsed},\"key_press_p50_ns\":{},\"key_press_p99_ns\":{},\"key_press_max_ns\":{},\"key_release_p99_ns\":{},\"key_release_max_ns\":{},\"native_text_dispatch_p99_ns\":{},\"native_text_dispatch_max_ns\":{}}}",
+        started.elapsed().as_secs_f64(), percentile(&presses, 50), percentile(&presses, 99), presses.last().unwrap(),
+        percentile(&releases, 99), releases.last().unwrap(), percentile(&text, 99), text.last().unwrap(),
+    );
+    // Wait for owned workload cleanup so the next size starts without prior floods.
+    let shutdowns: Vec<_> = sessions.iter().map(Session::shutdown_handle).collect();
+    drop(sessions);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while shutdowns.iter().any(|shutdown| !shutdown.is_finished()) {
+        ensure!(Instant::now() < deadline, "keyboard workload cleanup timed out");
+        thread::sleep(Duration::from_millis(5));
+    }
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let mode = std::env::args().nth(1).unwrap_or_else(|| "all".into());
     if mode == "--flood" || mode == "--echo" {
         return child(&mode);
     }
-    if mode == "all" {
+    if mode == "keyboard" {
+        for panes in [1, 4, 8, 16] { keyboard_benchmark(panes)?; }
+    } else if mode == "all" {
         for panes in [1, 4, 8, 16] {
             benchmark(panes)?;
         }

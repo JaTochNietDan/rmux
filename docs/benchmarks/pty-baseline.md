@@ -51,3 +51,25 @@ retry. Opt-in renderer metrics expose `snapshot_busy`. This desktop change is
 **not measured by the results above**; native output-pressure/presentation and
 resize behavior still require acceptance. Resize and other engine access paths
 can still block, so the app is not claimed to be lock-free or lag-free.
+
+## Keyboard dispatch into an output-flooding pane
+
+`mise run bench-keyboard` measures 128 key press, release and native-text routing
+calls while the targeted terminal itself parses continuous colored Unicode output.
+All 1/4/8/16 panes produce output, unlike the original benchmark's quiet responder.
+The harness waits for its owned children to exit before moving to the next size.
+Raw results are in `pty-keyboard-same-pane.jsonl` (local macOS release build).
+
+| Flood panes | Key press p99 | Largest press | Release p99 | Native-text routing p99 |
+| --- | --- | --- | --- | --- |
+| 1 | 0.216 ms | 0.244 ms | 0.103 ms | 0.029 ms |
+| 4 | 0.022 ms | 0.037 ms | 0.013 ms | 0.0003 ms |
+| 8 | 0.016 ms | 0.018 ms | 0.018 ms | 0.0005 ms |
+| 16 | 0.028 ms | 0.153 ms | 0.0003 ms | 0.0006 ms |
+
+This is one short sample per size, not a worst-case bound. Scheduling and output
+throughput vary with pane count; lower values at more panes are not evidence of
+better scaling. There is no GUI rendering, input-to-presentation measurement,
+Kitty keyboard mode transition, IME composition or child consumption timing here.
+The encoder still shares the parser mutex; these measurements establish a
+regression baseline, not a nonblocking guarantee. No locking change was made.

@@ -145,3 +145,7 @@ run = "sh scripts/release-macos.sh"
 [tasks.bench-palette-search]
 description = "Compare optimized palette filtering with full rescans, without a GUI"
 run = ["mkdir -p target", "rustc --edition=2024 -O scripts/bench-palette-search.rs -o target/bench-palette-search", "./target/bench-palette-search"]
+
+[tasks.bench-keyboard]
+description = "Release key dispatch timings into an output-flooding pane at 1/4/8/16 panes"
+run = "cargo run --release -p rmux-terminal --example pty_bench -- keyboard"
