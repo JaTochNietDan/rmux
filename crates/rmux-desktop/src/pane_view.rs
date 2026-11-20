@@ -101,6 +101,21 @@ pub(super) fn pane_control(id: &'static str, hint: &'static str) -> Stateful<Div
         .tooltip(move |_, cx| cx.new(|_| ControlHint(hint.into())).into())
 }
 
+/// Resolve on hover so settings reloads cannot leave an obsolete shortcut visible.
+pub(super) fn action_control(
+    id: &'static str,
+    label: &'static str,
+    action: impl Action,
+    focus: Option<FocusHandle>,
+) -> Stateful<Div> {
+    pane_control(id, label).tooltip(move |window, cx| {
+        let focus = focus.clone().or_else(|| window.focused(cx));
+        let hint = focus.as_ref().and_then(|focus| shortcuts::hint(&action, focus, window));
+        let text = hint.map_or_else(|| label.to_owned(), |hint| format!("{label}  {hint}"));
+        cx.new(|_| ControlHint(text.into())).into()
+    })
+}
+
 #[derive(Clone)]
 struct TabMenu {
     target: EntityId,
@@ -997,6 +1012,7 @@ impl PaneView {
 
 impl Render for PaneView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let control_focus = self.terminals.get(self.active).map(|terminal| terminal.read(cx).focus.clone());
         // Hidden tabs keep their engines, but need not retain shaped glyph rows.
         // Do not notify: releasing a cache cannot change visible output.
         for (index, terminal) in self.terminals.iter().enumerate() {
@@ -1181,7 +1197,7 @@ impl Render for PaneView {
                                 }),
                         )
                         .when(self.terminals.len() > 1, |header| header.child(
-                            pane_control("tab-picker", if cfg!(target_os = "macos") { "Choose Terminal Tab  ⌘⇧T" } else { "Choose Terminal Tab  Ctrl+Alt+Shift+T" })
+                            action_control("tab-picker", "Choose Terminal Tab", ShowTabPicker, control_focus.clone())
                                 .on_click(cx.listener(|this, event: &ClickEvent, window, cx| {
                                     if !event.standard_click() { return; }
                                     this.show_tab_picker(window, cx);
@@ -1190,18 +1206,18 @@ impl Render for PaneView {
                         .when(self.spawning_tab.is_some(), |header| header.child(
                             div().flex().items_center().gap_1().px_2().text_xs().text_color(rgb(0xaaaaaa))
                                 .child(if self.tab_launch_canceled.as_ref().is_some_and(|cancel| cancel.load(Ordering::Relaxed)) { "Canceling…" } else { "Starting…" })
-                                .child(pane_control("cancel-new-tab", "Cancel New Terminal Tab")
+                                .child(action_control("cancel-new-tab", "Cancel New Terminal Tab", CancelNewTab, control_focus.clone())
                                     .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
                                         if event.standard_click() { this.cancel_tab_launch(cx); }
                                     })).child(icons::icon("close")))
                         ))
                         .child(
-                            pane_control("new-tab", if self.spawning_tab.is_some() { "Starting terminal…" } else if cfg!(target_os = "macos") { "New Terminal Tab  ⌘T" } else { "New Terminal Tab  Ctrl+Shift+T" })
+                            action_control("new-tab", if self.spawning_tab.is_some() { "Starting terminal…" } else { "New Terminal Tab" }, NewTab, control_focus.clone())
                                 .on_click(cx.listener(|this, _, window, cx| this.add(window, cx)))
                                 .child(icons::icon("plus")),
                         )
                         .child(
-                            pane_control("split-right", if cfg!(target_os = "macos") { "Split Right  ⌘D" } else { "Split Right  Ctrl+Shift+D" })
+                            action_control("split-right", "Split Right", Split, control_focus.clone())
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.focus(window, cx);
                                     window.dispatch_action(Box::new(Split), cx);
@@ -1209,7 +1225,7 @@ impl Render for PaneView {
                                 .child(icons::icon("split-right")),
                         )
                         .child(
-                            pane_control("split-down", if cfg!(target_os = "macos") { "Split Down  ⌘⇧D" } else { "Split Down  Ctrl+Shift+E" })
+                            action_control("split-down", "Split Down", SplitBelow, control_focus.clone())
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.focus(window, cx);
                                     window.dispatch_action(Box::new(SplitBelow), cx);

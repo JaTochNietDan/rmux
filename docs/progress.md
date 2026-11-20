@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Replaced fixed shortcut labels on the terminal tab picker, new/cancel tab,
+split-right/down and sidebar new-workspace controls with the shared binding
+resolver. Tooltips resolve on hover against the pane's active terminal (sidebar
+uses current window focus), so overrides, disabled bindings and chords reflect
+the current keymap after settings reload. No binding lookup is added to the
+terminal paint loop. Desktop cargo check passed; native tooltip appearance and
+focus-context acceptance remain pending.
+
 Polished shortcut labels across palette/context-menu hints and pending chords.
 macOS uses compact modifier/key symbols; other platforms use Ctrl/Alt/Shift with
 named special keys. Binding hints respect GPUI's display key/modifiers (including

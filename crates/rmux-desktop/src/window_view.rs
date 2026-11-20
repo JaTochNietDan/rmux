@@ -3639,7 +3639,7 @@ impl Render for WorkspaceWindow {
                                  .child(gpui::div().id("sidebar-title-drag").flex_1().min_w_0().truncate().text_xs().text_color(rgb(0xa0a0a0))
                                     .on_mouse_down(MouseButton::Left, |event, window, _| { if cfg!(target_os = "macos") { if event.click_count == 2 { window.zoom_window(); } else { window_geometry::drag_titlebar(window); } } })
                                     .child(if self.sidebar_selection.len() > 1 { format!("{} selected", self.sidebar_selection.len()) } else { "Workspaces".into() }))
-                                .child(pane_view::pane_control("sidebar-new-workspace", if cfg!(target_os = "macos") { "New Workspace · ⌘N" } else { "New Workspace · Ctrl+Shift+N" })
+                                .child(pane_view::action_control("sidebar-new-workspace", "New Workspace", NewWorkspace, None)
                                     .on_click(cx.listener(|this, event: &ClickEvent, window, cx| { if event.standard_click() { this.add(1, window, cx); } })).child(icons::icon("plus")))
                                 .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint(
                                     if cfg!(target_os = "macos") { "⌘-click to select · Shift-click for range · ⌘⇧G to group" }
