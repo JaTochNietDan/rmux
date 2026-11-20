@@ -2829,13 +2829,13 @@ impl Render for WorkspaceWindow {
         let mut notification_previews = std::collections::HashMap::new();
         if self.sidebar {
             for entry in &self.entries {
-                let preview = entry.workspace.read(cx).panes.iter().find_map(|pane| {
-                    pane.read(cx).terminals.iter().find_map(|terminal| {
-                        let view = terminal.read(cx);
-                        view.notifications.latest_unread().cloned()
+                let preview = entry.workspace.read(cx).panes.iter().flat_map(|pane| {
+                    pane.read(cx).terminals.iter().filter_map(|terminal| {
+                        terminal.read(cx).notifications.unread_preview()
+                            .map(|(arrival, message)| (arrival, message.clone()))
                     })
-                });
-                if let Some(preview) = preview { notification_previews.insert(entry.workspace.entity_id(), preview); }
+                }).max_by_key(|(arrival, _)| *arrival);
+                if let Some((_, preview)) = preview { notification_previews.insert(entry.workspace.entity_id(), preview); }
             }
         }
         let current = self

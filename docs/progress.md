@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Workspace notification previews now choose the newest unread message across
+all panes/tabs using a process-wide arrival sequence, instead of the first pane
+with unread history. Per-terminal cached previews include that sequence, so the
+sidebar does not scan each 32-message ring. Moving panes therefore does not change
+preview priority. Three notification tests passed, covering interleaved terminal
+arrivals, dismissal, read state and eviction. Native sidebar verification remains
+pending; notification panel ordering is unchanged.
+
 Tab drop targets now use a blue leading border with a subdued background to
 indicate insertion before the target; the trailing append area uses the same cue.
 Border space is reserved outside a drag so the cue does not change layout width.
