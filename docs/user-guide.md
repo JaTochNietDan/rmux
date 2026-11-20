@@ -11,8 +11,12 @@ pending image paste. The **Preparing image paste…** badge exposes a cancel but
 **Cancel Queued Paste** also cancels preparation, and typing cancels it before
 sending the new input. Automation mutations report busy during preparation.
 Canceling delivery does not interrupt an in-flight disk write; its unused file
-is removed when that bounded write finishes. This does not upload to remote hosts. Native clipboard
-acceptance and cleanup after forced process termination remain pending.
+is removed when that bounded write finishes. This does not upload to remote hosts. Image files live under `~/Library/Caches/rmux/pasted-images` on macOS, or
+`$XDG_CACHE_HOME/rmux/pasted-images` (default `~/.cache`) on Linux. A later image
+paste scans at most 512 entries and removes unlocked rmux image files left after
+a crash; active images stay locked. No idle cleanup timer runs. Older images in
+the system temporary directory are not swept. Native clipboard acceptance and
+forced-termination recovery testing remain pending.
 
 On macOS/Linux, drop files into a **focused terminal** to insert their absolute
 paths using POSIX shell quoting. A space follows each path; no Enter is sent.

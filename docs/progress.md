@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Added crash-orphan cleanup for newly pasted images in a private per-user cache
+directory. A stable directory lock serializes file publication and bounded cleanup;
+content writes run after releasing it, while a per-image lock remains held for
+the owning terminal lifetime. Each background paste examines at most 512 entries,
+removing only unlocked regular rmux-image files and skipping symlinks/unrelated
+names. Contended publication returns a retryable busy error instead of blocking.
+Focused storage tests passed permissions/bytes, live-file retention, orphan
+removal, publication exclusion, unrelated/symlink preservation and quota release.
+Native forced-termination/cross-process acceptance remains pending. No idle timer,
+external temp-directory sweep or deletion of legacy image files was introduced.
+
 Image preparation now participates in the existing paste status/cancel UI. The
 badge distinguishes Preparing image paste from queued delivery, and both its
 button and Cancel Queued Paste cancel the pending image task plus queued PTY
