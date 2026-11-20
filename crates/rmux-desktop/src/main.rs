@@ -437,6 +437,7 @@ struct TerminalView {
     status_details: Option<Vec<rmux_terminal::program_status::Record>>,
     ports: ports_view::State,
     copy_mode: Option<Entity<copy_mode::CopyMode>>,
+    hidden_line_input: bool,
     attention: attention::Attention,
     session: Session,
     applied_colors: Option<[Option<Color>; 3]>,
@@ -471,6 +472,12 @@ struct PreparedTerminal {
 struct TabMetadataChanged;
 impl EventEmitter<TabMetadataChanged> for TerminalView {}
 impl TerminalView {
+    fn refresh_input_mode(&mut self, cx: &mut Context<Self>) {
+        let hidden = self.input_focused && self.session.local_input_mode()
+            .is_some_and(|mode| mode.canonical && !mode.echo);
+        if self.hidden_line_input != hidden { self.hidden_line_input = hidden; cx.notify(); }
+    }
+
     fn refresh_git_context(&mut self, cx: &mut Context<Self>) {
         if self.git_loading { self.git_refresh_pending = true; return; }
         let directory = self.snapshot_directory.clone();
@@ -658,6 +665,7 @@ impl TerminalView {
                         if let Some(status) = view.session.exit_status() {
                             view.error = Some(status);
                         }
+                        if !retry { view.refresh_input_mode(cx); }
                         if view.rendered_paste_pending != view.session.paste_pending() { cx.notify(); }
                         if let Some(error) = view.session.take_input_error() {
                             view.error = Some(error);
@@ -791,6 +799,7 @@ impl TerminalView {
             status_details: None,
             ports: Default::default(),
             copy_mode: None,
+            hidden_line_input: false,
             attention: attention::Attention::default(),
             input_focused: false,
             _focus_subscriptions: subscriptions,
@@ -914,6 +923,7 @@ impl TerminalView {
             return;
         }
         self.input_focused = focused;
+        self.refresh_input_mode(cx);
         if !focused {
             self.schedule_compression(cx);
         }
@@ -951,6 +961,7 @@ impl TerminalView {
         cx.notify();
     }
     fn input(&mut self, bytes: &[u8], cx: &mut Context<Self>) {
+        self.refresh_input_mode(cx);
         if let Err(error) = self.session.input(bytes) {
             self.error = Some(error.to_string());
             cx.notify();
@@ -1188,6 +1199,7 @@ impl TerminalView {
         if !self.composition.text.is_empty() {
             return;
         }
+        self.refresh_input_mode(cx);
         let key = &event.keystroke;
         if key.modifiers.platform {
             return;
@@ -1276,6 +1288,7 @@ impl TerminalView {
         cx.stop_propagation();
     }
     fn paste(&mut self, _: &Paste, _: &mut Window, cx: &mut Context<Self>) {
+        self.refresh_input_mode(cx);
         if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
             if let Err(error) = self.session.paste_owned(text) {
                 self.error = Some(error.to_string());
@@ -1656,6 +1669,12 @@ impl Render for TerminalView {
             })
             .when(self.ports.visible, |root| root.child(ports_view::panel(&self.ports, window, cx)))
             .child(TerminalElement { view: cx.entity() })
+            .when(self.hidden_line_input, |root| root.child(
+                div().id("hidden-line-input").absolute().bottom(px(8.)).left(px(8.)).px_2().py_1()
+                    .rounded_sm().bg(rgb(0x292929)).text_xs().text_color(rgb(0xb8c4d4))
+                    .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("The local terminal has disabled echo for line input. Remote and raw-mode password prompts may not be detected.".into())).into())
+                    .child("Input hidden")
+            ))
             .when(self.rendered_paste_pending, |root| root.child(
                 div().id("paste-status").absolute().bottom(px(8.)).right(px(8.))
                     .max_w_full().px_2().h(px(28.)).flex().items_center().gap_2()

@@ -1,5 +1,12 @@
 # rmux
 
+A focused local macOS/Linux terminal shows **Input hidden** when canonical line
+input has echo disabled. Raw-mode TUIs do not trigger this badge. It samples on
+output, focus and input events, so silent mode changes may remain stale until
+the next event. This is a local echo-state indication, not a guarantee that every
+password prompt is recognized; remote/raw-mode prompts and Windows ConPTY
+detection remain unsupported. No input content is inspected for this indicator.
+
 **Enter Copy Mode** (palette/menu, custom action `copy_mode`) opens a stable
 history snapshot while the terminal keeps running. Use ↑/↓ or j/k to move,
 Home/End to reach either end, and Page Up/Down to move approximately one visible page. Hold Shift while

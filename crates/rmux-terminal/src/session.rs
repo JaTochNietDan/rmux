@@ -183,7 +183,24 @@ impl Drop for UnstartedChild {
         }
     }
 }
+/// Local PTY input flags; raw mode alone is not evidence of password entry.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LocalInputMode { pub echo: bool, pub canonical: bool }
+
 impl Session {
+    /// Event-driven callers can sample local tty flags without locking the parser.
+    /// ConPTY and remote tty modes are not inferred from output text.
+    pub fn local_input_mode(&self) -> Option<LocalInputMode> {
+        if self.exit_status().is_some() { return None; }
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
+        {
+            let flags = self.master.get_termios()?.local_flags.bits();
+            Some(LocalInputMode { echo: flags & libc::ECHO != 0, canonical: flags & libc::ICANON != 0 })
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+        { None }
+    }
+
     pub fn compressor(&self) -> crate::compression::Compressor {
         crate::compression::Compressor::new(Arc::downgrade(&self.terminal))
     }
@@ -1273,6 +1290,31 @@ mod tests {
             thread::sleep(std::time::Duration::from_millis(5));
         }
         assert_eq!(std::fs::read(destination)?, expected.as_bytes());
+        Ok(())
+    }
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn local_input_modes_distinguish_hidden_line_input_from_raw_tuis() -> Result<()> {
+        let mut command = CommandBuilder::new("/bin/sh");
+        command.args(["-c", "stty icanon -echo; printf HIDDEN; IFS= read -r first; stty -icanon -echo; printf RAW; dd bs=1 count=1 >/dev/null 2>&1; stty icanon echo; printf VISIBLE; IFS= read -r last"]);
+        let session = Session::spawn(command, 40, 3)?;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let wait = |marker: &str| -> Result<()> {
+            while !session.frame()?.text().contains(marker) {
+                anyhow::ensure!(std::time::Instant::now() < deadline, "input mode marker timed out: {marker}");
+                thread::sleep(std::time::Duration::from_millis(5));
+            }
+            Ok(())
+        };
+        wait("HIDDEN")?;
+        assert_eq!(session.local_input_mode(), Some(LocalInputMode { echo: false, canonical: true }));
+        session.input_without_scroll(b"continue\n")?;
+        wait("RAW")?;
+        assert_eq!(session.local_input_mode(), Some(LocalInputMode { echo: false, canonical: false }));
+        session.input_without_scroll(b"x")?;
+        wait("VISIBLE")?;
+        assert_eq!(session.local_input_mode(), Some(LocalInputMode { echo: true, canonical: true }));
+        session.input_without_scroll(b"done\n")?;
         Ok(())
     }
     #[cfg(any(target_os = "macos", target_os = "linux"))]

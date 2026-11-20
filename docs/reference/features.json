@@ -582,7 +582,14 @@
         "SCHEMA"
       ],
       "acceptance": "Track echo state accurately and limit prompt-editing gestures to eligible shell contexts.",
-      "rmux_status": "not_started"
+      "rmux_status": "in_progress",
+      "implementation": "Event-driven local macOS/Linux PTY echo/canonical sampling with an Input hidden badge for focused canonical no-echo input. Real PTY transition fixture passed; raw-mode TUIs excluded.",
+      "remaining": "Native badge/input acceptance, silent-mode transition freshness, remote/ConPTY password detection and optional eligible-prompt editing gestures.",
+      "implementation_sources": [
+        "crates/rmux-terminal/src/session.rs",
+        "crates/rmux-desktop/src/main.rs"
+      ],
+      "progress_record": "docs/progress.md"
     },
     {
       "id": "T18",

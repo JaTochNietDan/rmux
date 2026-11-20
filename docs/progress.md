@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Started T17 with local PTY input-mode sampling and an Input hidden badge for a
+focused terminal in canonical mode with echo disabled. Raw-mode TUIs are excluded;
+macOS/Linux query termios through portable-pty without taking the terminal parser
+lock. Output, focus and input events refresh the sample; there is no idle timer
+and silent termios changes may remain stale until another event. Remote tty and
+ConPTY modes are not inferred, and no typed content is inspected. A real PTY
+fixture passed hidden-canonical → raw-no-echo → echoed-canonical transitions;
+desktop compilation passed. Native badge layout, broader prompt coverage,
+Windows/remote detection and optional prompt-editing gestures remain pending.
+
 Named-buffer lifecycle now includes Delete Named Buffer… in the command palette,
 native menu and delete_buffer custom shortcut action. The searchable picker
 lists names/sizes without cloning stored text and works without a focused terminal.
