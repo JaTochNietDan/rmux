@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Workspace and group context menus now use the same active-keymap shortcut column,
+window-bounded width and long-hint tooltips as terminal/tab menus. Their binding
+lookup uses the captured return focus, not the menu's temporary key context.
+Custom bindings now also expose group_current_workspace, edit_group_color,
+edit_group_icon, toggle_group_pin, ungroup_workspaces, close_group,
+remove_workspace_from_group, set_group_anchor and close_workspace. These reuse
+existing actions and confirmations; no new default shortcuts were assigned.
+Desktop compilation passed; rendered menu and native key-dispatch acceptance
+remain pending.
+
 Terminal and tab context menus now show right-aligned shortcut hints resolved
 against the targeted terminal's active keymap. They share the command palette's
 highest-precedence binding lookup instead of hardcoding platform defaults;

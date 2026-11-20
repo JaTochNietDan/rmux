@@ -219,7 +219,7 @@ impl WorkspaceWindow {
         }
     }
 
-    fn workspace_menu_element(&self, menu: WorkspaceMenu, cx: &mut Context<Self>) -> AnyElement {
+    fn workspace_menu_element(&self, menu: WorkspaceMenu, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let pinned = self.entries.iter().find(|entry| entry.workspace.entity_id() == menu.target).is_some_and(|entry| entry.pinned);
         let labels = if let Some(id) = menu.group {
             let pinned = self.groups.entries().iter().any(|group| group.id == id && group.pinned);
@@ -227,9 +227,15 @@ impl WorkspaceWindow {
         } else {
             ["Rename Workspace", "Edit Description", "Change Color", "Change Icon", if pinned { "Unpin Workspace" } else { "Pin Workspace" }, "Close Workspace…"]
         };
+        let actions: [Box<dyn Action>; 6] = if menu.group.is_some() {
+            [Box::new(RenameWorkspaceGroup), Box::new(EditGroupColor), Box::new(EditGroupIcon), Box::new(ToggleGroupPin), Box::new(UngroupWorkspaces), Box::new(CloseWorkspaceGroup)]
+        } else {
+            [Box::new(RenameWorkspace), Box::new(EditWorkspaceDescription), Box::new(EditWorkspaceColor), Box::new(EditWorkspaceIcon), Box::new(ToggleWorkspacePin), Box::new(CloseWorkspace)]
+        };
+        let hints: Vec<_> = actions.iter().map(|action| menu.return_focus.as_ref().and_then(|focus| shortcuts::hint(action.as_ref(), focus, window))).collect();
         deferred(anchored().position(menu.position).snap_to_window().child(
             div().id("workspace-context-menu").track_focus(&menu.focus).key_context("WorkspaceMenu")
-                .w(px(230.)).py_1().bg(rgb(0x292929)).border_1().border_color(rgb(0x465063)).rounded_md().shadow_md()
+                .w(px(340.).min((window.viewport_size().width - px(16.)).max(px(1.)))).py_1().bg(rgb(0x292929)).border_1().border_color(rgb(0x465063)).rounded_md().shadow_md()
                 .on_mouse_down_out(cx.listener(|this, _, window, cx| this.dismiss_workspace_menu(window, cx)))
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
@@ -249,7 +255,7 @@ impl WorkspaceWindow {
                     cx.notify();
                 }))
                 .children(labels.into_iter().enumerate().map(|(index, label)| {
-                    div().id(("workspace-menu-item", index)).mx_1().px_3().py_2().rounded_sm().text_size(px(13.)).cursor_pointer()
+                    div().id(("workspace-menu-item", index)).mx_1().px_3().py_2().rounded_sm().text_size(px(13.)).cursor_pointer().flex().items_center().gap_3()
                         .when(index == menu.selected, |row| row.bg(rgb(0x354969)))
                         .on_mouse_move(cx.listener(move |this, _, _, cx| {
                             if let Some(menu) = &mut this.workspace_menu {
@@ -259,7 +265,13 @@ impl WorkspaceWindow {
                         .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
                             if event.standard_click() { this.activate_workspace_menu(index, window, cx); }
                             cx.stop_propagation();
-                        })).child(label)
+                        }))
+                        .child(div().flex_1().min_w_0().truncate().child(label))
+                        .when_some(hints[index].clone(), |row, hint| row.child(
+                            div().id(("workspace-menu-shortcut", index)).max_w(px(120.)).flex_shrink_0().truncate().text_xs().text_color(rgb(0xa0a0a0))
+                                .tooltip({ let hint = hint.clone(); move |_, cx| cx.new(|_| pane_view::ControlHint(hint.clone().into())).into() })
+                                .child(hint)
+                        ))
                 }))
         )).with_priority(2).into_any_element()
     }
@@ -3584,7 +3596,7 @@ impl Render for WorkspaceWindow {
                     .bg(rgb(0x292929)).text_color(rgb(0xdcdfe6)).text_size(px(12.)).shadow_md()
                     .child(format!("{}  ·  Waiting for next key…", keys.iter().map(ToString::to_string).collect::<Vec<_>>().join(" ")))
             ))
-            .when_some(self.workspace_menu.clone(), |root, menu| root.child(self.workspace_menu_element(menu, cx)))
+            .when_some(self.workspace_menu.clone(), |root, menu| root.child(self.workspace_menu_element(menu, window, cx)))
             .when_some(self.settings_state.clone(), |root, state| root.child(settings_view::panel(state, cx)))
             .when(self.notification_navigation.is_some(), |root| root.child(self.notification_panel(cx)))
             .when_some(self.palette.as_ref(), |root, (palette, _)| root.child(

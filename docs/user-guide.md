@@ -19,8 +19,8 @@ Right-click terminal content for Copy, Paste, Find, selection, directory actions
 and Clear Scrollback. Use Shift-right-click when a terminal app handles mouse
 input. The palette’s **Terminal Actions** command opens the same menu; custom
 shortcuts can bind `terminal_menu`. Arrow keys navigate, Enter activates, and
-Escape returns focus to the terminal. Terminal and tab context menus show the
-current shortcut beside each bound action, including custom key sequences.
+Escape returns focus to the terminal. Terminal, tab, workspace and group context menus show the current shortcut
+beside each bound action, including custom key sequences.
 
 Command-click (Control-click on Linux/Windows) opens terminal HTTP(S) links.
 If output parsing is busy, rmux reports a retry message instead of waiting; click
@@ -1291,3 +1291,9 @@ returned by `list-notifications`. It calls `notification.mark_read`, retains the
 message in history and does not focus the source terminal. The response includes
 `marked_read: true` when an unread message changed; missing or already-read
 messages return `false`. An unknown surface remains an RPC error.
+
+Group actions can be assigned custom shortcuts using `group_current_workspace`,
+`edit_group_color`, `edit_group_icon`, `toggle_group_pin`, `ungroup_workspaces`,
+`close_group`, `remove_workspace_from_group` and `set_group_anchor`.
+`close_workspace` targets the current workspace and keeps its usual confirmation
+policy. These action names do not add default key bindings.
