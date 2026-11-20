@@ -1723,3 +1723,9 @@ and `changed`. It normalizes each split's weights to one without moving terminal
 or changing focus/selection; repeated calls and single-pane layouts return
 `changed: false`. Zoomed layouts, active divider drags and pending split launches
 are rejected as busy. Unzoom first to equalize through automation.
+
+For a focused developer check of these layout operations, build the desktop and
+run `mise exec -- python scripts/smoke-workspace-placement.py --live-shell`.
+It launches an isolated test app and fixture shells, checks retained process state
+through resize/split/equalize, and observes cleanup without attaching to existing
+rmux windows.

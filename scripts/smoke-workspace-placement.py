@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Native RPC check for insertion order, failed creation and selection continuity."""
+import argparse
 import json
 import os
 from pathlib import Path
@@ -8,8 +9,11 @@ import subprocess
 import tempfile
 import time
 
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--live-shell", action="store_true", help="Check layout mutations with persistent shell state (end-placement scenario only)")
+args = parser.parse_args()
 binary = Path("target/debug/rmux").resolve()
-for mode in ["end", "top", "after_current"]:
+for mode in (["end"] if args.live_shell else ["end", "top", "after_current"]):
     with tempfile.TemporaryDirectory(prefix="rmux-placement-") as temporary:
         root = Path(temporary).resolve()
         config = root / "config.json"
@@ -17,6 +21,20 @@ for mode in ["end", "top", "after_current"]:
         endpoint = root / "rpc"
         env = {k: v for k, v in os.environ.items() if not k.startswith("RMUX_")}
         env.update(RMUX_CONFIG=str(config), RMUX_SHELL="/usr/bin/true", RMUX_SOCKET_DIR=str(endpoint))
+        if args.live_shell:
+            fixture = root / "fixture-shell"
+            fixture.write_text('#!/bin/sh\ntrap "exit 0" HUP TERM\nprintf "alive-%s" "$$" > "$RMUX_TEST_PROCESS_DIR/$$.ready"\ntoken=initial\nwhile IFS= read -r line; do\n  case "$line" in\n    set:*) token=${line#set:} ;;\n    probe) printf "%s" "$token" > "$RMUX_TEST_PROCESS_DIR/$$.state" ;;\n  esac\ndone\n')
+            fixture.chmod(0o700)
+            env.update(RMUX_SHELL=str(fixture), RMUX_TEST_PROCESS_DIR=str(root))
+
+        def wait_file(path, expected):
+            deadline = time.monotonic() + 3
+            while time.monotonic() < deadline:
+                if path.exists() and path.read_text() == expected:
+                    return
+                time.sleep(.01)
+            raise AssertionError(f"fixture did not report expected state in {path.name}")
+
         with tempfile.TemporaryFile() as log:
             app = subprocess.Popen([str(binary)], env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=log)
             try:
@@ -68,6 +86,11 @@ for mode in ["end", "top", "after_current"]:
                         def identity():
                             return [(r["id"], r.get("process_id")) for r in call("surface.list", workspace_id=original)["surfaces"]]
                         surfaces = identity()
+                        if args.live_shell:
+                            for surface, pid in surfaces:
+                                wait_file(root / f"{pid}.ready", f"alive-{pid}")
+                                call("surface.send_text", surface_id=surface, text=f"set:retained-{pid}-世界\nprobe\n")
+                                wait_file(root / f"{pid}.state", f"retained-{pid}-世界")
                         selected = [r["id"] for r in rows() if r["selected"]]
                         assert call("pane.resize", pane_id=pane, direction="right")["changed"] is True
                         call("pane.resize", notify=True, pane_id=pane, direction="right")
@@ -119,6 +142,19 @@ for mode in ["end", "top", "after_current"]:
                         call("workspace.equalize", fail=True, workspace_id="999999999")
                         call("workspace.equalize", fail=True, workspace_id=original, direction="right")
                         print("PASS: workspace equalize balances nested weights, is idempotent and preserves identities/selection")
+                        if args.live_shell:
+                            current = call("surface.list", workspace_id=original)["surfaces"]
+                            assert all(not item["process_exited"] for item in current)
+                            for item in current:
+                                pid = item["process_id"]
+                                wait_file(root / f"{pid}.ready", f"alive-{pid}")
+                                os.kill(pid, 0)
+                            for surface, pid in surfaces:
+                                state = root / f"{pid}.state"
+                                state.unlink()
+                                call("surface.send_text", surface_id=surface, text="probe\n")
+                                wait_file(state, f"retained-{pid}-世界")
+                            print("PASS: running shell PIDs and Unicode state survive resize, left/up splits and equalize")
                     if mode == "after_current":
                         group = call("workspace.group.create", window_id=window, name="Placement", workspace_ids=[second, original])
                         call("workspace.select", workspace_id=original)
@@ -136,4 +172,21 @@ for mode in ["end", "top", "after_current"]:
                 except subprocess.TimeoutExpired:
                     app.kill()
                     app.wait(timeout=5)
+                if args.live_shell:
+                    # Observe only fixture-owned processes; never signal a reused PID.
+                    deadline = time.monotonic() + 5
+                    pending = [int(path.stem) for path in root.glob("*.ready")]
+                    while pending:
+                        alive = []
+                        for pid in pending:
+                            try:
+                                os.kill(pid, 0)
+                                alive.append(pid)
+                            except ProcessLookupError:
+                                pass
+                        pending = alive
+                        assert not pending or time.monotonic() < deadline, f"fixture children remain: {pending}"
+                        if pending:
+                            time.sleep(.01)
+                    print("PASS: all fixture-owned shells exited after app shutdown")
     print(f"PASS: {mode} insertion, failed creation, background/focused selection and close" + (", group and pinned-group ordering" if mode == "after_current" else ""))

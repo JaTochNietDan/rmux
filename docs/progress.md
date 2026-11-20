@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Added --live-shell to the focused workspace/layout smoke. The native socket run
+passed retained PID and Unicode shell-state probes across divider resize,
+left/up split insertion and workspace equalization. Newly created split shells
+were alive, existing surface identities and selection checks passed, and every
+fixture-owned child was observed exiting after app shutdown. The opt-in live
+mode runs only the relevant end-placement scenario and completed in under one
+second here. This closes the running-process evidence gap for these RPC layout
+operations; menu/shortcut focus and screenshots remain separate native UI checks.
+
 Exposed workspace-wide pane equalization through workspace.equalize RPC and
 rmuxctl equalize-panes --workspace ID, including capability discovery, notification
 requests, CLI help/completion and strict target/option validation. The existing
