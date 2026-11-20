@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Saving settings now inspects configuration symlinks without following them
+first. A dangling link produces a resolution error and remains intact instead of
+being replaced by a regular file; valid relative links still update their target.
+Two focused save tests passed on macOS, covering both symlink cases, preserving
+invalid configuration contents and merging unrelated settings. Windows symlink
+acceptance remains deferred with native Windows validation.
+
 Background configuration reload now compares its starting settings-panel values
 with the current session before applying the file. If the user edited controls
 while the read ran, it discards that reload result and explains that the newer

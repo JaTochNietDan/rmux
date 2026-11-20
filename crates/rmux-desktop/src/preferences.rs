@@ -200,8 +200,13 @@ impl Preferences {
     pub fn save_appearance(&self) -> Result<std::path::PathBuf> {
         use std::io::Write;
         let path = self.source.clone().context("No configuration path is available")?;
-        // Follow an existing config symlink instead of replacing the link itself.
-        let path = if path.try_exists()? { path.canonicalize()? } else { path };
+        // Inspect the link itself: exists()/try_exists() follow it and mistake
+        // a dangling user-managed symlink for a new configuration file.
+        let path = match std::fs::symlink_metadata(&path) {
+            Ok(_) => path.canonicalize().context("Could not resolve configuration target; existing link was left unchanged")?,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => path,
+            Err(error) => return Err(error.into()),
+        };
         let mut latest = Self::read(&path, false)?;
         latest.font_size = self.font_size;
         latest.terminal_padding = self.terminal_padding;
@@ -471,6 +476,26 @@ mod tests {
         std::fs::write(&path, b"unfinished user edit")?;
         assert!(preferences.save_appearance().is_err());
         assert_eq!(std::fs::read(&path)?, b"unfinished user edit");
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn appearance_save_follows_valid_links_and_preserves_dangling_links() -> Result<()> {
+        use std::os::unix::fs::symlink;
+        let directory = tempfile::tempdir()?;
+        let target = directory.path().join("target.json");
+        let link = directory.path().join("config.json");
+        std::fs::write(&target, b"{}")?;
+        symlink("target.json", &link)?;
+        let preferences = Preferences { source: Some(link.clone()), font_size: 20., ..Preferences::default() };
+        preferences.save_appearance()?;
+        assert_eq!(std::fs::read_link(&link)?, std::path::PathBuf::from("target.json"));
+        assert_eq!(Preferences::read(&target, true)?.font_size, 20.);
+        std::fs::remove_file(&target)?;
+        assert!(preferences.save_appearance().is_err());
+        assert_eq!(std::fs::read_link(&link)?, std::path::PathBuf::from("target.json"));
+        assert!(!target.exists());
         Ok(())
     }
 
