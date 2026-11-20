@@ -2647,9 +2647,9 @@ impl Workspace {
             self.swap_panes(current, next, cx);
         }
     }
-    fn swap_panes(&mut self, current: usize, next: usize, cx: &mut Context<Self>) {
+    fn swap_panes(&mut self, current: usize, next: usize, cx: &mut Context<Self>) -> bool {
         let Some(tree) = &mut self.layout else {
-            return;
+            return false;
         };
         if tree.swap(&self.panes[current], &self.panes[next]) {
             // Keep the pane vector in tree traversal order for save/restore and
@@ -2658,7 +2658,9 @@ impl Workspace {
             self.split_drag = None;
             self.zoomed = None;
             cx.notify();
+            return true;
         }
+        false
     }
     fn snapshot_tree(tree: &PaneTree<Entity<PaneView>>, cx: &App) -> snapshot::Node {
         match tree {

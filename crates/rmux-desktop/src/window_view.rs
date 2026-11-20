@@ -966,6 +966,23 @@ impl WorkspaceWindow {
         Ok(serde_json::json!({"workspace_id":target.to_string(), "changed":changed}))
     }
 
+    pub(super) fn automation_swap_panes(&mut self, swap: &automation::PaneSwap, target: EntityId, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
+        self.automation_available(cx)?;
+        let (workspace, _) = self.automation_pane_target(target, cx)
+            .ok_or(automation::Failure { code: -32004, message: "Pane not found" })?;
+        let changed = workspace.update(cx, |workspace, cx| {
+            if workspace.zoomed.is_some() || workspace.spawning_split.is_some() || workspace.split_drag.is_some() {
+                return Err(automation::Failure { code: -32005, message: "Pane layout is busy or zoomed" });
+            }
+            let current = workspace.panes.iter().position(|pane| pane.entity_id() == target).unwrap();
+            let other = workspace.panes.iter().position(|pane| pane.entity_id().to_string() == swap.other_pane_id)
+                .ok_or(automation::Failure { code: -32004, message: "Other pane not found in the same workspace" })?;
+            Ok(current != other && workspace.swap_panes(current, other, cx))
+        })?;
+        Ok(serde_json::json!({"pane_id":swap.pane_id, "other_pane_id":swap.other_pane_id,
+            "workspace_id":workspace.entity_id().to_string(), "changed":changed}))
+    }
+
     pub(super) fn automation_resize_pane(&mut self, resize: &automation::PaneResize, target: EntityId, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
         self.automation_available(cx)?;
         let (workspace, pane) = self.automation_pane_target(target, cx)

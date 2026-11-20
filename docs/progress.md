@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Added explicit two-pane swap via pane.swap RPC and rmuxctl swap-panes, with
+capability discovery, notification support, CLI help/completion and required-ID
+validation. It reuses the UI swap operation, preserves split geometry and terminal
+ownership, updates pane traversal order, rejects cross-workspace/busy/zoomed
+requests and treats same-pane swaps as no-ops. Explicit IDs avoid stale rendered
+bounds in hidden workspaces. Native live-shell smoke passed exact identity-only
+layout exchange, reverse-swap restoration, selection preservation, notification
+framing, rejection paths, retained PID/Unicode shell state and child cleanup.
+Desktop build and focused CLI parsing test passed; native OS focus remains
+separate from the verified workspace-selection state.
+
 Added shared type-to-select behavior to terminal and tab context menus. Plain
 character prefixes select enabled labels; repeated first letters cycle matching
 items, longer prefixes narrow selection, and a one-second gap starts a new query.

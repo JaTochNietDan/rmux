@@ -22,6 +22,7 @@ pub const HELP: &str = "Commands (JSON output except pipe-pane; explicit opaque 
   merge-workspace --workspace ID --target-workspace ID [--activate]
   move-workspace --workspace ID --window ID [--activate]
   equalize-panes --workspace ID
+  swap-panes --pane ID --other-pane ID
   resize-pane --pane ID --direction left|right|up|down
   split-pane --pane ID --direction left|right|up|down [--cwd PATH] [--focus true|false] [--activate]
   set-pane-zoom --pane ID --zoomed true|false
@@ -62,6 +63,7 @@ pub fn help(command: &str) -> Result<String, String> {
         "merge-workspace" => ("--workspace ID --target-workspace ID [--activate]", "Merge into another workspace in any window of the connected app, retaining live panes and nested splits. Selects the destination and removes the source entry; keeps destination metadata. OS activation requires --activate."),
         "move-workspace" => ("--workspace ID --window ID [--activate]", "Move a workspace and its live terminals to another window. Window activation requires --activate."),
         "equalize-panes" => ("--workspace ID", "Balance every split in a workspace without changing focus. Rejects zoomed or busy layouts."),
+        "swap-panes" => ("--pane ID --other-pane ID", "Exchange two panes in the same workspace without changing focus or restarting terminals."),
         "resize-pane" => ("--pane ID --direction left|right|up|down", "Move a shared divider one step without changing focus. Rejects zoomed or busy layouts."),
         "split-pane" => ("--pane ID --direction left|right|up|down [--cwd PATH] [--focus true|false] [--activate]", "Create a terminal beside an explicit pane. Inherits its directory and font; focus and OS activation are opt-in."),
         "set-pane-zoom" => ("--pane ID --zoomed true|false", "Set pane zoom explicitly without toggling. Zooming selects its terminal within the window, without OS window activation."),
@@ -94,6 +96,7 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
         "merge-workspace" => ("workspace.merge", Some(("--workspace", "workspace_id")), None),
         "move-workspace" => ("workspace.move_to_window", Some(("--workspace", "workspace_id")), None),
         "equalize-panes" => ("workspace.equalize", Some(("--workspace", "workspace_id")), None),
+        "swap-panes" => ("pane.swap", Some(("--pane", "pane_id")), None),
         "resize-pane" => ("pane.resize", Some(("--pane", "pane_id")), None),
         "split-pane" => ("pane.split", Some(("--pane", "pane_id")), None),
         "set-pane-zoom" => ("pane.zoom.set", Some(("--pane", "pane_id")), None),
@@ -195,6 +198,12 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
                 let value = args.next().ok_or("destination requires an ID")?.into_string().map_err(|_| "ID must be UTF-8")?;
                 if value.is_empty() || value.len() > 128 || value.starts_with('-') { return Err("invalid destination ID".into()); }
                 if params.insert(key.into(), Value::String(value)).is_some() { return Err("duplicate destination".into()); }
+                continue;
+            }
+            if command == "swap-panes" && arg == "--other-pane" {
+                let value = args.next().ok_or("--other-pane requires an ID")?.into_string().map_err(|_| "pane ID must be UTF-8")?;
+                if value.is_empty() { return Err("pane ID must not be empty".into()); }
+                if params.insert("other_pane_id".into(), Value::String(value)).is_some() { return Err("duplicate --other-pane".into()); }
                 continue;
             }
             if matches!(command, "split-pane" | "resize-pane") && arg == "--direction" {
@@ -326,6 +335,7 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
     let required = match command {
         "dismiss-notification" | "read-notification" => Some(("revision", "--revision")),
         "split-pane" | "resize-pane" => Some(("direction", "--direction")),
+        "swap-panes" => Some(("other_pane_id", "--other-pane")),
         "move-panel" => Some(("workspace_id", "--workspace")),
         "merge-workspace" => Some(("target_workspace_id", "--target-workspace")),
         "move-workspace" => Some(("window_id", "--window")),
@@ -383,6 +393,16 @@ mod tests {
     fn args(v: &[&str]) -> Vec<OsString> {
         v.iter().map(OsString::from).collect()
     }
+    #[test]
+    fn swap_requires_two_explicit_panes() {
+        assert_eq!(expand("swap-panes", args(&["--pane", "12", "--other-pane", "34"])).unwrap(),
+            ("pane.swap".into(), serde_json::json!({"pane_id":"12", "other_pane_id":"34"})));
+        for input in [vec![], vec!["--pane", "12"], vec!["--other-pane", "34"], vec!["--pane", "12", "--other-pane", ""],
+            vec!["--pane", "12", "--other-pane", "34", "--activate"], vec!["--pane", "12", "--other-pane", "34", "--other-pane", "56"]] {
+            assert!(expand("swap-panes", args(&input)).is_err());
+        }
+    }
+
     #[test]
     fn equalize_requires_workspace_and_rejects_unrelated_options() {
         assert_eq!(expand("equalize-panes", args(&["--workspace", "12"])).unwrap(),

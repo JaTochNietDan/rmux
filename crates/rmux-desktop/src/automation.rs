@@ -23,6 +23,7 @@ const LIVE_METHODS: &[&str] = &[
     "pane.zoom.set",
     "pane.split",
     "pane.resize",
+    "pane.swap",
     "workspace.equalize",
     "surface.list",
     "notification.list",
@@ -174,6 +175,13 @@ pub(super) struct SurfaceRead {
 pub(super) struct PaneZoom {
     pub pane_id: String,
     pub zoomed: bool,
+}
+
+#[derive(serde::Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
+pub(super) struct PaneSwap {
+    pub pane_id: String,
+    pub other_pane_id: String,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -355,6 +363,7 @@ struct LiveRequest {
     pane_zoom: Option<PaneZoom>,
     pane_split: Option<PaneSplit>,
     pane_resize: Option<PaneResize>,
+    pane_swap: Option<PaneSwap>,
     window_create: Option<WindowCreate>,
     workspace_create: Option<WorkspaceCreate>,
     workspace_rename: Option<WorkspaceRename>,
@@ -741,6 +750,17 @@ pub fn attach_live(cx: &mut gpui::App, stdio: bool, socket_directory: Option<std
                         message: "Surface not found",
                     });
                 }
+                if let Some(swap) = &request.pane_swap {
+                    let target = target_id(&swap.pane_id)?;
+                    for handle in cx.windows() {
+                        let Some(handle) = handle.downcast::<super::window_view::WorkspaceWindow>() else { continue; };
+                        if handle.read(cx).is_ok_and(|view| view.automation_pane_target(target, cx).is_some()) {
+                            return handle.update(cx, |view, _, cx| view.automation_swap_panes(swap, target, cx))
+                                .map_err(|_| Failure { code: -32004, message: "Pane window closed" })?;
+                        }
+                    }
+                    return Err(Failure { code: -32004, message: "Pane not found" });
+                }
                 if let Some(resize) = &request.pane_resize {
                     let target = target_id(&resize.pane_id)?;
                     for handle in cx.windows() {
@@ -896,6 +916,7 @@ fn dispatch_inner(
                 | "notification.mark_read"
                 | "pane.zoom.set"
                 | "pane.resize"
+                | "pane.swap"
                 | "workspace.equalize"
                 | "pane.split"
                 | "window.create"
@@ -985,6 +1006,12 @@ fn dispatch_inner(
     } else {
         None
     };
+    let pane_swap = if method == "pane.swap" {
+        match request.get("params").cloned().and_then(|params| serde_json::from_value::<PaneSwap>(params).ok()) {
+            Some(swap) if target_id(&swap.pane_id).is_ok() && target_id(&swap.other_pane_id).is_ok() => Some(swap),
+            _ => return respond(error(id, -32602, "Expected pane_id and other_pane_id")),
+        }
+    } else { None };
     let pane_resize = if method == "pane.resize" {
         match request.get("params").cloned().and_then(|params| serde_json::from_value::<PaneResize>(params).ok()) {
             Some(resize) if target_id(&resize.pane_id).is_ok() => Some(resize),
@@ -1261,6 +1288,7 @@ fn dispatch_inner(
         && pane_zoom.is_none()
         && pane_split.is_none()
         && pane_resize.is_none()
+        && pane_swap.is_none()
         && surface_focus.is_none()
         && !is_filtered_list
         && request.get("params").is_some_and(|params| {
@@ -1300,6 +1328,7 @@ fn dispatch_inner(
                     pane_zoom,
                     pane_split,
                     pane_resize,
+                    pane_swap,
                     window_create,
                     workspace_create,
                     workspace_rename,
@@ -1704,6 +1733,7 @@ mod tests {
                 pane_zoom: None,
                 pane_split: None,
                 pane_resize: None,
+                pane_swap: None,
                 window_create: None,
                 workspace_create: None,
                 workspace_rename: None,

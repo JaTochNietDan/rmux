@@ -1736,3 +1736,12 @@ run `mise exec -- python scripts/smoke-workspace-placement.py --live-shell`.
 It launches an isolated test app and fixture shells, checks retained process state
 through resize/split/equalize, and observes cleanup without attaching to existing
 rmux windows.
+
+`rmuxctl swap-panes --pane PANE_ID --other-pane OTHER_ID` exchanges two panes in
+the same workspace. JSON-RPC uses `pane.swap` with `pane_id` and `other_pane_id`.
+Tabs, terminal processes and active tabs stay attached to their pane; split axes
+and weights stay attached to their positions. Workspace selection and focus are
+unchanged. The result includes both pane IDs, `workspace_id` and `changed`; swapping
+a pane with itself returns false. Different-workspace targets, zoomed layouts,
+active divider drags and pending split launches are rejected. Explicit IDs also
+allow swaps in hidden workspaces without relying on old screen coordinates.

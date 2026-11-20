@@ -125,9 +125,32 @@ for mode in (["end"] if args.live_shell else ["end", "top", "after_current"]):
                             assert all(item in current for item in surfaces)
                             assert [r["id"] for r in rows() if r["selected"]] == selected
                         print("PASS: left/up splits preserve nested order, identities and workspace selection")
+                        # Swap identities only; retain every split axis and weight.
+                        before_swap = next(r["layout"] for r in rows() if r["id"] == original)
+                        pane_ids = [r["id"] for r in call("pane.list", workspace_id=original)["panes"]]
+                        first, other = pane_ids[0], pane_ids[-1]
+                        def exchanged(node):
+                            result = dict(node)
+                            if "pane_id" in result:
+                                result["pane_id"] = {first: other, other: first}.get(result["pane_id"], result["pane_id"])
+                            if "children" in result:
+                                result["children"] = [exchanged(child) for child in result["children"]]
+                            return result
+                        assert call("pane.swap", pane_id=first, other_pane_id=other)["changed"] is True
+                        assert next(r["layout"] for r in rows() if r["id"] == original) == exchanged(before_swap)
+                        assert [r["id"] for r in rows() if r["selected"]] == selected
+                        assert call("pane.swap", pane_id=first, other_pane_id=first)["changed"] is False
+                        foreign = call("pane.list", workspace_id=second)["panes"][0]["id"]
+                        call("pane.swap", fail=True, pane_id=first, other_pane_id=foreign)
+                        call("pane.swap", fail=True, pane_id=first, other_pane_id="999999999")
+                        call("pane.swap", notify=True, pane_id=first, other_pane_id=other)
+                        assert next(r["layout"] for r in rows() if r["id"] == original) == before_swap
+                        assert [r["id"] for r in call("pane.list", workspace_id=original)["panes"]] == pane_ids
+                        print("PASS: pane swap exchanges only identities, preserves selection and rejects foreign panes")
                         before_equalize = identity()
                         call("pane.zoom.set", pane_id=pane, zoomed=True)
                         call("workspace.equalize", fail=True, workspace_id=original)
+                        call("pane.swap", fail=True, pane_id=first, other_pane_id=other)
                         call("pane.zoom.set", pane_id=pane, zoomed=False)
                         selected = [r["id"] for r in rows() if r["selected"]]
                         assert call("workspace.equalize", workspace_id=original)["changed"] is True
@@ -154,7 +177,7 @@ for mode in (["end"] if args.live_shell else ["end", "top", "after_current"]):
                                 state.unlink()
                                 call("surface.send_text", surface_id=surface, text="probe\n")
                                 wait_file(state, f"retained-{pid}-世界")
-                            print("PASS: running shell PIDs and Unicode state survive resize, left/up splits and equalize")
+                            print("PASS: running shell PIDs and Unicode state survive resize, left/up splits, swap and equalize")
                     if mode == "after_current":
                         group = call("workspace.group.create", window_id=window, name="Placement", workspace_ids=[second, original])
                         call("workspace.select", workspace_id=original)
