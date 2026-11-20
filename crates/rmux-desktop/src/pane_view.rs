@@ -131,11 +131,11 @@ impl Render for ControlHint {
     }
 }
 
-pub(super) fn pane_control(id: &'static str, hint: &'static str) -> Stateful<Div> {
+pub(super) fn pane_control(id: impl Into<ElementId>, hint: &'static str) -> Stateful<Div> {
     control_button(id).tooltip(move |_, cx| cx.new(|_| ControlHint(hint.into())).into())
 }
 
-fn control_button(id: &'static str) -> Stateful<Div> {
+fn control_button(id: impl Into<ElementId>) -> Stateful<Div> {
     div()
         .id(id)
         .flex()

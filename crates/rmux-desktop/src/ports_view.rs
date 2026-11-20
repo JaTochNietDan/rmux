@@ -107,7 +107,7 @@ pub(super) fn panel(state: &State, window: &Window, cx: &mut Context<TerminalVie
         .when_some(state.focus.as_ref(), |panel, focus| panel.track_focus(focus))
         .on_key_down(cx.listener(TerminalView::ports_key))
         .on_action(cx.listener(|this, _: &CopySelection, _, cx| { this.copy_port(cx); cx.stop_propagation(); }))
-        .h(px(180.)).max_h(relative(0.4)).flex_shrink_0().flex().flex_col()
+        .h(px(180.)).max_h(relative(0.4)).min_w_0().overflow_hidden().flex_shrink_0().flex().flex_col()
         .bg(rgb(0x242424)).border_b_1().border_color(rgb(0x383838)).text_size(px(12.))
         .on_mouse_down(MouseButton::Left, cx.listener(|this, _, window, cx| {
             if let Some(focus) = &this.ports.focus { focus.focus(window); }
@@ -118,8 +118,10 @@ pub(super) fn panel(state: &State, window: &Window, cx: &mut Context<TerminalVie
         .on_mouse_up(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .on_mouse_move(|_, _, cx| cx.stop_propagation())
         .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
-        .child(div().h(px(32.)).flex_shrink_0().px_2().flex().items_center().gap_2()
-            .child(div().flex_1().child(if state.loading { "Local TCP listeners · Scanning…" } else { "Local TCP listeners · Snapshot" }))
+        .child(div().h(px(32.)).min_w_0().flex_shrink_0().px_2().flex().items_center().gap_2()
+            .child(div().id("ports-heading").flex_1().min_w_0().truncate()
+                .tooltip({ let text: SharedString = if state.loading { "Local TCP listeners · Scanning…" } else { "Local TCP listeners · Snapshot" }.into(); move |_, cx| cx.new(|_| pane_view::ControlHint(text.clone())).into() })
+                .child(if state.loading { "Local TCP listeners · Scanning…" } else { "Local TCP listeners · Snapshot" }))
             .child(pane_view::pane_control("refresh-ports", "Refresh Listening Ports").on_click(cx.listener(|this, event: &ClickEvent, window, cx| { if event.standard_click() { this.refresh_ports(window, cx); } })).child(icons::icon("refresh")))
             .child(pane_view::pane_control("close-ports", "Close Listening Ports").on_click(cx.listener(|this, event: &ClickEvent, window, cx| {
                 if event.standard_click() { this.close_ports(window, cx); }

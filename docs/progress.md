@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Reviewed the stored rmux screenshot and visual-reference notes, then aligned
+Program Status close/copy controls with the existing embedded monochrome icons
+and shared 28px hit areas. The shared control helper now accepts indexed IDs for
+repeated record controls. Listening Ports has explicit minimum-width/overflow
+constraints and a shrinking heading with full hover text, preserving space for
+refresh/close controls in narrow panes. Desktop cargo check passed. The stored
+screenshot is historical evidence, not a fresh render; these changes still need
+visual acceptance on the unlocked desktop.
+
 Directional focus now switches the visible pane while zoomed, using current split
 geometry and retaining zoom on the destination. This brings arrow-direction
 navigation in line with numeric focus and pane cycling; outer-edge navigation is

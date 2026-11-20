@@ -41,7 +41,7 @@ pub fn panel(records: &[Record], loading: bool, cx: &mut Context<TerminalView>) 
                             view.status_load = None;
                             cx.notify();
                         }))
-                        .child("×"),
+                        .child(icons::icon("close")),
                 ),
         )
         .child(
@@ -95,15 +95,12 @@ pub fn panel(records: &[Record], loading: bool, cx: &mut Context<TerminalView>) 
                                 .child(div().id(("status-heading", index)).flex_1().min_w_0().truncate().text_color(rgb(tint))
                                     .tooltip({ let heading = heading.clone(); move |_, cx| cx.new(|_| pane_view::ControlHint(heading.clone())).into() })
                                     .child(heading))
-                                .child(div().id(("copy-status", index)).flex_shrink_0().px_2().py_1().rounded_sm()
-                                    .text_xs().text_color(rgb(0xaaaaaa)).cursor_pointer()
-                                    .hover(|style| style.bg(rgb(0x404040)))
-                                    .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("Copy complete task details".into())).into())
+                                .child(pane_view::pane_control(("copy-status", index), "Copy complete task details")
                                     .on_click(move |event: &ClickEvent, _, cx| {
                                         if !event.standard_click() { return; }
                                         cx.stop_propagation();
                                         clipboard::write(ClipboardItem::new_string(report.clone()), cx);
-                                    }).child("Copy")),
+                                    }).child(icons::icon("copy"))),
                         )
                         .when(!record.app.is_empty() || !record.title.is_empty(), |row| {
                             row.child(
