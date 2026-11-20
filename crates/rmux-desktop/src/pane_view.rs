@@ -24,6 +24,11 @@ fn refresh_tab_picker_list(scroll: &ListState, count: usize) {
     scroll.scroll_to(offset);
 }
 
+fn reveal_reordered_tab(scroll: &ListState, previous: &mut usize, row: usize) {
+    if row != *previous { crate::list_navigation::reveal(scroll, row); }
+    *previous = row;
+}
+
 #[derive(Clone, Copy)]
 enum TabCloseScope { Others, Right, Finished }
 impl TabCloseScope {
@@ -63,6 +68,22 @@ mod tab_order_tests {
         assert_eq!(scroll.logical_scroll_top().offset_in_item, px(0.));
         refresh_tab_picker_list(&scroll, 0);
         assert_eq!(scroll.logical_scroll_top().item_ix, 0);
+    }
+
+    #[test]
+    fn picker_reordered_selection_is_revealed_without_resetting_manual_scroll() {
+        use super::{ListState, ListAlignment, ListOffset, px, refresh_tab_picker_list, reveal_reordered_tab};
+        let scroll = ListState::new(256, ListAlignment::Top, px(96.));
+        let mut selected = 200;
+        scroll.scroll_to(ListOffset { item_ix: 40, offset_in_item: px(7.) });
+        refresh_tab_picker_list(&scroll, 256);
+        reveal_reordered_tab(&scroll, &mut selected, 200);
+        assert_eq!(scroll.logical_scroll_top().item_ix, 40);
+        assert_eq!(scroll.logical_scroll_top().offset_in_item, px(7.));
+        refresh_tab_picker_list(&scroll, 256);
+        reveal_reordered_tab(&scroll, &mut selected, 250);
+        assert_eq!(scroll.logical_scroll_top().item_ix, 250);
+        assert_eq!(selected, 250);
     }
 
     #[test]
@@ -182,6 +203,7 @@ pub(super) struct PaneView {
     // explicitly reveal the active tab. Busy background tabs must not reset it.
     tab_scroll: ScrollHandle,
     tab_picker: Option<(Entity<text_field::TextField>, Option<EntityId>, ListState)>,
+    tab_picker_selected_row: usize,
     tab_picker_blur: Option<Subscription>,
     tab_menu: Option<TabMenu>,
     tab_menu_blur: Option<Subscription>,
@@ -373,6 +395,7 @@ impl PaneView {
                     let matches = this.matching_tabs(cx);
                     let first = matches.first().map(|index| this.terminals[*index].entity_id());
                     if let Some((_, selected, scroll)) = &mut this.tab_picker { *selected = first; scroll.reset(matches.len()); }
+                    this.tab_picker_selected_row = 0;
                 }
                 text_field::EditEvent::Submitted { .. } => {
                     if let Some((_, selected, _)) = &this.tab_picker {
@@ -386,6 +409,7 @@ impl PaneView {
             cx.notify();
         }).detach();
         self.tab_picker = Some((input, self.active_terminal_id(), scroll));
+        self.tab_picker_selected_row = self.active;
         cx.notify();
     }
     fn render_tab_picker_row(&mut self, index: usize, selected: Option<EntityId>, cx: &mut Context<Self>) -> AnyElement {
@@ -436,13 +460,17 @@ impl PaneView {
         if let Some((_, _, scroll)) = &self.tab_picker {
             refresh_tab_picker_list(scroll, matches.len());
         }
-        if matches.iter().any(|index| Some(self.terminals[*index].entity_id()) == selected) { return; }
+        if let Some(row) = matches.iter().position(|index| Some(self.terminals[*index].entity_id()) == selected) {
+            if let Some((_, _, scroll)) = &self.tab_picker { reveal_reordered_tab(scroll, &mut self.tab_picker_selected_row, row); }
+            return;
+        }
         let first = matches.first().map(|index| self.terminals[*index].entity_id());
         if selected == first { return; }
         if let Some((_, selected, scroll)) = &mut self.tab_picker {
             *selected = first;
             if !matches.is_empty() { crate::list_navigation::reveal(scroll, 0); }
         }
+        self.tab_picker_selected_row = 0;
     }
 
     pub(super) fn set_workspace_owner(&mut self, workspace: EntityId, cx: &mut Context<Self>) {
@@ -674,6 +702,7 @@ impl PaneView {
         Self {
             tab_scroll,
             tab_picker: None,
+            tab_picker_selected_row: 0,
             tab_picker_blur: None,
             tab_menu: None,
             tab_menu_blur: None,
@@ -726,6 +755,7 @@ impl PaneView {
         Self {
             tab_scroll: ScrollHandle::new(),
             tab_picker: None,
+            tab_picker_selected_row: 0,
             tab_picker_blur: None,
             tab_menu: None,
             tab_menu_blur: None,
@@ -1378,6 +1408,7 @@ impl Render for PaneView {
                         };
                         if let Some(next) = destination {
                             *selected = Some(this.terminals[matches[next]].entity_id());
+                            this.tab_picker_selected_row = next;
                             crate::list_navigation::reveal(scroll, next);
                             cx.stop_propagation(); cx.notify();
                         }

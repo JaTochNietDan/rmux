@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Tab-picker metadata reconciliation now tracks the selected result position as
+well as its terminal identity. When a title/directory change or tab reorder
+moves that result, the virtual list reveals its new row. Unchanged positions
+preserve manual scrolling, avoiding jumps on ordinary title updates. Query
+edits, opening and keyboard navigation reset/update the tracked position.
+A focused 256-row ListState test passed moved-selection reveal and preservation
+of manual offset for unchanged selection; desktop check/test compilation passed.
+Native live-title and wheel interaction acceptance remain pending.
+
 Polished the named-buffer rename editor with explicit Save/Cancel controls and
 an editor-specific keyboard hint, replacing the unrelated picker-navigation
 footer. The controls remain available in compact windows and wrap in narrow
