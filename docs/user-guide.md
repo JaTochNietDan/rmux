@@ -22,8 +22,11 @@ a character range; Enter copies it. Navigation and copy preserve complete Unicod
 graphemes, including combined emoji and accents. Vertical movement retains the
 desired terminal-cell column across wide characters and short lines. Press c to return to line mode;
 clicking a row or Select All also returns to line mode. Long-line display follows
-the character cursor without shaping the entire line. Rectangle selection and
-named copy buffers remain pending.
+the character cursor without shaping the entire line. Press r for rectangle mode,
+then anchor with Space or Shift-movement and move across rows/columns. Rectangle
+copy uses terminal-cell columns, includes whole graphemes touched by either edge,
+and joins rows with newlines without padding short lines. r returns to character
+mode; c returns to line mode. Named copy buffers remain pending.
 
 **Choose Terminal Font…** searches installed font families for the current
 terminal. Type to filter, use arrows and Enter to choose, or Escape to cancel.

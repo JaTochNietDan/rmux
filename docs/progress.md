@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Copy mode now has rectangular selection via r, alongside character and line
+modes. Anchored keyboard ranges use terminal-cell columns, highlight each row,
+and include complete graphemes touched by either edge. Copy joins retained row
+slices with newlines without synthetic right padding; short/empty rows are
+supported. Formatting uses the existing background copy path and checks the
+clipboard generation between rows. Seven focused behavior tests passed (the
+explicit performance sample stayed ignored), including reversed rectangles,
+CJK/combined emoji at edges, empty rows and cancellation. Desktop test compilation
+passed. Native UI acceptance and named buffer/CLI/RPC parity remain pending.
+
 Copy-mode clipboard preparation now runs on the background executor against the
 shared snapshot. The requested selection is captured at activation; subsequent
 navigation does not change what is copied. Each request uses the same global

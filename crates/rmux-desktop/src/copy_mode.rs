@@ -83,6 +83,32 @@ impl Buffer {
         }
         line.len()
     }
+    fn rectangle(&self, row: usize, column: usize, anchor: Option<(usize, usize)>) -> (Range<usize>, Range<usize>) {
+        let (other_row, other_column) = anchor.unwrap_or((row, column));
+        let here = self.visual_column(row, column);
+        let there = self.visual_column(other_row, other_column);
+        let here_end = self.visual_column(row, next_grapheme(self.line(row), column));
+        let there_end = self.visual_column(other_row, next_grapheme(self.line(other_row), other_column));
+        (row.min(other_row)..row.max(other_row) + 1, here.min(there)..here_end.max(there_end))
+    }
+    fn rectangle_row(&self, row: usize, rows: &Range<usize>, columns: &Range<usize>) -> Range<usize> {
+        if !rows.contains(&row) { return 0..0; }
+        let start = self.byte_at_column(row, columns.start);
+        let mut end = self.byte_at_column(row, columns.end);
+        // Include a wide grapheme touched by the right edge rather than split it.
+        if self.visual_column(row, end) < columns.end { end = next_grapheme(self.line(row), end); }
+        self.lines[row].start + start..self.lines[row].start + end
+    }
+    fn rectangle_text(&self, row: usize, column: usize, anchor: Option<(usize, usize)>, current: impl Fn() -> bool) -> Option<String> {
+        let (rows, columns) = self.rectangle(row, column, anchor);
+        let mut text = String::new();
+        for row in rows.clone() {
+            if !current() { return None; }
+            if row != rows.start { text.push('\n'); }
+            text.push_str(&self.text[self.rectangle_row(row, &rows, &columns)]);
+        }
+        Some(text)
+    }
     fn character_range(&self, row: usize, column: usize, anchor: Option<(usize, usize)>) -> Range<usize> {
         let here = self.lines[row].start + column;
         let (anchor_row, anchor_column) = anchor.unwrap_or((row, column));
@@ -120,6 +146,7 @@ pub(super) struct CopyMode {
     cursor: usize,
     anchor: Option<usize>,
     characters: bool,
+    rectangular: bool,
     column: usize,
     preferred_column: Option<usize>,
     character_anchor: Option<(usize, usize)>,
@@ -168,7 +195,7 @@ impl CopyMode {
         focus.focus(window);
         Self { focus, buffer: None, search: None, query: String::new(), matches: Vec::new(),
             search_message: String::new(), search_cancel: Arc::new(AtomicBool::new(false)), search_job: None, copy_message: None, copy_job: None, message: "Reading terminal history…".into(), cursor: 0,
-            anchor: None, characters: false, column: 0, preferred_column: None, character_anchor: None, scroll: ListState::new(0, ListAlignment::Bottom, px(128.)), _load: load }
+            anchor: None, characters: false, rectangular: false, column: 0, preferred_column: None, character_anchor: None, scroll: ListState::new(0, ListAlignment::Bottom, px(128.)), _load: load }
     }
     fn open_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(search) = &self.search { search.read(cx).focus.focus(window); return; }
@@ -232,13 +259,16 @@ impl CopyMode {
         // copy from another pane, field or window must win over this worker.
         let ticket = clipboard::begin();
         self.copy_job = None;
-        let (cursor, column, anchor, character_anchor, characters) =
-            (self.cursor, self.column, self.anchor, self.character_anchor, self.characters);
+        let (cursor, column, anchor, character_anchor, characters, rectangular) =
+            (self.cursor, self.column, self.anchor, self.character_anchor, self.characters, self.rectangular);
         let executor = cx.background_executor().clone();
         self.copy_message = Some("Copying selection…".into());
         self.copy_job = Some(cx.spawn(async move |entity, cx| {
             let text = executor.spawn(async move {
                 if !clipboard::current(ticket) { return None; }
+                if rectangular {
+                    return buffer.rectangle_text(cursor, column, character_anchor, || clipboard::current(ticket));
+                }
                 let selected = if characters { &buffer.text[buffer.character_range(cursor, column, character_anchor)] }
                     else { buffer.selected(cursor, anchor) };
                 let owned = selected.to_owned();
@@ -298,7 +328,8 @@ impl CopyMode {
                 } else { match key.key.as_str() {
                     "/" => self.open_search(window, cx),
                     "n" | "N" => self.jump_match(key.modifiers.shift || key.key == "N", false),
-                    "c" => { self.characters = !self.characters; self.anchor = None; self.character_anchor = None; self.column = 0; self.preferred_column = None; }
+                    "r" => { self.rectangular = !self.rectangular; self.characters = true; self.anchor = None; }
+                    "c" => { self.rectangular = false; self.characters = !self.characters; self.anchor = None; self.character_anchor = None; self.column = 0; self.preferred_column = None; }
                     "space" | "v" => {
                         if self.characters { self.character_anchor = if self.character_anchor.is_some() { None } else { Some((self.cursor, self.column)) }; }
                         else { self.anchor = if self.anchor.is_some() { None } else { Some(self.cursor) }; }
@@ -324,7 +355,10 @@ impl CopyMode {
         let suffix = if end < text.len() { "… [display clipped]" } else { "" };
         let display = format!("{prefix}{}{suffix}", &text[start..end]);
         let highlights = if self.characters {
-            let selected = buffer.character_range(self.cursor, self.column, self.character_anchor);
+            let selected = if self.rectangular {
+                let (rows, columns) = buffer.rectangle(self.cursor, self.column, self.character_anchor);
+                buffer.rectangle_row(index, &rows, &columns)
+            } else { buffer.character_range(self.cursor, self.column, self.character_anchor) };
             let from = selected.start.max(range.start + start);
             let to = selected.end.min(range.start + end);
             (from < to).then(|| (from - range.start - start + prefix.len()..to - range.start - start + prefix.len(),
@@ -337,7 +371,7 @@ impl CopyMode {
             .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
                 if event.standard_click() {
                     this.copy_message = None;
-                    this.characters = false; this.character_anchor = None; this.column = 0; this.preferred_column = None;
+                    this.characters = false; this.rectangular = false; this.character_anchor = None; this.column = 0; this.preferred_column = None;
                     if event.modifiers().shift && this.anchor.is_none() { this.anchor = Some(this.cursor); }
                     else if !event.modifiers().shift { this.anchor = None; }
                     this.cursor = index;
@@ -360,7 +394,7 @@ impl Render for CopyMode {
             .on_action(|_: &Paste, _, cx| cx.stop_propagation())
             .on_action(cx.listener(|this, _: &EditorSelectAll, _, cx| {
                 if let Some(buffer) = &this.buffer {
-                    this.characters = false; this.character_anchor = None; this.column = 0; this.preferred_column = None;
+                    this.characters = false; this.rectangular = false; this.character_anchor = None; this.column = 0; this.preferred_column = None;
                     this.anchor = Some(0);
                     this.cursor = buffer.lines.len() - 1;
                     this.scroll.scroll_to_reveal_item(this.cursor);
@@ -391,7 +425,8 @@ impl Render for CopyMode {
                 .flex_1().min_h_0().w_full())
             .when_some(self.copy_message.clone(), |root, message| root.child(div().px_3().py_1().text_xs().text_color(rgb(0x9fceb0)).child(message)))
             .child(div().px_3().py_2().text_xs().border_t_1().border_color(rgb(0x383838))
-                .child(if self.characters { "Character mode · ←→ / h l move · Shift / Space select · c line mode · Enter copy · Esc close" }
+                .child(if self.rectangular { "Rectangle mode · Arrows move · Shift / Space select · r characters · Enter copy · Esc close" }
+                    else if self.characters { "Character mode · ←→ / h l move · Shift / Space select · r rectangle · c lines · Enter copy · Esc close" }
                     else { "Line mode · ↑↓ move · Shift / Space select · c characters · Enter copy · / search · Esc close" }))
     }
 }
@@ -464,6 +499,17 @@ mod tests {
             assert!(actual <= column && column - actual <= 1);
         }
         assert!(long.column_marks.len() < 200, "index must stay sparse");
+    }
+    #[test]
+    fn rectangle_selection_uses_cell_columns_without_splitting_graphemes() {
+        let buffer = Buffer::new("abcdef\na界de\nx\n👩‍💻e\u{301}xyz".into(), false);
+        // Inclusive cells 1..3 touch CJK and emoji boundaries; short rows remain empty.
+        let selected = buffer.rectangle_text(0, 1, Some((3, "👩‍💻e\u{301}".len())), || true).unwrap();
+        assert_eq!(selected, "bcd\n界d\n\n👩‍💻e\u{301}x");
+        assert_eq!(selected, buffer.rectangle_text(3, "👩‍💻e\u{301}".len(), Some((0, 1)), || true).unwrap());
+        assert!(buffer.rectangle_text(0, 1, Some((3, 0)), || false).is_none());
+        let empty = Buffer::new(String::new(), false);
+        assert_eq!(empty.rectangle_text(0, 0, None, || true).unwrap(), "");
     }
     #[test]
     fn character_selection_preserves_graphemes_across_lines_and_reverse_ranges() {
