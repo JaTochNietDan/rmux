@@ -53,7 +53,7 @@ pub fn help(command: &str) -> Result<String, String> {
         "focus-panel" => ("--panel ID [--activate]", "Focus an existing terminal surface; --activate also activates its window."),
         "send-key" => ("--surface ID KEY", "Send one key tap, such as Enter, Up, Ctrl-c, Alt-Left or Shift-Tab."),
         "send" => ("--surface ID [--paste] TEXT", "Send literal text. --paste applies terminal paste encoding. Use -- before text starting with a dash."),
-        "capture-pane" => ("--surface ID [--scrollback] [--lines N]", "Capture visible text, or retained history with --scrollback. --lines N implies history and requests the last 1–65536 logical screen lines, including blank trailing rows; soft wraps are joined. Returns JSON with text and truncation status, bounded to 1 MiB."),
+        "capture-pane" => ("--surface ID [--scrollback] [--lines N]", "Capture visible text, or retained history with --scrollback. --lines N implies history and requests the last 1–65536 logical text lines; unused trailing screen rows are omitted and soft wraps are joined. Returns JSON with text and truncation status, bounded to 1 MiB."),
         "read-screen" => ("--surface ID [--scrollback | --selection [--preserve-wraps]]", "Read visible text by default, retained history with --scrollback, or selected text with --selection; add --preserve-wraps to keep soft-wrap line breaks."),
         "move-panel" => ("--panel ID --workspace ID [--activate]", "Move a live terminal to another workspace, preserving its process. Destination selection changes; window activation requires --activate."),
         "move-workspace" => ("--workspace ID --window ID [--activate]", "Move a workspace and its live terminals to another window. Window activation requires --activate."),

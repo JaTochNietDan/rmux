@@ -4,6 +4,7 @@ use super::*;
 struct Output {
     bytes: Vec<u8>,
     limit: usize,
+    skip_lines: usize,
     truncated: bool,
     allocation_failed: bool,
 }
@@ -11,7 +12,13 @@ struct Output {
 unsafe extern "C" fn write_output(userdata: *mut c_void, data: *const u8, len: usize) -> bool {
     // Ghostty calls synchronously with a valid context and borrowed byte slice.
     let output = unsafe { &mut *userdata.cast::<Output>() };
-    let bytes = unsafe { std::slice::from_raw_parts(data, len) };
+    let mut bytes = unsafe { std::slice::from_raw_parts(data, len) };
+    while output.skip_lines > 0 {
+        let Some(index) = bytes.iter().position(|byte| *byte == b'\n') else { return true; };
+        bytes = &bytes[index + 1..];
+        output.skip_lines -= 1;
+    }
+    let len = bytes.len();
     let accepted = len.min(output.limit.saturating_sub(output.bytes.len()));
     let required = output.bytes.len() + accepted;
     if required > output.bytes.capacity() {
@@ -50,7 +57,7 @@ impl Terminal {
     }
 
     /// Export the last `lines` logical rows of the active screen and history.
-    /// Blank trailing screen rows count as lines; soft wraps do not. Locates the
+    /// Trailing rows omitted by the formatter do not count; soft wraps do not. Locates the
     /// range backwards before formatting, avoiding a copy of preceding history.
     /// The byte cap bounds the returned prefix of that range (not a byte tail).
     /// Like history_text_limited, run this on a background executor.
@@ -74,21 +81,48 @@ impl Terminal {
                 }, &mut grid))?;
                 Ok(grid)
             };
-            let end = grid_at(columns - 1, (total - 1) as u32)?;
             let mut row = total - 1;
+            // Ask the same formatter whether a row emits text, with a zero-byte
+            // writer budget. This avoids duplicating its Unicode/space/spacer
+            // rules and allocates no output buffer. Only trailing blank rows
+            // and the first nonblank row are probed.
+            let end = loop {
+                let end = grid_at(columns - 1, row as u32)?;
+                let probe = GhosttySelection { start: grid_at(0, row as u32)?, end, rectangle: false };
+                let (_, has_text) = self.export_text_range(0, false, true, Some(probe), None)?
+                    .expect("explicit row range");
+                if has_text { break end; }
+                // Explicit spaces can cause the preceding line break to be
+                // emitted even though trimming removes the row's own bytes.
+                let mut spaces = false;
+                for column in 0..columns {
+                    let grid = grid_at(column, row as u32)?;
+                    let mut cell = 0;
+                    let mut codepoint = 0u32;
+                    check(ghostty_grid_ref_cell(&grid, &mut cell))?;
+                    check(ghostty_cell_get(cell, GHOSTTY_CELL_DATA_CODEPOINT, out(&mut codepoint)))?;
+                    if codepoint == 32 { spaces = true; break; }
+                }
+                if spaces { break end; }
+                if row == 0 { return Ok((String::new(), false)); }
+                row -= 1;
+            };
             let mut remaining = lines;
             let start = loop {
                 let grid = grid_at(0, row as u32)?;
                 let mut raw = 0;
                 let mut continuation = false;
-                check(ghostty_grid_ref_row(&grid, &mut raw))?;
-                check(ghostty_row_get(raw, GHOSTTY_ROW_DATA_WRAP_CONTINUATION, out(&mut continuation)))?;
+                if row > 0 {
+                    let previous = grid_at(0, (row - 1) as u32)?;
+                    check(ghostty_grid_ref_row(&previous, &mut raw))?;
+                    check(ghostty_row_get(raw, GHOSTTY_ROW_DATA_WRAP, out(&mut continuation)))?;
+                }
                 if !continuation { remaining -= 1; }
                 if row == 0 || remaining == 0 { break grid; }
                 row -= 1;
             };
             let selection = GhosttySelection { start, end, rectangle: false };
-            self.export_text_range(max_bytes, false, true, Some(selection))
+            self.export_text_range(max_bytes, false, true, Some(selection), Some(lines))
                 .map(|text| text.expect("explicit history range"))
         }
     }
@@ -109,10 +143,10 @@ impl Terminal {
     }
 
     pub(super) fn export_text_with_wraps(&self, max_bytes: usize, selected: bool, unwrap: bool) -> Result<Option<(String, bool)>> {
-        self.export_text_range(max_bytes, selected, unwrap, None)
+        self.export_text_range(max_bytes, selected, unwrap, None, None)
     }
 
-    fn export_text_range(&self, max_bytes: usize, selected: bool, unwrap: bool, range: Option<GhosttySelection>) -> Result<Option<(String, bool)>> {
+    fn export_text_range(&self, max_bytes: usize, selected: bool, unwrap: bool, range: Option<GhosttySelection>, tail_lines: Option<usize>) -> Result<Option<(String, bool)>> {
         let explicit_range = range.is_some();
         struct Formatter(GhosttyFormatter);
         impl Drop for Formatter {
@@ -123,6 +157,7 @@ impl Terminal {
         let mut output = Output {
             bytes: Vec::new(),
             limit: max_bytes,
+            skip_lines: 0,
             truncated: false,
             allocation_failed: false,
         };
@@ -148,6 +183,22 @@ impl Terminal {
                 GHOSTTY_FORMATTER_OPT_UNWRAP,
                 input(&unwrap),
             ))?;
+            if let Some(lines) = tail_lines {
+                unsafe extern "C" fn count_lines(userdata: *mut c_void, data: *const u8, len: usize) -> bool {
+                    let count = unsafe { &mut *userdata.cast::<usize>() };
+                    let bytes = unsafe { std::slice::from_raw_parts(data, len) };
+                    *count += bytes.iter().filter(|byte| **byte == b'\n').count();
+                    true
+                }
+                // Row metadata bounds the candidate range, but erased/wrapped
+                // rows may emit additional line breaks. Count actual formatted
+                // separators without retaining text, then skip excess lines.
+                let mut newlines = 0usize;
+                check(ghostty_formatter_format(formatter.0, GhosttyWriter {
+                    write: Some(count_lines), userdata: (&mut newlines as *mut usize).cast(),
+                }))?;
+                output.skip_lines = newlines.saturating_sub(lines - 1);
+            }
             let result = ghostty_formatter_format(
                 formatter.0,
                 GhosttyWriter {
@@ -194,7 +245,52 @@ mod tests {
         assert_eq!(terminal.frame()?.scrollback_offset, before.scrollback_offset);
         terminal.write(b"\x1b[?1049h\x1b[HALT");
         assert_eq!(terminal.history_tail_limited(2, 4096)?, ("ALT".into(), false));
-        assert_eq!(terminal.history_tail_limited(1, 4096)?, (String::new(), false));
+        assert_eq!(terminal.history_tail_limited(1, 4096)?, ("ALT".into(), false));
+        Ok(())
+    }
+
+    #[test]
+    fn history_tail_matches_full_text_suffix_with_blank_and_wrapped_rows() -> Result<()> {
+        for input in [
+            "", "hello", "hello\r\n", "a\r\n\r\nb\r\n\r\n",
+            "世界abcdefgh\r\n\r\nlast\r\n", "a\r\n   ",
+            "12345678        ", "old\r\n\x1b[41m   ",
+            "a\r\nb\r\nc\r\nd\r\ne\r\nf\r\ng\r\n",
+        ] {
+            let mut terminal = Terminal::new(8, 5)?;
+            terminal.write(input.as_bytes());
+            let (full, truncated) = terminal.history_text_limited(4096)?;
+            assert!(!truncated);
+            for lines in 1..=8 {
+                let start = full.match_indices('\n').rev().nth(lines - 1).map_or(0, |(index, _)| index + 1);
+                let expected = &full[start..];
+                assert_eq!(terminal.history_tail_limited(lines, 4096)?, (expected.into(), false), "input={input:?}, lines={lines}");
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn history_tail_matches_suffix_after_terminal_edits() -> Result<()> {
+        let mut seed = 17u64;
+        let fragments = ["x", " ", "世界", "\r\n", "\t", "\x1b[K", "\x1b[2K", "\r", "\x1b[31m", "\x1b[0m"];
+        let mut terminal = Terminal::new(8, 5)?;
+        for step in 0..200 {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+            terminal.write(fragments[(seed >> 32) as usize % fragments.len()].as_bytes());
+            let (full, truncated) = terminal.history_text_limited(65536)?;
+            assert!(!truncated);
+            for lines in 1..=6 {
+                let start = full.match_indices('\n').rev().nth(lines - 1).map_or(0, |(index, _)| index + 1);
+                let expected = &full[start..];
+                assert_eq!(terminal.history_tail_limited(lines, 65536)?, (expected.into(), false), "step={step}, lines={lines}, full={full:?}");
+                for limit in [0, 1, 5] {
+                    let (text, truncated) = terminal.history_tail_limited(lines, limit)?;
+                    assert!(text.len() <= limit && expected.starts_with(&text));
+                    assert_eq!(truncated, expected.len() > limit);
+                }
+            }
+        }
         Ok(())
     }
 
@@ -220,6 +316,7 @@ mod tests {
         let mut output = Output {
             bytes: Vec::new(),
             limit: 10_000,
+            skip_lines: 0,
             truncated: false,
             allocation_failed: false,
         };

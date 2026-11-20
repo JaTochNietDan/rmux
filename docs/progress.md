@@ -2,6 +2,18 @@
 
 ## Current implementation focus
 
+Corrected tail capture to operate on formatted text lines, following the pinned
+[cmux tail tests](https://github.com/manaflow-ai/cmux/blob/a76816e4f0788003758b9434ab702068a640fb5d/cmuxTests/TerminalControllerTerminalTextTests.swift).
+Unused trailing rows no longer consume the requested line count. Explicit spaces
+that preserve a newline remain significant. Row metadata bounds the candidate
+range; a counting formatter pass handles extra separators after erased/wrapped
+rows before the bounded output pass. Neither pass copies preceding history;
+the counting pass scans the candidate text, so long-line latency remains to be
+measured. Seven focused export tests passed, including differential comparisons
+against full-text suffixes after 200 deterministic Unicode/wrap/erase/tab edits,
+with UTF-8 byte caps. Native/live socket acceptance and upstream snapshot merging
+remain unverified; this supersedes the trailing-blank limitation recorded below.
+
 Connected the logical tail exporter through Session, background surface.read_text
 RPC and capture-pane --lines N. CLI help/completion include capture-pane, explicit
 surface targeting, --scrollback and --lines; the CLI cap is 1 MiB. Counts are
