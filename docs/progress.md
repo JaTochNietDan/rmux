@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Polished Program Status for narrow panes: neutral panel/card colors, shrinking
+title columns, bounded overflow, complete-heading/metadata hover hints and a
+standard close control with primary-click handling. App/title metadata omits
+empty separators. Each record now has an explicit Copy control that exports its
+heading, available app/title and full message, preserving access to long text.
+Message paragraphs wrap normally; oversized unbroken text stays within the card
+and remains available through Copy. Desktop cargo check passed; visual layout,
+hover and clipboard interaction acceptance remain pending on the locked Mac.
+
 Program Status opening no longer waits for the terminal parser mutex. An
 opportunistic records snapshot populates immediately when available; otherwise
 the panel shows Loading and a single cancellable task retries every 8ms only
