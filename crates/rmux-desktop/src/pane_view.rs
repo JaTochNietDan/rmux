@@ -90,6 +90,10 @@ impl Render for ControlHint {
 }
 
 pub(super) fn pane_control(id: &'static str, hint: &'static str) -> Stateful<Div> {
+    control_button(id).tooltip(move |_, cx| cx.new(|_| ControlHint(hint.into())).into())
+}
+
+fn control_button(id: &'static str) -> Stateful<Div> {
     div()
         .id(id)
         .flex()
@@ -102,7 +106,7 @@ pub(super) fn pane_control(id: &'static str, hint: &'static str) -> Stateful<Div
         .text_color(rgb(0xaaaaaa))
         .cursor_pointer()
         .hover(|style| style.bg(rgb(0x353535)).text_color(rgb(0xffffff)))
-        .tooltip(move |_, cx| cx.new(|_| ControlHint(hint.into())).into())
+
 }
 
 /// Resolve on hover so settings reloads cannot leave an obsolete shortcut visible.
@@ -112,7 +116,7 @@ pub(super) fn action_control(
     action: impl Action,
     focus: Option<FocusHandle>,
 ) -> Stateful<Div> {
-    pane_control(id, label).tooltip(move |window, cx| {
+    control_button(id).tooltip(move |window, cx| {
         let focus = focus.clone().or_else(|| window.focused(cx));
         let hint = focus.as_ref().and_then(|focus| shortcuts::hint(&action, focus, window));
         let text = hint.map_or_else(|| label.to_owned(), |hint| format!("{label}  {hint}"));
