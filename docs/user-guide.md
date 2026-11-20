@@ -927,6 +927,11 @@ virtual, compressed and image bytes plus compression support. Its scope is
 and child-process memory, and are not total application RSS. A busy parser returns
 `-32007` for retry. No periodic sampler runs when the endpoint is unused.
 The View menu and command palette also offer Show / Refresh Terminal Memory.
+Opening or refreshing focuses the panel. Use ↑/↓, Home/End to select a row,
+Enter to focus its terminal, R to refresh, S to cycle sorting, C to copy the JSON
+report, and Esc to close. Selection follows the terminal through sorting and
+refreshes while it remains in the sample; Esc restores prior focus when the panel
+still owns focus. Rows are virtualized for larger terminal lists.
 Its panel samples up to 256 terminals in the current window and provides manual
 Refresh/Close controls, including explicit busy or unavailable rows.
 Rows initially sort by resident storage; use the sort control or command palette's

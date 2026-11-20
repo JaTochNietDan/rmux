@@ -123,6 +123,9 @@ pub(super) struct WorkspaceWindow {
     notice: Option<String>,
     memory_rows: Option<Vec<memory_view::Row>>,
     memory_scroll: ListState,
+    memory_focus: Option<FocusHandle>,
+    memory_previous_focus: Option<FocusHandle>,
+    memory_selected: usize,
     memory_application: Option<process_metrics::Sample>,
     memory_sort: memory_view::Sort,
     memory_loading: bool,
@@ -283,14 +286,70 @@ impl WorkspaceWindow {
     }
 
     pub(super) fn focus_memory_terminal(&mut self, workspace: EntityId, surface: EntityId, window: &mut Window, cx: &mut Context<Self>) {
-        if self.automation_available(cx).is_ok() { self.focus_terminal(workspace, surface, window, cx); }
+        if self.automation_available(cx).is_ok() {
+            if let Some(rows) = &self.memory_rows {
+                if let Some(index) = self.memory_sort.indices(rows).iter().position(|index| rows[*index].surface_id == surface) { self.memory_selected = index; }
+            }
+            self.focus_terminal(workspace, surface, window, cx);
+        }
     }
-    pub(super) fn render_memory_row(&self, index: usize, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_memory_row(&self, index: usize, selected: bool, cx: &mut Context<Self>) -> AnyElement {
         self.memory_rows.as_ref().and_then(|rows| rows.get(index))
-            .map(|row| memory_view::render_row(row, index, cx))
+            .map(|row| memory_view::render_row(row, index, selected, cx))
             .unwrap_or_else(|| div().into_any_element())
     }
-    fn refresh_memory(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn memory_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let modifiers = event.keystroke.modifiers;
+        if modifiers.control || modifiers.platform || modifiers.alt { return; }
+        let count = self.memory_rows.as_ref().map_or(0, Vec::len);
+        match event.keystroke.key.as_str() {
+            "escape" => self.close_memory(window, cx),
+            "r" => self.refresh_memory(window, cx),
+            "s" => self.sort_memory(cx),
+            "c" => { if let Some(rows) = &self.memory_rows { clipboard::write(ClipboardItem::new_string(memory_view::report(rows, self.memory_application, self.memory_sort)), cx); } },
+            "up" if count > 0 => self.memory_selected = (self.memory_selected + count - 1) % count,
+            "down" if count > 0 => self.memory_selected = (self.memory_selected + 1) % count,
+            "home" => self.memory_selected = 0,
+            "end" => self.memory_selected = count.saturating_sub(1),
+            "enter" => {
+                let target = self.memory_rows.as_ref().and_then(|rows| self.memory_sort.indices(rows).get(self.memory_selected).map(|index| (rows[*index].workspace_id, rows[*index].surface_id)));
+                if let Some((workspace, surface)) = target { self.focus_memory_terminal(workspace, surface, window, cx); }
+            },
+            _ => {},
+        }
+        if count > 0 && self.memory_rows.is_some() { self.memory_scroll.scroll_to_reveal_item(self.memory_selected); }
+        cx.stop_propagation();
+        cx.notify();
+    }
+    fn sort_memory(&mut self, cx: &mut Context<Self>) {
+        let rows = self.memory_rows.as_deref().unwrap_or_default();
+        let selected = self.memory_sort.indices(rows).get(self.memory_selected).copied();
+        self.memory_sort = self.memory_sort.next();
+        self.memory_selected = selected.and_then(|selected| self.memory_sort.indices(rows).iter().position(|index| *index == selected)).unwrap_or(0);
+        self.memory_scroll.reset(rows.len());
+        if !rows.is_empty() { self.memory_scroll.scroll_to_reveal_item(self.memory_selected); }
+        cx.notify();
+    }
+    fn close_memory(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(canceled) = self.memory_canceled.take() { canceled.store(true, Ordering::Relaxed); }
+        self.process_sampler = Default::default();
+        self.memory_rows = None;
+        self.memory_scroll.reset(0);
+        self.memory_application = None;
+        self.memory_loading = false;
+        self.memory_generation = self.memory_generation.wrapping_add(1);
+        if self.memory_focus.as_ref().is_some_and(|focus| focus.is_focused(window)) {
+            if let Some(focus) = self.memory_previous_focus.take() { focus.focus(window); }
+            else { self.select(self.active, window, cx); }
+        }
+        self.memory_previous_focus = None;
+        cx.notify();
+    }
+    fn refresh_memory(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.memory_focus.as_ref().is_some_and(|focus| focus.is_focused(window)) {
+            self.memory_previous_focus = window.focused(cx);
+        }
+        self.memory_focus.get_or_insert_with(|| cx.focus_handle()).focus(window);
         if self.memory_loading { return; }
         let mut jobs = Vec::new();
         'workspaces: for index in self.workspace_order(true) {
@@ -334,7 +393,11 @@ impl WorkspaceWindow {
             }).await;
             let _ = entity.update(cx, |this, cx| {
                 if this.memory_generation != generation || this.memory_rows.is_none() { return; }
+                let selected = this.memory_rows.as_ref().and_then(|previous| this.memory_sort.indices(previous).get(this.memory_selected).map(|index| previous[*index].surface_id));
+                this.memory_selected = selected.and_then(|surface| this.memory_sort.indices(&rows.0).iter().position(|index| rows.0[*index].surface_id == surface))
+                    .unwrap_or_else(|| this.memory_selected.min(rows.0.len().saturating_sub(1)));
                 this.memory_scroll.reset(rows.0.len());
+                if !rows.0.is_empty() { this.memory_scroll.scroll_to_reveal_item(this.memory_selected); }
                 this.memory_rows = Some(rows.0);
                 this.memory_application = rows.1;
                 this.memory_loading = false;
@@ -2596,6 +2659,9 @@ impl WorkspaceWindow {
             notice: None,
             memory_rows: None,
             memory_scroll: ListState::new(0, ListAlignment::Top, px(80.)),
+            memory_focus: None,
+            memory_previous_focus: None,
+            memory_selected: 0,
             memory_application: None,
             memory_sort: Default::default(),
             memory_loading: false,
@@ -2768,6 +2834,9 @@ impl WorkspaceWindow {
             notice: None,
             memory_rows: None,
             memory_scroll: ListState::new(0, ListAlignment::Top, px(80.)),
+            memory_focus: None,
+            memory_previous_focus: None,
+            memory_selected: 0,
             memory_application: None,
             memory_sort: Default::default(),
             memory_loading: false,
@@ -3440,27 +3509,12 @@ impl Render for WorkspaceWindow {
             .on_action(cx.listener(|this, _: &EditWorkspaceIcon, window, cx| this.edit_metadata(MetadataField::Icon, window, cx)))
             .on_action(cx.listener(|this, _: &EditWorkspaceColor, window, cx| this.edit_metadata(MetadataField::Color, window, cx)))
             .on_action(cx.listener(|this, _: &NewWorkspace, window, cx| this.add(1, window, cx)))
-            .on_action(cx.listener(|this, _: &RefreshTerminalMemory, _, cx| this.refresh_memory(cx)))
-            .on_action(cx.listener(|this, _: &CycleTerminalMemorySort, _, cx| {
-                this.memory_sort = this.memory_sort.next();
-                this.memory_scroll.reset(this.memory_rows.as_ref().map_or(0, Vec::len));
-                cx.notify();
-            }))
+            .on_action(cx.listener(|this, _: &RefreshTerminalMemory, window, cx| this.refresh_memory(window, cx)))
+            .on_action(cx.listener(|this, _: &CycleTerminalMemorySort, _, cx| this.sort_memory(cx)))
             .on_action(cx.listener(|this, _: &CopyTerminalMemory, _, cx| {
                 if let Some(rows) = &this.memory_rows { clipboard::write(ClipboardItem::new_string(memory_view::report(rows, this.memory_application, this.memory_sort)), cx); }
             }))
-            .on_action(cx.listener(|this, _: &CloseTerminalMemory, _, cx| {
-                if let Some(canceled) = this.memory_canceled.take() { canceled.store(true, Ordering::Relaxed); }
-                // Drop cached process records without locking a sampler that may
-                // still be in an OS call. An in-flight worker releases its Arc later.
-                this.process_sampler = Default::default();
-                this.memory_rows = None;
-                this.memory_scroll.reset(0);
-                this.memory_application = None;
-                this.memory_loading = false;
-                this.memory_generation = this.memory_generation.wrapping_add(1);
-                cx.notify();
-            }))
+            .on_action(cx.listener(|this, _: &CloseTerminalMemory, window, cx| this.close_memory(window, cx)))
             .on_action(cx.listener(|this, _: &NewWorkspaceGroup, window, cx| this.create_group(true, window, cx)))
             .on_action(cx.listener(|this, _: &GroupCurrentWorkspace, window, cx| this.create_group(false, window, cx)))
             .on_action(cx.listener(|this, _: &GroupSelectedWorkspaces, window, cx| this.group_selected(window, cx)))
@@ -3761,7 +3815,7 @@ impl Render for WorkspaceWindow {
                                     .child(icons::icon("bell")))
                         ).child(gpui::div().flex_1().min_h_0().child(entry.workspace.clone()))
                     })
-                    .when_some(self.memory_rows.as_ref(), |div, rows| div.child(memory_view::panel(rows, self.memory_application, self.memory_sort, self.memory_loading, self.memory_scroll.clone(), cx)))
+                    .when_some(self.memory_rows.as_ref(), |div, rows| div.child(memory_view::panel(rows, self.memory_application, self.memory_sort, self.memory_loading, self.memory_scroll.clone(), self.memory_focus.as_ref(), self.memory_selected, cx)))
                     .when_some(self.notice.clone(), |div, notice| div.child(gpui::div().flex().items_start().flex_shrink_0().min_w_0()
                         .gap_2().px_3().py_2().text_xs().bg(rgb(0x292929)).border_t_1().border_color(rgb(0x3b4557))
                         .child(gpui::div().id("window-notice-text").flex_1().min_w_0().max_h(px(96.)).overflow_scroll().whitespace_normal()

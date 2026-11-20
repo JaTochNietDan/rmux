@@ -1613,7 +1613,7 @@
       ],
       "acceptance": "Attribute runaway memory to the correct process generation; distinguish warning from termination policy.",
       "rmux_status": "in_progress",
-      "implementation": "Manual terminal memory panel samples up to 256 shell processes plus rmux on a background worker, reporting RSS and CPU after a valid baseline, alongside Ghostty screen storage. Sorting, JSON copy and terminal focus are implemented. GPUI virtualized rows limit UI element construction to the requested range; refresh/sort/close reset list measurements. No idle polling is added. Desktop compilation passed for virtualization.",
+      "implementation": "Manual terminal memory panel samples up to 256 shell processes plus rmux on a background worker, reporting RSS and CPU after a valid baseline, alongside Ghostty screen storage. Sorting, JSON copy and terminal focus are implemented. GPUI virtualized rows limit UI element construction to the requested range; refresh/sort/close reset list measurements. No idle polling is added. Dedicated panel keyboard focus supports arrows/Home/End, Enter to focus, refresh/sort/copy/close keys and prior-focus restoration on close. Selection follows stable surface identity through sort/refresh. Desktop compilation passed; native keyboard acceptance remains pending.",
       "remaining": "Descendant/foreground process attribution and warning/termination policy, native panel scrolling and focus acceptance, per-pane upstream UI parity and measured rendering cost; other-platform runtime acceptance.",
       "implementation_sources": [
         "crates/rmux-desktop/src/memory_view.rs",

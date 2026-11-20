@@ -15,7 +15,7 @@ impl Sort {
     fn label(self) -> &'static str {
         match self { Self::Storage => "Screen storage ↓", Self::ShellMemory => "Shell RSS ↓", Self::ShellCpu => "Shell CPU ↓" }
     }
-    fn indices(self, rows: &[Row]) -> Vec<usize> {
+    pub(super) fn indices(self, rows: &[Row]) -> Vec<usize> {
         let mut indices: Vec<_> = (0..rows.len()).collect();
         indices.sort_by(|a, b| {
             let (a, b) = (&rows[*a], &rows[*b]);
@@ -59,14 +59,17 @@ pub fn report(rows: &[Row], application: Option<process_metrics::Sample>, sort: 
     serde_json::to_string_pretty(&serde_json::json!({"scope":"ghostty_screen_storage","sample_mode":"manual","application":{"process_id":std::process::id(),"scope":"application_process","sample":application},"surfaces":rows})).expect("JSON memory report")
 }
 
-pub fn panel(rows: &[Row], application: Option<process_metrics::Sample>, sort: Sort, loading: bool, scroll: ListState, cx: &mut Context<window_view::WorkspaceWindow>) -> AnyElement {
+pub fn panel(rows: &[Row], application: Option<process_metrics::Sample>, sort: Sort, loading: bool, scroll: ListState, focus: Option<&FocusHandle>, selected: usize, cx: &mut Context<window_view::WorkspaceWindow>) -> AnyElement {
     let indices = sort.indices(rows);
     let entity = cx.entity();
     let sampled = rows.iter().filter(|row| row.usage.is_some()).count();
     let resident: u64 = rows.iter().filter_map(|row| row.usage)
         .map(|usage| usage.primary_resident_bytes.saturating_add(usage.alternate_resident_bytes))
         .fold(0, u64::saturating_add);
-    div().h(px(240.)).max_h(relative(0.45)).flex_shrink_0().min_h_0()
+    div().key_context("TerminalMemory")
+        .when_some(focus, |panel, focus| panel.track_focus(focus))
+        .on_key_down(cx.listener(window_view::WorkspaceWindow::memory_key))
+        .h(px(240.)).max_h(relative(0.45)).flex_shrink_0().min_h_0()
         .flex().flex_col().bg(rgb(0x242424)).border_t_1().border_color(rgb(0x3b4352))
         .child(div().h(px(36.)).flex_shrink_0().px_3().flex().items_center().gap_2()
             .child(div().flex_1().min_w_0().truncate().text_sm()
@@ -87,12 +90,14 @@ pub fn panel(rows: &[Row], application: Option<process_metrics::Sample>, sort: S
         .child(div().px_3().pb_2().text_xs().text_color(rgb(0xa0a0a0))
             .child("Screen storage excludes app/GPU assets · shell RSS/CPU excludes descendants · up to 256 terminals · manual refresh"))
         .child(list(scroll, move |index, _, cx| {
-            entity.update(cx, |root, cx| root.render_memory_row(indices[index], cx))
+            entity.update(cx, |root, cx| root.render_memory_row(indices[index], index == selected, cx))
         }).with_sizing_behavior(ListSizingBehavior::Auto).flex_1().min_h_0().w_full())
+        .child(div().px_3().py_1().flex_shrink_0().text_xs().text_color(rgb(0xa0a0a0))
+            .child("↑↓ Select · Enter Focus · R Refresh · S Sort · C Copy · Esc Close"))
         .into_any_element()
 }
 
-pub fn render_row(row: &Row, index: usize, cx: &mut Context<window_view::WorkspaceWindow>) -> AnyElement {
+pub fn render_row(row: &Row, index: usize, selected: bool, cx: &mut Context<window_view::WorkspaceWindow>) -> AnyElement {
     let workspace = row.workspace_id;
     let surface = row.surface_id;
     let hint: SharedString = format!("{} · Click to focus terminal", row.name).into();
@@ -101,7 +106,8 @@ pub fn render_row(row: &Row, index: usize, cx: &mut Context<window_view::Workspa
         mib(usage.compressed_bytes), mib(usage.image_bytes), mib(usage.virtual_bytes)))
         .unwrap_or_else(|| row.status.into());
     div().id(("terminal-memory-row", index)).px_3().py_2().border_b_1().border_color(rgb(0x383838))
-        .cursor_pointer().hover(|style| style.bg(rgb(0x303030)))
+        .when(selected, |row| row.bg(rgb(0x354969)))
+        .cursor_pointer().hover(move |style| style.bg(rgb(if selected { 0x40577b } else { 0x303030 })))
         .tooltip(move |_, cx| cx.new(|_| pane_view::ControlHint(hint.clone())).into())
         .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
             if event.standard_click() { this.focus_memory_terminal(workspace, surface, window, cx); }

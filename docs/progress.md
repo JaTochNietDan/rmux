@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Added dedicated keyboard focus and visible selection to the terminal memory
+panel: arrows/Home/End select, Enter focuses the addressed terminal, R refreshes,
+S sorts, C copies the report and Escape closes. Sort and completed refresh resolve
+the selection by stable surface identity; clicks update the same selection.
+Selected rows scroll into view. Closing restores previous focus only when the
+panel owns focus, and existing cancellation/generation cleanup remains shared by
+button and keyboard paths. Desktop compilation passed; native keyboard, focus
+restoration and narrow-window layout acceptance remain pending.
+
 Changed the terminal memory panel from eagerly constructing every sampled row to
 GPUI's virtualized list, matching the command palette's rendering approach.
 Only requested rows construct labels, formatting, tooltips and click handlers;
