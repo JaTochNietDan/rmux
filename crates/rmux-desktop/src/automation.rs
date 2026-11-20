@@ -23,6 +23,7 @@ const LIVE_METHODS: &[&str] = &[
     "pane.zoom.set",
     "pane.split",
     "pane.resize",
+    "workspace.equalize",
     "surface.list",
     "notification.list",
     "notification.send",
@@ -335,14 +336,15 @@ pub(super) struct SurfaceKey {
 
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-struct WorkspaceClose { workspace_id: String }
+struct WorkspaceTarget { workspace_id: String }
 
 struct LiveRequest {
     buffer_command: Option<super::copy_buffers::Command>,
     list_filter: ListFilter,
     notification_change: Option<NotificationChange>,
     surface_key: Option<SurfaceKey>,
-    workspace_close: Option<WorkspaceClose>,
+    workspace_close: Option<WorkspaceTarget>,
+    workspace_equalize: Option<WorkspaceTarget>,
     method: String,
     selection: Option<Selection>,
     surface_focus: Option<SurfaceFocus>,
@@ -528,6 +530,17 @@ pub fn attach_live(cx: &mut gpui::App, stdio: bool, socket_directory: Option<std
                             code: -32002,
                             message: "Window created but response unavailable; inspect window.list",
                         });
+                }
+                if let Some(equalize) = &request.workspace_equalize {
+                    let target = target_id(&equalize.workspace_id)?;
+                    for handle in cx.windows() {
+                        let Some(handle) = handle.downcast::<super::window_view::WorkspaceWindow>() else { continue; };
+                        if handle.read(cx).is_ok_and(|view| view.automation_contains_workspace(target)) {
+                            return handle.update(cx, |view, _, cx| view.automation_equalize_workspace(target, cx))
+                                .map_err(|_| Failure { code: -32004, message: "Window closed" })?;
+                        }
+                    }
+                    return Err(Failure { code: -32004, message: "Workspace not found" });
                 }
                 if let Some(close) = &request.workspace_close {
                     let target = target_id(&close.workspace_id)?;
@@ -883,6 +896,7 @@ fn dispatch_inner(
                 | "notification.mark_read"
                 | "pane.zoom.set"
                 | "pane.resize"
+                | "workspace.equalize"
                 | "pane.split"
                 | "window.create"
                 | "workspace.create"
@@ -1012,8 +1026,14 @@ fn dispatch_inner(
     } else {
         None
     };
+    let workspace_equalize = if method == "workspace.equalize" {
+        match serde_json::from_value::<WorkspaceTarget>(request.get("params").cloned().unwrap_or_else(|| json!({}))) {
+            Ok(close) if target_id(&close.workspace_id).is_ok() => Some(close),
+            _ => return respond(error(id, -32602, "Expected workspace_id")),
+        }
+    } else { None };
     let workspace_close = if method == "workspace.close" {
-        match serde_json::from_value::<WorkspaceClose>(request.get("params").cloned().unwrap_or_else(|| json!({}))) {
+        match serde_json::from_value::<WorkspaceTarget>(request.get("params").cloned().unwrap_or_else(|| json!({}))) {
             Ok(close) if target_id(&close.workspace_id).is_ok() => Some(close),
             _ => return respond(error(id, -32602, "Expected workspace_id")),
         }
@@ -1233,6 +1253,7 @@ fn dispatch_inner(
         && workspace_merge.is_none()
         && workspace_rename.is_none()
         && workspace_close.is_none()
+        && workspace_equalize.is_none()
         && surface_key.is_none()
         && notification_change.is_none()
         && window_create.is_none()
@@ -1269,6 +1290,7 @@ fn dispatch_inner(
                     notification_change,
                     surface_key,
                     workspace_close,
+                    workspace_equalize,
                     selection,
                     surface_focus,
                     surface_text,
@@ -1672,6 +1694,7 @@ mod tests {
                 notification_change: None,
                 surface_key: None,
                 workspace_close: None,
+                workspace_equalize: None,
                 selection: None,
                 surface_focus: None,
                 surface_text: None,

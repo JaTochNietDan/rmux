@@ -21,6 +21,7 @@ pub const HELP: &str = "Commands (JSON output except pipe-pane; explicit opaque 
   move-panel --panel ID --workspace ID [--activate]
   merge-workspace --workspace ID --target-workspace ID [--activate]
   move-workspace --workspace ID --window ID [--activate]
+  equalize-panes --workspace ID
   resize-pane --pane ID --direction left|right|up|down
   split-pane --pane ID --direction left|right|up|down [--cwd PATH] [--focus true|false] [--activate]
   set-pane-zoom --pane ID --zoomed true|false
@@ -60,6 +61,7 @@ pub fn help(command: &str) -> Result<String, String> {
         "move-panel" => ("--panel ID --workspace ID [--activate]", "Move a live terminal to another workspace, preserving its process. Destination selection changes; window activation requires --activate."),
         "merge-workspace" => ("--workspace ID --target-workspace ID [--activate]", "Merge into another workspace in any window of the connected app, retaining live panes and nested splits. Selects the destination and removes the source entry; keeps destination metadata. OS activation requires --activate."),
         "move-workspace" => ("--workspace ID --window ID [--activate]", "Move a workspace and its live terminals to another window. Window activation requires --activate."),
+        "equalize-panes" => ("--workspace ID", "Balance every split in a workspace without changing focus. Rejects zoomed or busy layouts."),
         "resize-pane" => ("--pane ID --direction left|right|up|down", "Move a shared divider one step without changing focus. Rejects zoomed or busy layouts."),
         "split-pane" => ("--pane ID --direction left|right|up|down [--cwd PATH] [--focus true|false] [--activate]", "Create a terminal beside an explicit pane. Inherits its directory and font; focus and OS activation are opt-in."),
         "set-pane-zoom" => ("--pane ID --zoomed true|false", "Set pane zoom explicitly without toggling. Zooming selects its terminal within the window, without OS window activation."),
@@ -91,6 +93,7 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
         "move-panel" => ("surface.move_to_workspace", Some(("--panel", "surface_id")), None),
         "merge-workspace" => ("workspace.merge", Some(("--workspace", "workspace_id")), None),
         "move-workspace" => ("workspace.move_to_window", Some(("--workspace", "workspace_id")), None),
+        "equalize-panes" => ("workspace.equalize", Some(("--workspace", "workspace_id")), None),
         "resize-pane" => ("pane.resize", Some(("--pane", "pane_id")), None),
         "split-pane" => ("pane.split", Some(("--pane", "pane_id")), None),
         "set-pane-zoom" => ("pane.zoom.set", Some(("--pane", "pane_id")), None),
@@ -380,6 +383,15 @@ mod tests {
     fn args(v: &[&str]) -> Vec<OsString> {
         v.iter().map(OsString::from).collect()
     }
+    #[test]
+    fn equalize_requires_workspace_and_rejects_unrelated_options() {
+        assert_eq!(expand("equalize-panes", args(&["--workspace", "12"])).unwrap(),
+            ("workspace.equalize".into(), serde_json::json!({"workspace_id":"12"})));
+        for input in [vec![], vec!["--pane", "12"], vec!["--workspace", "12", "--direction", "left"], vec!["--workspace", "12", "--activate"]] {
+            assert!(expand("equalize-panes", args(&input)).is_err());
+        }
+    }
+
     #[test]
     fn resize_pane_requires_explicit_target_and_cardinal_direction() {
         for direction in ["left", "right", "up", "down"] {

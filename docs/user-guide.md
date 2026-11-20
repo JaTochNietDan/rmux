@@ -1715,3 +1715,11 @@ such as `cmd shift d` on macOS or `ctrl shift k` for a configured binding; macOS
 symbols such as `⇧⌘D` also work. Combine key names with an action name to narrow
 fuzzy matches. Hints reflect the originating terminal's bindings when you open
 the picker, including custom overrides and disabled shortcuts.
+
+To balance every split in a workspace from a script, run
+`rmuxctl equalize-panes --workspace WORKSPACE_ID` or call JSON-RPC
+`workspace.equalize` with `workspace_id`. The response includes `workspace_id`
+and `changed`. It normalizes each split's weights to one without moving terminals
+or changing focus/selection; repeated calls and single-pane layouts return
+`changed: false`. Zoomed layouts, active divider drags and pending split launches
+are rejected as busy. Unzoom first to equalize through automation.

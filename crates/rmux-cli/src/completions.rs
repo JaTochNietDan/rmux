@@ -27,6 +27,7 @@ const COMMANDS: &[(&str, &[&str])] = &[
     ("move-panel", &["--panel", "--workspace", "--activate"]),
     ("merge-workspace", &["--workspace", "--target-workspace", "--activate"]),
     ("move-workspace", &["--workspace", "--window", "--activate"]),
+    ("equalize-panes", &["--workspace"]),
     ("resize-pane", &["--pane", "--direction"]),
     ("split-pane", &["--pane", "--direction", "--cwd", "--focus", "--activate"]),
     ("set-pane-zoom", &["--pane", "--zoomed"]),

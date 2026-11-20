@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Exposed workspace-wide pane equalization through workspace.equalize RPC and
+rmuxctl equalize-panes --workspace ID, including capability discovery, notification
+requests, CLI help/completion and strict target/option validation. The existing
+layout operation now reports change/no-op and avoids rewriting already-normalized
+weights. Automation preserves selection and rejects zoomed/busy layouts. Native
+socket smoke passed nested weight normalization, idempotence, notification framing,
+identity/selection preservation, zoom and invalid-target/field rejection; the CLI
+validation test and desktop build passed. The fixture's immediately exiting shells
+do not establish running-process or native focus behavior.
+
 Added and ran a release focus-dispatch pressure benchmark at 1/4/8/16 flooding
 panes, with application focus reporting enabled and working-task OSC metadata.
 128 samples per size measured focus-in plus summary reads, focus-out and optional

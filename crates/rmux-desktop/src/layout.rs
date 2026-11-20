@@ -127,17 +127,17 @@ impl<T: Clone + PartialEq> PaneTree<T> {
     }
 
     /// Give siblings equal space at every split without changing topology.
-    pub fn equalize(&mut self) {
+    pub fn equalize(&mut self) -> bool {
+        let mut changed = false;
         if let Self::Split {
             children, weights, ..
         } = self
         {
-            weights.clear();
-            weights.resize(children.len(), 1.);
-            for child in children {
-                child.equalize();
-            }
+            changed = weights.len() != children.len() || weights.iter().any(|weight| *weight != 1.);
+            if changed { weights.clear(); weights.resize(children.len(), 1.); }
+            for child in children { changed |= child.equalize(); }
         }
+        changed
     }
     /// Exchange leaf identities without changing split geometry. Missing targets
     /// leave the entire tree untouched.

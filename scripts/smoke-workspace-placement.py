@@ -102,6 +102,23 @@ for mode in ["end", "top", "after_current"]:
                             assert all(item in current for item in surfaces)
                             assert [r["id"] for r in rows() if r["selected"]] == selected
                         print("PASS: left/up splits preserve nested order, identities and workspace selection")
+                        before_equalize = identity()
+                        call("pane.zoom.set", pane_id=pane, zoomed=True)
+                        call("workspace.equalize", fail=True, workspace_id=original)
+                        call("pane.zoom.set", pane_id=pane, zoomed=False)
+                        selected = [r["id"] for r in rows() if r["selected"]]
+                        assert call("workspace.equalize", workspace_id=original)["changed"] is True
+                        def balanced(node):
+                            return "children" not in node or (all(w == 1 for w in node["weights"]) and all(balanced(c) for c in node["children"]))
+                        assert balanced(next(r["layout"] for r in rows() if r["id"] == original))
+                        assert call("workspace.equalize", workspace_id=original)["changed"] is False
+                        call("workspace.equalize", notify=True, workspace_id=original)
+                        assert call("system.ping")["pong"] is True
+                        assert identity() == before_equalize
+                        assert [r["id"] for r in rows() if r["selected"]] == selected
+                        call("workspace.equalize", fail=True, workspace_id="999999999")
+                        call("workspace.equalize", fail=True, workspace_id=original, direction="right")
+                        print("PASS: workspace equalize balances nested weights, is idempotent and preserves identities/selection")
                     if mode == "after_current":
                         group = call("workspace.group.create", window_id=window, name="Placement", workspace_ids=[second, original])
                         call("workspace.select", workspace_id=original)
