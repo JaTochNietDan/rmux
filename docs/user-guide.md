@@ -185,6 +185,9 @@ manually and copy an address from its row. In the panel, ↑/↓ or Home/End sel
 Enter or Command-C (Control-C on Linux/Windows) copies, R refreshes, and Escape
 closes and returns to the terminal. **Close Listening Ports** is also in
 the palette; custom actions are `listening_ports` and `close_listening_ports`.
+Refresh preserves the selected address and owning PID when both remain in the
+results, even if rows move. If that listener disappears, selection returns to the
+first result.
 The panel does not discover remote-host ports or assume that a listener serves
 HTTP. Results can change immediately as processes and sockets come and go. A
 refresh notice appears if process ownership changed during the scan. Closing

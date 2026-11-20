@@ -17,6 +17,10 @@ impl Drop for State {
     }
 }
 
+fn refreshed_selection(listeners: &[ports::Listener], previous: Option<ports::Listener>) -> usize {
+    previous.and_then(|previous| listeners.iter().position(|row| *row == previous)).unwrap_or(0)
+}
+
 impl TerminalView {
     fn reveal_selected_port(&self) {
         if let Some(report) = &self.ports.report {
@@ -64,6 +68,8 @@ impl TerminalView {
     pub(super) fn refresh_ports(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.ports.focus.get_or_insert_with(|| cx.focus_handle()).focus(window);
         if self.ports.loading { self.ports.visible = true; cx.notify(); return; }
+        let previous = self.ports.report.as_ref()
+            .and_then(|report| report.listeners.get(self.ports.selected)).copied();
         self.ports.visible = true;
         self.ports.error = None;
         self.ports.report = None;
@@ -92,7 +98,13 @@ impl TerminalView {
                         this.ports.canceled = None;
                         if !this.ports.visible { return; }
                         if this.session.exit_status().is_some() { this.ports.error = Some("Terminal process has exited".into()); }
-                        else { match result { Ok(report) => this.ports.report = report, Err(error) => this.ports.error = Some(error.to_string()) } }
+                        else { match result {
+                            Ok(report) => {
+                                this.ports.selected = report.as_ref().map_or(0, |report| refreshed_selection(&report.listeners, previous));
+                                this.ports.report = report;
+                            }
+                            Err(error) => this.ports.error = Some(error.to_string()),
+                        } }
                         this.reveal_selected_port();
                         cx.notify();
                     });
@@ -100,6 +112,23 @@ impl TerminalView {
             }
         }
         cx.notify();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ports::Listener, refreshed_selection};
+    #[test]
+    fn refreshed_listener_selection_tracks_address_and_owner() {
+        let a = Listener { address: "127.0.0.1:3000".parse().unwrap(), pid: 10 };
+        let b = Listener { address: "[::1]:4000".parse().unwrap(), pid: 20 };
+        assert_eq!(refreshed_selection(&[b, a], Some(a)), 1);
+        assert_eq!(refreshed_selection(&[a, b], Some(a)), 0);
+        assert_eq!(refreshed_selection(&[b, Listener { pid: 30, ..a }], Some(a)), 0);
+        assert_eq!(refreshed_selection(&[b, Listener { address: "127.0.0.1:3001".parse().unwrap(), ..a }], Some(a)), 0);
+        assert_eq!(refreshed_selection(&[b], Some(a)), 0);
+        assert_eq!(refreshed_selection(&[], Some(a)), 0);
+        assert_eq!(refreshed_selection(&[b, a], None), 0);
     }
 }
 pub(super) fn panel(state: &State, window: &Window, cx: &mut Context<TerminalView>) -> AnyElement {

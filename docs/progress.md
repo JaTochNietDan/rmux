@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Listening Ports refresh now restores selection by socket address and owning PID
+after its asynchronous scan, instead of always resetting to the first listener.
+Missing listeners fall back to the first result; address or owner changes do not
+inherit selection. Existing cancellation/generation guards remain in effect.
+Focused selection tests and desktop test compilation passed. Native access was
+rechecked and remains locked, so screenshots and refresh interaction acceptance
+are still pending.
+
 Settings now has a panel-scoped Cmd+S / Ctrl+S save binding and accepts a
 `settings` custom-keybinding context. Save uses the existing guarded asynchronous
 persistence action; the button displays its resolved shortcut, respecting custom
