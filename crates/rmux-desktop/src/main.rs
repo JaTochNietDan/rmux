@@ -57,6 +57,10 @@ struct AdjustSetting { key: String, delta: i32 }
 
 #[derive(Clone, Debug, Default, PartialEq, Action)]
 #[action(namespace = rmux, no_json)]
+struct SetTerminalTheme { theme: preferences::TerminalTheme }
+
+#[derive(Clone, Debug, Default, PartialEq, Action)]
+#[action(namespace = rmux, no_json)]
 struct RunCustomCommand { name: String }
 
 #[derive(Default)]

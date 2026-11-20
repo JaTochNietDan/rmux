@@ -88,7 +88,22 @@ pub fn panel(state: State, cx: &mut Context<window_view::WorkspaceWindow>) -> An
             .child(div().pt_3().text_xs().text_color(rgb(0xa0a0a0)).child("TERMINAL & BEHAVIOR"))
             .child(row("Default text size", "font", format!("{} pt", settings.font_size), true, state.selected == 0, false))
             .child(row("Terminal padding", "padding", format!("{} px", settings.terminal_padding), true, state.selected == 1, false))
-            .child(row("Terminal theme", "theme", settings.terminal_theme.label().into(), false, state.selected == 2, false))
+            .child(div().px_1().py_3().border_b_1().border_color(rgb(0x383838))
+                .when(state.selected == 2, |row| row.bg(rgb(0x303b4a)))
+                .child(div().mb_2().text_size(px(13.)).child("Terminal theme"))
+                .child(div().flex().flex_wrap().gap_2().children(
+                    preferences::TerminalTheme::ALL.into_iter().enumerate().map(|(index, theme)| {
+                        let selected = settings.terminal_theme == theme;
+                        div().id(("theme-choice", index)).px_2().py_1().rounded_sm().cursor_pointer()
+                            .text_size(px(12.)).border_1()
+                            .border_color(rgb(if selected { 0x4599ef } else { 0x454545 }))
+                            .bg(rgb(if selected { 0x354969 } else { 0x292929 }))
+                            .hover(|style| style.bg(rgb(0x40516c)))
+                            .on_click(move |event, window, cx| {
+                                if event.standard_click() { window.dispatch_action(Box::new(SetTerminalTheme { theme }), cx); }
+                            }).child(theme.label())
+                    })
+                )))
             .child(row("Unfocused cursor", "cursor", match settings.unfocused_cursor { preferences::UnfocusedCursor::Hollow => "Hollow", preferences::UnfocusedCursor::Hidden => "Hidden" }.into(), false, state.selected == 3, false))
             .child(row("Copy on select", "copy", if settings.copy_on_select { "On" } else { "Off" }.into(), false, state.selected == 4, false))
             .child(row("Confirm before closing", "close", format!("{}{}", match settings.confirm_close {

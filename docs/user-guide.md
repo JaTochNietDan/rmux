@@ -247,7 +247,10 @@ terminal theme's default palette.
 `terminal_theme` accepts `"dark"` (the existing default), `"light"` (white
 background with a darker ANSI palette), `"solarized_dark"`, or `"solarized_light"`.
 The Solarized presets use [Ethan Schoonover's published palette](https://ethanschoonover.com/solarized/).
-Settings cycles through all four presets. It reloads live; explicit color and
+Settings shows all four presets as direct choices, highlighting the selected one;
+Left/Right still cycles when the theme control is selected. The palette offers
+Terminal Theme commands for direct keyboard selection. Use Save these settings
+to persist a session choice. It reloads live; explicit color and
 palette values override the preset. This changes terminal content only, not the
 sidebar or other application controls, and does not automatically follow OS
 appearance changes.

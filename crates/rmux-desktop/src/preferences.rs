@@ -26,7 +26,7 @@ impl HexColor {
     }
 }
 
-#[derive(Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum TerminalTheme {
     #[default]
@@ -36,7 +36,7 @@ pub enum TerminalTheme {
     SolarizedLight,
 }
 impl TerminalTheme {
-    const ALL: [Self; 4] = [Self::Dark, Self::Light, Self::SolarizedDark, Self::SolarizedLight];
+    pub const ALL: [Self; 4] = [Self::Dark, Self::Light, Self::SolarizedDark, Self::SolarizedLight];
     pub fn label(self) -> &'static str {
         match self {
             Self::Dark => "Dark", Self::Light => "Light",

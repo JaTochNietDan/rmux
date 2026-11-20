@@ -252,6 +252,14 @@ impl CommandPalette {
         command!("Close Terminal Tabs to the Right…", CloseTabsToRight);
         command!("Close Workspace", CloseWorkspace);
         command!("Close Window", CloseWindow);
+        for theme in preferences::TerminalTheme::ALL {
+            commands.push(Command {
+                title: format!("Terminal Theme: {}", theme.label()),
+                target: PaletteEvent::Run(Box::new(SetTerminalTheme { theme })),
+                shortcut: None,
+                subtitle: Some("Applies to this session; explicit color overrides stay active".into()),
+            });
+        }
         for (name, icon) in WORKSPACE_ICONS {
             commands.push(Command {
                 title: format!("Workspace Icon: {name}"),

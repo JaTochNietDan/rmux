@@ -3138,6 +3138,19 @@ impl Render for WorkspaceWindow {
             .on_action(cx.listener(|this, _: &OpenLayout, _, cx| this.open_layout(cx)))
             .on_action(cx.listener(|this, command: &RunCustomCommand, window, cx| this.run_custom_command(&command.name, window, cx)))
             .on_action(cx.listener(|this, _: &ToggleSettings, window, cx| this.toggle_settings(window, cx)))
+            .on_action(cx.listener(|this, action: &SetTerminalTheme, window, cx| {
+                if let Some(state) = &mut this.settings_state {
+                    state.selected = settings_view::KEYS.iter().position(|key| *key == "theme").unwrap_or(0);
+                    state.focus.focus(window);
+                }
+                if cx.global::<Preferences>().terminal_theme != action.theme {
+                    let mut settings = cx.global::<Preferences>().clone();
+                    settings.terminal_theme = action.theme;
+                    cx.set_global(settings);
+                }
+                this.notice = None;
+                cx.notify();
+            }))
             .on_action(cx.listener(|this, change: &AdjustSetting, window, cx| {
                 if let Some(state) = &mut this.settings_state {
                     if let Some(index) = settings_view::KEYS.iter().position(|key| *key == change.key) { state.selected = index; }

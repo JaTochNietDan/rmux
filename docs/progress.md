@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Settings now exposes all four terminal themes as direct, wrapping choices with
+a selected-state border, rather than requiring repeated clicks through a cycle.
+Keyboard Left/Right cycling remains available. Named Terminal Theme palette
+commands apply the same typed action, preserve explicit overrides and skip
+global preference publication when the selected theme is already active. Save
+these settings remains the explicit persistence action. Desktop compilation
+passed; native wrapping, contrast and keyboard-focus acceptance remain pending.
+
 Terminal themes now include Solarized Dark/Light using the author's canonical
 ANSI mapping. Settings cycles through Dark, Light and both Solarized presets;
 configuration accepts `solarized_dark`/`solarized_light`. Explicit colors and
