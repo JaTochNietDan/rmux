@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Search workers now discard queued navigation when a scan completes without
+matches, rather than consuming up to 64 no-op steps or carrying those steps
+into later output. Five focused worker tests passed. The new regression queues
+64 moves before an empty scan completes, adds matching output afterward, checks
+that no selection appears, then verifies a fresh navigation request selects it.
+This is worker-level behavior evidence, not native interaction acceptance.
+
 Find navigation with zero matches now returns search-owned progress without
 acquiring the parser lock or invalidating terminal snapshots. A no-value
 navigation result also no longer increments the terminal revision. Three

@@ -86,6 +86,9 @@ impl SearchWorker {
                             search.refresh()?;
                         }
                         let mut progress = search.step()?;
+                        // Navigation queued while scanning applies to that result
+                        // set. Do not carry it into later output if nothing matched.
+                        if !progress.pending && progress.matches == 0 { navigation = 0; }
                         // Resolve pending navigation once the current snapshot has
                         // been scanned, rather than dropping Enter during a search.
                         if !progress.pending && navigation != 0
@@ -271,6 +274,35 @@ mod tests {
         assert_eq!(wait_for(&worker, revision, false).result.unwrap().matches, 0);
         assert_eq!(terminal.lock().unwrap().selected_text()?, None,
             "superseded navigation changed the terminal selection");
+        Ok(())
+    }
+
+    #[test]
+    fn empty_results_discard_navigation_before_later_output() -> Result<()> {
+        let terminal = Arc::new(Mutex::new(Terminal::new(30, 3)?));
+        let guard = terminal.lock().unwrap();
+        let worker = SearchWorker::new(terminal.clone())?;
+        let revision = worker.set_query("needle".into())?;
+        for _ in 0..64 { worker.navigate(Direction::Older); }
+        drop(guard);
+        assert_eq!(wait_for(&worker, revision, false).result.unwrap().matches, 0);
+        terminal.lock().unwrap().write(b"needle");
+        worker.refresh();
+        let deadline = Instant::now() + Duration::from_secs(3);
+        loop {
+            if let Some(update) = worker.latest() {
+                let progress = update.result.map_err(anyhow::Error::msg)?;
+                if !progress.pending && progress.matches == 1 {
+                    assert_eq!(progress.selected, None);
+                    break;
+                }
+            }
+            assert!(Instant::now() < deadline, "refreshed search did not complete");
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        assert!(terminal.lock().unwrap().selected_text()?.is_none());
+        worker.navigate(Direction::Older);
+        assert_eq!(wait_for(&worker, revision, true).result.unwrap().selected, Some(0));
         Ok(())
     }
 
