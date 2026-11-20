@@ -2503,6 +2503,35 @@ impl WorkspaceWindow {
         }));
         cx.notify();
     }
+    fn focus_search_result(&mut self, workspace: EntityId, terminal: EntityId, query: &str, window: &mut Window, cx: &mut Context<Self>) -> Result<()> {
+        self.automation_available(cx).map_err(|error| anyhow::anyhow!(error.message))?;
+        let target = self.entries.iter().find(|entry| entry.workspace.entity_id() == workspace)
+            .and_then(|entry| entry.workspace.read(cx).panes.iter().find_map(|pane|
+                pane.read(cx).terminals.iter().find(|entity| entity.entity_id() == terminal).cloned()))
+            .ok_or_else(|| anyhow::anyhow!("Terminal moved or closed; search again"))?;
+        self.focus_terminal(workspace, terminal, window, cx);
+        target.update(cx, |view, cx| {
+            view.dismiss_find(cx);
+            view.open_find_with_query(Some(query.to_owned()), window, cx);
+            if let Some(find) = &view.find {
+                find.update(cx, |find, cx| find.navigate(rmux_terminal::search::Direction::Older, cx));
+            }
+        });
+        Ok(())
+    }
+    fn collect_terminal_search_jobs(&self, target: Option<AnyWindowHandle>, label: &str, jobs: &mut Vec<terminal_search::Job>, extra: &mut usize, cx: &App) {
+        for index in self.workspace_order(true) {
+            let entry = &self.entries[index];
+            for pane in &entry.workspace.read(cx).panes {
+                for (tab, terminal) in pane.read(cx).terminals.iter().enumerate() {
+                    if jobs.len() == terminal_search::MAX_TERMINALS { *extra += 1; continue; }
+                    jobs.push(terminal_search::Job { window: target, workspace: entry.workspace.entity_id(), terminal: terminal.entity_id(),
+                        name: format!("{label} · {} / {}", entry.name, pane.read(cx).tab_title(tab, cx)),
+                        read: terminal.read(cx).session.history_export(terminal_search::MAX_BYTES) });
+                }
+            }
+        }
+    }
     fn search_terminal_output(&mut self, query: String, window: &mut Window, cx: &mut Context<Self>) {
         if self.terminal_search_job.is_some() || self.automation_available(cx).is_err() { return; }
         if let Err(error) = terminal_search::validate(&query) { self.notice = Some(error.into()); cx.notify(); return; }
@@ -2512,15 +2541,13 @@ impl WorkspaceWindow {
         };
         let mut jobs = Vec::new();
         let mut extra = 0;
-        for index in self.workspace_order(true) {
-            let entry = &self.entries[index];
-            for pane in &entry.workspace.read(cx).panes {
-                for (tab, terminal) in pane.read(cx).terminals.iter().enumerate() {
-                    if jobs.len() == terminal_search::MAX_TERMINALS { extra += 1; continue; }
-                    jobs.push(terminal_search::Job { workspace: entry.workspace.entity_id(), terminal: terminal.entity_id(),
-                        name: format!("{} / {}", entry.name, pane.read(cx).tab_title(tab, cx)),
-                        read: terminal.read(cx).session.history_export(terminal_search::MAX_BYTES) });
-                }
+        self.collect_terminal_search_jobs(None, "This window", &mut jobs, &mut extra, cx);
+        let current = window.window_handle();
+        for (index, handle) in cx.windows().into_iter().enumerate() {
+            if handle == current { continue; }
+            let Some(root) = handle.downcast::<Self>() else { continue; };
+            if let Ok(root) = root.read(cx) {
+                root.collect_terminal_search_jobs(Some(handle), &format!("Window {}", index + 1), &mut jobs, &mut extra, cx);
             }
         }
         let cancellation = file_browser::Cancellation::default();
@@ -2666,21 +2693,16 @@ impl WorkspaceWindow {
                     command_palette::PaletteEvent::SelectTerminal(workspace, terminal) => {
                         this.focus_terminal(*workspace, *terminal, window, cx);
                     }
-                    command_palette::PaletteEvent::SearchTerminal(workspace, terminal, query) => {
-                        if this.automation_available(cx).is_err() { return; }
-                        let target = this.entries.iter().find(|entry| entry.workspace.entity_id() == *workspace)
-                            .and_then(|entry| entry.workspace.read(cx).panes.iter().find_map(|pane|
-                                pane.read(cx).terminals.iter().find(|entity| entity.entity_id() == *terminal).cloned()));
-                        if let Some(target) = target {
-                            this.focus_terminal(*workspace, *terminal, window, cx);
-                            target.update(cx, |view, cx| {
-                                view.dismiss_find(cx);
-                                view.open_find_with_query(Some(query.clone()), window, cx);
-                                if let Some(find) = &view.find {
-                                    find.update(cx, |find, cx| find.navigate(rmux_terminal::search::Direction::Older, cx));
-                                }
-                            });
-                        } else { this.notice = Some("Search result terminal moved or closed; search again.".into()); cx.notify(); }
+                    command_palette::PaletteEvent::SearchTerminal(target, workspace, terminal, query) => {
+                        let result = if let Some(target) = target {
+                            target.downcast::<Self>().ok_or_else(|| anyhow::anyhow!("Search result window is unavailable"))
+                                .and_then(|target| target.update(cx, |destination, window, cx| -> Result<()> {
+                                    destination.focus_search_result(*workspace, *terminal, query, window, cx)?;
+                                    window.activate_window();
+                                    Ok(())
+                                })?)
+                        } else { this.focus_search_result(*workspace, *terminal, query, window, cx) };
+                        if let Err(error) = result { this.notice = Some(format!("Open search result: {error}")); cx.notify(); }
                     }
                     command_palette::PaletteEvent::SelectWindowTerminal(target, workspace, terminal) => {
                         let result = target.downcast::<Self>().ok_or_else(|| anyhow::anyhow!("window unavailable"))

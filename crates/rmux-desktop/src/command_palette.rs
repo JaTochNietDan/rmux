@@ -125,7 +125,7 @@ pub enum PaletteEvent {
     SelectWorkspace(EntityId),
     SelectWindowWorkspace(AnyWindowHandle, EntityId),
     SelectTerminal(EntityId, EntityId),
-    SearchTerminal(EntityId, EntityId, String),
+    SearchTerminal(Option<AnyWindowHandle>, EntityId, EntityId, String),
     SelectWindowTerminal(AnyWindowHandle, EntityId, EntityId),
     MoveTabToWorkspace(EntityId),
     MoveTabToWindowWorkspace(AnyWindowHandle, EntityId),
@@ -496,7 +496,7 @@ impl CommandPalette {
         palette
     }
     pub fn terminal_search(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let mut palette = Self::with_commands(Vec::new(), "Search terminal output · Current window", "Enter submits a literal search · Up to 256 terminals / 64 KiB each", window, cx);
+        let mut palette = Self::with_commands(Vec::new(), "Search terminal output · All windows", "Enter submits a literal search · Up to 256 terminals / 64 KiB each", window, cx);
         palette.terminal_search_input = true;
         palette
     }
@@ -506,7 +506,7 @@ impl CommandPalette {
             target: PaletteEvent::Run(Box::new(SearchTerminalOutput { query: query.clone() })) },
             Command { title: "New search…".into(), subtitle: None, shortcut: None, target: PaletteEvent::Run(Box::new(ShowTerminalSearch)) }];
         commands.extend(report.hits.into_iter().map(|hit| Command { title: hit.name, subtitle: Some(hit.snippet), shortcut: None,
-            target: PaletteEvent::SearchTerminal(hit.workspace, hit.terminal, query.clone()) }));
+            target: PaletteEvent::SearchTerminal(hit.window, hit.workspace, hit.terminal, query.clone()) }));
         let mut palette = Self::with_commands(commands, "Terminal output matches · Enter opens Find", "No matching results · Clear the filter to search again", window, cx);
         palette.location = Some(summary.into());
         if palette.commands.len() > 2 { palette.selected = 2; }
@@ -733,7 +733,7 @@ impl CommandPalette {
                     PaletteEvent::SelectTerminal(*workspace, *terminal)
                 }
                 PaletteEvent::SelectWindowTerminal(window, workspace, terminal) => PaletteEvent::SelectWindowTerminal(*window, *workspace, *terminal),
-                PaletteEvent::SearchTerminal(workspace, terminal, query) => PaletteEvent::SearchTerminal(*workspace, *terminal, query.clone()),
+                PaletteEvent::SearchTerminal(window, workspace, terminal, query) => PaletteEvent::SearchTerminal(*window, *workspace, *terminal, query.clone()),
                 PaletteEvent::MoveTabToWorkspace(id) => PaletteEvent::MoveTabToWorkspace(*id),
                 PaletteEvent::MoveTabToWindowWorkspace(window, workspace) => PaletteEvent::MoveTabToWindowWorkspace(*window, *workspace),
                 PaletteEvent::MergeWorkspaces(source, destination, target) => PaletteEvent::MergeWorkspaces(*source, *destination, *target),

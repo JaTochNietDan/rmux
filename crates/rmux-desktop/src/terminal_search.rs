@@ -13,12 +13,13 @@ impl Permit {
 }
 impl Drop for Permit { fn drop(&mut self) { RUNNING.store(false, Ordering::Release); } }
 pub struct Job {
+    pub window: Option<gpui::AnyWindowHandle>,
     pub workspace: EntityId,
     pub terminal: EntityId,
     pub name: String,
     pub read: rmux_terminal::session::HistoryExport,
 }
-pub struct Hit { pub workspace: EntityId, pub terminal: EntityId, pub name: String, pub snippet: String }
+pub struct Hit { pub window: Option<gpui::AnyWindowHandle>, pub workspace: EntityId, pub terminal: EntityId, pub name: String, pub snippet: String }
 #[derive(Default)]
 pub struct Report { pub hits: Vec<Hit>, pub scanned: usize, pub unavailable: usize, pub limited: usize }
 pub fn validate(query: &str) -> Result<(), &'static str> {
@@ -41,7 +42,7 @@ pub fn scan(jobs: Vec<Job>, query: &str, canceled: &AtomicBool) -> Report {
                 report.scanned += 1;
                 report.limited += usize::from(limited);
                 if let Some(snippet) = matching_line(&text, &query) {
-                    report.hits.push(Hit { workspace: job.workspace, terminal: job.terminal, name: job.name, snippet });
+                    report.hits.push(Hit { window: job.window, workspace: job.workspace, terminal: job.terminal, name: job.name, snippet });
                 }
             }
             _ => report.unavailable += 1,
@@ -57,7 +58,7 @@ mod tests {
         let calls = Arc::new(AtomicUsize::new(0));
         let jobs = |count| (0..count).map(|index| {
             let calls = calls.clone();
-            super::Job { workspace: gpui::EntityId::from(0x100000001), terminal: gpui::EntityId::from(0x100000002), name: index.to_string(),
+            super::Job { window: None, workspace: gpui::EntityId::from(0x100000001), terminal: gpui::EntityId::from(0x100000002), name: index.to_string(),
                 read: Box::new(move || { calls.fetch_add(1, Ordering::Relaxed); match index {
                     0 => Ok(Some(("NEEDLE 世界".into(), true))), 1 => Ok(None), _ => anyhow::bail!("closed"),
                 } }) }

@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Extended terminal-output search to all rmux windows with the originating window
+first and one shared 256-terminal cap. Results capture a window handle alongside
+workspace/surface identity and identify the owning window in their labels.
+Selection checks destination readiness and ownership before focusing, opening
+Find and activating another window. Closed/moved results return a visible error
+instead of selecting a replacement terminal. The scanner's two focused tests
+passed with the cross-window payload compiled; native window activation and
+result navigation still require acceptance.
+
 Added Search Terminal Output to the menu, command palette and
 `search_terminal_output` custom bindings. An explicit submit scans up to 256
 terminal history prefixes (64 KiB each) in the current window on one background
