@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Added offline per-command help via `rmuxctl help COMMAND` and `COMMAND --help/-h`,
+including a leading socket option without opening it. `--version` reports the
+client build version. Help describes supported arguments, explicit target IDs,
+focus/activation behavior and exit codes; completion suggests the new help forms.
+Eight CLI tests passed, including literal `--help` payload preservation and unknown
+help topics. Raw RPC schema help and full upstream command coverage remain open.
+
 Added offline `rmuxctl completions bash|zsh|fish` generation and a shared local
 candidate generator for friendly commands, supported flags and boolean values.
 Completion respects leading socket paths (including spaces), option values,

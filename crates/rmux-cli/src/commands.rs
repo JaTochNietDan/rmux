@@ -21,6 +21,29 @@ whole process unless narrowed with --window (workspaces/panes/panels) or
 --workspace (panes/panels). No implicit target, ref/index lookup or --force yet.
 ";
 
+pub fn help(command: &str) -> Result<String, String> {
+    let (arguments, description) = match command {
+        "notify" => ("--surface ID [--title TITLE] [--body BODY]", "Add a notification to a live terminal's history."),
+        "list-notifications" => ("[--window ID] [--workspace ID]", "List retained notifications, newest first within each terminal."),
+        "close-workspace" => ("--workspace ID", "Close a workspace through the app's close policy. No force option is supported."),
+        "new-window" => ("[--activate]", "Create a window. Activating it requires --activate."),
+        "new-workspace" => ("--window ID [--name NAME] [--description TEXT] [--cwd PATH] [--focus true|false] [--activate]", "Create a workspace in an existing window. Selection and activation are opt-in."),
+        "list-windows" => ("", "List windows in the connected app process."),
+        "list-workspaces" => ("[--window ID]", "List workspaces, optionally limited to one window."),
+        "list-panes" | "list-panels" => ("[--window ID] [--workspace ID]", "List panes or terminal surfaces, optionally limited to a window or workspace."),
+        "select-workspace" => ("--workspace ID [--activate]", "Select a workspace; --activate also activates its window."),
+        "rename-workspace" => ("--workspace ID NAME", "Set the workspace's manual name. Quote names containing spaces."),
+        "focus-panel" => ("--panel ID [--activate]", "Focus an existing terminal surface; --activate also activates its window."),
+        "send-key" => ("--surface ID KEY", "Send one key tap, such as Enter, Up, Ctrl-c, Alt-Left or Shift-Tab."),
+        "send" => ("--surface ID [--paste] TEXT", "Send literal text. --paste applies terminal paste encoding. Use -- before text starting with a dash."),
+        "read-screen" => ("--surface ID [--scrollback | --selection]", "Read visible text by default, retained history with --scrollback, or selected text with --selection."),
+        "completions" => ("bash|zsh|fish", "Print an offline shell completion script. No app connection is made."),
+        _ => return Err(format!("no local help for {command}; use --help for supported commands or system.capabilities to discover RPC methods")),
+    };
+    let prefix = if command == "completions" { "rmuxctl" } else { "rmuxctl [--socket PATH]" };
+    Ok(format!("Usage: {prefix} {command} {arguments}\n\n{description}\n\nTargets use explicit opaque IDs from list commands. RPC commands print JSON.\nExit 0: success; 1: RPC error; 2: usage/transport failure.\n"))
+}
+
 pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), String> {
     let (method, target, positional) = match command {
         "list-notifications" => ("notification.list", None, None),

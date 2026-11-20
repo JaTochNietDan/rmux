@@ -340,6 +340,12 @@ caller-scoped permissions remain pending. `mise run smoke-socket` checks two liv
 clients, shared mutations, reconnection and normal-quit cleanup on macOS/Unix.
 
 Build the lightweight external client with `mise exec -- cargo build -p rmux-cli`.
+`rmuxctl help COMMAND` or `rmuxctl COMMAND --help` shows command-specific usage
+without a socket or a running app. A leading `--socket PATH` is also accepted for
+help without opening that path. `rmuxctl --version` prints the client build version.
+Help flags are recognized in these dedicated forms; text after `--` remains literal
+input for commands such as `send`.
+
 `rmuxctl completions bash|zsh|fish` prints shell setup without requiring a running
 app or `RMUX_SOCKET_DIR`. With `rmuxctl` on your PATH, enable it for the current shell:
 

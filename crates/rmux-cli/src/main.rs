@@ -88,8 +88,30 @@ fn exchange(request: Request) -> Result<Value, String> {
 fn exchange(_: Request) -> Result<Value, String> {
     Err("local socket transport is not yet available on this platform".into())
 }
+fn local_help(args: &[OsString]) -> Result<Option<String>, String> {
+    if args.len() == 1 && args[0] == "--version" {
+        return Ok(Some(format!("rmuxctl {}\n", env!("CARGO_PKG_VERSION"))));
+    }
+    let args = if args.first().is_some_and(|arg| arg == "--socket") && args.len() >= 2 {
+        &args[2..]
+    } else { args };
+    if args.len() == 1 && matches!(args[0].to_str(), Some("--help" | "-h" | "help")) {
+        return Ok(Some(format!("{HELP}\n{}\nOffline: rmuxctl help COMMAND | --version | completions bash|zsh|fish\n", commands::HELP)));
+    }
+    let command = if args.len() == 2 && args[0] == "help" {
+        Some(&args[1])
+    } else if args.len() == 2 && matches!(args[1].to_str(), Some("--help" | "-h")) {
+        Some(&args[0])
+    } else { None };
+    command.map(|command| commands::help(command.to_str().ok_or("command must be UTF-8")?)).transpose()
+}
+
 fn run() -> Result<i32, String> {
     let args: Vec<_> = std::env::args_os().skip(1).collect();
+    if let Some(help) = local_help(&args)? {
+        print!("{help}");
+        return Ok(0);
+    }
     if args.first().is_some_and(|arg| arg == "completions") {
         if args.len() != 2 { return Err("usage: rmuxctl completions bash|zsh|fish".into()); }
         print!("{}", completions::script(args[1].to_str().ok_or("shell must be UTF-8")?)?);
@@ -124,6 +146,17 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn help_is_local_without_consuming_literal_payloads() {
+        for args in [vec!["send", "--help"], vec!["help", "send"], vec!["--socket", "/missing/socket", "send", "-h"]] {
+            let args: Vec<_> = args.into_iter().map(OsString::from).collect();
+            assert!(local_help(&args).unwrap().unwrap().contains("--paste"));
+        }
+        let args: Vec<_> = ["send", "--surface", "id", "--", "--help"].into_iter().map(OsString::from).collect();
+        assert!(local_help(&args).unwrap().is_none());
+        assert!(local_help(&["help".into(), "unknown".into()]).is_err());
+        assert!(local_help(&["--version".into()]).unwrap().unwrap().starts_with("rmuxctl "));
+    }
     #[test]
     fn rejects_ambiguous_or_oversized_requests() {
         for args in [

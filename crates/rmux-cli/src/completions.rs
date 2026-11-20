@@ -65,17 +65,23 @@ pub fn candidates(args: &[OsString]) -> Vec<&'static str> {
     let options = match command {
         None => return COMMANDS.iter().map(|(name, _)| *name)
             .filter(|name| !explicit_socket || *name != "completions")
-            .chain(["--socket", "--help"].into_iter().filter(|_| !explicit_socket))
+            .chain(["help", "--help"])
+            .chain(["--socket", "--version"].into_iter().filter(|_| !explicit_socket))
             .filter(|name| name.starts_with(current)).collect(),
+        Some(command) if command == "help" => {
+            if previous.next().is_some() { return Vec::new(); }
+            return COMMANDS.iter().map(|(name, _)| *name).filter(|name| name.starts_with(current)).collect();
+        }
         Some(command) if command == "completions" => {
             if previous.next().is_some() { return Vec::new(); }
-            return ["bash", "zsh", "fish"].into_iter().filter(|name| name.starts_with(current)).collect();
+            return ["bash", "zsh", "fish", "--help"].into_iter().filter(|name| name.starts_with(current)).collect();
         }
         Some(command) => match COMMANDS.iter().find(|(name, _)| command == *name) {
             Some((_, options)) => *options,
             None => return Vec::new(), // Raw RPC parameters are user-owned JSON.
         },
     };
+    let initial = previous.len() == 0;
     let mut used = Vec::new();
     let mut value_for = None;
     for word in previous {
@@ -94,7 +100,7 @@ pub fn candidates(args: &[OsString]) -> Vec<&'static str> {
             ["true", "false"].into_iter().filter(|value| value.starts_with(current)).collect()
         } else { Vec::new() };
     }
-    options.iter().copied().filter(|flag| flag.starts_with(current) && !used.contains(flag)
+    options.iter().copied().chain(["--help"].into_iter().filter(|_| initial)).filter(|flag| flag.starts_with(current) && !used.contains(flag)
         && !(matches!(*flag, "--scrollback" | "--selection") && used.iter().any(|used| matches!(*used, "--scrollback" | "--selection"))))
         .collect()
 }
@@ -113,6 +119,8 @@ mod tests {
         assert!(!complete(&["--socket", "/tmp/rpc", ""]).contains(&"--socket"));
         assert!(!complete(&["--socket", "/tmp/rpc", ""]).contains(&"completions"));
         assert_eq!(complete(&["completions", "z"]), ["zsh"]);
+        assert_eq!(complete(&["help", "send-k"]), ["send-key"]);
+        assert!(complete(&["send", "--h"]).contains(&"--help"));
         assert_eq!(complete(&["new-workspace", "--focus", "f"]), ["false"]);
         assert!(complete(&["send", "--surface", ""]).is_empty());
         assert!(complete(&["send", "--", "--"]).is_empty());
