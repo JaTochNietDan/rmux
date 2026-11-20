@@ -54,11 +54,19 @@ fn button(id: String, label: String, key: &'static str, delta: i32) -> impl Into
         .child(label)
 }
 fn row(label: &'static str, key: &'static str, value: String, stepper: bool, selected: bool) -> impl IntoElement {
-    div().px_1().py_3().when(selected, |s| s.bg(rgb(0x303b4a))).border_b_1().border_color(rgb(0x383838)).flex().items_center().gap_2()
-        .child(div().flex_1().text_size(px(13.)).child(label))
-        .when(stepper, |row| row.child(button(format!("{key}-less"), "−".into(), key, -1)))
-        .child(button(format!("{key}-value"), value, key, if stepper { 0 } else { 1 }))
-        .when(stepper, |row| row.child(button(format!("{key}-more"), "+".into(), key, 1)))
+    div().px_1().py_3().when(selected, |s| s.bg(rgb(0x303b4a))).border_b_1().border_color(rgb(0x383838))
+        .flex().flex_wrap().items_center().gap_2()
+        .child(div().flex_1().min_w(px(120.)).text_size(px(13.)).child(label))
+        .child(div().flex().items_center().gap_2().max_w_full()
+            .when(stepper, |controls| controls
+                .child(button(format!("{key}-less"), "−".into(), key, -1)))
+            .child(if stepper {
+                div().min_w(px(44.)).text_center().text_size(px(12.)).child(value).into_any_element()
+            } else {
+                button(format!("{key}-value"), value, key, 1).into_any_element()
+            })
+            .when(stepper, |controls| controls
+                .child(button(format!("{key}-more"), "+".into(), key, 1))))
 }
 pub fn panel(state: State, cx: &mut Context<window_view::WorkspaceWindow>) -> AnyElement {
     let settings = cx.global::<Preferences>();

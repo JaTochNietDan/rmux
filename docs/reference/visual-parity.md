@@ -69,6 +69,6 @@ sidebar toggling before accepting this layout; other OS titlebars stay native.
 Sidebar context follow-up: blue/white unread badges replace tiny amber dots, and
 an unread notification preview occupies at most two lines beneath workspace
 metadata. Group headers can show a hidden member's unread message. The preview
-uses the first unread message in pane/member order, not an invented globally
-ordered notification timestamp. Existing shell paths and descriptions remain
+uses the newest unread message across panes and group members, ordered by the
+application-wide arrival sequence. Existing shell paths and descriptions remain
 secondary. Git branch context is now implemented via background HEAD discovery; PR and port rows remain missing. Native rendering of the branch/path combination is unverified.

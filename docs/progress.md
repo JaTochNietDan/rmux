@@ -2,6 +2,12 @@
 
 ## Current implementation focus
 
+Settings rows now wrap labels and grouped controls when horizontal space is
+limited. Numeric stepper values are plain centered labels with a stable minimum
+width instead of clickable no-op buttons. Desktop compilation passed. A fresh
+native inspection attempt found the Mac locked and automatic unlock unavailable;
+small-window layout and screenshots remain pending, not accepted by compilation.
+
 A reproducible `mise run bench-selection` fixture now measures bounded rejection
 and complete selection formatting at 4/64 MiB retention. A same-host comparison
 against the previous two-pass implementation recorded complete-export medians
