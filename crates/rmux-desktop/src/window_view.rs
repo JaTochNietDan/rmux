@@ -2770,7 +2770,9 @@ impl WorkspaceWindow {
         this
     }
 
-    fn open_layout(&mut self, cx: &mut Context<Self>) {
+    fn open_layout(&mut self, cx: &mut Context<Self>) { self.open_snapshot(false, cx); }
+    fn open_snapshot(&mut self, session: bool, cx: &mut Context<Self>) {
+        let kind = if session { "session" } else { "layout" };
         if cx.global::<Shutdowns>().quitting || self.restore_job.is_some() {
             return;
         }
@@ -2782,7 +2784,7 @@ impl WorkspaceWindow {
             files: true,
             directories: false,
             multiple: false,
-            prompt: Some("Open Layout".into()),
+            prompt: Some(if session { "Open Session" } else { "Open Layout" }.into()),
         });
         let scrollback_bytes = cx.global::<Preferences>().scrollback_bytes();
         let executor = cx.background_executor().clone();
@@ -2795,29 +2797,27 @@ impl WorkspaceWindow {
                     return Ok(());
                 };
                 let _ = entity.update(cx, |this, cx| {
-                    this.notice = Some("Opening layout…".into());
+                    this.notice = Some(format!("Opening {kind}…"));
                     cx.notify();
                 });
                 let worker_token = token.clone();
                 let prepared = executor
                     .spawn(async move {
-                        restore::Prepared::read(&path, &worker_token, scrollback_bytes)
+                        if session {
+                            let prepared = restore::PreparedSession::read(&path, &worker_token, scrollback_bytes)?;
+                            anyhow::ensure!(!prepared.windows.is_empty(), "session contains no windows");
+                            Ok(prepared)
+                        } else {
+                            restore::Prepared::read(&path, &worker_token, scrollback_bytes)
+                                .map(|window| restore::PreparedSession { active_window: Some(0), windows: vec![window] })
+                        }
                     })
                     .await?;
                 cx.update(|cx| -> anyhow::Result<()> {
                     if cx.global::<Shutdowns>().quitting || restore::cancelled(&token) {
                         return Ok(());
                     }
-                    cx.open_window(
-                        WindowOptions {
-                            titlebar: workspace_titlebar(),
-                            window_bounds: Some(prepared.snapshot.geometry.map(|geometry| geometry.restore(cx))
-                                .unwrap_or_else(|| WindowBounds::centered(size(px(1000.), px(680.)), cx))),
-                            ..Default::default()
-                        },
-                        move |window, cx| cx.new(|cx| Self::restored(prepared, window, cx)),
-                    )?;
-                    cx.activate(true);
+                    restore::open_windows(prepared, cx)?;
                     Ok(())
                 })??;
                 Ok(())
@@ -2827,9 +2827,9 @@ impl WorkspaceWindow {
             let _ = entity.update(cx, |this, cx| {
                 this.restore_job = None;
                 this.notice = if was_cancelled {
-                    Some("Layout restore cancelled".into())
+                    Some(format!("{kind} restore cancelled"))
                 } else {
-                    result.err().map(|error| format!("Open layout: {error}"))
+                    result.err().map(|error| format!("Open {kind}: {error}"))
                 };
                 cx.notify();
             });
@@ -3479,6 +3479,7 @@ impl Render for WorkspaceWindow {
             .on_action(cx.listener(|this, _: &SaveLayout, window, cx| this.save_layout(window, cx)))
             .on_action(cx.listener(|this, _: &SaveSession, window, cx| this.save_session(window, cx)))
             .on_action(cx.listener(|this, _: &OpenLayout, _, cx| this.open_layout(cx)))
+            .on_action(cx.listener(|this, _: &OpenSession, _, cx| this.open_snapshot(true, cx)))
             .on_action(cx.listener(|this, command: &RunCustomCommand, window, cx| this.run_custom_command(&command.name, window, cx)))
             .on_action(cx.listener(|this, _: &ToggleSettings, window, cx| this.toggle_settings(window, cx)))
             .on_action(cx.listener(|this, action: &SetTerminalTheme, window, cx| {

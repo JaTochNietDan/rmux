@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Added Open Session in New Windows… to the File menu, command palette and
+open_session custom shortcut. The shared layout/session picker prepares shells
+on the background executor using existing schema/directory validation and
+cancellation. Publication preserves saved order/geometry, activates the saved
+window and rolls back only newly created windows if native creation fails.
+Existing windows remain intact; empty imports fail explicitly. Desktop compilation
+and all three restore preflight/cancellation/partial-spawn cleanup tests passed.
+These tests cover preparation, not the new native picker/publication/rollback UI.
+Native import, selected-window focus and cross-platform acceptance remain pending.
+
 Removed eager payload copying from borrowed paste calls. Ordinary borrowed,
 owned clipboard/image-path and automation paste now share the same admission and
 queue path via Cow: parser-busy rejection drops its permit before any borrowed

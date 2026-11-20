@@ -1507,7 +1507,11 @@
         "R"
       ],
       "acceptance": "Reject newer incompatible schema; import opens additional windows with reduced trust.",
-      "rmux_status": "not_started"
+      "rmux_status": "in_progress",
+      "implementation": "Save Session exports version-1 multi-window snapshots atomically. Open Session in New Windows menu/palette/custom-shortcut imports additional windows with fresh shells through validated background preparation, preserving saved order/geometry/selection. Empty imports fail; cancellation and native creation failure retain existing windows. Preparation tests pass; native publication remains unverified.",
+      "remaining": "Native import/export dialogs and publication rollback/focus acceptance, explicit build-channel migration and complete upstream reduced-trust semantics; cross-platform runtime validation.",
+      "implementation_sources": ["crates/rmux-desktop/src/restore.rs", "crates/rmux-desktop/src/window_view.rs", "crates/rmux-desktop/src/snapshot.rs"],
+      "progress_record": "docs/progress.md"
     },
     {
       "id": "S05",

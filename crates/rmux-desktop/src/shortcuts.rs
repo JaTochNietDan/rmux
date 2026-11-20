@@ -44,7 +44,7 @@ fn action(name: &str) -> Option<Box<dyn Action>> {
         "close_tab" => Box::new(ClosePane), "close_window" => Box::new(CloseWindow),
         "quit" => Box::new(Quit),
         "save_layout" => Box::new(SaveLayout), "open_layout" => Box::new(OpenLayout),
-        "save_session" => Box::new(SaveSession),
+        "save_session" => Box::new(SaveSession), "open_session" => Box::new(OpenSession),
         "open_settings_file" => Box::new(OpenSettingsFile),
         "save_appearance" => Box::new(SaveAppearanceSettings),
         "terminal_memory" => Box::new(RefreshTerminalMemory),

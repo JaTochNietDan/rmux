@@ -305,3 +305,35 @@ mod tests {
         assert_eq!(error.to_string(), "layout restore cancelled");
     }
 }
+
+/// Publish prepared windows as one UI-thread operation. Roll back only windows
+/// created by this request if native window creation fails partway through.
+pub(super) fn open_windows(session: PreparedSession, cx: &mut App) -> anyhow::Result<()> {
+    let active = session.active_window.unwrap_or(0);
+    let mut opened: Vec<WindowHandle<window_view::WorkspaceWindow>> = Vec::new();
+    for (index, prepared) in session.windows.into_iter().enumerate() {
+        let result = cx.open_window(
+            WindowOptions {
+                titlebar: workspace_titlebar(),
+                focus: false,
+                window_bounds: Some(prepared.snapshot.geometry.map(|geometry| geometry.restore(cx))
+                    .unwrap_or_else(|| WindowBounds::centered(size(px(1000.), px(680.)), cx))),
+                ..Default::default()
+            },
+            move |window, cx| cx.new(|cx| window_view::WorkspaceWindow::restored(prepared, window, cx)),
+        );
+        match result {
+            Ok(handle) => opened.push(handle),
+            Err(error) => {
+                for handle in opened { let _ = handle.update(cx, |_, window, _| window.remove_window()); }
+                return Err(error.into());
+            }
+        }
+        debug_assert_eq!(opened.len(), index + 1);
+    }
+    if let Some(handle) = opened.get(active) {
+        handle.update(cx, |_, window, _| window.activate_window())?;
+        cx.activate(true);
+    }
+    Ok(())
+}

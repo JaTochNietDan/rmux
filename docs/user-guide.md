@@ -369,7 +369,7 @@ pane/workspace as usual. For example:
 ]}
 ```
 
-Session/configuration actions include `save_layout`, `open_layout`, `save_session`,
+Session/configuration actions include `save_layout`, `open_layout`, `save_session`, `open_session`,
 `open_settings_file`, and `save_appearance`. These retain the existing dialogs and
 save behavior. Diagnostics actions include `terminal_memory`,
 `close_terminal_memory`, `copy_terminal_memory`, `cycle_terminal_memory_sort`,
@@ -1066,6 +1066,15 @@ File → Save Session… (also in the command palette) captures all normal rmux
 windows into one file. Capture refuses while a window is restoring, editing or
 waiting for a close decision. The selected path is written atomically on a
 background executor. This saves the state when the action was invoked.
+File → Open Session in New Windows… imports that file into the running app,
+leaving existing windows and sessions intact. It prepares fresh shells off the UI
+thread, then opens the saved windows and activates the saved selection. No running
+process or command history is resumed. All saved working directories must exist;
+empty session files are rejected by this command. Closing the initiating window
+cancels pending preparation. If native window creation fails partway through,
+windows opened by this import are removed; existing windows remain. The command
+is also available in the palette and as the `open_session` custom shortcut action.
+
 
 Use `rmux --session PATH` to restore a version-1 multi-window recovery file with
 fresh shells. It preserves window order and the selected window; an empty session
