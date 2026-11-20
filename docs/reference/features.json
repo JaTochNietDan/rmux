@@ -118,8 +118,8 @@
       ],
       "acceptance": "Keyboard navigation selects the expected pane with no accidental terminal input.",
       "rmux_status": "in_progress",
-      "implementation": "Directional pane focus, numeric workspace shortcuts and Focus Pane 1–9 palette actions with Cmd+Option+number on macOS / Ctrl+Alt+Shift+number elsewhere. Numeric selection follows pane traversal order and moves zoom to the selected pane.",
-      "remaining": "Complete native navigation coverage, including new Select Tab 1–9 shortcuts (Cmd+Shift+number on macOS / Ctrl+Shift+number elsewhere) and palette actions. Missing tab numbers are no-ops; tab numbering is per focused pane.",
+      "implementation": "Directional pane focus, numeric workspace shortcuts and Focus Pane 1\u20139 palette actions with Cmd+Option+number on macOS / Ctrl+Alt+Shift+number elsewhere. Numeric selection follows pane traversal order and moves zoom to the selected pane.",
+      "remaining": "Complete native navigation coverage, including new Select Tab 1\u20139 shortcuts (Cmd+Shift+number on macOS / Ctrl+Shift+number elsewhere) and palette actions. Missing tab numbers are no-ops; tab numbering is per focused pane.",
       "implementation_sources": [
         "crates/rmux-desktop/src/main.rs"
       ],
@@ -445,8 +445,8 @@
       ],
       "acceptance": "Follow directory changes and prompt boundaries across supported shells; avoid per-pane git polling.",
       "rmux_status": "in_progress",
-      "implementation": "OSC 7 directory tracking, sidebar labels, new-shell directory inheritance, and automatically loaded zsh hooks emitting OSC 133 boundaries plus encoded directory reports. Private temporary wrappers preserve user startup order and ZDOTDIR; environment opt-out is supported.",
-      "remaining": "Automatic Bash login/fish loading, fish runtime acceptance and input-start markers, PowerShell integration, broader prompt-theme/global-startup compatibility, Linux runtime validation and native acceptance. Non-login Bash auto-loads via RMUX_SHELL_LOGIN=0; manual Bash and fish scripts are present; fish is unverified without an installed executable.",
+      "implementation": "OSC 7 directory tracking, sidebar labels, new-shell directory inheritance, and automatically loaded zsh hooks emitting OSC 133 boundaries plus encoded directory reports. Private temporary wrappers preserve user startup order and ZDOTDIR; environment opt-out is supported. Fish automatically loads after user configuration via --init-command in both login modes.",
+      "remaining": "Automatic Bash login loading, fish runtime acceptance and input-start markers, PowerShell integration, broader prompt-theme/global-startup compatibility, Linux runtime validation and native acceptance. Non-login Bash auto-loads via RMUX_SHELL_LOGIN=0; manual Bash and fish scripts are present; fish is unverified without an installed executable.",
       "implementation_sources": [
         "crates/rmux-terminal/src/directory.rs",
         "crates/rmux-desktop/src/window_view.rs"
@@ -539,7 +539,13 @@
         "TREE"
       ],
       "acceptance": "Validate copy-mode and buffer semantics separately from ordinary clipboard operations.",
-      "rmux_status": "not_started"
+      "rmux_status": "in_progress",
+      "implementation": "Bounded asynchronous history snapshot with virtualized copy-mode rows, keyboard and mouse line-range selection, Unicode clipboard copy and Select All. Snapshot text stays stable while output continues.",
+      "remaining": "Native input/layout acceptance, character and rectangle selection, snapshot search, named buffer lifecycle and CLI/RPC parity.",
+      "implementation_sources": [
+        "crates/rmux-desktop/src/copy_mode.rs"
+      ],
+      "progress_record": "docs/progress.md"
     },
     {
       "id": "T15",

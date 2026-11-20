@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+T14 now has a keyboard copy-mode view with a stable, bounded history snapshot.
+Opening formats history off the UI thread, then renders only visible rows. The
+snapshot caps text at 8 MiB and indices at 65,536 logical lines; truncation and
+per-line display clipping are explicit. Navigation, anchored line ranges,
+Unicode copy, Select All and mouse/Shift-click selection use that snapshot,
+independent of subsequent terminal output. Its focus target traps navigation
+and Paste; closing releases the buffer and restores terminal focus. Busy parser
+exports report retry rather than blocking the UI. Native layout/input acceptance,
+character/rectangle selection, search and named buffer semantics remain pending.
+Two focused snapshot selection/bounds tests and the desktop test build passed.
+
 Fish shell startup now automatically loads the existing directory/prompt hooks
 through --init-command after normal user configuration, in login and non-login
 sessions. The private integration directory follows session lifetime, the path

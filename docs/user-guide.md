@@ -1,5 +1,16 @@
 # rmux
 
+**Enter Copy Mode** (palette/menu, custom action `copy_mode`) opens a stable
+history snapshot while the terminal keeps running. Use ↑/↓ or j/k to move,
+Home/End to reach either end, and Page Up/Down to move 20 lines. Hold Shift while
+moving, or press Space/v to anchor a range. Click selects a line; Shift-click
+extends. Enter/y or the platform Copy shortcut copies selected logical lines;
+Select All selects the snapshot. Escape closes it. Paste is disabled in this
+view. The snapshot includes at most the first 8 MiB and 65,536 lines; truncation
+is labeled. Long displayed lines are clipped at 4,096 bytes, but copying includes
+their retained full text. Character/rectangle selection, snapshot search and
+named copy buffers remain pending.
+
 **Choose Terminal Font…** searches installed font families for the current
 terminal. Type to filter, use arrows and Enter to choose, or Escape to cancel.
 Monospaced families suit the terminal grid best. The picker preserves text size;

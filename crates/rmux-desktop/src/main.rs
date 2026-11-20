@@ -28,6 +28,7 @@ mod shortcuts;
 mod process_metrics;
 mod ports;
 mod ports_view;
+mod copy_mode;
 mod drag_item;
 mod edit_history;
 mod find_bar;
@@ -357,6 +358,7 @@ actions!(
         Paste,
         CancelQueuedPaste,
         CopySelection,
+        EnterCopyMode,
         ShowTerminalMenu,
         CopySelectionWithLineBreaks,
         CopyWorkingDirectory,
@@ -423,6 +425,7 @@ struct TerminalView {
     program_status_revision: u64,
     status_details: Option<Vec<rmux_terminal::program_status::Record>>,
     ports: ports_view::State,
+    copy_mode: Option<Entity<copy_mode::CopyMode>>,
     attention: attention::Attention,
     session: Session,
     applied_colors: Option<[Option<Color>; 3]>,
@@ -593,6 +596,7 @@ impl TerminalView {
         self.terminal_menu = None;
         self.terminal_menu_blur = None;
         self.ports = Default::default();
+        self.copy_mode = None;
         // Pointer coordinates and wheel accumulation belong to the old window,
         // even when its terminal was already unfocused.
         self.mouse_button = None;
@@ -775,6 +779,7 @@ impl TerminalView {
             program_status_revision: 0,
             status_details: None,
             ports: Default::default(),
+            copy_mode: None,
             attention: attention::Attention::default(),
             input_focused: false,
             _focus_subscriptions: subscriptions,
@@ -1519,6 +1524,20 @@ impl Render for TerminalView {
             .on_key_up(cx.listener(Self::key_up))
             .on_scroll_wheel(cx.listener(Self::wheel))
             .on_action(cx.listener(Self::paste))
+            .on_action(cx.listener(|this, _: &EnterCopyMode, window, cx| {
+                if let Some(mode) = &this.copy_mode { mode.read(cx).focus.focus(window); return; }
+                this.selecting = false;
+                this.selection_scroll = None;
+                this.selection_pointer = None;
+                let mode = cx.new(|cx| copy_mode::CopyMode::new(&this.session, window, cx));
+                cx.subscribe_in(&mode, window, |this, _, _: &copy_mode::Close, window, cx| {
+                    this.copy_mode = None;
+                    this.focus.focus(window);
+                    cx.notify();
+                }).detach();
+                this.copy_mode = Some(mode);
+                cx.notify();
+            }))
             .on_action(cx.listener(|this, _: &ShowListeningPorts, window, cx| this.refresh_ports(window, cx)))
             .on_action(cx.listener(|this, _: &CloseListeningPorts, window, cx| this.close_ports(window, cx)))
             .on_action(cx.listener(|this, _: &ShowTerminalMenu, window, cx| {
@@ -1646,6 +1665,7 @@ impl Render for TerminalView {
                 cx.listener(|this, event: &ClickEvent, _, cx| {
                     if event.standard_click() { this.error = None; cx.stop_propagation(); cx.notify(); }
                 }))))
+            .when_some(self.copy_mode.clone(), |root, mode| root.child(mode))
             .when_some(self.terminal_menu.clone(), |root, menu| root.child(self.terminal_menu_element(menu, window, cx)))
     }
 }
@@ -3109,6 +3129,8 @@ fn main() {
                 KeyBinding::new("cmd-c", CopySelection, Some("TextInput")),
                 KeyBinding::new("cmd-c", CopySelection, Some("Notifications")),
                 KeyBinding::new("cmd-c", CopySelection, Some("ListeningPorts")),
+                KeyBinding::new("cmd-c", CopySelection, Some("CopyMode")),
+                KeyBinding::new("cmd-a", EditorSelectAll, Some("CopyMode")),
                 KeyBinding::new("cmd-x", EditorCut, Some("TextInput")),
                 KeyBinding::new("cmd-z", EditorUndo, Some("TextInput")),
                 KeyBinding::new("cmd-shift-z", EditorRedo, Some("TextInput")),
@@ -3160,6 +3182,8 @@ fn main() {
                 KeyBinding::new("ctrl-c", CopySelection, Some("TextInput")),
                 KeyBinding::new("ctrl-c", CopySelection, Some("Notifications")),
                 KeyBinding::new("ctrl-c", CopySelection, Some("ListeningPorts")),
+                KeyBinding::new("ctrl-c", CopySelection, Some("CopyMode")),
+                KeyBinding::new("ctrl-a", EditorSelectAll, Some("CopyMode")),
                 KeyBinding::new("ctrl-x", EditorCut, Some("TextInput")),
                 KeyBinding::new("ctrl-z", EditorUndo, Some("TextInput")),
                 KeyBinding::new("ctrl-shift-z", EditorRedo, Some("TextInput")),
@@ -3285,6 +3309,7 @@ fn main() {
                     MenuItem::action("Increase Font Size", IncreaseFontSize),
                     MenuItem::action("Decrease Font Size", DecreaseFontSize),
                     MenuItem::action("Reset Font Size", ResetFontSize),
+                    MenuItem::action("Enter Copy Mode", EnterCopyMode),
                     MenuItem::action("Choose Terminal Font…", ShowFontPicker),
                     MenuItem::action("Choose Default Font…", ShowDefaultFontPicker),
                     MenuItem::action("Use Configured Font", UseConfiguredFont),

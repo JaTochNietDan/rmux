@@ -342,7 +342,7 @@ impl PaneView {
 
     pub(super) fn automation_busy(&self, cx: &App) -> bool {
         self.rename.is_some() || self.close_prompt.is_some() || self.tab_picker.is_some() || self.tab_menu.is_some() || self.spawning_tab.is_some()
-            || self.terminals.iter().any(|terminal| terminal.read(cx).terminal_menu.is_some())
+            || self.terminals.iter().any(|terminal| terminal.read(cx).terminal_menu.is_some() || terminal.read(cx).copy_mode.is_some())
     }
     pub(super) fn automation_surfaces(&self, window_id: &str, workspace_id: &str, pane_id: &str, history: bool, cx: &App) -> Vec<serde_json::Value> {
         self.terminals.iter().enumerate().map(|(index, entity)| {

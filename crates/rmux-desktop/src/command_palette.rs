@@ -223,6 +223,7 @@ impl CommandPalette {
         command!("Increase Font Size", IncreaseFontSize);
         command!("Decrease Font Size", DecreaseFontSize);
         command!("Reset Font Size", ResetFontSize);
+        command!("Enter Copy Mode", EnterCopyMode);
         command!("Choose Terminal Font…", ShowFontPicker);
         command!("Choose Default Font…", ShowDefaultFontPicker);
         command!("Use Configured Font", UseConfiguredFont);
