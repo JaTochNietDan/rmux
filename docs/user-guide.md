@@ -203,6 +203,9 @@ file without overwriting an existing one. After editing, use Reload Settings.
 default 4). Zero disables scrollback. Reloading changes the default for new
 terminals without trimming existing sessions. This is an engine retention budget,
 not a cap on total process/GPU memory.
+Settings exposes this as New terminal history, adjustable in 1 MiB steps.
+Changes affect terminals started afterward; Save these settings persists the
+budget for future launches.
 
 `terminal_padding` sets the inset around terminal content in logical pixels
 (0–32, default 8). Reload Settings applies it to existing terminals and resizes

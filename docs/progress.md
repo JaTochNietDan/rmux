@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Settings now exposes the per-new-terminal scrollback budget as New terminal
+history, with 1 MiB steps bounded to 0–256 MiB and an explanation that existing
+history is preserved. Save these settings now persists this control and includes
+it in unsaved-change detection while retaining unrelated configuration fields.
+Three focused persistence tests and the settings navigation/bounds test passed.
+Native control layout and new-terminal retention acceptance remain pending;
+this setting is not a total app/process memory cap.
+
 Focused cursor shape can now be set to Application (default), Block, Bar or
 Underline through configuration and Settings, with explicit Save persistence.
 The renderer combines this preference with the existing unfocused hide/hollow

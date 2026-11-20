@@ -243,6 +243,7 @@ impl Preferences {
     pub fn same_saved_appearance(&self, other: &Self) -> bool {
         self.font_size == other.font_size
             && self.terminal_padding == other.terminal_padding
+            && self.scrollback_mib == other.scrollback_mib
             && self.terminal_theme == other.terminal_theme
             && self.unfocused_cursor == other.unfocused_cursor
             && self.focused_cursor == other.focused_cursor
@@ -264,6 +265,7 @@ impl Preferences {
         let mut latest = Self::read(&path, false)?;
         latest.font_size = self.font_size;
         latest.terminal_padding = self.terminal_padding;
+        latest.scrollback_mib = self.scrollback_mib;
         latest.terminal_theme = self.terminal_theme;
         latest.unfocused_cursor = self.unfocused_cursor;
         latest.focused_cursor = self.focused_cursor;
@@ -393,6 +395,9 @@ mod tests {
         assert!(!saved.same_saved_appearance(&current));
         current = saved.clone();
         current.scrollback_mib += 1;
+        assert!(!saved.same_saved_appearance(&current));
+        current = saved.clone();
+        current.font_family = "Other Mono".into();
         assert!(saved.same_saved_appearance(&current));
     }
 
@@ -531,6 +536,7 @@ mod tests {
         let mut preferences = Preferences { source: Some(path.clone()), ..Preferences::default() };
         preferences.font_size = 19.;
         preferences.terminal_padding = 12;
+        preferences.scrollback_mib = 8;
         preferences.copy_on_select = true;
         preferences.group_new_workspace_placement = crate::workspace_groups::Placement::End;
         preferences.confirm_close = ClosePolicy::Never;
@@ -542,7 +548,7 @@ mod tests {
         assert!(saved.copy_on_select);
         assert_eq!(saved.group_new_workspace_placement, crate::workspace_groups::Placement::End);
         assert_eq!(saved.font_family, "Custom Mono");
-        assert_eq!(saved.scrollback_mib, 16);
+        assert_eq!(saved.scrollback_mib, 8);
         assert_eq!(saved.confirm_close, ClosePolicy::Never);
         preferences.policy_override = Some(ClosePolicy::Always);
         preferences.confirm_close = ClosePolicy::Always;

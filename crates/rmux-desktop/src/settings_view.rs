@@ -7,7 +7,7 @@ pub struct State {
     pub selected: usize,
     pub scroll: ScrollHandle,
 }
-pub const KEYS: &[&str] = &["font", "padding", "theme", "focused_cursor", "cursor", "copy", "close", "group_placement"];
+pub const KEYS: &[&str] = &["font", "padding", "theme", "focused_cursor", "cursor", "copy", "close", "group_placement", "scrollback"];
 pub fn next_control(selected: usize, key: &str, shift: bool) -> Option<usize> {
     let count = KEYS.len() + 2;
     match key {
@@ -25,6 +25,7 @@ pub fn adjust(settings: &mut Preferences, key: &str, delta: i32) {
     match key {
         "font" => settings.font_size = (settings.font_size + delta as f32).clamp(8., 40.),
         "padding" => settings.terminal_padding = (settings.terminal_padding as i32 + delta).clamp(0, 32) as u8,
+        "scrollback" => settings.scrollback_mib = (settings.scrollback_mib as i32 + delta.signum()).clamp(0, 256) as u16,
         "theme" => settings.terminal_theme = settings.terminal_theme.cycle(delta),
         "focused_cursor" => settings.focused_cursor = settings.focused_cursor.cycle(delta < 0),
         "close" if !settings.close_policy_overridden() => {
@@ -116,6 +117,8 @@ pub fn panel(state: State, cx: &mut Context<window_view::WorkspaceWindow>) -> An
                 workspace_groups::Placement::Top => "First",
                 workspace_groups::Placement::End => "Last",
             }.into(), false, state.selected == 7, false))
+            .child(row("New terminal history", "scrollback", format!("{} MiB", settings.scrollback_mib), true, state.selected == 8, false))
+            .child(div().pt_2().text_xs().text_color(rgb(0xa0a0a0)).child("History budget per new terminal. 0 disables scrollback. Existing terminals keep their current history; total app memory also includes other resources."))
             .child(div().py_3().text_xs().text_color(rgb(0xa0a0a0)).child("Tab / ↑↓ to navigate · ←→ to change · Enter to activate · Esc to close. Changes apply to this session. Text size updates terminals using the previous default. Per-terminal zoom stays unchanged; Reset Font Size rejoins the default. Custom colors in your config override the theme."))
             .child(div().id("settings-save").border_1().border_color(if state.selected == KEYS.len() { rgb(0xffffff) } else { rgb(0x007aff) }).px_3().py_2().rounded_sm().bg(rgb(0x007aff)).hover(|s| s.bg(rgb(0x1685ff))).text_sm().cursor_pointer()
                 .on_click(|event, window, cx| { if event.standard_click() { window.dispatch_action(Box::new(SaveAppearanceSettings), cx); } }).child("Save these settings"))
@@ -149,5 +152,9 @@ mod tests {
         assert_eq!(prefs.group_new_workspace_placement, workspace_groups::Placement::End);
         assert_eq!(prefs.font_size, 40.);
         assert_eq!(prefs.terminal_padding, 0);
+        for _ in 0..300 { adjust(&mut prefs, "scrollback", -1); }
+        assert_eq!(prefs.scrollback_mib, 0);
+        for _ in 0..300 { adjust(&mut prefs, "scrollback", 1); }
+        assert_eq!(prefs.scrollback_mib, 256);
     }
 }
