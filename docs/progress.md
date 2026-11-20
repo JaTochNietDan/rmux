@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Interactive split commands now launch the PTY shell on the background executor,
+with one pending launch per workspace and a Starting split terminal indicator.
+Completion resolves the original pane identity and rechecks split eligibility;
+focus is acquired only if the original focus remains current. Missing targets,
+shutdown, workspace destruction and window rebinding discard pending attachment.
+Launch failures preserve existing panes. Desktop compilation passed. Native
+focus/process cleanup and latency evidence remain pending; initial frame/color
+preparation still runs on the UI thread, and workspace/RPC creation paths are
+unchanged. This is not evidence that all split-startup stalls are eliminated.
+
 Group-header context menus now act on the displayed group rather than silently
 editing its anchor workspace. They expose group name/color/icon, pin/unpin,
 Ungroup Workspaces (preserving terminals), and the existing Close Group prompt.

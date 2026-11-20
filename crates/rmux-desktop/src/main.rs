@@ -2032,6 +2032,7 @@ fn color(c: Color) -> Hsla {
 }
 
 struct Workspace {
+    spawning_split: Option<Task<()>>,
     pane_subscriptions: std::collections::HashMap<EntityId, Vec<Subscription>>,
     zoomed: Option<EntityId>,
     split_drag: Option<split_view::SplitDrag>,
@@ -2083,6 +2084,7 @@ impl Workspace {
     }
     fn rebind_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.split_drag = None;
+        self.spawning_split = None;
         self.pane_subscriptions.clear();
         for pane in self.panes.clone() {
             pane.update(cx, |pane, _| pane.reset_window_editors());
@@ -2399,16 +2401,45 @@ impl Workspace {
         Some(index)
     }
     fn add(&mut self, axis: SplitAxis, window: &mut Window, cx: &mut Context<Self>) {
-        self.add_in(axis, None, window, cx);
+        if self.benchmark {
+            self.add_prepared(axis, None, true, None, window, cx);
+            return;
+        }
+        if self.spawning_split.is_some() || cx.global::<Shutdowns>().quitting { return; }
+        let Some(index) = self.focused_index(window, cx).or_else(|| self.panes.len().checked_sub(1)) else { return; };
+        let pane = &self.panes[index];
+        if self.layout.as_ref().is_some_and(|tree| !tree.can_split(pane)) {
+            self.error = Some(format!("Cannot split this pane: maximum nesting is {}", layout::MAX_SPLIT_DEPTH));
+            cx.notify();
+            return;
+        }
+        let target = pane.entity_id();
+        let directory = pane.read(cx).cached_directory(cx)
+            .or_else(|| cx.global::<InitialDirectory>().0.clone());
+        let scrollback = cx.global::<Preferences>().scrollback_bytes();
+        let origin = window.focused(cx);
+        let executor = cx.background_executor().clone();
+        self.error = None;
+        self.spawning_split = Some(cx.spawn_in(window, async move |entity, cx| {
+            let result = executor.spawn(async move {
+                Session::shell_in_with_scrollback(80, 24, directory.as_deref(), scrollback)
+            }).await;
+            let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
+                this.spawning_split = None;
+                cx.notify();
+                if cx.global::<Shutdowns>().quitting || !this.panes.iter().any(|pane| pane.entity_id() == target) { return; }
+                match result {
+                    Ok(session) => {
+                        let focus = origin.as_ref().is_some_and(|focus| focus.is_focused(window));
+                        this.add_prepared_at(Some(target), axis, None, focus, Some((session, None)), window, cx);
+                    }
+                    Err(error) => this.error = Some(format!("Start split terminal: {error}")),
+                }
+            }));
+        }));
+        cx.notify();
     }
 
-    fn add_in(&mut self, axis: SplitAxis, directory: Option<std::path::PathBuf>, window: &mut Window, cx: &mut Context<Self>) {
-        self.add_in_with_focus(axis, directory, true, window, cx);
-    }
-
-    fn add_in_with_focus(&mut self, axis: SplitAxis, directory: Option<std::path::PathBuf>, focus: bool, window: &mut Window, cx: &mut Context<Self>) {
-        self.add_prepared(axis, directory, focus, None, window, cx);
-    }
     fn add_prepared(&mut self, axis: SplitAxis, directory: Option<std::path::PathBuf>, focus: bool, prepared: Option<(Session, Option<String>)>, window: &mut Window, cx: &mut Context<Self>) {
         self.add_prepared_at(None, axis, directory, focus, prepared, window, cx);
     }
@@ -2517,6 +2548,11 @@ impl Render for Workspace {
             .text_color(rgb(0xdcdfe6))
             .flex()
             .flex_col()
+            .when(self.spawning_split.is_some(), |root| root.child(
+                div().h(px(24.)).flex_shrink_0().px_3().flex().items_center()
+                    .text_xs().text_color(rgb(0xaab4c4)).bg(rgb(0x242424))
+                    .child("Starting split terminal…")
+            ))
             .on_action(
                 cx.listener(|view, _: &TogglePaneZoom, window, cx| view.toggle_zoom(window, cx)),
             )

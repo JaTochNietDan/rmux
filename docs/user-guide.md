@@ -310,6 +310,12 @@ mise run run
 ```
 
 `mise run bundle` creates `target/debug/rmux.app` on macOS. `mise run test` runs workspace tests; `mise run check` checks the workspace. Cmd+D splits the focused pane right; Cmd+Shift+D splits below. Linux/Windows use Ctrl+Shift+D and Ctrl+Shift+E. Splits can nest in either direction. Cmd+V pastes and Cmd+Q quits.
+Interactive split commands launch the shell in the background and show
+“Starting split terminal…” while pending. Each workspace permits one pending
+split. Completion splits the original pane; switching focus during launch keeps
+your newer focus. Closing the original pane or transferring the workspace to
+another window discards the pending result. Startup failure leaves existing
+panes intact.
 
 Clipboard text pastes accept up to 1 MiB of UTF-8 per operation and preserve
 bracketed-paste boundaries. Each terminal accepts one pending paste at a time;
