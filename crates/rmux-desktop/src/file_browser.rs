@@ -105,6 +105,42 @@ pub fn list_cancellable(path: PathBuf, canceled: &AtomicBool) -> anyhow::Result<
 #[cfg(test)]
 mod tests {
     #[test]
+    #[ignore = "manual file loader performance baseline"]
+    fn file_loader_baseline() -> anyhow::Result<()> {
+        let root = tempfile::tempdir()?;
+        for index in 0..super::MAX_ENTRIES {
+            std::fs::write(root.path().join(format!("entry-{index:04}-世界.txt")), "")?;
+        }
+        let preview_file = tempfile::NamedTempFile::new()?;
+        // More than both limits, with Unicode near the byte boundary.
+        std::fs::write(preview_file.path(), "x世界\n".repeat(16384))?;
+        let mut directory_times = Vec::new();
+        let mut preview_times = Vec::new();
+        let mut retained_text = 0;
+        for _ in 0..40 {
+            let start = std::time::Instant::now();
+            let listing = super::list(root.path().to_owned())?;
+            directory_times.push(start.elapsed().as_secs_f64() * 1000.);
+            assert_eq!(listing.entries.len(), super::MAX_ENTRIES);
+            let start = std::time::Instant::now();
+            let preview = super::preview(preview_file.path().to_owned())?;
+            preview_times.push(start.elapsed().as_secs_f64() * 1000.);
+            assert_eq!(preview.lines.len(), 512);
+            assert!(preview.truncated);
+            retained_text = preview.lines.iter().map(String::len).sum::<usize>();
+        }
+        directory_times.sort_by(f64::total_cmp);
+        preview_times.sort_by(f64::total_cmp);
+        println!("{}", serde_json::json!({
+            "benchmark":"file_loader", "samples":40, "profile":if cfg!(debug_assertions) {"debug"} else {"release"},
+            "os":std::env::consts::OS, "arch":std::env::consts::ARCH,
+            "directory_entries":super::MAX_ENTRIES, "directory_p50_ms":directory_times[20], "directory_p95_ms":directory_times[37],
+            "preview_input_bytes":131072, "preview_lines":512, "preview_retained_text_bytes":retained_text,
+            "preview_p50_ms":preview_times[20], "preview_p95_ms":preview_times[37]
+        }));
+        Ok(())
+    }
+    #[test]
     fn directory_input_preserves_literal_paths_and_rejects_relative_expansion() {
         let root = std::env::temp_dir();
         let path = root.join("space 世界 $(literal) ");

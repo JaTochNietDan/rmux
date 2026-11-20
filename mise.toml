@@ -153,3 +153,7 @@ run = "cargo run --release -p rmux-terminal --example pty_bench -- keyboard"
 [tasks.bench-focus]
 description = "Release focus dispatch timings into output-flooding panes at 1/4/8/16 panes"
 run = "cargo run --release -p rmux-terminal --example pty_bench -- focus"
+
+[tasks.bench-file-loaders]
+description = "Measure bounded local directory and text-preview reads (debug profile)"
+run = "cargo test -p rmux-desktop file_loader_baseline -- --ignored --nocapture"

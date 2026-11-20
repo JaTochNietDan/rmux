@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Recorded a focused file-loader baseline and added `mise run bench-file-loaders`.
+On this macOS arm64 debug build, 40 samples measured 2.608 ms p95 for a
+2,048-entry directory and 0.095 ms p95 for a bounded preview of a 128 KiB Unicode
+file. The preview retained 512 lines / 3,584 text bytes. Raw summary and scope
+limitations are in docs/performance.md; this does not measure UI frames, total
+memory, cold/network storage or release-build performance. Native UI access was
+rechecked and remains locked, so screenshots are still unavailable.
+
 Added Open Text Preview in File, the command palette and `open_text_preview`
 custom bindings. A single-file native picker feeds the existing asynchronous,
 bounded preview loader without requiring a known terminal cwd. PromptGate

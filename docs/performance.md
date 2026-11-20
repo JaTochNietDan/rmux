@@ -1,5 +1,15 @@
 # rmux performance acceptance plan
 
+Local file-loader baseline (`1794455` plus the benchmark harness, macOS arm64,
+debug profile): 40 reads of a freshly generated 2,048-entry directory measured
+2.486 ms p50 / 2.608 ms p95. A 128 KiB Unicode fixture, capped to a 64 KiB read
+and 512 preview lines, measured 0.085 ms p50 / 0.095 ms p95 and retained 3,584
+bytes of line text. [Raw samples summary](benchmarks/file-loaders-debug.jsonl).
+Run `mise run bench-file-loaders` to repeat. This is a local, mostly warm-cache
+baseline, excludes fixture creation, UI construction/rendering, allocator
+overhead and clipboard writes, and is not a release-build or slow-filesystem
+acceptance result. Retained text bytes are not total memory usage.
+
 New-tab PTY creation runs in a background task, with one pending launch per
 pane and cached directory inheritance. PTY creation plus initial frame/color preparation run off the
 UI thread for new tabs. Settings changes during launch trigger background
