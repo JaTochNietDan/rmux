@@ -111,11 +111,12 @@ impl SearchWorker {
                             } else {
                                 Direction::Newer
                             };
-                            navigation -= navigation.signum();
-                            progress = search.select_if(direction, || {
+                            let Some(selected) = search.try_select_if(direction, || {
                                 !canceled.load(Ordering::Acquire)
                                     && pending.lock().unwrap_or_else(|e| e.into_inner()).revision == revision
-                            })?;
+                            })? else { return Ok(None); };
+                            navigation -= navigation.signum();
+                            progress = selected;
                         }
                         Ok(Some(progress))
                     })();

@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Find match navigation now tries the parser lock and preserves queued movement
+on contention. A canceled or superseded query is rechecked after acquisition,
+before any selection/viewport mutation. Blocking direct engine callers retain
+their existing behavior through a shared implementation. Twelve focused search
+tests passed, including held-lock navigation, stale-selection rejection and
+successful retry. Search cleanup still requires serialized parser access.
+
 Find query replacement now uses a nonblocking parser-lock attempt. On contention,
 the worker restores the query plus refresh/navigation only if that revision is
 still current, allowing later edits to supersede it during the 1 ms retry backoff.

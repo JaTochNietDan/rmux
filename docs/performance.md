@@ -5,8 +5,10 @@ the refresh request, backs off for 1 ms and rechecks cancellation/supersession
 instead of waiting inside the feed mutex acquisition. Completed searches still
 sleep on their command channel. Query replacement also uses opportunistic locking,
 requeueing the query/refresh/navigation only while its revision is still current.
-Explicit match selection and search cleanup retain their existing lock behavior; this is not a claim that
-every search operation is nonblocking. A contention regression verifies that
+Find navigation also attempts the parser lock without waiting and consumes a
+queued movement only after selection succeeds. Supersession is checked again
+after acquisition. Search cleanup retains its existing lock behavior; this is
+not a claim that every search operation is nonblocking. A contention regression verifies that
 the scan resumes without changing terminal selection or viewport.
 
 Manual process-tree sampling baseline (`22dc885` plus harness/shared-index change,

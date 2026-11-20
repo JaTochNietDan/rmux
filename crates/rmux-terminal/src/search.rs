@@ -166,11 +166,27 @@ impl Search {
 
     /// Recheck supersession after acquiring the parser, before moving selection.
     pub(crate) fn select_if(&mut self, direction: Direction, current: impl FnOnce() -> bool) -> Result<Progress> {
+        Ok(self.select_inner(direction, current, false)?.expect("blocking selection acquires the parser"))
+    }
+
+    /// None leaves navigation queued when the parser is busy. Supersession is
+    /// checked after acquisition, immediately before changing selection.
+    pub(crate) fn try_select_if(&mut self, direction: Direction, current: impl FnOnce() -> bool) -> Result<Option<Progress>> {
+        self.select_inner(direction, current, true)
+    }
+
+    fn select_inner(&mut self, direction: Direction, current: impl FnOnce() -> bool, nonblocking: bool) -> Result<Option<Progress>> {
         let progress = self.progress()?;
-        if progress.matches == 0 { return Ok(progress); }
+        if progress.matches == 0 { return Ok(Some(progress)); }
         {
-            let mut terminal = self.terminal.lock().unwrap_or_else(|e| e.into_inner());
-            if !current() { return self.progress(); }
+            let mut terminal = if nonblocking {
+                match self.terminal.try_lock() {
+                    Ok(guard) => guard,
+                    Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),
+                    Err(std::sync::TryLockError::WouldBlock) => return Ok(None),
+                }
+            } else { self.terminal.lock().unwrap_or_else(|e| e.into_inner()) };
+            if !current() { return self.progress().map(Some); }
             // SAFETY: navigation, snapshot extraction and selection installation
             // are one transaction with no intervening terminal mutations.
             unsafe {
@@ -196,7 +212,7 @@ impl Search {
                 }
             }
         }
-        self.progress()
+        self.progress().map(Some)
     }
 
     fn status(&self) -> Result<GhosttySearchStatus> {
@@ -311,6 +327,27 @@ mod tests {
             assert_eq!(after.scrollback_offset, before.scrollback_offset);
             assert_eq!(terminal.lock().unwrap().selected_text()?, selection);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn busy_navigation_waits_without_consuming_or_applying_stale_selection() -> Result<()> {
+        let terminal = Arc::new(Mutex::new(Terminal::new(20, 3)?));
+        terminal.lock().unwrap().write(b"needle one\r\nneedle two");
+        let mut search = Search::new(terminal.clone())?;
+        search.set_query("needle")?;
+        assert_eq!(finish(&mut search)?.matches, 2);
+        let mut guard = terminal.lock().unwrap();
+        let before = guard.frame()?;
+        assert!(search.try_select_if(Direction::Older, || true)?.is_none());
+        assert!(guard.selected_text()?.is_none());
+        assert_eq!(guard.frame()?.revision, before.revision);
+        drop(guard);
+        let stale = search.try_select_if(Direction::Older, || false)?.unwrap();
+        assert_eq!(stale.selected, None);
+        let selected = search.try_select_if(Direction::Older, || true)?.unwrap();
+        assert_eq!(selected.selected, Some(0));
+        assert_eq!(terminal.lock().unwrap().selected_text()?.as_deref(), Some("needle"));
         Ok(())
     }
 
