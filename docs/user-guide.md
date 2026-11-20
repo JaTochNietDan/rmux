@@ -1,5 +1,16 @@
 # rmux
 
+`rmuxctl pipe-pane --surface SURFACE_ID --command 'wc -l'` captures retained
+terminal history once and sends it to a local `/bin/sh` command as stdin. Quote
+the command as one argument; a trailing quoted command is also accepted. The
+command runs in the CLI's working directory and inherits its stdout/stderr.
+Unlike other rmuxctl commands, this returns command output and its exit status,
+not a JSON envelope. Capture is capped at 1 MiB; truncation or RPC failure prevents
+execution. The CLI waits for the command, with ordinary shell interruption for
+long-running consumers. There is no future-output stream or app-side subprocess.
+Windows shell execution, implicit workspace/window selectors and JSON-wrapped
+command output are not implemented.
+
 A focused local macOS/Linux terminal shows **Input hidden** when canonical line
 input has echo disabled. Raw-mode TUIs do not trigger this badge. It samples on
 output, focus and input events, so silent mode changes may remain stale until

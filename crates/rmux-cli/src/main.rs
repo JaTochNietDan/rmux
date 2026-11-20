@@ -1,6 +1,7 @@
 //! Small external client: no GPUI, Ghostty, shell or terminal dependencies.
 mod commands;
 mod completions;
+mod pipe;
 use serde_json::{Value, json};
 use std::{ffi::OsString, path::PathBuf};
 
@@ -8,6 +9,7 @@ const HELP: &str = "Usage: rmuxctl [--socket PATH] METHOD [JSON_OBJECT]\n\nConne
 struct Request {
     socket: PathBuf,
     body: Vec<u8>,
+    pipe_command: Option<String>,
 }
 fn parse(
     args: impl IntoIterator<Item = OsString>,
@@ -38,7 +40,11 @@ fn parse(
     if method.is_empty() || method.starts_with('-') {
         return Err("a nonempty RPC method is required".into());
     }
-    let (method, params) = commands::expand_with_input(&method, args.collect(), std::io::stdin().lock())?;
+    let piping = method == "pipe-pane";
+    let (method, mut params) = commands::expand_with_input(&method, args.collect(), std::io::stdin().lock())?;
+    let pipe_command = if piping {
+        Some(params.as_object_mut().unwrap().remove("command").unwrap().as_str().unwrap().to_owned())
+    } else { None };
     let mut body =
         serde_json::to_vec(&json!({"jsonrpc":"2.0", "id":1, "method":method, "params":params}))
             .unwrap();
@@ -46,7 +52,7 @@ fn parse(
         return Err("request exceeds 64 KiB".into());
     }
     body.push(b'\n');
-    Ok(Some(Request { socket, body }))
+    Ok(Some(Request { socket, body, pipe_command }))
 }
 #[cfg(unix)]
 fn exchange(request: Request) -> Result<Value, String> {
@@ -121,7 +127,7 @@ fn run() -> Result<i32, String> {
         for candidate in completions::candidates(&args[1..]) { println!("{candidate}"); }
         return Ok(0);
     }
-    let Some(request) = parse(
+    let Some(mut request) = parse(
         args,
         std::env::var_os("RMUX_SOCKET_DIR"),
     )?
@@ -129,7 +135,17 @@ fn run() -> Result<i32, String> {
         print!("{HELP}\n{}\nOffline shell setup: rmuxctl completions bash|zsh|fish\n", commands::HELP);
         return Ok(0);
     };
+    let pipe_command = request.pipe_command.take();
     let reply = exchange(request)?;
+    if let Some(command) = pipe_command {
+        if reply.get("error").is_some() { println!("{reply}"); return Ok(1); }
+        let result = &reply["result"];
+        if result.get("truncated").and_then(Value::as_bool) != Some(false) {
+            return Err("pipe-pane capture is truncated or incomplete; shell command was not started".into());
+        }
+        let text = result.get("text").and_then(Value::as_str).ok_or("pipe-pane capture has no text; shell command was not started")?;
+        return pipe::run(&command, text);
+    }
     println!("{reply}");
     Ok(if reply.get("error").is_some() { 1 } else { 0 })
 }
@@ -146,6 +162,15 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn pipe_pane_keeps_shell_command_out_of_the_rpc_request() {
+        let request = parse(["--socket", "/tmp/test.sock", "pipe-pane", "--surface", "42", "--command", "cat"].map(OsString::from), None).unwrap().unwrap();
+        assert_eq!(request.pipe_command.as_deref(), Some("cat"));
+        let wire: Value = serde_json::from_slice(&request.body).unwrap();
+        assert_eq!(wire["method"], "surface.read_text");
+        assert_eq!(wire["params"], json!({"surface_id":"42","scope":"history","max_bytes":1048576}));
+        assert!(parse(["--socket", "/tmp/test.sock", "pipe-pane", "cat"].map(OsString::from), None).is_err());
+    }
     #[test]
     fn help_is_local_without_consuming_literal_payloads() {
         for args in [vec!["send", "--help"], vec!["help", "send"], vec!["--socket", "/missing/socket", "send", "-h"]] {

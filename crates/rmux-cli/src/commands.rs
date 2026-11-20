@@ -3,7 +3,7 @@ use serde_json::{Map, Value};
 use std::ffi::OsString;
 use std::io::Read;
 
-pub const HELP: &str = "Commands (JSON output; explicit opaque IDs required):
+pub const HELP: &str = "Commands (JSON output except pipe-pane; explicit opaque IDs required):
   set-buffer [--name NAME] [TEXT|-] | list-buffers
   paste-buffer --surface ID [--name NAME] [--bracketed]
   notify --surface ID [--title TITLE] [--body BODY]
@@ -25,6 +25,7 @@ pub const HELP: &str = "Commands (JSON output; explicit opaque IDs required):
   send-key --surface ID KEY  (Enter, Up, Ctrl-c, Alt-Left, Shift-Tab)
   send --surface ID [--paste] TEXT
   read-screen --surface ID [--scrollback | --selection [--preserve-wraps]]
+  pipe-pane --surface ID [--command SHELL_COMMAND | SHELL_COMMAND]
 Use -- before positional text beginning with a dash. List commands list the
 whole process unless narrowed with --window (workspaces/panes/panels) or
 --workspace (panes/panels). No implicit target, ref/index lookup or --force yet.
@@ -32,6 +33,7 @@ whole process unless narrowed with --window (workspaces/panes/panels) or
 
 pub fn help(command: &str) -> Result<String, String> {
     let (arguments, description) = match command {
+        "pipe-pane" => ("--surface ID [--command SHELL_COMMAND | SHELL_COMMAND]", "Capture retained history (up to 1 MiB) and feed it once to a local /bin/sh command via stdin. Truncated captures are rejected. Runs in the CLI working directory, forwards command stdout/stderr and returns its exit status. The CLI waits for the command; use normal shell interruption for long-running commands. Does not stream future output."),
         "paste-buffer" => ("--surface ID [--name NAME] [--bracketed]", "Queue a retained buffer to an explicit terminal without changing focus or scroll position. --bracketed uses terminal paste encoding. The buffer is retained; requests are never retried."),
         "set-buffer" => ("[--name NAME] [TEXT|-]", "Set a process-local copy buffer; name defaults to default. Omitted text or - reads UTF-8 stdin exactly, including trailing newlines. Storage and request size are bounded; buffers are not persisted or copied to the OS clipboard."),
         "list-buffers" => ("", "List process-local copy buffer names and byte counts without their contents."),
@@ -59,7 +61,7 @@ pub fn help(command: &str) -> Result<String, String> {
         _ => return Err(format!("no local help for {command}; use --help for supported commands or system.capabilities to discover RPC methods")),
     };
     let prefix = if command == "completions" { "rmuxctl" } else { "rmuxctl [--socket PATH]" };
-    Ok(format!("Usage: {prefix} {command} {arguments}\n\n{description}\n\nTargets use explicit opaque IDs from list commands. RPC commands print JSON.\nExit 0: success; 1: RPC error; 2: usage/transport failure.\n"))
+    Ok(format!("Usage: {prefix} {command} {arguments}\n\n{description}\n\nTargets use explicit opaque IDs from list commands. RPC commands print JSON; pipe-pane forwards child output and status.\nExit 0: success; 1: RPC error; 2: usage/transport failure.\n"))
 }
 
 pub fn expand_with_input(command: &str, args: Vec<OsString>, mut input: impl std::io::Read) -> Result<(String, Value), String> {
@@ -76,6 +78,7 @@ pub fn expand_with_input(command: &str, args: Vec<OsString>, mut input: impl std
 
 pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), String> {
     let (method, target, positional) = match command {
+        "pipe-pane" => ("surface.read_text", Some(("--surface", "surface_id")), Some("command")),
         "paste-buffer" => ("buffer.paste", Some(("--surface", "surface_id")), None),
         "set-buffer" => ("buffer.set", None, Some("text")),
         "list-buffers" => ("buffer.list", None, None),
@@ -147,6 +150,11 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
             continue;
         }
         if !literal && arg.starts_with('-') && !(command == "set-buffer" && arg == "-") {
+            if command == "pipe-pane" && arg == "--command" {
+                let text = args.next().ok_or("--command requires shell command text")?.into_string().map_err(|_| "shell command must be UTF-8")?;
+                if params.insert("command".into(), Value::String(text)).is_some() { return Err("duplicate pipe command".into()); }
+                continue;
+            }
             if matches!(command, "set-buffer" | "paste-buffer") && arg == "--name" {
                 let name = args.next().ok_or("--name requires text")?.into_string().map_err(|_| "name must be UTF-8")?;
                 if params.insert("name".into(), Value::String(name)).is_some() { return Err("duplicate --name".into()); }
@@ -307,6 +315,11 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
         if !params.contains_key(key) && command != "set-buffer" {
             return Err(format!("{command} requires {key}"));
         }
+    }
+    if command == "pipe-pane" {
+        if params["command"].as_str().is_none_or(|command| command.trim().is_empty()) { return Err("pipe-pane requires nonempty shell command text".into()); }
+        params.insert("scope".into(), Value::String("history".into()));
+        params.insert("max_bytes".into(), Value::from(1024 * 1024));
     }
     if command == "send-key" {
         let original = params.remove("key").unwrap().as_str().unwrap().to_owned();

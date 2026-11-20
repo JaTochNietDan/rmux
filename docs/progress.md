@@ -2,6 +2,18 @@
 
 ## Current implementation focus
 
+Confirmed [pinned pipe-pane behavior](https://github.com/manaflow-ai/cmux/blob/a76816e4f0788003758b9434ab702068a640fb5d/CLI/cmux.swift):
+one captured history snapshot feeds a client-side shell command. Implemented
+pipe-pane --surface ID with --command or quoted positional command using the
+existing history RPC, capped at 1 MiB. Truncated/invalid responses reject before
+spawning; command text is stripped from RPC params. The CLI forwards stdout/stderr
+without collecting them, waits/reaps the child and returns its status; early
+stdin closure is supported. Command runtime follows normal shell semantics, with
+no automatic timeout. No PTY reader or UI thread waits on the consumer. Two
+focused request-routing/process tests passed, including literal stdin, nonzero
+status, early close and size limits. Window video recording, selector aliases,
+JSON command-output mode and Windows execution remain pending.
+
 Reviewed the [pinned CLI contract](https://github.com/manaflow-ai/cmux/blob/a76816e4f0788003758b9434ab702068a640fb5d/docs/cli-contract.md)
 before recording work: window video capture and terminal text piping are distinct;
 copy-mode is a placeholder there. Corrected T15 scope without claiming implementation.

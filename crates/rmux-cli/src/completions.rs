@@ -21,6 +21,7 @@ const COMMANDS: &[(&str, &[&str])] = &[
     ("focus-panel", &["--panel", "--activate"]),
     ("send-key", &["--surface"]),
     ("send", &["--surface", "--paste"]),
+    ("pipe-pane", &["--surface", "--command"]),
     ("read-screen", &["--surface", "--scrollback", "--selection", "--preserve-wraps"]),
     ("move-panel", &["--panel", "--workspace", "--activate"]),
     ("move-workspace", &["--workspace", "--window", "--activate"]),
