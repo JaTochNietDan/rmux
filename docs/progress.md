@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Interactive split startup now prepares initial engine colors/palette and the
+first frame on the background executor before attaching the terminal view.
+Settings changes during launch trigger background re-preparation. Ready and
+raw-session inputs share the existing split validation/attachment path, and
+raw-session preparation failures now use its error handling rather than panic
+in TerminalView::new. Desktop compilation and the live socket smoke passed,
+including targeted nested splits, creation and cleanup. That smoke exercises
+the shared attachment path, not native asynchronous Split actions; their timing,
+focus, cancellation and visual acceptance remain pending. Layout/resize work
+still runs on the UI thread.
+
 Interactive split commands now launch the PTY shell on the background executor,
 with one pending launch per workspace and a Starting split terminal indicator.
 Completion resolves the original pane identity and rechecks split eligibility;

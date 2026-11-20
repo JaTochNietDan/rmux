@@ -2031,6 +2031,11 @@ fn color(c: Color) -> Hsla {
     rgb((u32::from(c.0) << 16) | (u32::from(c.1) << 8) | u32::from(c.2)).into()
 }
 
+enum TerminalSeed {
+    Session(Session),
+    Ready(PreparedTerminal),
+}
+
 struct Workspace {
     spawning_split: Option<Task<()>>,
     pane_subscriptions: std::collections::HashMap<EntityId, Vec<Subscription>>,
@@ -2417,21 +2422,35 @@ impl Workspace {
         let directory = pane.read(cx).cached_directory(cx)
             .or_else(|| cx.global::<InitialDirectory>().0.clone());
         let scrollback = cx.global::<Preferences>().scrollback_bytes();
+        let colors = cx.global::<Preferences>().terminal_colors();
+        let palette = cx.global::<Preferences>().terminal_palette();
         let origin = window.focused(cx);
         let executor = cx.background_executor().clone();
         self.error = None;
         self.spawning_split = Some(cx.spawn_in(window, async move |entity, cx| {
-            let result = executor.spawn(async move {
-                Session::shell_in_with_scrollback(80, 24, directory.as_deref(), scrollback)
+            let mut result = executor.spawn(async move {
+                let session = Session::shell_in_with_scrollback(80, 24, directory.as_deref(), scrollback)?;
+                TerminalView::prepare(session, colors, palette)
             }).await;
+            loop {
+                let refresh = cx.update(|_, cx| {
+                    let prepared = result.as_ref().ok()?;
+                    let settings = cx.global::<Preferences>();
+                    let current = (settings.terminal_colors(), settings.terminal_palette());
+                    ((prepared.colors, prepared.palette) != current).then_some(current)
+                }).ok().flatten();
+                let Some((colors, palette)) = refresh else { break; };
+                let session = result.expect("successful preparation checked above").session;
+                result = executor.spawn(async move { TerminalView::prepare(session, colors, palette) }).await;
+            }
             let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
                 this.spawning_split = None;
                 cx.notify();
                 if cx.global::<Shutdowns>().quitting || !this.panes.iter().any(|pane| pane.entity_id() == target) { return; }
                 match result {
-                    Ok(session) => {
+                    Ok(prepared) => {
                         let focus = origin.as_ref().is_some_and(|focus| focus.is_focused(window));
-                        this.add_prepared_at(Some(target), axis, None, focus, Some((session, None)), window, cx);
+                        this.add_seed_at(Some(target), axis, None, focus, Some((TerminalSeed::Ready(prepared), None)), window, cx);
                     }
                     Err(error) => this.error = Some(format!("Start split terminal: {error}")),
                 }
@@ -2444,6 +2463,9 @@ impl Workspace {
         self.add_prepared_at(None, axis, directory, focus, prepared, window, cx);
     }
     fn add_prepared_at(&mut self, target: Option<EntityId>, axis: SplitAxis, directory: Option<std::path::PathBuf>, focus: bool, prepared: Option<(Session, Option<String>)>, window: &mut Window, cx: &mut Context<Self>) -> Option<EntityId> {
+        self.add_seed_at(target, axis, directory, focus, prepared.map(|(session, label)| (TerminalSeed::Session(session), label)), window, cx)
+    }
+    fn add_seed_at(&mut self, target: Option<EntityId>, axis: SplitAxis, directory: Option<std::path::PathBuf>, focus: bool, prepared: Option<(TerminalSeed, Option<String>)>, window: &mut Window, cx: &mut Context<Self>) -> Option<EntityId> {
         if cx.global::<Shutdowns>().quitting { return None; }
         let anchor = if let Some(target) = target {
             Some(self.panes.iter().position(|pane| pane.entity_id() == target)?)
@@ -2466,7 +2488,7 @@ impl Workspace {
                 .map(|index| self.panes[index].read(cx).active_cell_metrics(cx))
                 .unwrap_or_else(|| CellMetrics::new(cx.global::<Preferences>().font_size))
         };
-        let (prepared, command_label) = match prepared.or_else(|| cx.global_mut::<InitialCommand>().0.take()) {
+        let (prepared, command_label) = match prepared.or_else(|| cx.global_mut::<InitialCommand>().0.take().map(|(session, label)| (TerminalSeed::Session(session), label))) {
             Some((session, label)) => (Some(session), label),
             None => (None, None),
         };
@@ -2477,28 +2499,35 @@ impl Workspace {
                 .map(|index| self.panes[index].read(cx).active_font_family(cx))
                 .unwrap_or_else(|| cx.global::<Preferences>().font_family.clone().into())
         };
-        let session = if let Some(session) = prepared {
-            Ok(session)
-        } else if self.benchmark {
-            Session::benchmark_shell(80, 24)
-        } else {
-            Session::shell_in_with_scrollback(
-                80,
-                24,
-                directory
-                    .as_deref()
-                    .or(cx.global::<InitialDirectory>().0.as_deref()),
-                cx.global::<Preferences>().scrollback_bytes(),
-            )
+        let prepared = match prepared {
+            Some(TerminalSeed::Ready(prepared)) => Ok(prepared),
+            seed => {
+                let session = if let Some(TerminalSeed::Session(session)) = seed {
+                    Ok(session)
+                } else if self.benchmark {
+                    Session::benchmark_shell(80, 24)
+                } else {
+                    Session::shell_in_with_scrollback(
+                        80,
+                        24,
+                        directory
+                            .as_deref()
+                            .or(cx.global::<InitialDirectory>().0.as_deref()),
+                        cx.global::<Preferences>().scrollback_bytes(),
+                    )
+                };
+                let settings = cx.global::<Preferences>();
+                session.and_then(|session| TerminalView::prepare(session, settings.terminal_colors(), settings.terminal_palette()))
+            }
         };
-        match session {
-            Ok(session) => {
+        match prepared {
+            Ok(prepared) => {
                 let focused = split_index;
                 self.error = None;
                 self.split_drag = None;
                 self.zoomed = None;
                 let terminal = cx.new(|cx| {
-                    let mut terminal = TerminalView::new(session, window, cx);
+                    let mut terminal = TerminalView::from_prepared(prepared, window, cx);
                     terminal.cells = cells;
                     terminal.font_family = family;
                     terminal
