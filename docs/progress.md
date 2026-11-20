@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Fresh macOS debug binaries passed `mise run smoke-socket` with selected-text
+wrap routing coverage. The real CLI reached the background selection exporter
+and returned empty/untruncated text for a surface without a selection. Invalid
+wrap scopes, string/null booleans preserved request IDs and returned -32602; a
+second client still completed ordinary selection reads. Existing split, history,
+notification and cleanup scenarios passed too. This verifies live routing and
+empty-selection semantics; nonempty wrapped selections remain engine-tested,
+and native selection/clipboard interaction is still pending.
+
 Selected-text automation now exposes the wrap choice through selection-scope
 `surface.read_text` with `preserve_wraps:true`, and `read-screen --selection
 --preserve-wraps` with help/completion support. Other scopes reject the enabled

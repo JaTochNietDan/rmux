@@ -70,6 +70,23 @@ with tempfile.TemporaryDirectory(prefix="rmux-socket-") as tmp:
             surfaces = json.loads(panels.stdout)["result"]["surfaces"]
             assert surfaces and all(row["workspace_id"] == original["id"] for row in surfaces)
             surface = surfaces[0]["id"]
+            # Route the selected-text wrap option through the real CLI, socket,
+            # UI target lookup and background exporter. This fixture has no selection.
+            selection_read = subprocess.run([cli, "read-screen", "--surface", surface, "--selection", "--preserve-wraps"], env=env, capture_output=True, text=True, timeout=8)
+            assert selection_read.returncode == 0, (selection_read.stdout, selection_read.stderr)
+            selection_result = json.loads(selection_read.stdout)["result"]
+            assert selection_result["scope"] == "selection" and selection_result["text"] == "", selection_result
+            assert selection_result["truncated"] is False, selection_result
+            for extra in [
+                {"preserve_wraps": True},
+                {"scope": "history", "preserve_wraps": True},
+                {"scope": "selection", "preserve_wraps": "true"},
+                {"scope": "selection", "preserve_wraps": None},
+            ]:
+                first.write((json.dumps({"jsonrpc":"2.0", "id":"invalid-wrap", "method":"surface.read_text", "params":{"surface_id":surface, **extra}}) + "\n").encode())
+                rejected_read = json.loads(first.readline())
+                assert rejected_read["id"] == "invalid-wrap" and rejected_read["error"]["code"] == -32602, rejected_read
+            assert call(second, "surface.read_text", {"surface_id":surface,"scope":"selection"})["text"] == ""
             pane_id = surfaces[0]["pane_id"]
             original_pid = surfaces[0]["process_id"]
             before_selection = [(row["id"], row["selected"]) for row in call(first, "workspace.list")["workspaces"]]
@@ -202,7 +219,7 @@ with tempfile.TemporaryDirectory(prefix="rmux-socket-") as tmp:
             assert not endpoint.exists(), "normal quit left socket directory behind"
             second.close()
             third.close()
-            print("Socket RPC passed: bundled/client discovery and error exits, private endpoint, two clients, shared UI mutation, cross-window filters, targeted nested splits and failure atomicity, notification acknowledgement/history and OSC coexistence, workspace creation/close and shell cleanup, reconnect, normal-quit cleanup.")
+            print("Socket RPC passed: bundled/client discovery and error exits, private endpoint, two clients, shared UI mutation, cross-window filters, targeted nested splits and failure atomicity, selected-text wrap routing/validation, notification acknowledgement/history and OSC coexistence, workspace creation/close and shell cleanup, reconnect, normal-quit cleanup.")
         finally:
             for client in clients: client.close()
             if app.poll() is None:
