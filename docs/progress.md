@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Single-line editors now show a compact “Too long” indicator when a paste or IME
+update exceeds the existing 4096-byte limit. Its tooltip explains that existing
+text was retained; successful edits and undo/redo clear the indicator. Paste size
+is checked before allocating the newline-normalized copy, with subtraction-based
+bounds checks in both input paths. Desktop compilation passed. Native narrow-field
+layout, tooltip and oversized IME interaction still need visual verification.
+
 Single-line text fields on macOS now support Command-Backspace to delete to the
 start and Command-Forward Delete to delete to the end. Selected text takes
 precedence, Unicode grapheme boundaries remain intact, and edits use the existing

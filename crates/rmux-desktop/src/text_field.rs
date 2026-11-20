@@ -13,6 +13,7 @@ pub(super) struct TextField {
     reversed: bool,
     pointer_anchor: Option<usize>,
     history: edit_history::EditHistory,
+    rejected_edit: bool,
 }
 impl EventEmitter<EditEvent> for TextField {}
 impl TextField {
@@ -49,6 +50,7 @@ impl TextField {
             reversed: false,
             pointer_anchor: None,
             history: Default::default(),
+            rejected_edit: false,
         }
     }
     fn changed(&mut self, cx: &mut Context<Self>) {
@@ -64,10 +66,15 @@ impl TextField {
                 .unwrap_or_else(|| self.text.selected.clone())
         });
         let bytes = self.text.byte_range(range.clone());
-        let text = text.replace(['\r', '\n'], " ");
-        if self.text.text.len() - bytes.len() + text.len() > 4096 {
+        // Newline normalization preserves UTF-8 byte length. Reject before
+        // allocating another copy of a potentially very large clipboard value.
+        if text.len() > 4096usize.saturating_sub(self.text.text.len() - bytes.len()) {
+            self.rejected_edit = true;
+            cx.notify();
             return;
         }
+        self.rejected_edit = false;
+        let text = text.replace(['\r', '\n'], " ");
         if self.text.marked.is_none() && self.text.text[bytes] != text {
             self.history.record(&self.text, self.reversed);
         }
@@ -132,6 +139,7 @@ impl TextField {
             .history
             .restore(&mut self.text, &mut self.reversed, redo)
         {
+            self.rejected_edit = false;
             self.changed(cx);
         }
     }
@@ -343,6 +351,14 @@ impl Render for TextField {
                         .size_full(),
                     ),
             )
+            .when(self.rejected_edit, |field| field.child(
+                div().id("text-too-long").flex_shrink_0().px_2().text_xs()
+                    .text_color(rgb(0xf18a8a))
+                    .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint(
+                        "Text is too long. Shorten it and try again (4 KB limit). Your existing text was kept.".into()
+                    )).into())
+                    .child("Too long")
+            ))
     }
 }
 
@@ -399,12 +415,17 @@ impl EntityInputHandler for TextField {
                 .clone()
                 .unwrap_or_else(|| self.text.selected.clone())
         });
-        if self.text.text.len() - self.text.byte_range(range.clone()).len() + text.len() <= 4096 {
+        let retained = self.text.text.len() - self.text.byte_range(range.clone()).len();
+        if text.len() <= 4096usize.saturating_sub(retained) {
+            self.rejected_edit = false;
             if self.text.marked.is_none() {
                 self.history.record(&self.text, self.reversed);
             }
             self.text.update(Some(range), text, selected);
             self.reversed = false;
+            cx.notify();
+        } else {
+            self.rejected_edit = true;
             cx.notify();
         }
     }
