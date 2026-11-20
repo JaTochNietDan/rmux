@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Named buffers now support paste-buffer --surface ID [--name NAME] [--bracketed]
+and buffer.paste RPC. Explicit opaque targets resolve through the same input
+routing as surface.send_text, retaining existing modal/busy/exited/backpressure
+checks and preserving focus/viewport. Raw delivery is capped at 64 KiB;
+--bracketed uses terminal-aware paste encoding up to the 1 MiB buffer limit.
+Buffers are retained, mutations never auto-retry, and invalid targets/options or
+missing buffers return errors. Three buffer tests and one CLI test passed with
+both test builds; native delivery and UI save-to-buffer acceptance remain pending.
+
 Added process-local named copy buffers, beginning with the inventoried set-buffer
 and list-buffers CLI shapes. The live RPC queue supports buffer.set/list plus
 rmux-specific buffer.get/delete; capabilities advertise them and shell completion

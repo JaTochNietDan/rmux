@@ -5,17 +5,22 @@ const MAX_COUNT: usize = 32;
 const MAX_BUFFER: usize = 1024 * 1024;
 const MAX_TOTAL: usize = 8 * 1024 * 1024;
 
-pub enum Command { List, Get(String), Delete(String), Set(String, String) }
+pub enum Command { List, Get(String), Delete(String), Set(String, String), Paste { name: String, surface_id: String, bracketed: bool } }
 pub fn parse(method: &str, params: Option<&Value>) -> Result<Option<Command>, &'static str> {
-    if !matches!(method, "buffer.list" | "buffer.get" | "buffer.delete" | "buffer.set") { return Ok(None); }
+    if !matches!(method, "buffer.list" | "buffer.get" | "buffer.delete" | "buffer.set" | "buffer.paste") { return Ok(None); }
     let empty = json!({});
     let params = params.unwrap_or(&empty).as_object().ok_or("Expected object params")?;
-    let allowed: &[&str] = match method { "buffer.list" => &[], "buffer.set" => &["name", "text"], _ => &["name"] };
+    let allowed: &[&str] = match method { "buffer.list" => &[], "buffer.set" => &["name", "text"], "buffer.paste" => &["name", "surface_id", "bracketed"], _ => &["name"] };
     if params.keys().any(|key| !allowed.contains(&key.as_str())) { return Err("Unknown buffer parameter"); }
     if method == "buffer.list" { return Ok(Some(Command::List)); }
     let name = match params.get("name") { None => "default", Some(Value::String(name)) => name, _ => return Err("Expected buffer name string") };
     if name.trim().is_empty() || name.len() > 128 || name.chars().any(char::is_control) { return Err("Buffer name must be nonempty, at most 128 bytes and contain no controls"); }
     Ok(Some(match method {
+        "buffer.paste" => {
+            let surface_id = params.get("surface_id").and_then(Value::as_str).filter(|id| !id.is_empty() && id.len() <= 128).ok_or("Expected explicit surface_id")?;
+            let bracketed = match params.get("bracketed") { None => false, Some(Value::Bool(value)) => *value, _ => return Err("Expected bracketed boolean") };
+            Command::Paste { name: name.into(), surface_id: surface_id.into(), bracketed }
+        }
         "buffer.get" => Command::Get(name.into()),
         "buffer.delete" => Command::Delete(name.into()),
         _ => {
@@ -29,8 +34,15 @@ pub fn parse(method: &str, params: Option<&Value>) -> Result<Option<Command>, &'
 pub struct Store { entries: BTreeMap<String, String>, bytes: usize }
 impl gpui::Global for Store {}
 impl Store {
+    pub fn paste_input(&self, command: &Command) -> Result<Option<super::automation::SurfaceText>, &'static str> {
+        let Command::Paste { name, surface_id, bracketed } = command else { return Ok(None); };
+        let text = self.entries.get(name).ok_or("Buffer not found")?;
+        if !bracketed && text.len() > 64 * 1024 { return Err("Raw buffer delivery exceeds 64 KiB; use bracketed paste"); }
+        Ok(Some(super::automation::SurfaceText { surface_id: surface_id.clone(), text: text.clone(), paste: *bracketed }))
+    }
     pub fn execute(&mut self, command: &Command) -> Result<Value, &'static str> {
         Ok(match command {
+            Command::Paste { .. } => return Err("Buffer paste requires a live terminal target"),
             Command::List => json!({"buffers":self.entries.iter().map(|(name, text)| json!({"name":name,"bytes":text.len()})).collect::<Vec<_>>(), "bytes":self.bytes,"max_buffers":MAX_COUNT,"max_bytes":MAX_TOTAL,"max_buffer_bytes":MAX_BUFFER}),
             Command::Get(name) => json!({"name":name,"text":self.entries.get(name).ok_or("Buffer not found")?}),
             Command::Delete(name) => {
@@ -53,6 +65,23 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn buffer_paste_requires_target_and_respects_input_limits_without_consuming_text() {
+        assert!(parse("buffer.paste", Some(&json!({}))).is_err());
+        assert!(parse("buffer.paste", Some(&json!({"surface_id":"42", "bracketed":"true"}))).is_err());
+        assert!(parse("buffer.paste", Some(&json!({"surface_id":"42", "activate":true}))).is_err());
+        let mut store = Store::default();
+        let command = parse("buffer.paste", Some(&json!({"surface_id":"42"}))).unwrap().unwrap();
+        assert!(store.paste_input(&command).is_err());
+        store.execute(&Command::Set("default".into(), "世界\n".into())).unwrap();
+        let input = store.paste_input(&command).unwrap().unwrap();
+        assert_eq!((input.surface_id.as_str(), input.text.as_str(), input.paste), ("42", "世界\n", false));
+        store.execute(&Command::Set("default".into(), "x".repeat(64 * 1024 + 1))).unwrap();
+        assert!(store.paste_input(&command).is_err());
+        let bracketed = parse("buffer.paste", Some(&json!({"surface_id":"42","bracketed":true}))).unwrap().unwrap();
+        assert!(store.paste_input(&bracketed).unwrap().unwrap().paste);
+        assert_eq!(store.bytes, 64 * 1024 + 1);
+    }
     #[test]
     fn replacement_limits_and_deletion_preserve_existing_buffers() {
         let mut store = Store::default();

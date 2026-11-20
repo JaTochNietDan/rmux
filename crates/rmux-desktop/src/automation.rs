@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 const MAX_REQUEST_BYTES: usize = 64 * 1024;
 const METHODS: &[&str] = &["system.ping", "system.capabilities"];
 const LIVE_METHODS: &[&str] = &[
-    "buffer.list", "buffer.get", "buffer.set", "buffer.delete",
+    "buffer.list", "buffer.get", "buffer.set", "buffer.delete", "buffer.paste",
     "system.quit",
     "system.ping",
     "system.capabilities",
@@ -74,6 +74,19 @@ fn target_id(text: &str) -> Result<gpui::EntityId, Failure> {
         return Err(missing());
     }
     Ok(id)
+}
+
+fn send_surface_input(input: &SurfaceText, cx: &gpui::App) -> RpcResult {
+    let target = target_id(&input.surface_id)?;
+    for handle in cx.windows() {
+        let Some(handle) = handle.downcast::<super::window_view::WorkspaceWindow>() else { continue; };
+        if let Ok(view) = handle.read(cx) {
+            if view.automation_surface_target(target, cx).is_some() {
+                return view.automation_send_text(input, target, cx);
+            }
+        }
+    }
+    Err(Failure { code: -32004, message: "Surface not found" })
 }
 
 pub(super) fn layout_snapshot<T>(
@@ -437,6 +450,10 @@ pub fn attach_live(cx: &mut gpui::App, stdio: bool, socket_directory: Option<std
                     });
                 }
                 if let Some(command) = &request.buffer_command {
+                    if let Some(input) = cx.global::<super::copy_buffers::Store>().paste_input(command)
+                        .map_err(|message| Failure { code: -32008, message })? {
+                        return send_surface_input(&input, cx);
+                    }
                     return cx.global_mut::<super::copy_buffers::Store>().execute(command)
                         .map_err(|message| Failure { code: -32008, message });
                 }
@@ -641,16 +658,7 @@ pub fn attach_live(cx: &mut gpui::App, stdio: bool, socket_directory: Option<std
                     return Err(Failure { code: -32004, message: "Surface not found" });
                 }
                 if let Some(input) = &request.surface_text {
-                    let target = target_id(&input.surface_id)?;
-                    for handle in cx.windows() {
-                        let Some(handle) = handle.downcast::<super::window_view::WorkspaceWindow>() else { continue; };
-                        if let Ok(view) = handle.read(cx) {
-                            if view.automation_surface_target(target, cx).is_some() {
-                                return view.automation_send_text(input, target, cx);
-                            }
-                        }
-                    }
-                    return Err(Failure { code: -32004, message: "Surface not found" });
+                    return send_surface_input(input, cx);
                 }
                 if let Some(focus) = &request.surface_focus {
                     let target = target_id(&focus.surface_id)?;
@@ -813,7 +821,7 @@ fn dispatch_inner(
     if notification
         && !matches!(
             method,
-            "buffer.set" | "buffer.delete" | "workspace.select"
+            "buffer.set" | "buffer.delete" | "buffer.paste" | "workspace.select"
                 | "surface.focus"
                 | "surface.send_text"
                 | "surface.send_key"

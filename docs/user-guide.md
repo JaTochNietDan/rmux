@@ -31,6 +31,7 @@ mode; c returns to line mode. Named buffers can be managed through the CLI/API:
 ```sh
 rmuxctl set-buffer --name notes 'text to retain'
 rmuxctl list-buffers
+rmuxctl paste-buffer --surface SURFACE_ID --name notes --bracketed
 rmuxctl buffer.get '{"name":"notes"}'
 rmuxctl buffer.delete '{"name":"notes"}'
 ```
@@ -40,8 +41,13 @@ independent of the clipboard, and disappear when the app exits. Limits are 32
 buffers, 1 MiB per buffer and 8 MiB total text; over-limit writes fail without
 eviction. The existing 64 KiB JSON request limit further constrains CLI writes
 (including JSON escaping). Lists expose names and byte counts, not contents.
-`buffer.get` and `buffer.delete` are rmux RPC extensions. Paste-buffer targeting
-and saving selections to named buffers from the UI remain pending.
+`buffer.get` and `buffer.delete` are rmux RPC extensions. `paste-buffer` requires an explicit surface ID and retains the buffer after
+queueing. It preserves terminal focus and scroll position. Raw delivery is capped
+at 64 KiB; `--bracketed` uses the terminal's paste encoding (including bracketed
+markers when requested by the application), up to 1 MiB. Busy/exited terminals
+and full queues report errors without automatic retry. RPC equivalent:
+`buffer.paste` with `surface_id`, optional `name`, and optional `bracketed` boolean.
+Saving selections to named buffers from the UI remains pending.
 
 **Choose Terminal Font…** searches installed font families for the current
 terminal. Type to filter, use arrows and Enter to choose, or Escape to cancel.
