@@ -210,11 +210,14 @@ impl PaneView {
         }
     }
 
-    fn tab_menu_element(&self, menu: TabMenu, cx: &mut Context<Self>) -> AnyElement {
+    fn tab_menu_element(&self, menu: TabMenu, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let enabled = self.tab_menu_enabled(menu.target);
+        let focus = self.terminals.iter().find(|terminal| terminal.entity_id() == menu.target).map(|terminal| terminal.read(cx).focus.clone());
+        let actions: [Box<dyn Action>; 8] = [Box::new(RenameTab), Box::new(CopyWorkingDirectory), Box::new(RevealWorkingDirectory), Box::new(MoveTabLeft), Box::new(MoveTabRight), Box::new(ClosePane), Box::new(CloseOtherTabs), Box::new(CloseTabsToRight)];
+        let hints: Vec<_> = actions.iter().map(|action| focus.as_ref().and_then(|focus| shortcuts::hint(action.as_ref(), focus, window))).collect();
         deferred(anchored().position(menu.position).snap_to_window().child(
             div().id("tab-context-menu").track_focus(&menu.focus).key_context("TabMenu")
-                .w(px(220.)).py_1().bg(rgb(0x292929)).border_1().border_color(rgb(0x465063)).rounded_md().shadow_md()
+                .w(px(340.).min((window.viewport_size().width - px(16.)).max(px(1.)))).py_1().bg(rgb(0x292929)).border_1().border_color(rgb(0x465063)).rounded_md().shadow_md()
                 .on_mouse_down_out(cx.listener(|this, _, window, cx| this.dismiss_tab_menu(window, cx)))
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
@@ -241,7 +244,7 @@ impl PaneView {
                     cx.notify();
                 }))
                 .children(TAB_MENU_LABELS.iter().enumerate().map(|(index, label)| {
-                    div().id(("tab-menu-item", index)).mx_1().px_3().py_2().rounded_sm().text_size(px(13.))
+                    div().id(("tab-menu-item", index)).mx_1().px_3().py_2().rounded_sm().text_size(px(13.)).flex().items_center().gap_3()
                         .when(enabled[index], |row| row.cursor_pointer()
                             .when(index == menu.selected, |row| row.bg(rgb(0x354969)))
                             .on_mouse_move(cx.listener(move |this, _, _, cx| {
@@ -256,7 +259,13 @@ impl PaneView {
                         .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
                             if event.standard_click() { this.activate_tab_menu(index, window, cx); }
                             cx.stop_propagation();
-                        })).child(*label)
+                        }))
+                        .child(div().flex_1().min_w_0().truncate().child(*label))
+                        .when_some(hints[index].clone(), |row, hint| row.child(
+                            div().id(("tab-menu-shortcut", index)).max_w(px(120.)).flex_shrink_0().truncate().text_xs().text_color(rgb(0xa0a0a0))
+                                .tooltip({ let hint = hint.clone(); move |_, cx| cx.new(|_| ControlHint(hint.clone().into())).into() })
+                                .child(hint)
+                        ))
                 }))
         )).with_priority(2).into_any_element()
     }
@@ -1219,7 +1228,7 @@ impl Render for PaneView {
                     if event.standard_click() { this.error = None; cx.stop_propagation(); cx.notify(); }
                 })))
             })
-            .when_some(self.tab_menu.clone(), |root, menu| root.child(self.tab_menu_element(menu, cx)))
+            .when_some(self.tab_menu.clone(), |root, menu| root.child(self.tab_menu_element(menu, window, cx)))
             .when_some(self.tab_picker.clone(), |root, (input, selected, scroll)| {
                 let matches = self.matching_tabs(cx);
                 let selected = matches.iter().map(|index| self.terminals[*index].entity_id())

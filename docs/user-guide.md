@@ -19,7 +19,8 @@ Right-click terminal content for Copy, Paste, Find, selection, directory actions
 and Clear Scrollback. Use Shift-right-click when a terminal app handles mouse
 input. The palette’s **Terminal Actions** command opens the same menu; custom
 shortcuts can bind `terminal_menu`. Arrow keys navigate, Enter activates, and
-Escape returns focus to the terminal.
+Escape returns focus to the terminal. Terminal and tab context menus show the
+current shortcut beside each bound action, including custom key sequences.
 
 Command-click (Control-click on Linux/Windows) opens terminal HTTP(S) links.
 If output parsing is busy, rmux reports a retry message instead of waiting; click

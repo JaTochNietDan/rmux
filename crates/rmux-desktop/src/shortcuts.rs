@@ -1,6 +1,14 @@
 use super::*;
 use anyhow::{Result, ensure};
 
+/// Resolve the current binding at the terminal that will receive the action.
+/// This respects custom overrides, disabled bindings and multi-stroke chords.
+pub(super) fn hint(action: &dyn Action, focus: &FocusHandle, window: &Window) -> Option<String> {
+    window.highest_precedence_binding_for_action_in(action, focus).map(|binding| {
+        binding.keystrokes().iter().map(ToString::to_string).collect::<Vec<_>>().join(" ")
+    })
+}
+
 #[derive(Clone, serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Binding {

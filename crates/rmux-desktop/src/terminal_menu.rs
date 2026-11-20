@@ -54,11 +54,13 @@ impl TerminalView {
             _ => {},
         }
     }
-    pub(super) fn terminal_menu_element(&self, menu: Menu, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn terminal_menu_element(&self, menu: Menu, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let enabled = self.menu_enabled();
+        let actions: [Box<dyn Action>; 8] = [Box::new(CopySelection), Box::new(CopySelectionWithLineBreaks), Box::new(Paste), Box::new(EditorSelectAll), Box::new(Find), Box::new(CopyWorkingDirectory), Box::new(RevealWorkingDirectory), Box::new(ClearScrollback)];
+        let hints: Vec<_> = actions.iter().map(|action| shortcuts::hint(action.as_ref(), &self.focus, window)).collect();
         deferred(anchored().position(menu.position).snap_to_window().child(
             div().id("terminal-context-menu").track_focus(&menu.focus).key_context("TerminalMenu")
-                .w(px(230.)).py_1().bg(rgb(0x292929)).text_color(rgb(0xd6d6d6))
+                .w(px(340.).min((window.viewport_size().width - px(16.)).max(px(1.)))).py_1().bg(rgb(0x292929)).text_color(rgb(0xd6d6d6))
                 .border_1().border_color(rgb(0x465063)).rounded_md().shadow_md().occlude()
                 .on_mouse_down_out(cx.listener(|this, _, window, cx| this.dismiss_terminal_menu(window, cx)))
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
@@ -86,7 +88,7 @@ impl TerminalView {
                     cx.notify();
                 }))
                 .children(LABELS.iter().enumerate().map(|(index, label)| {
-                    div().id(("terminal-menu-item", index)).mx_1().px_3().py_2().rounded_sm().text_size(px(13.))
+                    div().id(("terminal-menu-item", index)).mx_1().px_3().py_2().rounded_sm().text_size(px(13.)).flex().items_center().gap_3()
                         .when(enabled[index], |row| row.cursor_pointer()
                             .when(index == menu.selected, |row| row.bg(rgb(0x354969)))
                             .on_mouse_move(cx.listener(move |this, _, _, cx| {
@@ -98,7 +100,13 @@ impl TerminalView {
                         .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
                             if event.standard_click() { this.activate_terminal_menu(index, window, cx); }
                             cx.stop_propagation();
-                        })).child(*label)
+                        }))
+                        .child(div().flex_1().min_w_0().truncate().child(*label))
+                        .when_some(hints[index].clone(), |row, hint| row.child(
+                            div().id(("terminal-menu-shortcut", index)).max_w(px(120.)).flex_shrink_0().truncate().text_xs().text_color(rgb(0xa0a0a0))
+                                .tooltip({ let hint = hint.clone(); move |_, cx| cx.new(|_| pane_view::ControlHint(hint.clone().into())).into() })
+                                .child(hint)
+                        ))
                 }))
         )).with_priority(2).into_any_element()
     }

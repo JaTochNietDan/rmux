@@ -307,16 +307,7 @@ impl CommandPalette {
                 let PaletteEvent::Run(action) = &command.target else {
                     continue;
                 };
-                command.shortcut = window
-                    .highest_precedence_binding_for_action_in(action.as_ref(), &focus)
-                    .map(|binding| {
-                        binding
-                            .keystrokes()
-                            .iter()
-                            .map(ToString::to_string)
-                            .collect::<Vec<_>>()
-                            .join(" ")
-                    });
+                command.shortcut = shortcuts::hint(action.as_ref(), &focus, window);
             }
         }
         for (index, (id, name)) in workspaces.into_iter().enumerate() {

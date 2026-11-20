@@ -1487,7 +1487,7 @@ impl Focusable for TerminalView {
     }
 }
 impl Render for TerminalView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let entity = cx.weak_entity();
         self.rendered_paste_pending = self.session.paste_pending();
         div()
@@ -1621,7 +1621,7 @@ impl Render for TerminalView {
                 cx.listener(|this, event: &ClickEvent, _, cx| {
                     if event.standard_click() { this.error = None; cx.stop_propagation(); cx.notify(); }
                 }))))
-            .when_some(self.terminal_menu.clone(), |root, menu| root.child(self.terminal_menu_element(menu, cx)))
+            .when_some(self.terminal_menu.clone(), |root, menu| root.child(self.terminal_menu_element(menu, window, cx)))
     }
 }
 fn div_error(error: String, dismiss: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> impl IntoElement {

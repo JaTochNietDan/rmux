@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Terminal and tab context menus now show right-aligned shortcut hints resolved
+against the targeted terminal's active keymap. They share the command palette's
+highest-precedence binding lookup instead of hardcoding platform defaults;
+custom chords and disabled/overridden bindings follow the same lookup path.
+Menu widths are capped against the window, labels can truncate, and long shortcut
+hints have a bounded column and full-text tooltip. Desktop compilation passed.
+Rendered spacing, small-window clipping and live shortcut-label behavior remain
+native acceptance work while the Mac is locked.
+
 Linux/XDG notifications now retain async action handles and share macOS's
 click-to-current-terminal routing and 16-listener admission cap. The notification
 advertises the default Open Terminal action. Waiting races a two-minute deadline;
