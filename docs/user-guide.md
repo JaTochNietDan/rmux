@@ -1203,6 +1203,13 @@ Fish automatically loads its hooks after normal shell configuration for both
 login and non-login sessions. PowerShell integration remains pending. Run
 `mise run test-zsh-integration` for the focused hook check.
 
+Bash reports completed-command status through OSC 133 D before the next prompt.
+A leading hook captures the command's status and returns it unchanged for the
+first user prompt hook; the trailing integration hook emits the captured value.
+User hooks therefore cannot accidentally turn a failed command into a successful
+status report. The first prompt does not emit a synthetic completion. This does
+not add a command-start DEBUG trap or live running-command tracking.
+
 Bash integration can currently be sourced manually from
 `shell-integration/bash/rmux.bash` (also included in newly built macOS bundles).
 It reports encoded working directories and prompt boundaries, preserves existing

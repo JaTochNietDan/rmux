@@ -5,8 +5,19 @@
 _rmux_bash_loaded=1
 _rmux_bash_prompt_end=$'\\[\e]133;B\a\\]'
 
+# Run before user prompt hooks, which may overwrite the command's exit status.
+# Returning it also preserves the status seen by the first user hook.
+_rmux_bash_capture_status() {
+    _rmux_bash_command_status=$?
+    return "$_rmux_bash_command_status"
+}
+
 _rmux_bash_precmd() {
-    local command_status=$?
+    local command_status=${_rmux_bash_command_status-0}
+    if [[ ${_rmux_bash_prompt_seen-} == 1 ]]; then
+        builtin printf '\e]133;D;%d\a' "$command_status"
+    fi
+    _rmux_bash_prompt_seen=1
     local LC_ALL=C
     local encoded='' character hex byte index
     for (( index = 0; index < ${#PWD}; index++ )); do
@@ -26,6 +37,6 @@ _rmux_bash_precmd() {
 # Preserve scalar hooks, including multiline commands and trailing comments.
 # Modern Bash also supports PROMPT_COMMAND arrays; retain their element order.
 case $(declare -p PROMPT_COMMAND 2>/dev/null) in
-    'declare -a '*) PROMPT_COMMAND+=(_rmux_bash_precmd) ;;
-    *) PROMPT_COMMAND="${PROMPT_COMMAND-}"$'\n_rmux_bash_precmd' ;;
+    'declare -a '*) PROMPT_COMMAND=(_rmux_bash_capture_status "${PROMPT_COMMAND[@]}" _rmux_bash_precmd) ;;
+    *) PROMPT_COMMAND=$'_rmux_bash_capture_status\n'"${PROMPT_COMMAND-}"$'\n_rmux_bash_precmd' ;;
 esac

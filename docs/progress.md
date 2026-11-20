@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Added Bash completed-command status reports (OSC 133 D) before subsequent prompts.
+A leading status capture preserves $? for the first user prompt hook; the existing
+trailing integration emits the captured value even if user hooks change status.
+Scalar multiline/comment hooks and modern array hook ordering are retained, and
+first-prompt completion is suppressed. Existing Bash integration checks now verify
+statuses 0/1/7 and status delivery to user hooks; automatic non-login startup test
+also passed on macOS Bash. Modern array-hook runtime, command-start tracking and
+login-shell autoloading remain pending. Bash ignores --rcfile for login shells;
+no startup-file semantics were replaced to work around that limitation.
+
 Exposed macOS Option-key behavior in Settings: Terminal Alt or Native text,
 with guidance about accented/dead-key composition and Control+Option/navigation.
 The row participates in keyboard navigation and appears only on macOS. Added the

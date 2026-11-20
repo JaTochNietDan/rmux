@@ -37,6 +37,17 @@ with tempfile.TemporaryDirectory(prefix="rmux-bash-") as temporary:
     assert b"\x1b]133;A\x07" in output and b"\x1b]133;B\x07" in output
     assert b"replacement> \x1b]133;B\x07" in output
     assert b"\x1b]133;B\x07\x1b]133;B\x07" not in output
+    status_output = run("\n".join([
+        "PS1='status> '",
+        "PROMPT_COMMAND='printf \"USER-STATUS:%s\\n\" \"$?\"'",
+        source,
+        "false",
+        "(exit 7)",
+        "true",
+    ]))
+    assert b"USER-STATUS:1" in status_output and b"USER-STATUS:7" in status_output
+    for status in [0, 1, 7]:
+        assert f"\x1b]133;D;{status}\x07".encode() in status_output, "user prompt hooks must not replace command status"
     disabled = run(source, dict(environment, RMUX_SHELL_INTEGRATION="0"))
     assert b"\x1b]133;" not in disabled and b"\x1b]7;" not in disabled
-print("bash integration: existing hook, idempotence, prompt replacement, encoded cwd and opt-out passed")
+print("bash integration: existing hook, idempotence, prompt replacement, encoded cwd, command status and opt-out passed")

@@ -100,7 +100,7 @@ mod tests {
             .env("RMUX_SHELL_INTEGRATION", "1")
             .env("RMUX_BASH_WRAPPER", builder.get_env("RMUX_BASH_WRAPPER").unwrap()).output()?;
         assert!(output.status.success());
-        assert_eq!(String::from_utf8(output.stdout)?, "loaded|1|unset|printf user-hook\n_rmux_bash_precmd");
+        assert_eq!(String::from_utf8(output.stdout)?, "loaded|1|unset|_rmux_bash_capture_status\nprintf user-hook\n_rmux_bash_precmd");
         let path = wrapper.path().to_owned();
         drop(wrapper);
         assert!(!path.exists());
