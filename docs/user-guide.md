@@ -353,7 +353,10 @@ send while a search/copy/ports overlay or confirmation prompt is active. Existin
 leader-key, override and reload rules apply. Ghostty's configuration syntax and
 named key tables are not yet imported.
 
-The palette shows shortcuts resolved for its originating focus context.
+The palette shows shortcuts resolved for its originating focus context. Display
+labels use macOS modifier symbols (for example ⇧⌘P) or Ctrl/Alt/Shift names on
+other platforms. Pending chords use the same notation. Configuration still uses
+GPUI strings such as `cmd-shift-p`; displayed labels are not configuration syntax.
 
 Clipboard and lifecycle action names are `copy`, `paste`, `select_all`,
 `clear_scrollback`, `close_tab`, `close_workspace`, `close_window`, and `quit`.

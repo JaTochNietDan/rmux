@@ -416,7 +416,7 @@
       ],
       "acceptance": "Document action mapping and precedence; distinguish terminal actions from host actions.",
       "rmux_status": "in_progress",
-      "implementation": "rmux JSON custom bindings support terminal/window action scopes, configured commands, one/two-stroke sequences, prefix validation, precedence and reload. Text targets now send exact bounded UTF-8 input only to the focused terminal, with overlay/prompt guards. Custom action mapping also exposes menu clipboard, tab/window/quit, layout/session save/open, settings-file/appearance save and diagnostics operations without new handlers or defaults. Focused keymap tests cover text bytes, context exclusion and validation.",
+      "implementation": "rmux JSON custom bindings support terminal/window action scopes, configured commands, one/two-stroke sequences, prefix validation, precedence and reload. Text targets now send exact bounded UTF-8 input only to the focused terminal, with overlay/prompt guards. Resolved hints and pending chords use platform-style labels without changing GPUI configuration syntax; palette shortcut columns have bounded width. Custom action mapping also exposes menu clipboard, tab/window/quit, layout/session save/open, settings-file/appearance save and diagnostics operations without new handlers or defaults. Focused keymap tests cover text bytes, context exclusion and validation.",
       "remaining": "Ghostty syntax import, complete action mapping, named key tables and native chord/text input acceptance; this is not a claim of Ghostty configuration compatibility.",
       "implementation_sources": ["crates/rmux-desktop/src/shortcuts.rs", "crates/rmux-desktop/src/main.rs"],
       "progress_record": "docs/progress.md"

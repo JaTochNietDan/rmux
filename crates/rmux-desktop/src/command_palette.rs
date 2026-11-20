@@ -474,10 +474,11 @@ impl CommandPalette {
             )
             .when_some(self.commands[command].shortcut.clone(), |row, shortcut| {
                 row.child(
-                    div()
-                        .flex_shrink_0()
+                    div().id(("command-shortcut", command))
+                        .flex_shrink_0().max_w(relative(0.4)).truncate()
                         .text_xs()
                         .text_color(rgb(0xa0a0a0))
+                        .tooltip({ let hint: SharedString = shortcut.clone().into(); move |_, cx| cx.new(|_| pane_view::ControlHint(hint.clone())).into() })
                         .child(shortcut),
                 )
             }).into_any_element()

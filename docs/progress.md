@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Polished shortcut labels across palette/context-menu hints and pending chords.
+macOS uses compact modifier/key symbols; other platforms use Ctrl/Alt/Shift with
+named special keys. Binding hints respect GPUI's display key/modifiers (including
+Windows keyboard mapping) without changing parsing, precedence or dispatch.
+Palette shortcut columns are capped at 40% width with ellipsis/full-label tooltips
+so long bindings cannot crowd out command names. Desktop test compilation and
+focused platform notation/key-identity checks passed. Native glyph, narrow-window
+layout and keyboard-layout acceptance remain pending.
+
 Added a dedicated Open Layout Preset… picker in the File menu, general palette
 and layout_preset_picker custom action. It reuses fuzzy matching, virtualized rows,
 keyboard navigation, focus return and current-context shortcut hints. Shared preset

@@ -3887,7 +3887,7 @@ impl Render for WorkspaceWindow {
                 div().absolute().bottom(px(8.)).right(px(8.)).max_w(relative(0.8))
                     .px_3().py_2().rounded_md().border_1().border_color(rgb(0x465063))
                     .bg(rgb(0x292929)).text_color(rgb(0xdcdfe6)).text_size(px(12.)).shadow_md()
-                    .child(format!("{}  ·  Waiting for next key…", keys.iter().map(ToString::to_string).collect::<Vec<_>>().join(" ")))
+                    .child(format!("{}  ·  Waiting for next key…", keys.iter().map(shortcuts::key_label).collect::<Vec<_>>().join(" ")))
             ))
             .when_some(self.workspace_menu.clone(), |root, menu| root.child(self.workspace_menu_element(menu, window, cx)))
             .when_some(self.settings_state.clone(), |root, state| root.child(settings_view::panel(state, cx)))

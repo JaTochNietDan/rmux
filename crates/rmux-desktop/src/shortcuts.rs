@@ -5,8 +5,31 @@ use anyhow::{Result, ensure};
 /// This respects custom overrides, disabled bindings and multi-stroke chords.
 pub(super) fn hint(action: &dyn Action, focus: &FocusHandle, window: &Window) -> Option<String> {
     window.highest_precedence_binding_for_action_in(action, focus).map(|binding| {
-        binding.keystrokes().iter().map(ToString::to_string).collect::<Vec<_>>().join(" ")
+        binding.keystrokes().iter().map(|key| format_key_parts(key.key(), *key.modifiers(), cfg!(target_os = "macos"))).collect::<Vec<_>>().join(" ")
     })
+}
+
+/// Presentation only: parsing and keymap identity continue using GPUI's syntax.
+pub(super) fn key_label(key: &Keystroke) -> String { format_keystroke(key, cfg!(target_os = "macos")) }
+fn format_keystroke(key: &Keystroke, mac: bool) -> String { format_key_parts(&key.key, key.modifiers, mac) }
+fn format_key_parts(key: &str, modifiers: Modifiers, mac: bool) -> String {
+    let mut parts = Vec::with_capacity(6);
+    if modifiers.function { parts.push("Fn".to_owned()); }
+    if modifiers.control { parts.push(if mac { "⌃" } else { "Ctrl" }.to_owned()); }
+    if modifiers.alt { parts.push(if mac { "⌥" } else { "Alt" }.to_owned()); }
+    if modifiers.shift { parts.push(if mac { "⇧" } else { "Shift" }.to_owned()); }
+    if modifiers.platform { parts.push(if mac { "⌘" } else if cfg!(target_os = "windows") { "Win" } else { "Super" }.to_owned()); }
+    parts.push(match key {
+        "up" => "↑".into(), "down" => "↓".into(), "left" => "←".into(), "right" => "→".into(),
+        "enter" => if mac { "↩" } else { "Enter" }.into(),
+        "backspace" => if mac { "⌫" } else { "Backspace" }.into(),
+        "delete" => if mac { "⌦" } else { "Delete" }.into(),
+        "escape" => "Esc".into(), "tab" => if mac { "⇥" } else { "Tab" }.into(),
+        "space" => "Space".into(), "pageup" => "PgUp".into(), "pagedown" => "PgDn".into(),
+        "home" => "Home".into(), "end" => "End".into(), "insert" => "Insert".into(),
+        other => other.to_uppercase(),
+    });
+    parts.join(if mac { "" } else { "+" })
 }
 
 #[derive(Clone, serde::Deserialize, serde::Serialize)]
@@ -201,6 +224,20 @@ mod tests {
     use crate::{preferences::Preferences, ShowCommandPalette, ToggleSettings};
     use gpui::{KeyBinding, KeyContext, Keymap, Keystroke};
     fn settings(value: serde_json::Value) -> Preferences { serde_json::from_value(value).unwrap() }
+    #[test]
+    fn shortcut_labels_use_platform_notation_without_changing_key_identity() {
+        for (source, mac, expected) in [
+            ("cmd-shift-p", true, "⇧⌘P"), ("ctrl-alt-shift-left", true, "⌃⌥⇧←"),
+            ("ctrl-shift-p", false, "Ctrl+Shift+P"), ("alt-enter", false, "Alt+Enter"),
+            ("cmd-backspace", true, "⌘⌫"), ("f12", false, "F12"), ("space", true, "Space"),
+        ] {
+            let key = Keystroke::parse(source).unwrap();
+            let identity = key.to_string();
+            assert_eq!(super::format_keystroke(&key, mac), expected);
+            assert_eq!(key.to_string(), identity);
+        }
+    }
+
     #[test]
     fn override_precedence_context_and_disable_use_real_keymap() {
         let defaults = vec![KeyBinding::new("ctrl-shift-p", ShowCommandPalette, None)];
