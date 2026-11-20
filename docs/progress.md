@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Completed streaming OSC 99 Base64 text assembly: encoded groups and multibyte
+Unicode can span chunks, title/body maintain independent state, and independently
+padded chunks still concatenate. A final unpadded group is flushed at message
+completion; malformed or incomplete final text is discarded. Only up to three
+encoded characters and three undecoded UTF-8 bytes persist per text field, besides
+the bounded title/body. Plain text avoids a payload-sized scratch allocation.
+Four focused tests passed, including every split of multilingual encoded text,
+one-character chunks, interleaved title/body completion, padding, and malformed
+endings. This finishes the previously documented encoding-group gap; notification
+history, lifecycle actions and native UI acceptance remain outstanding.
+
 OSC 99 capability discovery now replies to empty `p=?` queries with supported
 text payloads and visibility policies, preserving safe identifiers and BEL/ST
 termination. Unsupported action/close/sound/expiry features are not advertised.

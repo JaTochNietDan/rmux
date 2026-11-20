@@ -632,7 +632,7 @@
       "acceptance": "Route notification sequences to their originating surface and deduplicate hook overlap.",
       "rmux_status": "in_progress",
       "implementation": "OSC 9/777 callback with bounded latest-message storage and unread markers for unfocused terminals; focused protocol test passed.",
-      "remaining": "Full OSC 99 lifecycle/action semantics, cross-chunk Base64 groups, notification history and native acceptance. Bounded chunked title/body, complete-chunk Base64, capability queries and always/unfocused/invisible filtering are implemented.",
+      "remaining": "Full OSC 99 lifecycle/action semantics, notification history and native acceptance. Bounded chunked title/body, streaming Base64/Unicode assembly, capability queries and always/unfocused/invisible filtering are implemented.",
       "implementation_sources": [
         "crates/rmux-terminal/src/lib.rs",
         "crates/rmux-terminal/src/session.rs",

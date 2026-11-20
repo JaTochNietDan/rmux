@@ -793,7 +793,8 @@ up to 16 pending message IDs, 256 title bytes and 1024 body bytes. OSC 99
 `o=always` (default), `o=unfocused` and `o=invisible` control whether a request
 is accepted. Empty `p=?` queries return `p=title,body,?` and the supported `o`
 values, preserving the query identifier and BEL/ST terminator. Queries do not
-create notifications. Base64 text accepts padded or unpadded complete chunks.
+create notifications. Base64 text accepts padded or unpadded chunks, including encoding groups and
+Unicode characters split across successive chunks.
 Hidden tabs/workspaces, zoom-hidden panes and inactive OS windows
 count as invisible. Suppressed requests are discarded, not replayed on blur.
 OSC 9;4 progress reports show a percentage or Working/Paused/Error label in the
