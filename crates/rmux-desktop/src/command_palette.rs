@@ -30,7 +30,7 @@ pub(super) fn navigated_result(selected: usize, count: usize, key: &str) -> Opti
 
 // Keep the destination within one viewport of the starting row. Always advance
 // at least one result, including in a window shorter than a single row.
-fn paged_result(selected: usize, count: usize, backwards: bool, viewport: f32, row_height: impl Fn(usize) -> f32) -> Option<usize> {
+pub(super) fn paged_result(selected: usize, count: usize, backwards: bool, viewport: f32, row_height: impl Fn(usize) -> f32) -> Option<usize> {
     if count == 0 { return None; }
     let mut next = selected.min(count - 1);
     let mut occupied = row_height(next);

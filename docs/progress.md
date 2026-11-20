@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Notification Page Up/Down now uses the visible scroll viewport and measured card
+strides (including gaps), sharing the palette's bounded paging algorithm instead
+of jumping eight messages. Expanded cards participate at their actual height;
+page movement advances at least one message and clamps at list edges. All three
+focused navigation tests passed, and the desktop test target compiled. Native
+expanded-card scrolling and layout measurements remain to be visually accepted.
+
 Group header notification previews now choose the newest unread message across
 all members, including collapsed members, instead of the first member with an
 unread message. The sidebar retains the existing arrival sequence alongside its

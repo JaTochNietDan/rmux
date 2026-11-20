@@ -495,7 +495,8 @@ focused, Command-C on macOS or Control-C on Linux/Windows copies the selected
 message. Copying preserves unread state and does not open the source terminal.
 
 The notification panel owns keyboard focus while open. Up/down, Page Up/Down,
-and Tab/Shift-Tab navigate messages; Enter/Space closes the panel and opens the
+and Tab/Shift-Tab navigate messages. Page keys use the visible panel height and
+measured card sizes, advancing at least one message. Enter/Space closes the panel and opens the
 selected terminal. Delete/Backspace dismisses the selected message, and Escape
 closes the panel and restores its prior focus. Selection tracks terminal and message revision
 as messages arrive; the panel and Settings are mutually exclusive.

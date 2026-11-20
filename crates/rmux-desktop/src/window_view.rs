@@ -1523,7 +1523,21 @@ impl WorkspaceWindow {
         let key = event.keystroke.key.as_str();
         let selected = targets.iter().position(|row| Some((row.1, row.2)) == state.selected).unwrap_or(0);
         let direction = if key == "tab" { if event.keystroke.modifiers.shift { "up" } else { "down" } } else { key };
-        if let Some(index) = command_palette::navigated_result(selected, targets.len(), direction) {
+        let destination = if matches!(direction, "pageup" | "pagedown") {
+            command_palette::paged_result(selected, targets.len(), direction == "pageup",
+                f32::from(state.scroll.bounds().size.height), |index| {
+                    // Child zero is the keyboard hint. Include the inter-card gap
+                    // in the measured stride; expanded cards can exceed a viewport.
+                    state.scroll.bounds_for_item(index + 1).map(|bounds| {
+                        state.scroll.bounds_for_item(index + 2)
+                            .map(|next| f32::from(next.top() - bounds.top()))
+                            .unwrap_or_else(|| f32::from(bounds.size.height) + 8.)
+                    }).unwrap_or(1.).max(1.)
+                })
+        } else {
+            command_palette::navigated_result(selected, targets.len(), direction)
+        };
+        if let Some(index) = destination {
             state.selected = Some((targets[index].1, targets[index].2));
             state.scroll.scroll_to_item(index + 1);
             cx.notify();
