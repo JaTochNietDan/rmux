@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+The tab picker now pages by its measured viewport and row heights, accounting
+for directory subtitles instead of jumping eight results. Empty/whitespace-only
+queries return original tab order directly, avoiding per-tab lowercase title/path
+allocations, scoring and sorting. Three focused navigation tests passed and the
+desktop test target compiled. Native small-pane paging remains unverified; no
+latency or memory reduction has been measured for the empty-query fast path.
+
 Clipboard cancellation now also stops waiting for a busy parser. Pending copies
 use opportunistic lock attempts with 1 ms backoff and recheck their generation
 on contention; there is no idle polling. A focused regression held the parser

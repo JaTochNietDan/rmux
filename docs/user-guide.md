@@ -859,7 +859,8 @@ in this window. Search by its name to choose a destination directly; numbered
 results distinguish duplicate names and resolve targets by stable workspace ID.
 Multi-tab pane headers also have a `⌄` tab picker for crowded strips. Use its list
 to see titles and unread markers; Up/Down navigates, Enter selects, and Escape
-returns to the terminal without switching tabs.
+returns to the terminal without switching tabs. Page Up/Down advances by the
+visible menu height using measured row sizes, including directory subtitles.
 Open it directly with ⌘⇧T on macOS or Ctrl+Alt+Shift+T elsewhere, or choose
 “Choose Terminal Tab” in the command palette. Type to filter titles and working
 directories: all whitespace-separated query words must match either field,

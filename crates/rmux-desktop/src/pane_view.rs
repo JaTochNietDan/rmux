@@ -129,6 +129,9 @@ impl PaneView {
     fn matching_tabs(&self, cx: &App) -> Vec<usize> {
         let query = self.tab_picker.as_ref().map(|(input, _, _)| input.read(cx).value().to_lowercase()).unwrap_or_default();
         let words: Vec<_> = query.split_whitespace().collect();
+        // An empty picker follows tab order; avoid allocating/lowercasing every
+        // title and directory merely to assign identical scores and sort them.
+        if words.is_empty() { return (0..self.terminals.len()).collect(); }
         let mut matches: Vec<_> = (0..self.terminals.len()).filter_map(|index| {
             let title = self.tab_title(index, cx).to_lowercase();
             let directory = self.terminals[index].read(cx).snapshot_directory.as_ref()
@@ -918,7 +921,16 @@ impl Render for PaneView {
                         let Some((input, selected, scroll)) = &mut this.tab_picker else { return; };
                         if input.read(cx).is_composing() { return; }
                         let current = matches.iter().position(|index| Some(this.terminals[*index].entity_id()) == *selected).unwrap_or(0);
-                        if let Some(next) = command_palette::navigated_result(current, matches.len(), &event.keystroke.key) {
+                        let key = event.keystroke.key.as_str();
+                        let destination = if matches!(key, "pageup" | "pagedown") {
+                            command_palette::paged_result(current, matches.len(), key == "pageup",
+                                f32::from(scroll.bounds().size.height), |index| {
+                                    scroll.bounds_for_item(index).map(|bounds| f32::from(bounds.size.height)).unwrap_or(1.).max(1.)
+                                })
+                        } else {
+                            command_palette::navigated_result(current, matches.len(), key)
+                        };
+                        if let Some(next) = destination {
                             *selected = Some(this.terminals[matches[next]].entity_id());
                             scroll.scroll_to_item(next); cx.stop_propagation(); cx.notify();
                         }
