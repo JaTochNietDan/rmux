@@ -1075,3 +1075,7 @@ and notification panel. It acknowledges bell, notification and task-status
 alerts across all workspaces and hidden tabs in the current window while keeping
 messages visible. Other windows retain their unread state. A custom shortcut can
 bind `mark_all_read`. Clear all dismisses messages instead.
+
+Terminal, tab and split-operation errors appear in dismissible banners. Use the
+copy icon to copy the full message or the close icon to dismiss it. Long messages
+scroll inside the banner; dismissal does not retry the failed operation.

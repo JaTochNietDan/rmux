@@ -1511,11 +1511,29 @@ impl Render for TerminalView {
                 root.child(status_view::panel(records, cx))
             })
             .child(TerminalElement { view: cx.entity() })
-            .when_some(self.error.clone(), |div, error| div.child(div_error(error)))
+            .when_some(self.error.clone(), |div, error| div.child(div_error(error,
+                cx.listener(|this, event: &ClickEvent, _, cx| {
+                    if event.standard_click() { this.error = None; cx.stop_propagation(); cx.notify(); }
+                }))))
     }
 }
-fn div_error(error: String) -> impl IntoElement {
-    div().text_color(rgb(0xff7777)).child(error)
+fn div_error(error: String, dismiss: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> impl IntoElement {
+    let copy = error.clone();
+    div().flex().items_start().gap_2().px_2().py_1().flex_shrink_0().min_w_0()
+        .bg(rgb(0x302626)).border_t_1().border_color(rgb(0x644141))
+        .text_sm().text_color(rgb(0xf2a5a5))
+        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .on_mouse_down(MouseButton::Middle, |_, _, cx| cx.stop_propagation())
+        .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
+        .on_mouse_move(|_, _, cx| cx.stop_propagation())
+        .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
+        .child(div().id("error-message").flex_1().min_w_0().max_h(px(96.)).overflow_y_scroll().py_1().child(error))
+        .child(pane_view::pane_control("copy-error", "Copy error message")
+            .on_click(move |event, _, cx| {
+                if event.standard_click() { clipboard::write(ClipboardItem::new_string(copy.clone()), cx); cx.stop_propagation(); }
+            }).child(icons::icon("copy")))
+        .child(pane_view::pane_control("dismiss-error", "Dismiss error message")
+            .on_click(dismiss).child(icons::icon("close")))
 }
 fn terminal_button(button: MouseButton) -> Option<rmux_terminal::mouse::Button> {
     Some(match button {
@@ -2519,7 +2537,10 @@ impl Render for Workspace {
                         ))
                     }),
             )
-            .when_some(self.error.clone(), |div, error| div.child(div_error(error)))
+            .when_some(self.error.clone(), |div, error| div.child(div_error(error,
+                cx.listener(|this, event: &ClickEvent, _, cx| {
+                    if event.standard_click() { this.error = None; cx.stop_propagation(); cx.notify(); }
+                }))))
     }
 }
 fn open_window(benchmark_panes: Option<usize>, cx: &mut App) -> anyhow::Result<()> {

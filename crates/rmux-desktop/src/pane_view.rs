@@ -863,7 +863,9 @@ impl Render for PaneView {
                     .child(input.clone()))
             })
             .when_some(self.error.clone(), |root, error| {
-                root.child(div_error(error))
+                root.child(div_error(error, cx.listener(|this, event: &ClickEvent, _, cx| {
+                    if event.standard_click() { this.error = None; cx.stop_propagation(); cx.notify(); }
+                })))
             })
             .when_some(self.tab_picker.clone(), |root, (input, selected, scroll)| {
                 let matches = self.matching_tabs(cx);

@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Terminal, pane and workspace errors now share a compact banner with copy and
+dismiss icon controls. Text scrolls within a 96px cap, controls retain 28px hit
+areas, and banner pointer events are isolated from terminal input/selection.
+Copy participates in the existing clipboard generation ordering; dismissal only
+clears the owning view's error and does not retry an operation. Desktop compilation
+passed. Native clipping, scrolling, tooltip and click acceptance remain pending.
+
 The split-tree mutation itself now enforces the restore depth limit, closing the
 remaining break-tab path around the creation guard. Break Tab checks before
 constructing a destination or removing its live source tab and reports the same
