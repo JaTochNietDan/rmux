@@ -1102,7 +1102,7 @@ still owns focus. Rows are virtualized for larger terminal lists.
 Its panel samples up to 256 terminals in the current window and provides manual
 Refresh/Close controls, including explicit busy or unavailable rows.
 Rows initially sort by resident storage; use the sort control or command palette's
-Cycle Terminal Memory Sort to switch to shell or foreground RSS/CPU, descending with missing
+Cycle Terminal Memory Sort to switch to shell, foreground or shell-tree RSS/CPU, descending with missing
 samples last. Sorting reuses existing samples without another process scan.
 Click a row to focus its terminal. Copy exports the last sample as JSON in the
 displayed order, with raw byte counts and explicit unavailable values.
@@ -1114,8 +1114,18 @@ under `foreground_group_leader` in copied JSON. Results are discarded if that
 terminal's foreground group changes before sampling completes. Windows does not
 yet expose this information. This measures the leader alone; a pipeline or compiler
 can have additional workers whose memory is not included.
-These process figures exclude descendants and helpers, and are separate from
-Ghostty screen storage. Sampling is manual, with no idle polling timer.
+The separate **Shell tree** row includes the shell and its descendants, including
+background workers. JSON exports it under `shell_tree`, with sampled/expected
+process counts and a `complete` flag. Sampling retains at most 4,096 process
+metrics across the window. Oversized trees are unavailable; capped, exited or
+changed members produce a partial total. Parent/start-time snapshots before and
+after sampling exclude changed ownership chains. Process discovery still reads
+the host process table. Reparented helpers outside the shell tree are excluded.
+Tree CPU is unavailable until all members have valid baselines. Summed RSS can
+count shared pages more than once; it is not unique physical memory. Shell and
+foreground figures overlap the tree: do not add them together. All process
+figures are separate from Ghostty screen storage. Sampling is manual, with no
+idle polling timer.
 The panel's rmux summary reports application-process RSS and CPU across all
 windows, also included under `application` in copied JSON. RSS is the operating
 system's resident process measure, not a GPU allocation total. Screen storage is

@@ -8,14 +8,16 @@ pub enum Sort {
     ShellCpu,
     ForegroundMemory,
     ForegroundCpu,
+    TreeMemory,
+    TreeCpu,
 }
 
 impl Sort {
     pub fn next(self) -> Self {
-        match self { Self::Storage => Self::ShellMemory, Self::ShellMemory => Self::ShellCpu, Self::ShellCpu => Self::ForegroundMemory, Self::ForegroundMemory => Self::ForegroundCpu, Self::ForegroundCpu => Self::Storage }
+        match self { Self::Storage => Self::ShellMemory, Self::ShellMemory => Self::ShellCpu, Self::ShellCpu => Self::ForegroundMemory, Self::ForegroundMemory => Self::ForegroundCpu, Self::ForegroundCpu => Self::TreeMemory, Self::TreeMemory => Self::TreeCpu, Self::TreeCpu => Self::Storage }
     }
     fn label(self) -> &'static str {
-        match self { Self::Storage => "Screen storage ↓", Self::ShellMemory => "Shell RSS ↓", Self::ShellCpu => "Shell CPU ↓", Self::ForegroundMemory => "Foreground RSS ↓", Self::ForegroundCpu => "Foreground CPU ↓" }
+        match self { Self::Storage => "Screen storage ↓", Self::ShellMemory => "Shell RSS ↓", Self::ShellCpu => "Shell CPU ↓", Self::ForegroundMemory => "Foreground RSS ↓", Self::ForegroundCpu => "Foreground CPU ↓", Self::TreeMemory => "Shell tree RSS ↓", Self::TreeCpu => "Shell tree CPU ↓" }
     }
     pub(super) fn indices(self, rows: &[Row]) -> Vec<usize> {
         let mut indices: Vec<_> = (0..rows.len()).collect();
@@ -28,6 +30,8 @@ impl Sort {
             Self::ShellCpu => b.process.and_then(|s| s.cpu_percent).partial_cmp(&a.process.and_then(|s| s.cpu_percent)).unwrap_or(std::cmp::Ordering::Equal),
             Self::ForegroundMemory => b.foreground.map(|s| s.resident_bytes).cmp(&a.foreground.map(|s| s.resident_bytes)),
             Self::ForegroundCpu => b.foreground.and_then(|s| s.cpu_percent).partial_cmp(&a.foreground.and_then(|s| s.cpu_percent)).unwrap_or(std::cmp::Ordering::Equal),
+            Self::TreeMemory => b.tree.map(|s| s.resident_bytes).cmp(&a.tree.map(|s| s.resident_bytes)),
+            Self::TreeCpu => b.tree.and_then(|s| s.cpu_percent).partial_cmp(&a.tree.and_then(|s| s.cpu_percent)).unwrap_or(std::cmp::Ordering::Equal),
             }
         });
         indices
@@ -43,6 +47,7 @@ pub struct Row {
     pub name: String,
     pub pid: Option<u32>,
     pub process: Option<process_metrics::Sample>,
+    pub tree: Option<process_metrics::TreeSample>,
     pub foreground_pid: Option<u32>,
     pub foreground: Option<process_metrics::Sample>,
     pub usage: Option<rmux_terminal::MemoryUsage>,
@@ -56,6 +61,7 @@ pub fn report(rows: &[Row], application: Option<process_metrics::Sample>, sort: 
         "workspace_id":row.workspace_id.to_string(), "surface_id":row.surface_id.to_string(),
         "name":row.name,"process_id":row.pid,"status":row.status,
         "shell_process":row.process,
+        "shell_tree":row.tree,
         "foreground_group_leader":{"process_id":row.foreground_pid,"sample":row.foreground},
         "memory":row.usage.map(|usage| serde_json::json!({
             "primary_resident_bytes":usage.primary_resident_bytes,"alternate_resident_bytes":usage.alternate_resident_bytes,
@@ -91,11 +97,11 @@ pub fn panel(rows: &[Row], application: Option<process_metrics::Sample>, sort: S
             .child(application.map(|sample| format!("rmux · RSS {} · CPU {} · all windows", mib(sample.resident_bytes), sample.cpu_percent.map(|cpu| format!("{cpu:.1}%")).unwrap_or_else(|| "— refresh after baseline".into()))).unwrap_or_else(|| "rmux process sample unavailable".into())))
         .child(div().id("memory-sort").mx_3().mb_1().text_xs().cursor_pointer()
             .text_color(rgb(0xb4c7ef)).hover(|style| style.text_color(rgb(0xffffff)))
-            .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("Cycle sort: screen storage, shell RSS/CPU, foreground RSS/CPU".into())).into())
+            .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("Cycle sort: screen storage, shell RSS/CPU, foreground RSS/CPU, shell tree RSS/CPU".into())).into())
             .on_click(|event, window, cx| { if event.standard_click() { window.dispatch_action(Box::new(CycleTerminalMemorySort), cx); } })
             .child(sort.label()))
         .child(div().px_3().pb_2().text_xs().text_color(rgb(0xa0a0a0))
-            .child("Screen storage excludes app/GPU assets · process samples exclude descendants · up to 256 terminals · manual refresh"))
+            .child("Shell tree includes descendants; RSS may count shared pages more than once · up to 256 terminals / 4,096 processes · manual refresh"))
         .child(list(scroll, move |index, _, cx| {
             entity.update(cx, |root, cx| root.render_memory_row(indices[index], index == selected, cx))
         }).with_sizing_behavior(ListSizingBehavior::Auto).flex_1().min_h_0().w_full())
@@ -122,6 +128,7 @@ pub fn render_row(row: &Row, index: usize, selected: bool, cx: &mut Context<wind
         .child(div().text_sm().truncate().child(format!("{} · PID {}", row.name, row.pid.map(|pid| pid.to_string()).unwrap_or_else(|| "—".into()))))
         .child(div().text_xs().text_color(rgb(0xa0a0a0)).child(detail))
         .child(div().text_xs().text_color(rgb(0xa0a0a0)).child(row.process.map(|sample| format!("Shell RSS {} · CPU {}", mib(sample.resident_bytes), sample.cpu_percent.map(|cpu| format!("{cpu:.1}%")).unwrap_or_else(|| "— refresh after baseline".into()))).unwrap_or_else(|| "Shell process sample unavailable".into())))
+        .child(div().text_xs().text_color(rgb(0xa0a0a0)).child(row.tree.map(|sample| format!("Shell tree RSS {} · CPU {} · {}/{} processes{}", mib(sample.resident_bytes), sample.cpu_percent.map(|cpu| format!("{cpu:.1}%")).unwrap_or_else(|| "—".into()), sample.sampled_processes, sample.expected_processes, if sample.complete { "" } else { " · partial" })).unwrap_or_else(|| "Shell tree unavailable or ownership changed".into())))
         .when_some(row.foreground_pid, |row_element, pid| row_element.child(div().text_xs().text_color(rgb(0xa0a0a0))
             .child(row.foreground.map(|sample| format!("Foreground PID {pid} · RSS {} · CPU {}", mib(sample.resident_bytes), sample.cpu_percent.map(|cpu| format!("{cpu:.1}%")).unwrap_or_else(|| "— refresh after baseline".into())))
                 .unwrap_or_else(|| format!("Foreground PID {pid} · unavailable or job changed")))))

@@ -1608,8 +1608,8 @@
       ],
       "acceptance": "Attribute CPU and memory to surfaces and helper processes using bounded sampling.",
       "rmux_status": "in_progress",
-      "implementation": "On-demand surface.memory_usage RPC and a manual-refresh memory panel sample Ghostty storage with nonblocking engine access. Panel includes root-shell RSS/CPU, bounded to 256 terminals, background sampling, sorting, focus navigation and JSON copy.",
-      "remaining": "Descendant/helper process CPU and RSS attribution, GPU allocation accounting, native panel visual/interaction acceptance and sampling performance measurements.",
+      "implementation": "On-demand surface.memory_usage RPC and a manual-refresh memory panel sample Ghostty storage with nonblocking engine access. Panel includes root-shell and shell-tree RSS/CPU, bounded to 256 terminals and 4,096 sampled processes, background sampling, sorting, focus navigation and JSON copy. Tree ownership is checked before/after sampling; partial totals carry counts and withhold CPU.",
+      "remaining": "Reparented helper attribution, GPU allocation accounting, native panel visual/interaction acceptance and tree-sampling performance measurements.",
       "progress_record": "docs/progress.md"
     },
     {
@@ -1634,8 +1634,8 @@
       ],
       "acceptance": "Attribute runaway memory to the correct process generation; distinguish warning from termination policy.",
       "rmux_status": "in_progress",
-      "implementation": "Manual terminal memory panel samples up to 256 shell processes plus rmux on a background worker, reporting RSS and CPU after a valid baseline, alongside Ghostty screen storage. Sorting, JSON copy and terminal focus are implemented. GPUI virtualized rows limit UI element construction to the requested range; refresh/sort/close reset list measurements. No idle polling is added. Dedicated panel keyboard focus supports arrows/Home/End, Enter to focus, refresh/sort/copy/close keys and prior-focus restoration on close. Selection follows stable surface identity through sort/refresh. Unix foreground process-group leader PID/RSS/CPU sampling, sorting and JSON export are implemented, with completion-time ownership rechecks and a 513-process batch cap. Desktop compilation and real-PTY foreground identity checks pass; native keyboard acceptance remains pending.",
-      "remaining": "Descendant aggregation, Windows foreground process attribution and warning/termination policy, native panel scrolling and focus acceptance, per-pane upstream UI parity and measured rendering cost; other-platform runtime acceptance.",
+      "implementation": "Manual terminal memory panel samples up to 256 shell processes plus rmux on a background worker, reporting RSS and CPU after a valid baseline, alongside Ghostty screen storage. Sorting, JSON copy and terminal focus are implemented. GPUI virtualized rows limit UI element construction to the requested range; refresh/sort/close reset list measurements. No idle polling is added. Dedicated panel keyboard focus supports arrows/Home/End, Enter to focus, refresh/sort/copy/close keys and prior-focus restoration on close. Selection follows stable surface identity through sort/refresh. Unix foreground process-group leader PID/RSS/CPU sampling, sorting and JSON export are implemented, with completion-time ownership rechecks and a 513-process batch cap. Shell-tree aggregation, RSS/CPU sorting and JSON export now include descendants with a 4,096-process metric cap and parent/start-time ownership rechecks. Partial totals are labeled. Live shell/child, aggregation and ownership regressions pass. Desktop compilation and real-PTY foreground identity checks pass; native keyboard acceptance remains pending.",
+      "remaining": "Windows foreground process attribution and warning/termination policy, native panel scrolling and focus acceptance, per-pane upstream UI parity and measured rendering cost; other-platform runtime acceptance.",
       "implementation_sources": [
         "crates/rmux-desktop/src/memory_view.rs",
         "crates/rmux-desktop/src/process_metrics.rs",

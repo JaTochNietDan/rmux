@@ -34,6 +34,7 @@ mod settings_view;
 mod shortcuts;
 mod process_metrics;
 mod ports;
+mod process_tree;
 mod ports_view;
 mod copy_mode;
 mod copy_buffers;

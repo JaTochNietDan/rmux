@@ -9,6 +9,15 @@ pub struct Sample {
     pub start_time_seconds: u64,
 }
 
+#[derive(Clone, Copy, serde::Serialize)]
+pub struct TreeSample {
+    pub resident_bytes: u64,
+    pub cpu_percent: Option<f32>,
+    pub sampled_processes: usize,
+    pub expected_processes: usize,
+    pub complete: bool,
+}
+
 #[derive(Default)]
 pub struct Sampler {
     system: System,
@@ -18,9 +27,45 @@ pub struct Sampler {
 }
 
 impl Sampler {
+    #[cfg(test)]
     pub fn sample(&mut self, pids: impl IntoIterator<Item = u32>) -> HashMap<u32, Sample> {
-        // One application process plus at most 256 shells and 256 foreground leaders.
-        let mut pids: Vec<_> = pids.into_iter().take(513).map(Pid::from_u32).collect();
+        self.sample_bounded(pids, 513)
+    }
+
+    pub fn sample_with_trees(&mut self, pids: impl IntoIterator<Item = u32>, roots: impl IntoIterator<Item = u32>, canceled: &std::sync::atomic::AtomicBool) -> (HashMap<u32, Sample>, HashMap<u32, TreeSample>) {
+        use crate::process_tree::{process_snapshot, descendants, stable_owned};
+        use std::collections::BTreeSet;
+        let stopped = || canceled.load(std::sync::atomic::Ordering::Relaxed);
+        if stopped() { return Default::default(); }
+        let before = process_snapshot();
+        let mut selected: BTreeSet<_> = pids.into_iter().take(513).collect();
+        let mut trees = HashMap::new();
+        for root in roots.into_iter().take(256) {
+            if stopped() { return Default::default(); }
+            let Ok(owned) = descendants(root, before.iter().map(|(pid, identity)| (*pid, identity.parent))) else { continue; };
+            let ordered: BTreeSet<_> = owned.iter().copied().collect();
+            for pid in ordered { if selected.len() == 4096 { break; } selected.insert(pid); }
+            trees.insert(root, owned);
+        }
+        if stopped() { return Default::default(); }
+        let samples = self.sample_bounded(selected, 4096);
+        if stopped() { return Default::default(); }
+        let after = process_snapshot();
+        let mut totals = HashMap::new();
+        for (root, owned) in trees {
+            if stopped() { return Default::default(); }
+            let Ok(stable) = stable_owned(root, &before, &after) else { continue; };
+            let valid: Vec<_> = owned.iter().filter(|pid| stable.contains(pid)).filter_map(|pid| {
+                samples.get(pid).filter(|sample| before.get(pid).is_some_and(|identity| identity.started == sample.start_time_seconds))
+            }).collect();
+            totals.insert(root, aggregate_tree(owned.len(), valid.into_iter()));
+        }
+        (samples, totals)
+    }
+
+    fn sample_bounded(&mut self, pids: impl IntoIterator<Item = u32>, limit: usize) -> HashMap<u32, Sample> {
+        // Direct diagnostics use 513 slots; tree diagnostics share 4096 slots.
+        let mut pids: Vec<_> = pids.into_iter().take(limit).map(Pid::from_u32).collect();
         pids.sort_unstable();
         pids.dedup();
         // Reset on membership change so the process cache cannot grow as tabs
@@ -92,9 +137,62 @@ impl Sampler {
     }
 }
 
+fn aggregate_tree<'a>(expected: usize, samples: impl Iterator<Item = &'a Sample>) -> TreeSample {
+    let mut result = TreeSample { resident_bytes: 0, cpu_percent: Some(0.), sampled_processes: 0, expected_processes: expected, complete: false };
+    for sample in samples {
+        result.sampled_processes += 1;
+        result.resident_bytes = result.resident_bytes.saturating_add(sample.resident_bytes);
+        result.cpu_percent = result.cpu_percent.zip(sample.cpu_percent).map(|(sum, cpu)| sum + cpu).filter(|cpu| cpu.is_finite());
+    }
+    result.complete = result.sampled_processes == expected;
+    if !result.complete { result.cpu_percent = None; }
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn tree_totals_require_complete_cpu_baselines() {
+        let first = Sample { resident_bytes: 10, cpu_percent: Some(12.), start_time_seconds: 1 };
+        let second = Sample { resident_bytes: 20, cpu_percent: Some(34.), start_time_seconds: 2 };
+        let total = aggregate_tree(2, [&first, &second].into_iter());
+        assert!(total.complete);
+        assert_eq!(total.resident_bytes, 30);
+        assert_eq!(total.cpu_percent, Some(46.));
+        let partial = aggregate_tree(3, [&first, &second].into_iter());
+        assert!(!partial.complete);
+        assert_eq!(partial.sampled_processes, 2);
+        assert_eq!(partial.cpu_percent, None);
+        let unready = Sample { cpu_percent: None, ..second };
+        assert_eq!(aggregate_tree(2, [&first, &unready].into_iter()).cpu_percent, None);
+    }
+    #[cfg(unix)]
+    #[test]
+    fn shell_tree_samples_live_child_and_honors_cancellation() {
+        use std::io::BufRead;
+        struct Child(std::process::Child);
+        impl Drop for Child {
+            fn drop(&mut self) { let _ = self.0.kill(); let _ = self.0.wait(); }
+        }
+        let canceled = std::sync::atomic::AtomicBool::new(true);
+        assert!(Sampler::default().sample_with_trees([0], [0], &canceled).0.is_empty());
+        // A foreground child blocks on a pipe until the test closes stdin.
+        let mut shell = Child(std::process::Command::new("/bin/sh")
+            .args(["-c", "sh -c 'echo ready; read line'; :"])
+            .stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).spawn().unwrap());
+        let mut ready = String::new();
+        std::io::BufReader::new(shell.0.stdout.take().unwrap()).read_line(&mut ready).unwrap();
+        assert_eq!(ready.trim(), "ready");
+        let (_, trees) = Sampler::default().sample_with_trees([shell.0.id()], [shell.0.id()], &std::sync::atomic::AtomicBool::new(false));
+        drop(shell.0.stdin.take());
+        shell.0.wait().unwrap();
+        let tree = trees.get(&shell.0.id()).expect("live shell tree");
+        assert!(tree.complete);
+        assert!(tree.sampled_processes >= 2);
+        assert!(tree.resident_bytes > 0);
+        assert!(tree.cpu_percent.is_none());
+    }
     /// Explicit diagnostic benchmark, excluded from ordinary test runs.
     #[cfg(unix)]
     #[test]

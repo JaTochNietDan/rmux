@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Added shell-tree memory/CPU totals to the manual memory panel, sort modes and
+JSON export. Shared process-tree ownership checks with the port scanner;
+parent/start-time snapshots before/after sampling reject changed ancestors.
+The metric batch is capped at 4,096 processes across 256 terminal rows; partial
+totals show sampled/expected counts and withhold CPU. Host process-table discovery
+is separate from that cap. Shell and foreground values remain separately labeled,
+and summed RSS explicitly notes shared-page double counting. Eight focused tests
+passed, including a live shell/child, ownership changes, cancellation, exited
+process caches, the tree-size cap and CPU aggregation. Desktop compilation passed.
+Native panel visuals and tree-sampling performance measurements remain pending.
+
 Added Open Folder through the File menu, command palette, directory/error views
 and `open_folder` custom bindings. The native chooser accepts one folder and
 feeds the bounded asynchronous directory loader, independent of terminal cwd.
