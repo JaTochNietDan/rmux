@@ -28,9 +28,39 @@ pub(super) fn navigated_result(selected: usize, count: usize, key: &str) -> Opti
     }
 }
 
+// Keep the destination within one viewport of the starting row. Always advance
+// at least one result, including in a window shorter than a single row.
+fn paged_result(selected: usize, count: usize, backwards: bool, viewport: f32, row_height: impl Fn(usize) -> f32) -> Option<usize> {
+    if count == 0 { return None; }
+    let mut next = selected.min(count - 1);
+    let mut occupied = row_height(next);
+    loop {
+        let candidate = if backwards { next.checked_sub(1) } else { next.checked_add(1).filter(|index| *index < count) };
+        let Some(candidate) = candidate else { break; };
+        occupied += row_height(candidate);
+        if occupied > viewport && next != selected.min(count - 1) { break; }
+        next = candidate;
+        if occupied >= viewport { break; }
+    }
+    Some(next)
+}
+
 #[cfg(test)]
 mod navigation_tests {
-    use super::{navigated_result, result_area_height};
+    use super::{navigated_result, paged_result, result_area_height};
+    #[test]
+    fn paging_respects_visible_height_and_mixed_rows() {
+        assert_eq!(paged_result(0, 20, false, 320., |_| 36.), Some(7));
+        assert_eq!(paged_result(0, 20, false, 320., |_| 56.), Some(4));
+        assert_eq!(paged_result(8, 20, true, 320., |_| 56.), Some(4));
+        let heights = [36., 56., 36., 56.];
+        assert_eq!(paged_result(0, 4, false, 128., |i| heights[i]), Some(2));
+        assert_eq!(paged_result(2, 4, true, 128., |i| heights[i]), Some(0));
+        assert_eq!(paged_result(1, 4, false, 20., |i| heights[i]), Some(2));
+        assert_eq!(paged_result(3, 4, false, 320., |i| heights[i]), Some(3));
+        assert_eq!(paged_result(99, 4, true, 20., |i| heights[i]), Some(2));
+        assert_eq!(paged_result(0, 0, false, 320., |_| panic!("empty")), None);
+    }
     #[test]
     fn palette_result_height_is_stable_and_bounded() {
         assert_eq!(result_area_height([]), 0.);
@@ -417,7 +447,15 @@ impl Render for CommandPalette {
                 if this.input.read(cx).is_composing() {
                     return;
                 }
-                if let Some(selected) = navigated_result(this.selected, this.search.matches.len(), event.keystroke.key.as_str()) {
+                let key = event.keystroke.key.as_str();
+                let selected = if matches!(key, "pageup" | "pagedown") {
+                    paged_result(this.selected, this.search.matches.len(), key == "pageup",
+                        f32::from(this.scroll.viewport_bounds().size.height),
+                        |row| result_row_height(this.commands[this.search.matches[row]].subtitle.is_some()))
+                } else {
+                    navigated_result(this.selected, this.search.matches.len(), key)
+                };
+                if let Some(selected) = selected {
                     this.selected = selected;
                     this.scroll.scroll_to_reveal_item(this.selected);
                     cx.notify();

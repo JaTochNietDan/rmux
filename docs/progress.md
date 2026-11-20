@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Command palette Page Up/Down now uses the virtual list's actual viewport height
+and each result's title/subtitle row height instead of a fixed eight-result jump.
+The destination stays within a page including the starting row, with a minimum
+one-row advance in very small windows and clamping at list boundaries. Three
+focused palette tests passed, including mixed-height rows, tiny viewports, empty
+results and out-of-range selection. Native keyboard/resize interaction remains
+pending; the separate tab picker and notification list still use fixed paging.
+
 Tab overflow browsing no longer jumps back to the active tab on every terminal
 metadata update. All five subscription paths (new, restored, added, inserted and
 batch-transferred tabs) now repaint without changing the scroll target; explicit
