@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Bound shared control tooltips to the window's available width/height, with a
+380px width ceiling, 120px height ceiling, five-line wrapping/ellipsis and clipped
+overflow. Explicit line spacing and a subtle border distinguish hints from dark
+panels. This covers tab titles, palette details, shortcuts and sidebar hints.
+Sidebar grouping guidance now resolves the current binding on hover and points
+to the palette when no binding applies, rather than advertising a fixed shortcut.
+Desktop cargo check passed; native clipping/wrapping and visual acceptance remain
+pending while the Mac is locked.
+
 Added Run Configured Command… to the File menu, general palette and
 custom_command_picker shortcut action. The dedicated picker reuses fuzzy search,
 virtualized rows, keyboard navigation, current binding hints and focus return.

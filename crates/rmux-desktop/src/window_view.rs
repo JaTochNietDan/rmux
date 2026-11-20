@@ -3649,10 +3649,16 @@ impl Render for WorkspaceWindow {
                                     .child(if self.sidebar_selection.len() > 1 { format!("{} selected", self.sidebar_selection.len()) } else { "Workspaces".into() }))
                                 .child(pane_view::action_control("sidebar-new-workspace", "New Workspace", NewWorkspace, None)
                                     .on_click(cx.listener(|this, event: &ClickEvent, window, cx| { if event.standard_click() { this.add(1, window, cx); } })).child(icons::icon("plus")))
-                                .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint(
-                                    if cfg!(target_os = "macos") { "⌘-click to select · Shift-click for range · ⌘⇧G to group" }
-                                    else { "Ctrl-click to select · Shift-click for range · Ctrl+Alt+Shift+G to group" }.into()
-                                )).into()),
+                                .tooltip(|window, cx| {
+                                    let selection = if cfg!(target_os = "macos") { "⌘-click to select · Shift-click for range" }
+                                        else { "Ctrl-click to select · Shift-click for range" };
+                                    let group = window.focused(cx).and_then(|focus| shortcuts::hint(&GroupSelectedWorkspaces, &focus, window));
+                                    let text = match group {
+                                        Some(key) => format!("{selection} · {key} to group"),
+                                        None => format!("{selection} · Group Selected Workspaces in the command palette"),
+                                    };
+                                    cx.new(|_| pane_view::ControlHint(text.into())).into()
+                                }),
                         )
                         .child(
                             gpui::div()
