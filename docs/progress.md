@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Pending shortcut chords now show their keystrokes and Waiting for next key in
+a small out-of-flow window overlay. It observes GPUI pending-input changes,
+adds no polling timer, and neither moves keyboard focus nor participates in
+terminal layout. Existing GPUI completion/timeout/replay handling is unchanged.
+Desktop compilation passed; native visibility, clearing on focus changes and
+timeout, occlusion and shortcut routing remain pending visual acceptance.
+
 Custom two-stroke shortcuts now allow an unmodified suffix, such as `ctrl-k t`,
 while retaining the modified/function-key leader requirement and key/prefix
 validation. Three focused shortcut tests passed using GPUI's real keymap:

@@ -3109,6 +3109,7 @@ impl Render for WorkspaceWindow {
         }
         self.rendered_workspace = current.as_ref().map(Entity::downgrade);
         if !self.close_handler_installed {
+            cx.observe_pending_input(window, |_, _, cx| cx.notify()).detach();
             let entity = cx.weak_entity();
             window.on_window_should_close(cx, move |window, cx| {
                 entity
@@ -3552,6 +3553,12 @@ impl Render for WorkspaceWindow {
                                 cx.notify();
                             })).child("Cancel"))))),
             )
+            .when_some(window.pending_input_keystrokes().filter(|keys| !keys.is_empty()), |root, keys| root.child(
+                div().absolute().bottom(px(8.)).right(px(8.)).max_w(relative(0.8))
+                    .px_3().py_2().rounded_md().border_1().border_color(rgb(0x465063))
+                    .bg(rgb(0x292929)).text_color(rgb(0xdcdfe6)).text_size(px(12.)).shadow_md()
+                    .child(format!("{}  ·  Waiting for next key…", keys.iter().map(ToString::to_string).collect::<Vec<_>>().join(" ")))
+            ))
             .when_some(self.workspace_menu.clone(), |root, menu| root.child(self.workspace_menu_element(menu, cx)))
             .when_some(self.settings_state.clone(), |root, state| root.child(settings_view::panel(state, cx)))
             .when(self.notification_navigation.is_some(), |root| root.child(self.notification_panel(cx)))

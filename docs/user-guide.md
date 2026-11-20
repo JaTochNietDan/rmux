@@ -78,7 +78,9 @@ The first stroke must use Ctrl/Cmd/Alt or F1–F24; one- and two-stroke bindings
 supported. The second stroke may be unmodified, for example
 `{"key":"ctrl-k t","action":"new_tab"}`. Bare `t` remains normal typing.
 Incomplete chords use GPUI's one-second timeout and replay handling; a leader
-can therefore delay its ordinary terminal behavior. The limit is 128 bindings. Duplicate normalized keys in the same
+can therefore delay its ordinary terminal behavior. A small overlay shows the
+pending keys while rmux waits for the next stroke; it does not take keyboard
+focus or resize the terminal. The limit is 128 bindings. Duplicate normalized keys in the same
 context, unknown key names/actions/commands and ambiguous action-plus-command
 definitions fail config validation. A single stroke and a two-stroke chord cannot
 share a prefix in the same custom context (for example `ctrl-k` and
