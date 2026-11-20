@@ -1099,6 +1099,8 @@ terminal; left/right actions are unavailable at the respective ends of the strip
 Directory actions use the clicked terminal's asynchronous local-directory
 lookup. Custom shortcuts can name `copy_working_directory` and
 `reveal_working_directory`; unavailable directories report an error on that terminal.
+If you repeat or switch these actions during lookup, the latest request replaces
+the earlier one. Superseded copies do not overwrite newer clipboard content.
 Close Other Tabs in the menu/palette keeps the chosen terminal and closes the
 other tabs in that pane, using one confirmation when the close policy requires
 it. The `close_other_tabs` shortcut action has no default binding. The prompt

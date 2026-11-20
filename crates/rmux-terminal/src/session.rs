@@ -628,11 +628,22 @@ impl Session {
         })
     }
     /// Deferred directory lookup without retaining the terminal while queued.
-    pub fn directory_lookup(&self) -> Box<dyn FnOnce() -> Result<Option<std::path::PathBuf>> + Send> {
+    pub fn directory_lookup(&self, current: impl Fn() -> bool + Send + 'static) -> Box<dyn FnOnce() -> Result<Option<std::path::PathBuf>> + Send> {
         let terminal = Arc::downgrade(&self.terminal);
         Box::new(move || {
+            if !current() { return Ok(None); }
             let terminal = terminal.upgrade().context("terminal closed before directory lookup")?;
-            let engine = terminal.lock().unwrap_or_else(|error| error.into_inner());
+            let engine = loop {
+                match terminal.try_lock() {
+                    Ok(engine) => break engine,
+                    Err(std::sync::TryLockError::Poisoned(error)) => break error.into_inner(),
+                    Err(std::sync::TryLockError::WouldBlock) => {
+                        if !current() { return Ok(None); }
+                        thread::sleep(std::time::Duration::from_millis(1));
+                    }
+                }
+            };
+            if !current() { return Ok(None); }
             engine.current_directory()
         })
     }
@@ -1027,9 +1038,26 @@ mod tests {
         worker.join().unwrap();
         assert!(result??.is_none(), "obsolete copy waited for parser access");
 
-        let directory = session.directory_lookup();
+        let directory = session.directory_lookup(|| true);
         assert_eq!(Arc::strong_count(&session.terminal), owners, "queued directory lookup retained the engine");
         assert_eq!(thread::spawn(directory).join().unwrap()?, session.current_directory()?);
+        assert!(session.directory_lookup(|| false)()?.is_none());
+        let engine = session.terminal.lock().unwrap_or_else(|error| error.into_inner());
+        let canceled = Arc::new(AtomicBool::new(false));
+        let token = canceled.clone();
+        let (started, starting) = mpsc::channel();
+        let lookup = session.directory_lookup(move || {
+            let _ = started.send(());
+            !token.load(Ordering::Relaxed)
+        });
+        let (finished, completion) = mpsc::channel();
+        let worker = thread::spawn(move || { let _ = finished.send(lookup()); });
+        starting.recv_timeout(std::time::Duration::from_secs(2))?;
+        canceled.store(true, Ordering::Relaxed);
+        let result = completion.recv_timeout(std::time::Duration::from_secs(2));
+        drop(engine);
+        worker.join().unwrap();
+        assert!(result??.is_none(), "obsolete directory lookup waited for parser access");
         Ok(())
     }
     #[test]

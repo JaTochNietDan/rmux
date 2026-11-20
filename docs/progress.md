@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Repeated Copy/Reveal Working Directory requests now supersede earlier requests
+instead of being ignored while a lookup is pending. Workers use a weak request
+generation plus clipboard ordering, check cancellation before/after parser
+access, and poll only while a pending parser lock is busy. Closed terminals and
+obsolete requests stop waiting; there is no idle timer. Desktop compilation and
+the focused session test passed, including cancellation while the parser lock
+remains held. Native repeated clipboard/reveal interaction remains unverified.
+
 Tab context menus now expose Copy Working Directory and Reveal Working Directory
 for the clicked terminal identity, reusing the existing asynchronous lookup,
 clipboard ordering and missing-local-directory error handling. Both actions are

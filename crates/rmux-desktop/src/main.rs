@@ -2,7 +2,7 @@ use gpui::{prelude::*, *};
 use rmux_terminal::{Color, CursorShape, Frame, Scroll, session::Session};
 use std::ops::Range;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 mod app_menu;
 mod updater;
 mod attention;
@@ -382,6 +382,7 @@ struct TerminalView {
     selection_scroll: Option<Task<()>>,
     clipboard_task: Option<Task<()>>,
     directory_task: Option<Task<()>>,
+    directory_generation: Arc<AtomicU64>,
     title: String,
     custom_title: Option<String>,
     title_revision: u64,
@@ -718,6 +719,7 @@ impl TerminalView {
             selection_scroll: None,
             clipboard_task: None,
             directory_task: None,
+            directory_generation: Default::default(),
             title: String::new(),
             custom_title: None,
             title_revision: u64::MAX,
@@ -1325,9 +1327,14 @@ impl TerminalView {
         self.lookup_working_directory(false, cx);
     }
     fn lookup_working_directory(&mut self, copy: bool, cx: &mut Context<Self>) {
-        if self.directory_task.is_some() { return; }
+        let generation = self.directory_generation.fetch_add(1, Ordering::Relaxed).wrapping_add(1);
+        self.directory_task = None;
         let ticket = copy.then(clipboard::begin);
-        let lookup = self.session.directory_lookup();
+        let current = Arc::downgrade(&self.directory_generation);
+        let lookup = self.session.directory_lookup(move || {
+            current.upgrade().is_some_and(|current| current.load(Ordering::Relaxed) == generation)
+                && ticket.is_none_or(clipboard::current)
+        });
         let executor = cx.background_executor().clone();
         self.directory_task = Some(cx.spawn(async move |entity, cx| {
             let result = executor.spawn(async move { lookup() }).await;
