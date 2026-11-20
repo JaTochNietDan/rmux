@@ -54,6 +54,15 @@ for mode in ["end", "top", "after_current"]:
                     assert [r["id"] for r in rows() if r["selected"]] == [fourth], rows()
                     call("workspace.close", workspace_id=fourth)
                     assert [r["id"] for r in rows()] == expected, rows()
+                    if mode == "after_current":
+                        group = call("workspace.group.create", window_id=window, name="Placement", workspace_ids=[second, original])
+                        call("workspace.select", workspace_id=original)
+                        after_group = call("workspace.create", window_id=window, name="After group")["id"]
+                        assert [r["id"] for r in rows()] == [third, second, original, after_group], rows()
+                        call("workspace.group.update", window_id=window, group_id=group["id"], pinned=True)
+                        after_pin = call("workspace.create", window_id=window, name="After pinned group")["id"]
+                        assert [r["id"] for r in rows()] == [second, original, after_pin, third, after_group], rows()
+                        assert [r["id"] for r in rows() if r["selected"]] == [original], rows()
             finally:
                 if app.poll() is None:
                     app.terminate()
@@ -62,4 +71,4 @@ for mode in ["end", "top", "after_current"]:
                 except subprocess.TimeoutExpired:
                     app.kill()
                     app.wait(timeout=5)
-    print(f"PASS: {mode} insertion, failed creation, background/focused selection and close")
+    print(f"PASS: {mode} insertion, failed creation, background/focused selection and close" + (", group and pinned-group ordering" if mode == "after_current" else ""))

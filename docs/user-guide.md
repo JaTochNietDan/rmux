@@ -286,7 +286,8 @@ Settings → **New workspace position** controls ungrouped workspace creation:
 to the New Workspace action, configured commands, and RPC workspace creation.
 Background RPC creation preserves the selected workspace even when indices move.
 Pinned workspaces remain above unpinned ones; placement after a grouped origin is
-after that group's sidebar block. Group members retain the separate New group
+after that group's sidebar block. If the origin is pinned, the new unpinned
+workspace becomes the first row below the pinned section. Group members retain the separate New group
 workspace setting. Generated empty-group anchors retain their existing append
 behavior. Save these settings to persist your choice.
 

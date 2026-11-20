@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Fixed After current placement from a pinned workspace/group. New unpinned rows
+now begin the unpinned tier instead of inheriting a potentially unrelated storage
+position from the pinned anchor. Extended the native placement smoke with a group
+whose anchor differs from the selected member and whose storage order differs
+from sidebar order. The fixture reproduced the pinned-placement failure before
+the fix, then passed unpinned-group/pinned-group order and selection continuity,
+along with all three placement modes and creation/close failure coverage.
+Desktop build passed. Native mouse/keyboard and screenshot acceptance remain pending.
+
 Added persistent ungrouped workspace placement (First / After current / Last) in
 Settings and new_workspace_placement config; Last preserves previous behavior.
 New Workspace, configured commands and RPC creation use the insertion policy.

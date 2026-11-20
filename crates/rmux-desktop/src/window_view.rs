@@ -3129,7 +3129,15 @@ impl WorkspaceWindow {
             let anchor = self.entries.get(self.active).and_then(|entry| self.groups.containing(entry.workspace.entity_id()))
                 .and_then(|group| group.members.first()).and_then(|anchor| self.entries.iter().position(|entry| entry.workspace.entity_id() == *anchor))
                 .unwrap_or(self.active);
-            workspace_groups::insertion_index(self.entries.len(), anchor, placement.unwrap_or(cx.global::<Preferences>().new_workspace_placement))
+            let placement = placement.unwrap_or(cx.global::<Preferences>().new_workspace_placement);
+            // A new unpinned row cannot enter the pinned tier. Its nearest visual
+            // position after a pinned origin is the start of the unpinned tier,
+            // regardless of where the origin's anchor lives in storage.
+            let placement = if placement == workspace_groups::Placement::AfterCurrent
+                && !self.entries.is_empty() && self.top_level_pinned(self.active) {
+                workspace_groups::Placement::Top
+            } else { placement };
+            workspace_groups::insertion_index(self.entries.len(), anchor, placement)
         };
         if !self.entries.is_empty() && index <= self.active { self.active += 1; }
         self.entries.insert(index, Entry {
