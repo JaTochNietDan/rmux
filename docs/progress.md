@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Custom shortcuts now expose the existing Last Terminal/Workspace, pane cycling,
+tab/workspace reorder, previous/next/last prompt, top/bottom scroll and find-match
+navigation actions. They dispatch the same typed actions as menus/palette and
+retain the default terminal-only scope. User documentation includes focus-history
+and prompt-jump examples. Focused shortcut compilation/keymap tests passed; native
+shortcut interaction and complete upstream binding coverage remain pending.
+
 Paste encoding now allocates one output buffer instead of separate mutable-input
 and output buffers. Ghostty's documented null-output size query sanitizes the
 payload in place; rmux adds bracketed delimiters in the same allocation and checks

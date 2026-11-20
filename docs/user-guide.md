@@ -80,10 +80,28 @@ The palette shows shortcuts resolved for its originating focus context.
 
 Supported action names: `new_workspace`, `new_window`, `new_tab`, `split_right`,
 `split_down`, `focus_left`, `focus_right`, `focus_up`, `focus_down`,
-`next_workspace`, `previous_workspace`, `next_tab`, `previous_tab`, `tab_picker`,
+`next_workspace`, `previous_workspace`, `last_workspace`, `last_terminal`,
+`next_pane`, `previous_pane`, `next_tab`, `previous_tab`, `tab_picker`,
+`move_tab_left`, `move_tab_right`, `move_workspace_up`, `move_workspace_down`,
+`previous_prompt`, `next_prompt`, `last_prompt`, `scroll_to_top`, `scroll_to_bottom`,
+`find_older`, `find_newer`,
 `palette`, `toggle_zoom`, `toggle_sidebar`, `settings`, `notifications`,
 `next_unread`, `mark_all_read`, `find`, `reload_settings`, and `disabled`. Graphical binding editing,
 full conflict explanations and complete upstream shortcut coverage remain pending.
+
+For example, bind `last_terminal` to return to the previous live terminal across
+panes and workspaces, or `last_prompt` to jump to the newest retained shell prompt:
+
+```json
+{"keybindings":[
+  {"key":"alt-backspace","action":"last_terminal"},
+  {"key":"alt-home","action":"last_prompt"}
+]}
+```
+
+These actions use the same handlers as the menus and palette. Terminal-specific
+navigation needs terminal focus; keep the default `terminal` context for those
+bindings. Reordering preserves the existing live sessions.
 
 Workspace groups are available from the File menu and command palette: create
 an empty group (Ctrl-Cmd-G on macOS, Ctrl-Alt-G elsewhere), group the current
