@@ -12,6 +12,15 @@ pub enum Placement {
     End,
 }
 
+/// Position of a new ungrouped row; callers pass a group anchor for grouped origins.
+pub fn insertion_index(len: usize, current: usize, placement: Placement) -> usize {
+    match placement {
+        Placement::Top => 0,
+        Placement::End => len,
+        Placement::AfterCurrent => current.saturating_add(1).min(len),
+    }
+}
+
 /// Pick the next logical row, falling back to the previous row at the end.
 /// Storage indices need not match the pinned/grouped navigation order.
 pub fn neighbor_after_removal<T: Copy + Eq>(order: &[T], removed: T) -> Option<T> {

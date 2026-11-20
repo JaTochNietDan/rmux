@@ -2,6 +2,20 @@
 
 ## Current implementation focus
 
+Added persistent ungrouped workspace placement (First / After current / Last) in
+Settings and new_workspace_placement config; Last preserves previous behavior.
+New Workspace, configured commands and RPC creation use the insertion policy.
+Creation returns the actual index, background insertion preserves selection, and
+failed RPC creation removes the inserted entry rather than assuming the last row.
+Group-member placement stays separate; generated group anchors retain append.
+Native RPC smoke passed all modes, selection continuity, failed creation and close;
+existing group-directory smoke and saved-settings persistence test passed.
+
+The live run also exposed and fixed a startup panic introduced by dynamic toolbar
+hints: GPUI forbids registering two tooltips on one element. Static and action
+controls now share an unadorned button builder and each installs exactly one hint.
+Native startup now passes; visual/OS-focus acceptance remains pending.
+
 Added Bash completed-command status reports (OSC 133 D) before subsequent prompts.
 A leading status capture preserves $? for the first user prompt hook; the existing
 trailing integration emits the captured value even if user hooks change status.

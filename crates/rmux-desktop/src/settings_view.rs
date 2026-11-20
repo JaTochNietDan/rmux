@@ -7,7 +7,7 @@ pub struct State {
     pub selected: usize,
     pub scroll: ScrollHandle,
 }
-pub const KEYS: &[&str] = &["font", "padding", "theme", "focused_cursor", "cursor", "copy", "close", "group_placement", "scrollback", "native_notifications", "notification_focus", "font_family", "opacity", "blur",
+pub const KEYS: &[&str] = &["font", "padding", "theme", "focused_cursor", "cursor", "copy", "close", "group_placement", "scrollback", "native_notifications", "notification_focus", "font_family", "opacity", "blur", "workspace_placement",
     #[cfg(target_os = "macos")] "option_as_alt",
 ];
 // Each control owns its explanatory content. Only the heading and footer hint
@@ -46,9 +46,10 @@ pub fn adjust(settings: &mut Preferences, key: &str, delta: i32) {
                 _ => Active,
             };
         }
-        "group_placement" => {
+        "group_placement" | "workspace_placement" => {
             use workspace_groups::Placement::{AfterCurrent, Top, End};
-            settings.group_new_workspace_placement = match (settings.group_new_workspace_placement, delta < 0) {
+            let placement = if key == "group_placement" { &mut settings.group_new_workspace_placement } else { &mut settings.new_workspace_placement };
+            *placement = match (*placement, delta < 0) {
                 (AfterCurrent, false) | (End, true) => Top,
                 (Top, false) | (AfterCurrent, true) => End,
                 _ => AfterCurrent,
@@ -140,8 +141,13 @@ pub fn panel(state: State, cx: &mut Context<window_view::WorkspaceWindow>) -> An
             .child(row("Terminal background opacity", "opacity", format!("{}%", settings.background_opacity), true, state.selected == 12, false))
             .child(div().child(row("Blur behind terminal", "blur", if settings.background_blur { "On" } else { "Off" }.into(), false, state.selected == 13, false))
                 .child(div().pt_2().text_xs().text_color(rgb(0xa0a0a0)).child("Blur requires opacity below 100% and OS/compositor support. Text, colored cells, tabs and sidebar remain opaque.")))
+            .child(row("New workspace position", "workspace_placement", match settings.new_workspace_placement {
+                workspace_groups::Placement::AfterCurrent => "After current",
+                workspace_groups::Placement::Top => "First",
+                workspace_groups::Placement::End => "Last",
+            }.into(), false, state.selected == 14, false))
             .when(cfg!(target_os = "macos"), |panel| panel.child(div()
-                .child(row("Option key behavior", "option_as_alt", if settings.macos_option_as_alt { "Terminal Alt" } else { "Native text" }.into(), false, state.selected == 14, false))
+                .child(row("Option key behavior", "option_as_alt", if settings.macos_option_as_alt { "Terminal Alt" } else { "Native text" }.into(), false, state.selected == 15, false))
                 .child(div().pt_2().text_xs().text_color(rgb(0xa0a0a0)).child("Terminal Alt sends Option shortcuts to your shell. Native text allows Option characters and dead keys. Control+Option and navigation keys still use terminal encoding."))))
             .child(div().py_3().text_xs().text_color(rgb(0xa0a0a0)).child("Tab / ↑↓ to navigate · ←→ to change · Enter to activate · Esc to close. Changes apply to this session. Font family and text size update terminals using the previous defaults. Per-terminal zoom stays unchanged; Reset Font Size rejoins the default. Custom colors in your config override the theme."))
             .child(div().id("settings-save").border_1().border_color(if state.selected == KEYS.len() { rgb(0xffffff) } else { rgb(0x007aff) }).px_3().py_2().rounded_sm().text_sm()

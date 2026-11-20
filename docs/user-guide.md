@@ -280,6 +280,16 @@ or settings-file open is running, Save shows “Working with settings…” and 
 actions are temporarily unavailable. Controls remain editable; saving an older
 snapshot reports when newer session changes still need saving.
 
+Settings → **New workspace position** controls ungrouped workspace creation:
+**First**, **After current**, or **Last** (the default). The JSON field is
+`new_workspace_placement`, accepting `top`, `after_current`, or `end`. This applies
+to the New Workspace action, configured commands, and RPC workspace creation.
+Background RPC creation preserves the selected workspace even when indices move.
+Pinned workspaces remain above unpinned ones; placement after a grouped origin is
+after that group's sidebar block. Group members retain the separate New group
+workspace setting. Generated empty-group anchors retain their existing append
+behavior. Save these settings to persist your choice.
+
 Custom palette commands can be configured in `config.json`:
 
 ```json

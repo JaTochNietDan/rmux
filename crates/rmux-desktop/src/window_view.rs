@@ -482,7 +482,7 @@ impl WorkspaceWindow {
         if generated {
             let previous = self.previous_workspace;
             let next_number = self.next_number;
-            self.add_with_directory(1, false, None, create.cwd.clone(), window, cx);
+            self.add_with_directory(1, false, Some(workspace_groups::Placement::End), create.cwd.clone(), window, cx);
             let index = self.entries.len() - 1;
             if self.entries[index].workspace.read(cx).panes.is_empty() {
                 // No shell or pane was created, so no focus changed. Discard
@@ -541,10 +541,11 @@ impl WorkspaceWindow {
         self.automation_available(cx)?;
         if self.entries.len() >= 64 { return Err(automation::Failure { code: -32005, message: "Window workspace limit reached" }); }
         let next_number = self.next_number;
-        self.add_configured(1, false, None, create.cwd.clone(), false, None, window, cx);
-        let index = self.entries.len() - 1;
+        let index = self.add_configured(1, false, None, create.cwd.clone(), false, None, window, cx)
+            .ok_or(automation::Failure { code: -32005, message: "Window is shutting down" })?;
         if self.entries[index].workspace.read(cx).panes.is_empty() {
-            self.entries.pop();
+            self.entries.remove(index);
+            if index < self.active { self.active -= 1; }
             self.next_number = next_number;
             cx.notify();
             return Err(automation::Failure { code: -32005, message: "Could not start workspace shell" });
@@ -1117,8 +1118,7 @@ impl WorkspaceWindow {
                 this.command_launching = false;
                 match result {
                     Ok(session) if this.automation_available(cx).is_ok() && this.entries.len() < 64 => {
-                        this.add_configured(1, false, None, None, false, Some((session, Some(name.clone()))), window, cx);
-                        let index = this.entries.len() - 1;
+                        let Some(index) = this.add_configured(1, false, None, None, false, Some((session, Some(name.clone()))), window, cx) else { return; };
                         this.entries[index].name = name;
                         this.select(index, window, cx);
                         this.notice = None;
@@ -3084,9 +3084,9 @@ impl WorkspaceWindow {
         self.add_configured(panes, inherit_group, placement, directory_override, true, None, window, cx);
     }
 
-    fn add_configured(&mut self, panes: usize, inherit_group: bool, placement: Option<workspace_groups::Placement>, directory_override: Option<std::path::PathBuf>, focus: bool, mut prepared: Option<(Session, Option<String>)>, window: &mut Window, cx: &mut Context<Self>) {
+    fn add_configured(&mut self, panes: usize, inherit_group: bool, placement: Option<workspace_groups::Placement>, directory_override: Option<std::path::PathBuf>, focus: bool, mut prepared: Option<(Session, Option<String>)>, window: &mut Window, cx: &mut Context<Self>) -> Option<usize> {
         if cx.global::<Shutdowns>().quitting {
-            return;
+            return None;
         }
         if focus { self.remember_focus(window, cx); }
         let parent_group = self.entries.get(self.active).filter(|_| inherit_group).and_then(|entry| {
@@ -3125,7 +3125,14 @@ impl WorkspaceWindow {
         let closed = Self::observe_workspace(&workspace, window, cx);
         let metadata = Self::observe_metadata(&workspace, window, cx);
         let last_pane = workspace.read(cx).panes.last().map(Entity::entity_id);
-        self.entries.push(Entry {
+        let index = if parent_group.is_some() { self.entries.len() } else {
+            let anchor = self.entries.get(self.active).and_then(|entry| self.groups.containing(entry.workspace.entity_id()))
+                .and_then(|group| group.members.first()).and_then(|anchor| self.entries.iter().position(|entry| entry.workspace.entity_id() == *anchor))
+                .unwrap_or(self.active);
+            workspace_groups::insertion_index(self.entries.len(), anchor, placement.unwrap_or(cx.global::<Preferences>().new_workspace_placement))
+        };
+        if !self.entries.is_empty() && index <= self.active { self.active += 1; }
+        self.entries.insert(index, Entry {
             workspace,
             name: format!("Workspace {}", self.next_number),
             description: String::new(),
@@ -3138,19 +3145,20 @@ impl WorkspaceWindow {
         });
         self.next_number += 1;
         if let Some((group, after)) = parent_group {
-            let member = self.entries.last().unwrap().workspace.entity_id();
+            let member = self.entries[index].workspace.entity_id();
             if let Err(error) = self.groups.add_new(group, member, Some(after), placement.unwrap_or(cx.global::<Preferences>().group_new_workspace_placement)) {
                 self.notice = Some(format!("Add workspace to group: {error}"));
             }
             if let Some(group) = self.groups.get_mut(group) { group.collapsed = false; }
         }
         if focus {
-        self.remember_workspace_switch(self.entries.len() - 1);
-        self.active = self.entries.len() - 1;
+        self.remember_workspace_switch(index);
+        self.active = index;
         self.scroll_to_workspace(self.active);
         window.set_window_title(&format!("{} — rmux", self.entries[self.active].name));
         }
         cx.notify();
+        Some(index)
     }
 
     fn observe_workspace(

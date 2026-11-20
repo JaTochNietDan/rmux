@@ -144,6 +144,7 @@ pub struct Preferences {
     pub commands: Vec<CustomCommand>,
     pub layout_presets: Vec<LayoutPreset>,
     pub keybindings: Vec<crate::shortcuts::Binding>,
+    pub new_workspace_placement: crate::workspace_groups::Placement,
     pub group_new_workspace_placement: crate::workspace_groups::Placement,
     pub session_file: Option<std::path::PathBuf>,
     pub font_size: f32,
@@ -178,6 +179,7 @@ impl Default for Preferences {
             layout_presets: Vec::new(),
             keybindings: Vec::new(),
             session_file: None,
+            new_workspace_placement: crate::workspace_groups::Placement::End,
             group_new_workspace_placement: crate::workspace_groups::Placement::default(),
             font_size: 14.,
             terminal_padding: 8,
@@ -299,6 +301,7 @@ impl Preferences {
             && self.copy_on_select == other.copy_on_select
             && self.native_notifications == other.native_notifications
             && self.notification_focus == other.notification_focus
+            && self.new_workspace_placement == other.new_workspace_placement
             && self.group_new_workspace_placement == other.group_new_workspace_placement
             && (self.close_policy_overridden() || self.confirm_close == other.confirm_close)
     }
@@ -327,6 +330,7 @@ impl Preferences {
         latest.copy_on_select = self.copy_on_select;
         latest.native_notifications = self.native_notifications;
         latest.notification_focus = self.notification_focus;
+        latest.new_workspace_placement = self.new_workspace_placement;
         latest.group_new_workspace_placement = self.group_new_workspace_placement;
         if !self.close_policy_overridden() { latest.confirm_close = self.confirm_close; }
         let bytes = serde_json::to_vec_pretty(&latest)?;
@@ -664,6 +668,7 @@ mod tests {
         preferences.copy_on_select = true;
         preferences.native_notifications = true;
         preferences.notification_focus = NotificationFocus::BackgroundApp;
+        preferences.new_workspace_placement = crate::workspace_groups::Placement::Top;
         preferences.group_new_workspace_placement = crate::workspace_groups::Placement::End;
         preferences.confirm_close = ClosePolicy::Never;
         std::fs::write(&path, br##"{"font_family":"Custom Mono","scrollback_mib":16,"background_color":"#112233","confirm_close":"always"}"##)?;
@@ -675,6 +680,7 @@ mod tests {
         assert!(saved.copy_on_select);
         assert!(saved.native_notifications);
         assert_eq!(saved.notification_focus, NotificationFocus::BackgroundApp);
+        assert_eq!(saved.new_workspace_placement, crate::workspace_groups::Placement::Top);
         assert_eq!(saved.group_new_workspace_placement, crate::workspace_groups::Placement::End);
         assert_eq!(saved.font_family, preferences.font_family);
         assert_eq!(saved.scrollback_mib, 8);
