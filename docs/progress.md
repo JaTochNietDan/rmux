@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Copy-mode paging now uses the actual viewport height and measured row heights
+(where available), reusing the existing variable-height navigation helper instead
+of jumping a fixed 20 logical lines. The header shows current/total lines; copy
+reports byte count and empty selections leave the clipboard untouched. Feedback
+updates on user actions without a timer or polling. Desktop compilation passed;
+native layout/input validation remains pending while the Mac is locked.
+
 Copy-mode vertical navigation now uses Unicode terminal-cell widths instead of
 UTF-8 byte offsets and retains the preferred column across short lines. Sparse
 byte/cell checkpoints are built during background snapshot loading; lookups

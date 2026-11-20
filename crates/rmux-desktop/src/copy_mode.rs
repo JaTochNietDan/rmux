@@ -106,6 +106,7 @@ pub(super) struct CopyMode {
     search_cancel: Arc<AtomicBool>,
     search_job: Option<Task<()>>,
     message: String,
+    copy_message: Option<String>,
     cursor: usize,
     anchor: Option<usize>,
     characters: bool,
@@ -156,7 +157,7 @@ impl CopyMode {
         let focus = cx.focus_handle();
         focus.focus(window);
         Self { focus, buffer: None, search: None, query: String::new(), matches: Vec::new(),
-            search_message: String::new(), search_cancel: Arc::new(AtomicBool::new(false)), search_job: None, message: "Reading terminal history…".into(), cursor: 0,
+            search_message: String::new(), search_cancel: Arc::new(AtomicBool::new(false)), search_job: None, copy_message: None, message: "Reading terminal history…".into(), cursor: 0,
             anchor: None, characters: false, column: 0, preferred_column: None, character_anchor: None, scroll: ListState::new(0, ListAlignment::Bottom, px(128.)), _load: load }
     }
     fn open_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -215,16 +216,23 @@ impl CopyMode {
             });
         }));
     }
-    fn copy(&self, cx: &mut Context<Self>) {
+    fn copy(&mut self, cx: &mut Context<Self>) {
         if let Some(buffer) = &self.buffer {
             let text = if self.characters { &buffer.text[buffer.character_range(self.cursor, self.column, self.character_anchor)] }
                 else { buffer.selected(self.cursor, self.anchor) };
-            clipboard::write(ClipboardItem::new_string(text.to_owned()), cx);
+            if text.is_empty() {
+                self.copy_message = Some("Selection is empty".into());
+            } else {
+                self.copy_message = Some(format!("Copied {} bytes", text.len()));
+                clipboard::write(ClipboardItem::new_string(text.to_owned()), cx);
+            }
+            cx.notify();
         }
     }
     fn key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         if !self.focus.is_focused(window) { return; }
         let key = &event.keystroke;
+        self.copy_message = None;
         if key.key == "escape" { cx.emit(Close); }
         else if !key.modifiers.platform && !key.modifiers.control && !key.modifiers.alt {
             let count = self.buffer.as_ref().map_or(0, |buffer| buffer.lines.len());
@@ -241,8 +249,10 @@ impl CopyMode {
                 let next = match key.key.as_str() {
                     "up" | "k" => Some(self.cursor.saturating_sub(1)),
                     "down" | "j" => Some((self.cursor + 1).min(count - 1)),
-                    "pageup" => Some(self.cursor.saturating_sub(20)),
-                    "pagedown" => Some((self.cursor + 20).min(count - 1)),
+                    "pageup" | "pagedown" => command_palette::paged_result(self.cursor, count, key.key == "pageup",
+                        f32::from(self.scroll.viewport_bounds().size.height), |index| {
+                            self.scroll.bounds_for_item(index).map(|bounds| f32::from(bounds.size.height)).unwrap_or(22.)
+                        }),
                     "home" => Some(0), "end" => Some(count - 1), _ => None,
                 };
                 if let Some(next) = next {
@@ -295,6 +305,7 @@ impl CopyMode {
             .when(selected && !self.characters, |row| row.bg(rgb(0x354969)))
             .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
                 if event.standard_click() {
+                    this.copy_message = None;
                     this.characters = false; this.character_anchor = None; this.column = 0; this.preferred_column = None;
                     if event.modifiers().shift && this.anchor.is_none() { this.anchor = Some(this.cursor); }
                     else if !event.modifiers().shift { this.anchor = None; }
@@ -335,6 +346,8 @@ impl Render for CopyMode {
             .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
             .child(div().px_3().py_2().flex().items_center().gap_2().border_b_1().border_color(rgb(0x383838))
                 .child(div().flex_1().min_w_0().text_sm().child("Copy mode"))
+                .when_some(self.buffer.as_ref(), |header, buffer| header.child(div().text_xs().text_color(rgb(0xa0a0a0))
+                    .child(format!("Line {} / {}", self.cursor + 1, buffer.lines.len()))))
                 .child(pane_view::pane_control("close-copy-mode", "Close Copy Mode")
                     .on_click(cx.listener(|_, event: &ClickEvent, _, cx| { if event.standard_click() { cx.emit(Close); } }))
                     .child(icons::icon("close"))))
@@ -345,6 +358,7 @@ impl Render for CopyMode {
             .when(!self.search_message.is_empty(), |root| root.child(div().px_3().py_1().text_xs().child(self.search_message.clone())))
             .child(list(self.scroll.clone(), move |index, _, cx| entity.update(cx, |this, cx| this.row(index, cx)))
                 .flex_1().min_h_0().w_full())
+            .when_some(self.copy_message.clone(), |root, message| root.child(div().px_3().py_1().text_xs().text_color(rgb(0x9fceb0)).child(message)))
             .child(div().px_3().py_2().text_xs().border_t_1().border_color(rgb(0x383838))
                 .child(if self.characters { "Character mode · ←→ / h l move · Shift / Space select · c line mode · Enter copy · Esc close" }
                     else { "Line mode · ↑↓ move · Shift / Space select · c characters · Enter copy · / search · Esc close" }))
