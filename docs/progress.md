@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Opening Find no longer registers the Ghostty search on the UI thread. The
+on-demand search worker now initializes it when processing its first command,
+keeping parser-lock waits in that worker. Selection-prefill uses a nonblocking
+lock attempt and falls back to the remembered query while the parser is busy.
+Two focused worker tests passed: opening/queuing under a deliberately held parser
+lock, plus latest-query replacement, navigation, refresh and shutdown. This
+removes an identified UI wait; end-to-end input latency is not yet measured.
+
 Notification dismissal now repairs selection through one shared path for mouse,
 keyboard and RPC/CLI requests. Removing the selected message selects the next
 surviving row (or previous at the end), reveals it, and clears selection when the

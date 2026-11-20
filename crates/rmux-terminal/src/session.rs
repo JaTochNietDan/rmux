@@ -136,7 +136,7 @@ impl Session {
         crate::search::Search::new(self.terminal.clone())
     }
     pub fn search_worker(&self) -> Result<crate::search_worker::SearchWorker> {
-        crate::search_worker::SearchWorker::new(self.search()?)
+        crate::search_worker::SearchWorker::new(self.terminal.clone())
     }
     pub fn spawn(command: CommandBuilder, columns: u16, rows: u16) -> Result<Self> {
         Self::spawn_with_scrollback(command, columns, rows, 4 * 1024 * 1024)
@@ -681,9 +681,10 @@ impl Session {
     }
     /// A small single-line selection can seed Find without copying a large selection.
     pub fn selected_search_query(&self) -> Option<String> {
+        // Find can fall back to its remembered query while output is being parsed.
         self.terminal
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .try_lock()
+            .ok()?
             .selected_text_limited(4096)
             .ok()
             .flatten()

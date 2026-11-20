@@ -29,7 +29,7 @@ pub struct SearchWorker {
 }
 
 impl SearchWorker {
-    pub(crate) fn new(mut search: Search) -> Result<Self> {
+    pub(crate) fn new(terminal: Arc<Mutex<crate::Terminal>>) -> Result<Self> {
         let (wake, commands) = async_channel::bounded(1);
         let (notify, updates) = async_channel::bounded(1);
         let pending = Arc::new(Mutex::new(Pending::default()));
@@ -45,6 +45,9 @@ impl SearchWorker {
         std::thread::Builder::new()
             .name("rmux-search".into())
             .spawn(move || {
+                // Registration takes the parser lock, so defer it until work
+                // reaches this worker rather than blocking the UI opening Find.
+                let mut search = None;
                 let mut busy = false;
                 let mut navigation = 0i32;
                 loop {
@@ -65,6 +68,10 @@ impl SearchWorker {
                         )
                     };
                     let result = (|| -> Result<Progress> {
+                        if search.is_none() {
+                            search = Some(Search::new(terminal.clone())?);
+                        }
+                        let search = search.as_mut().expect("initialized search");
                         if let Some(query) = query {
                             navigation = 0;
                             search.set_query(&query)?;
@@ -194,10 +201,30 @@ mod tests {
     }
 
     #[test]
+    fn opening_and_queuing_search_does_not_wait_for_parser() -> Result<()> {
+        let terminal = Arc::new(Mutex::new(Terminal::new(30, 3)?));
+        let guard = terminal.lock().unwrap();
+        let (send, receive) = std::sync::mpsc::channel();
+        let owned = terminal.clone();
+        let creator = std::thread::spawn(move || {
+            let worker = SearchWorker::new(owned).unwrap();
+            let revision = worker.set_query("needle".into()).unwrap();
+            send.send((worker, revision)).unwrap();
+        });
+        let result = receive.recv_timeout(Duration::from_secs(1));
+        // Always release the parser before asserting, including on failure.
+        drop(guard);
+        creator.join().unwrap();
+        let (worker, revision) = result.expect("opening Find waited for the parser lock");
+        assert_eq!(wait_for(&worker, revision, false).result.unwrap().matches, 0);
+        Ok(())
+    }
+
+    #[test]
     fn latest_query_wins_refresh_and_navigation_are_delivered() -> Result<()> {
         let terminal = Arc::new(Mutex::new(Terminal::new(30, 3)?));
         terminal.lock().unwrap().write(b"alpha beta beta\r\n");
-        let worker = SearchWorker::new(Search::new(terminal.clone())?)?;
+        let worker = SearchWorker::new(terminal.clone())?;
         worker.set_query("alpha".into())?;
         let revision = worker.set_query("beta".into())?;
         worker.navigate(Direction::Older);
