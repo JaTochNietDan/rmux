@@ -1030,6 +1030,11 @@ and allows only 100 ms to await completion; the normal Quit action retains its
 confirmation policy and three-second cleanup deadline.
 
 Cmd+T creates a tab in the focused pane; Cmd+Shift+[ / ] switches tabs.
+New tabs start in the background. The Starting… indicator has a cancel button;
+Cancel New Terminal Tab is also available in the menu/palette and as the
+`cancel_new_tab` shortcut action. Cancellation preserves existing tabs and focus.
+The pane accepts another launch once the pending job finishes cleanup; an OS
+startup operation already in progress cannot be interrupted immediately.
 Cmd+Shift+1–9 selects a tab directly within that pane (Ctrl+Shift+1–9 on
 Linux/Windows). Missing tab numbers do nothing; 9 selects the ninth tab.
 The palette also offers Select Tab 1–9, Next Tab and Previous Tab.

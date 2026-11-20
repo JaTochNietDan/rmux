@@ -19,6 +19,7 @@ impl Global for Defaults {}
 fn action(name: &str) -> Option<Box<dyn Action>> {
     Some(match name {
         "new_workspace" => Box::new(NewWorkspace), "new_window" => Box::new(NewWindow),
+        "cancel_new_tab" => Box::new(CancelNewTab),
         "new_tab" => Box::new(NewTab), "split_right" => Box::new(Split), "split_down" => Box::new(SplitBelow),
         "focus_left" => Box::new(FocusLeft), "focus_right" => Box::new(FocusRight),
         "focus_up" => Box::new(FocusUp), "focus_down" => Box::new(FocusDown),

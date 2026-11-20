@@ -1,4 +1,5 @@
 use super::*;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 fn tab_drop_index(from: usize, target: usize) -> usize {
     target.saturating_sub(usize::from(from < target))
@@ -64,6 +65,7 @@ pub(super) struct PaneView {
     tab_picker: Option<(Entity<text_field::TextField>, Option<EntityId>, ScrollHandle)>,
     tab_picker_blur: Option<Subscription>,
     spawning_tab: Option<Task<()>>,
+    tab_launch_canceled: Option<Arc<AtomicBool>>,
     workspace: EntityId,
     titles: std::collections::HashMap<EntityId, Subscription>,
     pub terminals: Vec<Entity<TerminalView>>,
@@ -75,6 +77,12 @@ pub(super) struct PaneView {
     rename: Option<Entity<text_field::TextField>>,
     close_prompt: Option<EntityId>,
 }
+impl Drop for PaneView {
+    fn drop(&mut self) {
+        if let Some(cancel) = &self.tab_launch_canceled { cancel.store(true, Ordering::Relaxed); }
+    }
+}
+
 pub(super) struct PaneEmpty;
 impl EventEmitter<PaneEmpty> for PaneView {}
 pub(super) struct PaneMetadataChanged;
@@ -180,6 +188,7 @@ impl PaneView {
         }).collect()
     }
     pub fn reset_window_editors(&mut self) {
+        if let Some(cancel) = self.tab_launch_canceled.take() { cancel.store(true, Ordering::Relaxed); }
         self.spawning_tab = None;
         self.close_prompt = None;
         self.rename = None;
@@ -372,6 +381,7 @@ impl PaneView {
             tab_picker: None,
             tab_picker_blur: None,
             spawning_tab: None,
+            tab_launch_canceled: None,
             workspace,
             titles,
             next_number: terminals.len() + 1,
@@ -421,6 +431,7 @@ impl PaneView {
             tab_picker: None,
             tab_picker_blur: None,
             spawning_tab: None,
+            tab_launch_canceled: None,
             workspace,
             titles: [(terminal.entity_id(), title)].into_iter().collect(),
             terminals: vec![terminal],
@@ -482,6 +493,13 @@ impl PaneView {
         );
     }
 
+    fn cancel_tab_launch(&mut self, cx: &mut Context<Self>) {
+        if let Some(cancel) = &self.tab_launch_canceled {
+            cancel.store(true, Ordering::Relaxed);
+            cx.notify();
+        }
+    }
+
     fn add(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if cx.global::<Shutdowns>().quitting || self.spawning_tab.is_some() { return; }
         let directory = self.cached_directory(cx).or_else(|| cx.global::<InitialDirectory>().0.clone());
@@ -493,12 +511,18 @@ impl PaneView {
         let origin = window.focused(cx);
         let executor = cx.background_executor().clone();
         self.error = None;
+        let canceled = Arc::new(AtomicBool::new(false));
+        self.tab_launch_canceled = Some(canceled.clone());
+        let launch_canceled = canceled.clone();
         self.spawning_tab = Some(cx.spawn_in(window, async move |entity, cx| {
             let mut result = executor.spawn(async move {
+                anyhow::ensure!(!launch_canceled.load(Ordering::Relaxed), "tab launch canceled");
                 let session = Session::shell_in_with_scrollback(80, 24, directory.as_deref(), scrollback)?;
+                anyhow::ensure!(!launch_canceled.load(Ordering::Relaxed), "tab launch canceled");
                 TerminalView::prepare(session, colors, palette)
             }).await;
             loop {
+                if canceled.load(Ordering::Relaxed) { break; }
                 // Settings can change during startup. Re-prepare off-thread before
                 // installing the view, rather than showing stale colors indefinitely.
                 let refresh = cx.update(|_, cx| {
@@ -513,7 +537,9 @@ impl PaneView {
             }
             let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
                 this.spawning_tab = None;
-                if cx.global::<Shutdowns>().quitting { return; }
+                this.tab_launch_canceled = None;
+                cx.notify();
+                if canceled.load(Ordering::Relaxed) || cx.global::<Shutdowns>().quitting { return; }
                 match result {
                     Ok(prepared) => {
                         let terminal = cx.new(|cx| {
@@ -734,6 +760,7 @@ impl Render for PaneView {
             .min_h_0()
             .when(!self.benchmark, |pane| pane.border_1().border_color(if attention { rgb(0xf0b85b).into() } else { gpui::transparent_black() }))
             .on_action(cx.listener(|this, _: &NewTab, window, cx| this.add(window, cx)))
+            .on_action(cx.listener(|this, _: &CancelNewTab, _, cx| this.cancel_tab_launch(cx)))
             .on_action(cx.listener(|this, _: &RenameTab, window, cx| this.rename_tab(window, cx)))
             .on_action(cx.listener(|this, _: &NextTab, window, cx| this.cycle(1, window, cx)))
             .on_action(cx.listener(|this, _: &ShowTabPicker, window, cx| this.show_tab_picker(window, cx)))
@@ -898,7 +925,12 @@ impl Render for PaneView {
                                 })).child(icons::icon("chevron-down"))
                         ))
                         .when(self.spawning_tab.is_some(), |header| header.child(
-                            div().px_2().text_xs().text_color(rgb(0xaaaaaa)).child("Starting…")
+                            div().flex().items_center().gap_1().px_2().text_xs().text_color(rgb(0xaaaaaa))
+                                .child(if self.tab_launch_canceled.as_ref().is_some_and(|cancel| cancel.load(Ordering::Relaxed)) { "Canceling…" } else { "Starting…" })
+                                .child(pane_control("cancel-new-tab", "Cancel New Terminal Tab")
+                                    .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
+                                        if event.standard_click() { this.cancel_tab_launch(cx); }
+                                    })).child(icons::icon("close")))
                         ))
                         .child(
                             pane_control("new-tab", if self.spawning_tab.is_some() { "Starting terminal…" } else if cfg!(target_os = "macos") { "New Terminal Tab  ⌘T" } else { "New Terminal Tab  Ctrl+Shift+T" })

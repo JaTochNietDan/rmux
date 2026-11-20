@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Pending new-tab launches now have a cancel control, menu/palette action and
+`cancel_new_tab` shortcut action. Cancellation signals the background launch,
+skips preparation when observed after process startup, and suppresses late tab
+attachment/errors without touching existing tabs or focus. The launch slot
+remains occupied until completion, preventing cancel/retry job accumulation.
+Pane destruction and window rebinding also signal cancellation. Desktop
+compilation passed; native cancel/cleanup behavior remains unverified. An OS
+spawn or frame preparation already in progress is not forcibly interrupted.
+
 New-tab startup now also prepares engine colors/palette and the initial frame
 in its background task. The UI attaches a prepared session instead of immediately
 reacquiring the parser for those operations. A color/palette change during
