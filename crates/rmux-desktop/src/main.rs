@@ -2075,6 +2075,11 @@ impl Workspace {
         let Some(tree) = &mut self.layout else {
             return;
         };
+        if !tree.can_split(&source) {
+            self.error = Some(format!("Cannot split this pane: maximum nesting is {}", layout::MAX_SPLIT_DEPTH));
+            cx.notify();
+            return;
+        }
         let workspace = cx.entity_id();
         let target = cx.new(|cx| PaneView::from_transfer(tab, workspace, cx));
         // Remove the original tab only after the tree accepts its destination.
@@ -2082,6 +2087,7 @@ impl Workspace {
         if !tree.split(&source, target.clone(), axis) {
             return;
         }
+        self.error = None;
         source.update(cx, |pane, cx| pane.take_tab(id, cx));
         self.panes.insert(index + 1, target.clone());
         self.observe_pane(&target, window, cx);

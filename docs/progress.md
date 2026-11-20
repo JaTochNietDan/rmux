@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+The split-tree mutation itself now enforces the restore depth limit, closing the
+remaining break-tab path around the creation guard. Break Tab checks before
+constructing a destination or removing its live source tab and reports the same
+limit message. Rejected tree mutations preserve all geometry; successful tab
+breaks clear stale errors. Seven focused layout tests passed, including rejection
+without mutation and existing swap/remove/resize behavior. Native break-tab limit
+interaction remains unverified.
+
 Interactive/RPC split creation now checks the target's depth before starting a
 shell, sharing the 32-level constant with saved-layout validation. This prevents
 creation through these paths of a split tree that the restore validator rejects.

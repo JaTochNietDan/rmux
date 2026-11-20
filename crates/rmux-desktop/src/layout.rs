@@ -145,6 +145,11 @@ impl<T: Clone + PartialEq> PaneTree<T> {
     }
 
     pub fn split(&mut self, target: &T, new: T, axis: Axis) -> bool {
+        if !self.can_split(target) { return false; }
+        self.split_unchecked(target, new, axis)
+    }
+
+    fn split_unchecked(&mut self, target: &T, new: T, axis: Axis) -> bool {
         match self {
             Self::Pane(pane) if pane == target => {
                 *self = Self::Split {
@@ -156,7 +161,7 @@ impl<T: Clone + PartialEq> PaneTree<T> {
             }
             Self::Split { children, .. } => children
                 .iter_mut()
-                .any(|child| child.split(target, new.clone(), axis)),
+                .any(|child| child.split_unchecked(target, new.clone(), axis)),
             _ => false,
         }
     }
@@ -217,6 +222,9 @@ mod tests {
             assert!(tree.split(&(next - 1), next, Axis::Columns));
         }
         assert!(!tree.can_split(&MAX_SPLIT_DEPTH));
+        let before = format!("{tree:?}");
+        assert!(!tree.split(&MAX_SPLIT_DEPTH, 100, Axis::Rows));
+        assert_eq!(format!("{tree:?}"), before, "rejected split must leave all geometry unchanged");
         assert!(!tree.can_split(&999));
         // A shallow sibling still has room even when another branch is deep.
         assert!(tree.can_split(&0));
