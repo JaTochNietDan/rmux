@@ -8,6 +8,15 @@ pub(super) struct Lease {
 }
 impl Lease {
     pub fn acquire(path: PathBuf) -> anyhow::Result<Arc<Self>> {
+        if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+            let mut directories = std::fs::DirBuilder::new();
+            directories.recursive(true);
+            #[cfg(unix)] {
+                use std::os::unix::fs::DirBuilderExt;
+                directories.mode(0o700);
+            }
+            directories.create(parent)?;
+        }
         let mut lock_path = path.as_os_str().to_os_string();
         lock_path.push(".lock");
         let mut options = std::fs::OpenOptions::new();
@@ -110,6 +119,22 @@ pub(super) fn install(lease: Option<Arc<Lease>>, cx: &mut App) {
 mod tests {
     use super::{Writer, Lease};
     use crate::snapshot;
+    #[test]
+    fn first_launch_creates_recovery_directory_without_replacing_existing_files() -> anyhow::Result<()> {
+        let directory = tempfile::tempdir()?;
+        let path = directory.path().join("new/nested/session.json");
+        let lease = Lease::acquire(path.clone())?;
+        assert!(!path.exists(), "acquiring recovery must not create a fake checkpoint");
+        let mut writer = Writer::default();
+        writer.save(&lease.path, 1, snapshot::SessionSnapshot { version: 1, active_window: None, windows: vec![] })?;
+        assert!(path.is_file());
+        assert!(Lease::acquire(path).is_err());
+        let obstruction = directory.path().join("file");
+        std::fs::write(&obstruction, b"keep")?;
+        assert!(Lease::acquire(obstruction.join("session.json")).is_err());
+        assert_eq!(std::fs::read(obstruction)?, b"keep");
+        Ok(())
+    }
     #[test]
     fn lease_excludes_competitors_and_releases_after_last_owner() -> anyhow::Result<()> {
         let directory = tempfile::tempdir()?;

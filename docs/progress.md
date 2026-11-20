@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+First-launch session recovery now creates missing parent directories before
+opening its sibling lock file. New directories use mode 0700 on Unix; existing
+directories are not chmodded, and obstructing files still fail without mutation.
+A regression test first reproduced the missing-directory failure, then passed
+initial checkpoint creation and file-obstruction preservation after the fix.
+All three focused recovery tests passed, including exclusive lease ownership
+and stale background writer rejection. Native first-launch acceptance remains
+pending.
+
 Listening Ports refresh now restores selection by socket address and owning PID
 after its asynchronous scan, instead of always resetting to the first listener.
 Missing listeners fall back to the first result; address or owner changes do not

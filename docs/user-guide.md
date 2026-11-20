@@ -1180,7 +1180,9 @@ automatic recovery is enabled. Fullscreen/maximized and multi-monitor visual
 acceptance remain pending.
 
 To opt into recovery, set `"session_file": "/absolute/path/to/rmux-session.json"`
-in settings. Its parent directory must already exist. Recovery requires an
+in settings. Missing parent directories are created automatically (private to
+your user on macOS/Linux); existing files and directory permissions are preserved.
+Recovery requires an
 exclusive OS lock on a sibling `.lock` file. Another
 process using that recovery file opens a fresh window with recovery disabled,
 so it cannot overwrite the owner's checkpoint. The lock file remains on disk;
