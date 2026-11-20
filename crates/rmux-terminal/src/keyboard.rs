@@ -292,36 +292,36 @@ impl Terminal {
     }
 
     pub fn encode_paste(&mut self, text: &str) -> Result<Vec<u8>> {
-        ensure!(
-            text.len() <= 1024 * 1024,
-            "paste exceeds 1 MiB input limit"
-        );
-        let mut data = text.as_bytes().to_vec();
-        let mut bytes = vec![0; data.len() + 12];
-        let mut written = 0;
-        // SAFETY: mode 2004 is DEC private (ANSI bit unset); all buffers are owned.
-        unsafe {
-            let mut mode = GhosttyTerminalModeConfig {
-                mode: 2004,
-                value: false,
-            };
-            check(ghostty_terminal_get(
-                self.terminal,
-                GHOSTTY_TERMINAL_DATA_MODE,
-                out(&mut mode),
-            ))?;
-            check(ghostty_paste_encode(
-                data.as_mut_ptr().cast(),
-                data.len(),
-                mode.value,
-                bytes.as_mut_ptr(),
-                bytes.len(),
-                &mut written,
-            ))?;
-        }
-        bytes.truncate(written);
-        Ok(bytes)
+        encode_paste(text, self.bracketed_paste()?)
     }
+
+    pub(crate) fn bracketed_paste(&self) -> Result<bool> {
+        let mut mode = GhosttyTerminalModeConfig { mode: 2004, value: false };
+        // SAFETY: mode 2004 is DEC private (ANSI bit unset), and the output lives
+        // through the call. Session callers serialize this read with parsing.
+        unsafe {
+            check(ghostty_terminal_get(self.terminal, GHOSTTY_TERMINAL_DATA_MODE, out(&mut mode)))?;
+        }
+        Ok(mode.value)
+    }
+}
+
+/// Encode against a captured mode without accessing terminal state. Payload
+/// allocation and normalization need not retain the terminal/parser mutex.
+pub(crate) fn encode_paste(text: &str, bracketed: bool) -> Result<Vec<u8>> {
+    ensure!(text.len() <= 1024 * 1024, "paste exceeds 1 MiB input limit");
+    let mut data = text.as_bytes().to_vec();
+    let mut bytes = vec![0; data.len() + 12];
+    let mut written = 0;
+    // SAFETY: both buffers are owned and sized for payload plus delimiters.
+    unsafe {
+        check(ghostty_paste_encode(
+            data.as_mut_ptr().cast(), data.len(), bracketed,
+            bytes.as_mut_ptr(), bytes.len(), &mut written,
+        ))?;
+    }
+    bytes.truncate(written);
+    Ok(bytes)
 }
 
 #[cfg(test)]

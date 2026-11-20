@@ -529,11 +529,8 @@ impl Session {
     pub fn paste(&self, text: &str) -> Result<()> {
         anyhow::ensure!(self.exit_status().is_none(), "process has exited");
         let permit = PastePermit::acquire(&self.paste_pending)?;
-        let bytes = self
-            .terminal
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .encode_paste(text)?;
+        let bracketed = self.terminal.lock().unwrap_or_else(|e| e.into_inner()).bracketed_paste()?;
+        let bytes = crate::keyboard::encode_paste(text, bracketed)?;
         self.writer
             .try_send(InputMessage { bytes, _paste: Some(permit) })
             .map_err(|_| anyhow::anyhow!("terminal input queue is full or closed"))?;
@@ -545,14 +542,15 @@ impl Session {
         anyhow::ensure!(text.len() <= 16 * 1024, "automation paste exceeds 16 KiB");
         anyhow::ensure!(self.exit_status().is_none(), "process has exited");
         let permit = PastePermit::acquire(&self.paste_pending)?;
-        let bytes = {
-            let mut terminal = match self.terminal.try_lock() {
+        let bracketed = {
+            let terminal = match self.terminal.try_lock() {
                 Ok(terminal) => terminal,
                 Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),
                 Err(std::sync::TryLockError::WouldBlock) => return Ok(false),
             };
-            terminal.encode_paste(text)?
+            terminal.bracketed_paste()?
         };
+        let bytes = crate::keyboard::encode_paste(text, bracketed)?;
         self.writer.try_send(InputMessage { bytes, _paste: Some(permit) })
             .map_err(|_| anyhow::anyhow!("terminal input queue is full or closed"))?;
         Ok(true)

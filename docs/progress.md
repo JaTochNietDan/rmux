@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Paste captures bracketed-paste mode under the terminal mutex, then allocates and
+encodes its bounded payload after releasing that mutex. Both interactive and
+nonblocking automation paths use the same standalone Ghostty encoder; the single
+writer and paste permit still preserve complete-payload ordering and backpressure.
+Five focused paste tests passed, covering 1 MiB boundaries, delimiter sanitization,
+real PTY ordering, automation viewport preservation, and permit recovery. The
+interactive mode lookup still waits for parser access and encoding still occurs
+on the caller thread; this change does not establish a UI latency bound.
+
 Find now uses the shared monochrome chevron/close icons and neutral chrome with a
 thin separator. Empty queries retain “Find in terminal”; completed zero-result
 searches show “No matches” instead of an ambiguous 0 / 0. In-flight searches retain
