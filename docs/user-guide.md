@@ -1,5 +1,12 @@
 # rmux
 
+Use **Show Listening Ports** in the palette or menu to inspect a snapshot of local
+TCP listeners owned by the current terminal’s shell and descendants. Refresh
+manually and copy an address from its row. **Close Listening Ports** is also in
+the palette; custom actions are `listening_ports` and `close_listening_ports`.
+The panel does not discover remote-host ports or assume that a listener serves
+HTTP. Results can change immediately as processes and sockets come and go.
+
 **Desktop notifications** in Settings enables optional OS banners for unfocused
 terminals. Save settings to keep the choice (`"native_notifications": true` in
 JSON); the default is off. **Show desktop banners** chooses between an unfocused

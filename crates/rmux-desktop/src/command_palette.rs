@@ -218,6 +218,8 @@ impl CommandPalette {
         command!("Dismiss All Notifications", DismissAllNotifications);
         command!("Refresh Git Branch for Current Terminal", RefreshGitContext);
         command!("Toggle Program Status", ToggleProgramStatus);
+        command!("Show Listening Ports", ShowListeningPorts);
+        command!("Close Listening Ports", CloseListeningPorts);
         command!("Find in Terminal", Find);
         command!("Find Older Match", FindOlder);
         command!("Find Newer Match", FindNewer);

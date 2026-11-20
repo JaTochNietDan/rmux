@@ -60,6 +60,8 @@ fn action(name: &str) -> Option<Box<dyn Action>> {
         "decrease_font_size" => Box::new(DecreaseFontSize),
         "reset_font_size" => Box::new(ResetFontSize),
         "use_configured_font" => Box::new(UseConfiguredFont),
+        "close_listening_ports" => Box::new(CloseListeningPorts),
+        "listening_ports" => Box::new(ShowListeningPorts),
         "terminal_menu" => Box::new(ShowTerminalMenu),
         "tab_menu" => Box::new(ShowTabMenu),
         "workspace_menu" => Box::new(ShowWorkspaceMenu),

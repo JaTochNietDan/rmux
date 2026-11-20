@@ -26,6 +26,8 @@ mod memory_view;
 mod settings_view;
 mod shortcuts;
 mod process_metrics;
+mod ports;
+mod ports_view;
 mod drag_item;
 mod edit_history;
 mod find_bar;
@@ -326,6 +328,8 @@ actions!(
         DismissAllNotifications,
         RefreshGitContext,
         ToggleProgramStatus,
+        ShowListeningPorts,
+        CloseListeningPorts,
         PreviousWorkspace,
         MoveWorkspaceUp,
         MoveWorkspaceDown,
@@ -408,6 +412,7 @@ struct TerminalView {
     program_status: Option<rmux_terminal::program_status::Summary>,
     program_status_revision: u64,
     status_details: Option<Vec<rmux_terminal::program_status::Record>>,
+    ports: ports_view::State,
     attention: attention::Attention,
     session: Session,
     applied_colors: Option<[Option<Color>; 3]>,
@@ -758,6 +763,7 @@ impl TerminalView {
             program_status: None,
             program_status_revision: 0,
             status_details: None,
+            ports: Default::default(),
             attention: attention::Attention::default(),
             input_focused: false,
             _focus_subscriptions: subscriptions,
@@ -1502,6 +1508,8 @@ impl Render for TerminalView {
             .on_key_up(cx.listener(Self::key_up))
             .on_scroll_wheel(cx.listener(Self::wheel))
             .on_action(cx.listener(Self::paste))
+            .on_action(cx.listener(|this, _: &ShowListeningPorts, _, cx| this.refresh_ports(cx)))
+            .on_action(cx.listener(|this, _: &CloseListeningPorts, _, cx| this.close_ports(cx)))
             .on_action(cx.listener(|this, _: &ShowTerminalMenu, window, cx| {
                 this.show_terminal_menu(this.last_bounds.origin + point(px(8.), px(8.)), window, cx);
             }))
@@ -1600,6 +1608,7 @@ impl Render for TerminalView {
             .when_some(self.status_details.as_ref(), |root, records| {
                 root.child(status_view::panel(records, cx))
             })
+            .when(self.ports.visible, |root| root.child(ports_view::panel(&self.ports, cx)))
             .child(TerminalElement { view: cx.entity() })
             .when(self.rendered_paste_pending, |root| root.child(
                 div().id("paste-status").absolute().bottom(px(8.)).right(px(8.))
@@ -3327,6 +3336,7 @@ fn main() {
                     MenuItem::action("Mark All Read in This Window", MarkAllRead),
                     MenuItem::action("Toggle Notifications", ToggleNotifications),
                     MenuItem::action("Toggle Program Status", ToggleProgramStatus),
+                    MenuItem::action("Show Listening Ports", ShowListeningPorts),
                     MenuItem::action("Show / Refresh Terminal Memory", RefreshTerminalMemory),
                     MenuItem::action("Previous Workspace", PreviousWorkspace),
                 ],

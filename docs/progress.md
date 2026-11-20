@@ -2,6 +2,24 @@
 
 ## Current implementation focus
 
+T09 now includes Show Listening Ports: an explicit local TCP listener snapshot
+for the terminal shell and its descendant process tree, displayed in a compact
+panel with refresh, address copy and close actions. Palette/custom bindings also
+provide keyboard entry/exit. Scans run off the UI thread behind one app-wide
+permit; no idle polling or subprocess is introduced. Display retention is capped
+at 128 address/PID rows, traversal at 100,000 socket records and the owned tree at
+4096 processes. OS/backend enumeration allocations and syscall duration are not
+claimed to obey those application-level caps. Closing releases displayed rows;
+an in-flight scan can finish but does not publish into a closed panel.
+
+A macOS live loopback-listener ownership test and a descendant/cycle test passed;
+ARM64 Linux and macOS desktop compilation passed. Root disappearance/reuse is
+checked, but process/socket snapshots are not atomic and child ownership can
+change during enumeration. Native panel interaction, permission failures,
+process churn and Linux/Windows runtime behavior remain pending. Automatic
+metadata updates, remote discovery and PR metadata are still gaps. The adapter
+is pinned netstat2 0.11.2: https://docs.rs/netstat2/0.11.2/netstat2/ .
+
 Terminal, tab, workspace and group menus now bound their content height to the
 window and keep a per-open-menu scroll handle. Arrow/Home/End navigation scrolls
 the selected action into view; the initial enabled terminal action is revealed
