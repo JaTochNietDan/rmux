@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+"""Bundle dependency notices from the exact locally resolved Cargo packages."""
+import json
+from pathlib import Path
+import subprocess
+import sys
+
+metadata = json.loads(subprocess.check_output(['cargo', 'metadata', '--locked', '--format-version', '1', '--filter-platform', 'aarch64-apple-darwin']))
+resolved = {node['id'] for node in metadata['resolve']['nodes']}
+parts = ['rmux third-party notices\n\nDependency license declarations and available upstream license/notice files.\n']
+for package in sorted(metadata['packages'], key=lambda p: (p['name'], p['version'])):
+    if package['id'] not in resolved or package['name'].startswith('rmux-'):
+        continue
+    root = Path(package['manifest_path']).parent
+    parts.append(f"\n{'=' * 72}\n{package['name']} {package['version']}\nLicense: {package.get('license') or 'See upstream license'}\nSource: {package.get('repository') or ''}\n")
+    files = {p for p in root.iterdir() if p.is_file() and p.name.lower().startswith(('license', 'licence', 'copying', 'notice', 'copyright'))}
+    if package.get('license_file'):
+        files.add(root / package['license_file'])
+    for path in sorted(files):
+        if path.is_file():
+            parts.append('\n' + path.name + '\n' + path.read_text(errors='replace') + '\n')
+parts.append('\nGhostty notices\n' + Path('release/ghostty-notices.txt').read_text())
+Path(sys.argv[1]).write_text(''.join(parts))

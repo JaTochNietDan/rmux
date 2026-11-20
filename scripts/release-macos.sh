@@ -1,0 +1,30 @@
+#!/bin/sh
+# Run via mise run release-macos. Credentials never enter the repository.
+set -eu
+cd "$(dirname "$0")/.."
+: "${RMUX_SIGN_IDENTITY:?Set your Developer ID Application certificate identity}"
+: "${RMUX_NOTARY_PROFILE:?Set an existing notarytool Keychain profile name}"
+export RMUX_BUILD_PROFILE=release RMUX_DISTRIBUTION=1
+sh scripts/bundle-macos.sh
+version="$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')"
+app="$PWD/target/distribution/rmux.app"
+output="$PWD/target/releases/$version"
+mkdir -p "$output"
+archive="$output/rmux-$version-macos-arm64.zip"
+[ "$(uname -m)" = arm64 ] || { printf '%s\n' 'This initial release task currently requires an Apple Silicon host.' >&2; exit 1; }
+ditto -c -k --sequesterRsrc --keepParent "$app" "$archive"
+if [ -n "${RMUX_NOTARY_KEYCHAIN:-}" ]; then
+    xcrun notarytool submit "$archive" --keychain-profile "$RMUX_NOTARY_PROFILE" --keychain "$RMUX_NOTARY_KEYCHAIN" --wait --output-format json > "$output/notarization.json"
+else
+    xcrun notarytool submit "$archive" --keychain-profile "$RMUX_NOTARY_PROFILE" --wait --output-format json > "$output/notarization.json"
+fi
+python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); print("Notarization:",r["status"],r["id"]); sys.exit(0 if r["status"]=="Accepted" else 1)' "$output/notarization.json"
+xcrun stapler staple "$app"
+xcrun stapler validate "$app"
+spctl --assess --type execute --verbose=2 "$app"
+ditto -c -k --sequesterRsrc --keepParent "$app" "$archive"
+generate_appcast --account rmux --maximum-deltas 0 \
+    --download-url-prefix "https://github.com/JaTochNietDan/rmux/releases/download/v$version/" \
+    --link "https://github.com/JaTochNietDan/rmux" "$output"
+(cd "$output" && shasum -a 256 "rmux-$version-macos-arm64.zip" > SHA256SUMS)
+printf '%s\n' "Release artifacts: $output"

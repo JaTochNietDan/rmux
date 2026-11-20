@@ -1,0 +1,954 @@
+# rmux
+
+Workspace directory subtitles include the Git branch or detached HEAD when
+available. Discovery runs in the background on shell directory reports; it does
+not run Git or poll while idle. Branch changes without a new directory report
+may remain stale. PR and listening-port metadata are not yet implemented.
+The palette's Refresh Git Branch for Current Terminal action refreshes explicitly.
+Repeated shell directory reports refresh Git even when the path stays unchanged;
+the included zsh integration reports its directory at each prompt. `surface.list`
+exposes the cached value as `git_branch` (null when unavailable).
+
+A working Rust/Ghostty terminal-workspace prototype, with a locally runnable
+macOS release build. Start with [Trying rmux](trying-rmux.md) for launch,
+essential shortcuts and the current milestone gaps. Run `mise run open-app`
+from this project to build and open it. Full cmux parity remains in development.
+
+Open Settings with Cmd+, on macOS (Ctrl+, elsewhere), the app menu or palette.
+The side panel adjusts text-size defaults, terminal padding/theme, unfocused
+cursor and copy-on-select. Changes apply for the session; Save persists those
+fields while preserving other configuration options. Font defaults update matching terminals live while retaining custom size/family
+values. Reset Font Size returns the focused terminal to the size default. The editor link exposes the remaining settings. Tab/Shift-Tab or up/down navigate
+the panel; left/right adjust, Enter/Space activate, and Escape closes it. Opening
+the panel moves keyboard focus out of the shell; closing restores its prior focus
+when the panel still owns focus.
+
+Custom palette commands can be configured in `config.json`:
+
+```json
+{
+  "commands": [
+    {"name": "Tests", "argv": ["mise", "exec", "--", "cargo", "test"], "cwd": "/absolute/project/path", "env": {"RUST_BACKTRACE": "1"}}
+  ]
+}
+```
+
+After Reload Settings, choose **Run Tests** in the palette. Each invocation
+starts a dedicated workspace with its own terminal; it does not inject text into
+an existing shell. Arguments are literal, including spaces and empty arguments;
+use an explicit shell executable only when shell interpretation is intended.
+Without `cwd`, the selected workspace's remembered terminal directory is used
+when available. Limits are 32 unique command names, 64 argv entries and 16 KiB
+of argument text per command, within the config's overall 64 KiB limit. Optional
+`env` overrides inherited/default variables for that child only; it supports up
+to 64 portable variable names and 16 KiB of names/values, including empty values.
+Only one custom command may be starting per window; repeat activation while it
+is pending is rejected with a notice. Startup
+runs off the UI thread; failures appear in the notice area. These definitions
+are retained when saving appearance settings. Environment packs and the complete upstream command configuration contract
+remain pending; shortcut overrides are described below.
+
+Shortcut overrides can be added alongside custom commands:
+
+```json
+{
+  "keybindings": [
+    {"key": "ctrl-alt-y", "action": "settings", "context": "window"},
+    {"key": "ctrl-k ctrl-t", "command": "Tests"},
+    {"key": "ctrl-shift-p", "action": "disabled"}
+  ]
+}
+```
+
+The `Tests` command must exist in `commands`. Bindings default to `terminal`
+context, so they do not override text editors; `window` makes a binding global.
+Each stroke must use Ctrl/Cmd/Alt or F1–F24; one- and two-stroke bindings are
+supported. The limit is 128 bindings. Duplicate normalized keys in the same
+context, unknown key names/actions/commands and ambiguous action-plus-command
+definitions fail config validation. A single stroke and a two-stroke chord cannot
+share a prefix in the same custom context (for example `ctrl-k` and
+`ctrl-k ctrl-t`); two different chords may share their first stroke. Error messages
+identify the conflicting sequences. Function keys use F1–F24, without zero padding. Reload Settings replaces prior overrides and restores
+removed bindings to defaults. Later overrides win within the same context;
+a more specific terminal context takes precedence over a global binding.
+`disabled` removes the matching app binding, allowing normal event handling.
+The palette shows shortcuts resolved for its originating focus context.
+
+Supported action names: `new_workspace`, `new_window`, `new_tab`, `split_right`,
+`split_down`, `focus_left`, `focus_right`, `focus_up`, `focus_down`,
+`next_workspace`, `previous_workspace`, `next_tab`, `previous_tab`, `tab_picker`,
+`palette`, `toggle_zoom`, `toggle_sidebar`, `settings`, `notifications`,
+`next_unread`, `find`, `reload_settings`, and `disabled`. Graphical binding editing,
+full conflict explanations and complete upstream shortcut coverage remain pending.
+
+Workspace groups are available from the File menu and command palette: create
+an empty group (Ctrl-Cmd-G on macOS, Ctrl-Alt-G elsewhere), group the current
+workspace, rename, pin or ungroup. Headers represent the anchor terminal;
+their chevron collapses members and `+` adds a workspace. New workspaces within
+a group inherit the anchor's cached working directory and appear after the
+active member. Closing the anchor promotes the next member. Groups are saved
+with layouts and sessions. Use the palette's “Move Workspace to Group” commands
+to regroup existing workspaces. File-menu/palette actions can remove one member
+or make it the anchor without restarting terminals. Multi-selection, group drag/drop, configurable
+placement and group automation are still in progress. Group color and icon
+editors are available in the File menu and palette; styling is saved independently
+of the anchor workspace.
+Group children support Move Workspace Up/Down and drag placement after another
+group member. Dropping a child onto a standalone workspace removes it from its
+group. Header drags and Move Workspace Up/Down reorder whole groups among
+top-level rows in the same pinned/unpinned section. Native drag acceptance is
+still pending.
+Workspace number shortcuts and next/previous navigation follow group order.
+Collapsed members keep their shortcut numbers; selecting one expands its group.
+Group headers show workspace and unread-workspace counts, including hidden
+members. Collapsing a group does not acknowledge its notifications.
+Close Workspace Group in the File menu/palette closes its terminals after one
+confirmation for a multi-member group. Ungroup Workspaces keeps them running.
+Cmd-click (macOS) or Ctrl-click toggles sidebar selections; Shift-click selects
+a visible range. Group Selected Workspaces groups them in sidebar order with no
+new shell. Its shortcut is Cmd-Shift-G on macOS, Ctrl-Alt-Shift-G elsewhere.
+Set `group_new_workspace_placement` to `after_current` (default), `top` or `end`
+in config to choose where Cmd-N and the group header `+` insert new members.
+The header button uses the anchor as its reference; `top` always inserts directly
+below the anchor. Reload Settings applies changes to subsequent creations.
+
+Set `RMUX_SHELL` when launching rmux to choose the executable for new shell
+terminals, including fresh shells restored from layouts. It takes precedence
+over `SHELL` on Unix and `COMSPEC` on Windows. Supply one executable path/name,
+not a command string; paths containing spaces remain literal. An empty override
+is an error. Unix shells retain interactive login arguments (`-i -l`), and zsh
+retains its existing integration. Use the startup `-- PROGRAM ARG…` form when
+you need custom arguments. This override does not install or change your shell.
+
+Optional startup configuration is read from `$XDG_CONFIG_HOME/rmux/config.json`
+(or `~/.config/rmux/config.json`) on macOS/Linux, and
+`%APPDATA%/rmux/config.json` on Windows. `RMUX_CONFIG` selects an explicit file.
+No configuration file is created automatically. Example:
+
+```json
+{"font_size": 16, "confirm_close": "active"}
+```
+
+Open Settings File in the menu or palette opens that path with the system's
+default application for JSON. If missing, this explicit action creates a default
+file without overwriting an existing one. After editing, use Reload Settings.
+
+`scrollback_mib` sets the retained-history budget per new terminal (0–256,
+default 4). Zero disables scrollback. Reloading changes the default for new
+terminals without trimming existing sessions. This is an engine retention budget,
+not a cap on total process/GPU memory.
+
+`terminal_padding` sets the inset around terminal content in logical pixels
+(0–32, default 8). Reload Settings applies it to existing terminals and resizes
+their grids. Find/status bars stay outside this inset. Set it to 0 for the prior
+edge-to-edge layout; match padding when comparing benchmark window sizes.
+
+`copy_on_select` (default `false`) copies a completed local mouse selection to
+the system clipboard on release, including word/line and rectangular selections.
+Reload Settings applies it to existing terminals. Application mouse reporting
+keeps its normal behavior; hold Shift to select locally in those applications.
+
+On macOS, `macos_option_as_alt` defaults to `true`. Set it to `false` to leave
+Option-modified text and dead keys to native text composition, useful for
+accented characters. Control+Option and non-text navigation keys retain terminal
+encoding. Reload applies immediately. This setting has no effect on Linux or
+Windows; native text commits follow the existing UTF-8/IME path.
+
+`unfocused_cursor` is `"hollow"` by default, keeping the insertion position visible
+in inactive panes and windows. Set it to `"hidden"` to suppress inactive cursors.
+Focused terminals retain application-selected cursor shapes, and applications
+that hide their cursor remain hidden. Reload Settings applies this preference
+to existing windows; it does not add a blink timer.
+
+`foreground_color`, `background_color` and `cursor_color` accept `"#RRGGBB"`
+strings or `null` for the selected terminal theme's defaults. For example:
+
+```json
+{"foreground_color":"#dcdfe6","background_color":"#12141a","cursor_color":"#8cb4ff"}
+```
+
+Reload Settings updates existing terminals. Application OSC color overrides
+take precedence until the application resets them. These settings affect the
+terminal's default colors; sidebar styling and the ANSI palette are unchanged.
+
+`ansi_palette` separately accepts an array of exactly 16 `"#RRGGBB"` strings:
+black, red, green, yellow, blue, magenta, cyan, white, followed by their eight
+bright variants. Reload Settings recolors existing ANSI-indexed output. Extended
+indices 16–255 and true-color output retain their colors. Application OSC palette
+overrides take precedence; setting `ansi_palette` to `null` restores the selected
+terminal theme's default palette.
+
+`terminal_theme` accepts `"dark"` (the existing default) or `"light"` (white
+background with a darker ANSI palette). It reloads live; explicit color and
+palette values override the preset. This changes terminal content only, not the
+sidebar or other application controls, and does not automatically follow OS
+appearance changes.
+
+Font sizes must be 8–40. Reset Font Size uses this configured default; new tabs
+and splits inherit the source terminal's size and family, and saved layouts
+retain their saved fonts.
+Optional `font_family` selects an installed monospace font for terminals without
+a source to inherit from; the default remains Menlo/Consolas/DejaVu Sans Mono by platform. Missing
+fonts use GPUI's fallback stack. Existing terminals follow a changed family default only when their current family
+matches the previous default; saved layouts preserve each terminal's family. Older layouts without a family
+use the current configured default.
+Use Reload Settings in the menu or command palette to apply file changes.
+It keeps current settings if validation fails. Size and family values matching
+the previous defaults update live; values differing from those defaults remain
+unchanged. Matching is value-based, including fonts restored from layouts. `RMUX_CONFIRM_CLOSE` overrides the file's
+`confirm_close` setting. Unknown keys and invalid values fail startup.
+Use Configured Font in the View menu or palette applies both the configured
+family and size to the focused terminal while preserving its running session.
+Run `rmux --check-config` to validate settings without opening a window or
+starting a process. It returns 0 on success or 2 with a diagnostic on failure.
+`rmux --dump-config` prints the effective JSON preferences after defaults, the
+configuration file and the close-policy environment override are applied, then
+exits. Its output can be reused as a configuration file. It excludes internal
+source paths and separate launch variables such as `RMUX_SHELL`.
+`rmux --check-layout PATH` validates a saved layout's version, structure and
+resource limits without loading preferences, opening a window or starting shells.
+It returns 0 for a valid structure and 2 on error. Directory availability and
+shell executability are checked when restoring, not by this structural check.
+
+Close warnings use `RMUX_CONFIRM_CLOSE=active` by default (reported working/blocked
+tasks, live directly launched commands, and Unix foreground jobs whose process
+group differs from the shell). Set it to `always` to confirm closing any terminal-containing
+tab/workspace/window, or `never` to disable these confirmations. The Quit rmux
+action shares the policy. Set the variable before launching rmux; invalid values
+fail startup. OS-originated quit routes, Windows foreground-job detection and
+background jobs or commands that replace the shell remain pending.
+
+A planned Rust terminal workspace application for macOS, Linux and Windows, using Ghostty terminal technology and a cmux-style workspace layout. The priorities are responsive input, low idle overhead, bounded memory and eventual feature parity.
+
+This repository contains an early working macOS prototype plus the cross-platform roadmap. The prototype connects libghostty-vt 1.0.1, portable-pty and GPUI 0.2.2, renders terminal text directly through GPU elements, and supports workspaces, nested splits and per-pane tabs. Initial measurements and their limitations are recorded in `docs/benchmarks`; performance acceptance remains incomplete.
+
+Move Workspace to Next Window in the menu or palette transfers the active
+workspace into the next existing rmux window in the application's window list,
+wrapping around. It retains live terminals, layout and workspace metadata;
+pinned workspaces join the destination's pinned group. The destination becomes
+active, and an emptied source window closes. If there is no other window, the
+action shows a message; Move Workspace to New Window creates a destination.
+Transfers into windows restoring a layout or waiting for window-close
+confirmation are rejected before ownership changes.
+The palette also lists `Move Workspace to Window N — workspace name` for each
+other window, labelled with its active workspace. These entries retain the
+source workspace identity and destination window handle; a closed destination
+reports an error without removing the source workspace.
+
+Development tooling is managed through mise. Never install tools with Homebrew. Installations outside mise require explicit approval; the Apple Metal Toolchain was approved and installed for this machine's GPUI build.
+
+```sh
+mise install
+mise run bootstrap
+mise run run
+```
+
+`mise run bundle` creates `target/debug/rmux.app` on macOS. `mise run test` runs workspace tests; `mise run check` checks the workspace. Cmd+D splits the focused pane right; Cmd+Shift+D splits below. Linux/Windows use Ctrl+Shift+D and Ctrl+Shift+E. Splits can nest in either direction. Cmd+V pastes and Cmd+Q quits.
+
+Clipboard text pastes accept up to 1 MiB of UTF-8 per operation and preserve
+bracketed-paste boundaries. Each terminal accepts one pending paste at a time;
+another attempt reports an error until delivery finishes. Ordinary input queued
+after a paste follows its closing marker. A full or closed input queue reports
+an error instead of accepting a partial paste.
+
+Drag the sidebar's right edge to resize it; double-click the edge to restore its
+200px default width. Save Layout includes the preferred sidebar width.
+Double-click a workspace row to rename it. Hover over a truncated workspace name
+to read it in full; the New Workspace button also shows its platform shortcut.
+In the command palette, arrow keys select results and Page Up/Page Down jump eight
+results at a time. Hover over a truncated command title to read it in full.
+
+Launch with `rmux --working-directory PATH` (or `-d PATH`) to choose the default
+directory for new shells. A focused terminal's reported directory takes precedence
+for inherited tabs/splits. `--help` and `--version` exit without opening the UI;
+invalid arguments or directories return exit code 2.
+`rmux --rpc-stdio` provides standalone discovery without opening a window or
+starting a shell. Send one JSON-RPC 2.0 object per line, for example
+`{"jsonrpc":"2.0","id":1,"method":"system.capabilities"}`. Supported methods
+are `system.ping` and `system.capabilities`; parameters must be absent or empty
+(`{}` or `[]`). Responses use stdout, diagnostics stderr, and notifications
+produce no response. Each request is limited to 64 KiB including its newline;
+exceeding that limit closes the stream with exit code 2. Batch requests are not
+supported. Capabilities explicitly report `live_workspace_access: false`: this
+entry point does not connect to existing windows or claim cmux wire compatibility.
+
+`rmux --rpc-stdio-live` launches the normal UI with automation on its
+inherited stdin/stdout. It adds `window.list` and `workspace.list`, both with no
+parameters, for all windows in that process. Window results contain IDs, workspace
+counts and selected workspace IDs; workspace results include owning window ID,
+zero-based sidebar index, metadata, selection, pin state, and pane/terminal counts.
+IDs are opaque strings valid for that process lifetime, not saved-layout IDs.
+Selected means the selected sidebar workspace, not OS keyboard focus. Queries
+read cached UI state without terminal locks, scrollback extraction or focus changes.
+Pipe IO runs on one worker; the UI request queue holds at most eight requests and
+each reply waits at most five seconds. Error `-32000` indicates an unavailable/full
+queue; `-32001` means the request expired or was canceled before execution.
+If execution started but its reply is unavailable, `-32002` reports an unknown
+outcome; inspect current state before retrying. Closing stdin
+or breaking the stream detaches automation and leaves the windows running.
+This launch mode can combine with `--layout PATH`, or with directory and startup
+command options. Inspection flags remain incompatible. Stdio alone opens no socket
+and does not attach to an existing process. Additional targeting, subscriptions
+and cmux compatibility remain pending.
+The native GUI-to-pipe path passed a macOS smoke check covering restored layouts,
+zoom and target selection across two windows. Visual focus, OS activation and
+other-platform acceptance remain pending. Reproduce with
+`mise run smoke-live-rpc` on Unix with an existing Python 3 and usable GUI session.
+
+For opt-in Unix socket automation, launch with
+`RMUX_SOCKET_DIR=/absolute/new-directory mise run run`. The parent must exist;
+the endpoint directory must not. Connect to `rpc.sock` inside it using the same
+newline-delimited JSON-RPC protocol and live methods. This also works alongside
+`--rpc-stdio-live`; clients share the bounded UI dispatcher. The directory is
+mode 0700 and socket 0600. Same-user clients can control the app. At most eight
+connections are served, with ten-second read and five-second write timeouts;
+idle clients should reconnect. No idle polling or network listener is added.
+Normal quit removes the endpoint if its identity still matches. After a crash,
+choose a new directory or manually inspect/remove the stale one. Startup failures
+are logged and leave the GUI running without the socket. Windows named pipes and
+caller-scoped permissions remain pending. `mise run smoke-socket` checks two live
+clients, shared mutations, reconnection and normal-quit cleanup on macOS/Unix.
+
+Build the lightweight external client with `mise exec -- cargo build -p rmux-cli`.
+The macOS bundle also includes it at `Contents/MacOS/rmuxctl`, without a global
+install or PATH change. It has no desktop renderer or terminal-engine dependency:
+
+```sh
+target/debug/rmuxctl --socket /absolute/new-directory/rpc.sock workspace.list
+target/debug/rmuxctl --socket /absolute/new-directory/rpc.sock workspace.rename '{"workspace_id":"ID_FROM_LIST","name":"Build"}'
+```
+
+Alternatively, export `RMUX_SOCKET_DIR` and omit `--socket`. The client prints the
+complete JSON-RPC reply; exit status is 0 for success, 1 for an RPC error and 2
+for usage/transport failure. It never retries mutations automatically because a
+lost reply can have an unknown outcome. Requests are capped at 64 KiB and replies
+at 8 MiB. Alongside raw method calls, the client supports `list-windows`, `list-workspaces`,
+`list-panes`, `list-panels`, `select-workspace --workspace ID`,
+`rename-workspace --workspace ID NAME`, `focus-panel --panel ID`,
+`send --surface ID [--paste] TEXT`, and `read-screen --surface ID` (optionally `--scrollback`
+or `--selection`). Select/focus accept `--activate` to request OS activation;
+otherwise they change the target selection without requesting OS activation.
+Use `--` before positional text starting with a dash. All output remains JSON.
+Lists cover the whole process by default. Narrow workspace/pane/panel lists with
+`--window ID`; pane/panel lists also accept `--workspace ID`. Combined filters
+intersect, and a well-formed missing or mismatched target produces an empty list.
+Malformed IDs and unsupported filters are errors. Filtering does not focus or
+create anything. Ref/index resolution, implicit caller targets and the rest of
+the cmux CLI remain pending. Unsupported flags
+are rejected rather than ignored.
+
+`send-key --surface ID KEY` sends one symbolic press/release tap, for example
+`Enter`, `Escape`, `Up`, `F5`, `Ctrl-c`, `Alt-Left` or `Shift-Tab`. The CLI also
+accepts C-/M-/S- modifier prefixes, Return/Esc/BSpace aliases, and single Unicode
+characters. It uses the terminal's negotiated keyboard encoding, not hard-coded
+escape sequences, and preserves focus/viewport. Raw `surface.send_key` takes
+`surface_id`, a lowercase named `key` (or a literal character), and optional
+`control`, `alt`, `shift` booleans. A busy parser returns `-32007` before queueing;
+other input failures return `-32006`. Multi-key sequences, held keys and --force
+semantics remain pending.
+
+`send --paste` sets `paste:true` on `surface.send_text`. It uses Ghostty's current
+bracketed-paste mode, preserves viewport/focus, and queues the complete encoded
+payload before later input. Both raw and paste automation text are capped at
+16 KiB UTF-8. A busy parser returns `-32007` without queueing input; an exited
+terminal, pending paste or unavailable input queue returns `-32006`. No implicit
+newline is appended. Without `--paste`, input retains the existing raw behavior.
+
+The notification panel owns keyboard focus while open. Up/down, Page Up/Down,
+and Tab/Shift-Tab navigate messages; Enter/Space closes the panel and opens the
+selected terminal. Delete/Backspace dismisses the selected message, and Escape
+closes the panel and restores its prior focus. Selection tracks terminal identity
+as messages arrive; the panel and Settings are mutually exclusive.
+
+`notify --surface ID --title TITLE --body BODY` posts into rmux's existing
+notification panel and unread indicators without changing focus. Each surface
+retains its latest notification. `list-notifications` lists non-dismissed messages
+and accepts optional `--window`/`--workspace` filters. These are in-app messages;
+native OS notification delivery is not implemented yet. The raw methods are
+`notification.send`, `notification.list`, and `notification.dismiss`; dismissal
+requires `surface_id` and the returned `revision`, and returns `dismissed:false`
+if a newer message has replaced it. Shell OSC notifications and RPC messages
+share UI revisions while tracking shell updates independently. Titles/bodies are
+bounded and control characters removed. The full cmux notify/reply/clear contract
+is still pending. `surface.list` also includes its latest non-dismissed message
+as `notification` (or null).
+
+`close-workspace --workspace ID` calls `workspace.close`. It removes the targeted
+workspace and shuts down its owned terminals through the usual lifecycle; closing
+the last workspace also closes its window. Closing a background workspace preserves
+the current selection/focus. If the configured close policy requires confirmation,
+the API returns `-32003` and leaves the workspace untouched; complete the close in
+the UI. No force override is exposed. The result reports `closed` and
+`window_closed`; process reaping finishes asynchronously.
+
+`new-window [--activate]` creates a window. `new-workspace --window ID` creates
+one terminal workspace in an existing window, optionally with `--name NAME`,
+`--description TEXT`, `--cwd ABSOLUTE_PATH`, `--focus true|false`, and `--activate`.
+Workspace creation defaults to keeping the current workspace selected;
+`--activate` implies selection and requests OS activation. New workspaces are
+ungrouped; group creation has its own RPC methods. Command/env/layout overrides
+for creation remain pending. Raw `workspace.create` accepts the same fields
+using `window_id`, `name`, `description`, `cwd`, `focus`, and `activate`.
+Invalid cwd/shell startup leaves no empty workspace behind. Windows are limited
+to 64 workspaces through this API; busy windows reject creation for retry later.
+
+`workspace.list` accepts an optional `window_id`. `pane.list` and `surface.list`
+accept optional `window_id` and `workspace_id` filters; with no parameters they
+list all panes and terminal tabs across that process. Both include parent window/workspace IDs;
+surfaces also include pane ID, tab index, effective title, selected/attention flags
+and a cached directory label (not a canonical path). Pane results include selected
+surface ID, surface count and zoom state. Pane indices describe internal ordering,
+not spatial position. `workspace.list` includes `layout`, a nested tree of
+`pane` nodes with pane IDs and `split` nodes with `rows`/`columns`, child order and
+relative weights, plus `zoomed_pane_id`. The tree retains hidden panes during zoom.
+Use this tree for spatial layout and IDs for identity; tab order and indices may
+change. Cached labels can be stale while terminal metadata updates are pending.
+Surface results also contain `process_id` (the original PTY child PID, nullable)
+and `process_exited` (whether reaping has completed). These avoid terminal locks;
+a retained PID is not a liveness guarantee and may be reused after exit.
+
+`window.list` includes `groups` with window-scoped handles such as
+`workspace_group:17`, `window_id`, name, icon/color, pin/collapse flags,
+`generated_anchor`, `anchor_workspace_id` and ordered `workspace_ids`.
+Use the group handle together with its window ID; handles can repeat in another
+window. `workspace.list` adds nullable `group_id` and boolean `group_anchor`.
+Its `index` follows logical sidebar order, including collapsed members.
+`workspace.group.update` requires `window_id`, `group_id` and at least one of
+`name`, `collapsed` or `pinned`; it returns the updated group record.
+`workspace.group.ungroup` accepts only those two IDs and removes the container,
+returning its `workspace_ids` without closing terminals. Both respect busy-state
+guards and support notifications. `workspace.group.add`, `workspace.group.remove`
+and `workspace.group.set_anchor` require `window_id`, `group_id`, `workspace_id`.
+The workspace must belong to that window; remove/set-anchor also require current
+membership. Add appends a member and is idempotent within the same group. The
+response includes `group` (null if removing the final member dissolved it).
+These methods preserve terminals and selection.
+`workspace.group.create` requires `window_id` and `name`. Optional `workspace_ids`
+must be a nonempty, unique list from that window; the first becomes the anchor.
+Omitting it starts and selects a fresh anchor using the active workspace's cached
+directory. Optional `external_id` is a persistent, window-scoped retry key:
+repeating it returns the existing group without changing it or starting a shell.
+Creating from existing workspaces preserves selection. Optional `cwd` supplies
+an absolute directory for a fresh anchor; it cannot be combined with
+`workspace_ids`. Members subsequently inherit that anchor's directory.
+`workspace.group.ungroup` optionally accepts `remove_generated_anchor: true`.
+This closes only a sole anchor explicitly created by rmux; it rejects groups with
+other members and user-selected/promoted anchors. Close-policy confirmation
+requirements return `-32003` so the user can close the workspace in the UI.
+Successful cleanup returns `closed_workspace_id`; ordinary ungroup closes nothing.
+`workspace.group.new_workspace` accepts `window_id`, `group_id` and optional
+`placement` (`after_current`, `top`, `end`). It creates/selects a fresh workspace
+using the anchor's cached directory and returns its `workspace_id`. The anchor
+is the placement reference, so `after_current` inserts directly below it. Without
+an override, the configured `group_new_workspace_placement` is used.
+
+Live mode also supports `workspace.select` with an ID from `workspace.list`:
+`{"jsonrpc":"2.0","id":2,"method":"workspace.select","params":{"workspace_id":"ID","activate":false}}`.
+It uses sidebar selection behavior, including remembering the previous workspace
+and restoring pane focus inside that window. `activate` defaults to false; true
+also requests OS window activation. No index fallback is used for stale IDs.
+Unknown workspaces return `-32004`; windows with active editors, palettes, layout
+restoration or close prompts return `-32003` instead of interrupting that work.
+Queued requests canceled at the deadline cannot execute later. Selection
+notifications execute without a response; use a request ID to receive confirmation.
+
+`surface.focus` accepts `{"surface_id":"ID","activate":false}` using an ID from
+`surface.list`. It selects that terminal's workspace, pane and tab through the
+existing terminal-navigation path. If the workspace is zoomed, zoom follows the
+target pane. OS activation remains opt-in. The same deadline and busy-window
+errors apply, including active tab renames and close prompts. A removed surface
+returns `-32004` without selecting another tab. Success returns `surface_id`,
+`workspace_id` and `selected: true`; visual focus/zoom acceptance is still pending.
+
+`surface.send_text` takes `{"surface_id":"ID","text":"text"}` and queues the exact
+UTF-8 bytes to that PTY. Text must be nonempty and at most 16 KiB after UTF-8
+encoding. No newline or bracketed-paste envelope is added; include line endings
+explicitly when wanted. Workspace/tab selection and the scrollback viewport are
+preserved. `queued_bytes` confirms queue acceptance, not application execution or
+completed delivery. An exited process or unavailable writer queue returns
+`-32006`; invalid parameters return `-32602`. Existing target, busy and deadline
+rules apply. The native live-shell test verifies Unicode delivery and retained
+shell variable values after workspace transfer.
+
+`surface.read_text` takes `{"surface_id":"ID","max_bytes":65536}`. It reads the
+current viewport, including a scrolled-back viewport, from a fresh terminal
+snapshot without changing selection or scroll position. Visual rows are separated
+by newlines (including soft wraps), and row-end whitespace is trimmed. The optional
+byte limit defaults to 64 KiB and ranges from 1 byte to 1 MiB; output ends at a valid
+UTF-8 boundary with an explicit `truncated` flag. Responses include columns, rows,
+scrollback offset and `scope: "viewport"` (the default).
+If parsing owns the terminal lock, error `-32007` asks the caller to retry instead
+of blocking the UI waiting for that lock. Snapshot extraction itself still has a
+cost; sustained-read performance has not been benchmarked.
+
+Use `scope: "selection"` with `surface.read_text` to read only selected text.
+It uses the same bounded background export and UTF-8-safe truncation as history;
+no selection returns empty text with `truncated: false`. It does not change the
+clipboard, selection or viewport.
+
+`surface.memory_usage` accepts `{"surface_id":"ID"}` and samples Ghostty screen
+storage on demand in the background. It reports primary/alternate resident,
+virtual, compressed and image bytes plus compression support. Its scope is
+`ghostty_screen_storage`: these values exclude Rust snapshots, fonts, GPU assets
+and child-process memory, and are not total application RSS. A busy parser returns
+`-32007` for retry. No periodic sampler runs when the endpoint is unused.
+The View menu and command palette also offer Show / Refresh Terminal Memory.
+Its panel samples up to 256 terminals in the current window and provides manual
+Refresh/Close controls, including explicit busy or unavailable rows.
+Rows initially sort by resident storage; use the sort control or command palette's
+Cycle Terminal Memory Sort to switch to shell RSS or CPU, descending with missing
+samples last. Sorting reuses existing samples without another process scan.
+Click a row to focus its terminal. Copy exports the last sample as JSON in the
+displayed order, with raw byte counts and explicit unavailable values.
+The panel also samples each terminal's root shell RSS and CPU on the background
+worker. CPU requires two sufficiently spaced refreshes with the same PID set;
+the first sample is unavailable rather than zero. Exited processes are omitted.
+These process figures exclude descendants and helpers, and are separate from
+Ghostty screen storage. Sampling is manual, with no idle polling timer.
+The panel's rmux summary reports application-process RSS and CPU across all
+windows, also included under `application` in copied JSON. RSS is the operating
+system's resident process measure, not a GPU allocation total. Screen storage is
+already part of the application's memory: do not add it to application RSS.
+
+Use `{"surface_id":"ID","scope":"history","max_bytes":65536}` to export
+the active screen's retained history oldest-first, unwrapping soft-wrapped lines.
+The same byte limits apply; responses contain surface_id, scope, text and
+truncated. Export runs on a background executor, without changing selection,
+focus or scroll position. It returns `-32007` when the engine is busy or the
+terminal closes before export. Formatting still holds the engine lock while
+reading, so large exports can contend with rendering and parsing; sustained
+history-read latency is not yet benchmarked. Alternate-screen exports contain
+only that screen, not the main screen's history.
+
+`surface.move_to_workspace` takes `{"surface_id":"ID","workspace_id":"ID","activate":false}`.
+It moves the existing terminal into the destination workspace's remembered pane,
+including across windows, and selects the transferred tab. Activation is optional
+and defaults to false. Moving to the current workspace is a no-op. Stale IDs return
+`-32004`; busy editing/restore/close states return `-32003`. Successful responses
+contain the surface and destination workspace IDs. This shares the palette's
+cross-window transfer path and preserves the PTY and custom tab label.
+
+The rmux-specific `pane.zoom.set` method takes `{"pane_id":"ID","zoomed":true}`.
+Setting true selects that pane's workspace and active terminal, then zooms it
+without OS window activation. Setting false clears zoom only if that pane is
+currently zoomed; it does not clear another pane's zoom or change selection.
+Repeated requests are idempotent. Layout weights and terminal identities survive
+zoom/unzoom. Missing IDs return `-32004`, malformed parameters `-32602`, and busy
+windows `-32003`. Native state-transition checks pass; pixel-level zoom appearance
+and latency remain unmeasured. This method is not a cmux wire-compatibility claim.
+
+`window.create` accepts an optional `{"activate":false}` object and returns the
+new window's ID, selected workspace ID and initial workspace metadata. It uses
+the normal default-shell window creation path. Activation defaults to false;
+true requests window focus and app activation. A close prompt or shutdown returns
+`-32003`; native window creation failure returns `-32005`. Each successful call
+creates a new window, so inspect `window.list` after an unknown-outcome error
+before retrying. Creation does not guarantee that the configured shell started
+successfully; the window retains the normal terminal error display if it fails.
+
+`workspace.rename` takes `{"workspace_id":"ID","name":"New name"}` and returns
+the ID and effective name. It shares sidebar editor normalization: trim whitespace,
+remove control characters, keep at most 128 Unicode characters, then trim again.
+An empty result returns `-32602`. Renaming does not select the workspace or request
+OS activation; an active workspace also updates its window title. Existing
+busy-window, stale-ID and deadline rules apply. The native smoke verifies Unicode
+normalization and renaming an inactive workspace without changing selection.
+
+`workspace.move_to_window` takes `{"workspace_id":"ID","window_id":"DESTINATION","activate":false}`.
+It moves the existing workspace and terminals, selects it in the destination,
+and removes an empty source window. Names, metadata, split layout and terminal
+IDs are retained. The destination ID must come from `window.list`. Activation
+defaults off; repeated requests targeting the current owner are no-ops. Missing
+targets return `-32004`; busy source/destination interactions return `-32003`.
+The native smoke verifies layout/ID retention and empty-source cleanup.
+`mise run smoke-live-sessions` additionally verifies five live fixture-shell PIDs
+survive both transfers and exit during harness cleanup. Arbitrary running-shell
+state, OS focus and performance still need dedicated acceptance.
+
+File → Save Session… (also in the command palette) captures all normal rmux
+windows into one file. Capture refuses while a window is restoring, editing or
+waiting for a close decision. The selected path is written atomically on a
+background executor. This saves the state when the action was invoked.
+
+Use `rmux --session PATH` to restore a version-1 multi-window recovery file with
+fresh shells. It preserves window order and the selected window; an empty session
+opens one default window. `--check-session PATH` validates structure without
+launching shells or checking directories. Session files allow at most 16 windows,
+256 total tabs and 8 MiB. `--rpc-stdio-live` works with session restore.
+Process/output history is not resumed.
+Saved layouts and sessions also include window position, size and display mode.
+Pane zoom is saved per workspace; restoring it retains the underlying split tree
+and proportions, and focuses the visible pane. Older files default to unzoomed.
+Older files use default placement. If displays change, restore clamps the window
+to an available display. Moving/resizing a window schedules a checkpoint when
+automatic recovery is enabled. Fullscreen/maximized and multi-monitor visual
+acceptance remain pending.
+
+To opt into recovery, set `"session_file": "/absolute/path/to/rmux-session.json"`
+in settings. Its parent directory must already exist. Recovery requires an
+exclusive OS lock on a sibling `.lock` file. Another
+process using that recovery file opens a fresh window with recovery disabled,
+so it cannot overwrite the owner's checkpoint. The lock file remains on disk;
+ownership is released by the OS when the process exits, including forced stops.
+Normal launches restore
+that file if present; normal Quit captures the current windows and awaits an
+atomic background save within the shared three-second cleanup deadline. Closing
+all windows records an empty session. Corrupt/unrestorable files log an error and
+open a fresh window with a recovery notice. Automatic saving is disabled for that
+launch so the original file remains available for repair; Save Session can write
+the new session separately. Lock failures also produce a recovery notice. Explicit
+`--layout`, `--session`, directory/command launches and benchmarks neither restore
+nor overwrite the configured recovery file. This setting is frozen at startup;
+reload takes effect on the next launch. Saves can be skipped during an active
+editing/restore/close interaction; failures are logged. OS-originated quit has
+GPUI's shorter best-effort deadline. Window/workspace/pane changes also schedule
+a checkpoint after 750 ms, coalescing notifications in a one-slot queue. There is
+no idle polling or terminal-frame observer. Writes are serialized, unchanged
+serialized state is skipped, and older jobs cannot replace newer checkpoints.
+Deduplication retains one encoded session (at most 8 MiB) while enabled.
+Directory snapshots use delivered shell metadata without waiting for the terminal
+parser; an explicit startup directory is retained until a directory report arrives.
+Recent changes may be lost before a checkpoint completes. The native smoke verifies
+forced-stop/relaunch from a completed checkpoint, with fresh shells and preserved
+layout/directory metadata. Power-loss durability, interruption during file
+replacement and high-output capture performance remain unverified.
+
+Live RPC `system.quit` requests the normal quit flow, including the configured
+close confirmation. `{"requested":true}` confirms the request, not exit or save
+completion; a notification can be used when no reply is needed.
+
+Use `rmux --layout PATH` to start with a saved layout and fresh shells. Layout
+validation and shell preparation finish before the first window opens; failures
+return exit code 2. This cannot be combined with `--working-directory` or benchmark
+mode. It restores layout metadata, not running processes or scrollback.
+
+Drag a terminal tab onto another sidebar workspace to move that specific tab into
+the destination's remembered pane. Valid rows highlight during the drag; the
+destination becomes active after dropping. Cross-window tab drops are not supported.
+New zsh sessions automatically load prompt and directory integration through a
+private temporary startup wrapper. Existing user startup files run in order;
+their `ZDOTDIR` is restored before `.zshrc`, and no shell configuration files are
+modified. Set `RMUX_SHELL_INTEGRATION=0` before launching rmux to opt out.
+The hooks emit OSC 133 boundaries and percent-encoded OSC 7 paths using built-ins.
+For an already-running shell, source `shell-integration/zsh/rmux.zsh` manually;
+the macOS bundle also carries it under `Contents/Resources/shell-integration/zsh/`.
+Automatic fish startup and PowerShell integration remain pending. Run
+`mise run test-zsh-integration` for the focused hook check.
+
+Bash integration can currently be sourced manually from
+`shell-integration/bash/rmux.bash` (also included in newly built macOS bundles).
+It reports encoded working directories and prompt boundaries, preserves existing
+`PROMPT_COMMAND` hooks, and supports `RMUX_SHELL_INTEGRATION=0`. Run
+`mise run test-bash-integration` for its focused check. Automatic Bash login startup,
+command-start/end markers and exit-status reporting are still pending; the
+current fixture covers macOS Bash 3.2, with modern Bash array-hook runtime
+coverage still pending.
+
+Unix shells launch as interactive login shells by default. Set `RMUX_SHELL_LOGIN=0`
+before launching rmux to use interactive non-login shells instead. In this mode,
+Bash automatically loads integration through a private `--rcfile` wrapper that
+sources the user's `.bashrc` first. No user startup files are modified. Bash login
+shells retain their normal startup path and require manual sourcing; use
+`RMUX_SHELL_INTEGRATION=0` to disable automatic hooks in either supported shell.
+The login-mode setting affects default-shell tabs, splits and restored layouts,
+not explicit commands passed after `--`, and has no effect on Windows.
+The macOS PTY fixture verifies both zsh and non-login Bash directory reporting,
+Unicode path decoding, prompt navigation through scrollback and shell exit.
+
+Manual fish hooks are available in `shell-integration/fish/rmux.fish`, also copied
+into newly built macOS bundles. They report percent-encoded working directories,
+prompt start, command start/end and command exit status through fish events,
+without replacing prompt functions. Source only once per session; repeated
+sourcing is guarded, and `RMUX_SHELL_INTEGRATION=0` disables installation.
+These hooks do not emit a prompt-end/input-start marker or install automatically.
+`mise run test-fish-integration` uses an already-installed fish; runtime verification
+is pending because this machine has no fish executable. Event behavior follows
+the [fish event documentation](https://fishshell.com/docs/current/language.html#event-handlers)
+and [built-in URL escaping](https://fishshell.com/docs/current/cmds/string-escape.html).
+
+View → Previous Prompt / Next Prompt navigate shell-reported prompt boundaries.
+Use Cmd+Up/Down on macOS or Ctrl+Shift+Up/Down on Linux/Windows, or the command
+palette. This requires semantic shell markers such as OSC 133; unmarked output
+does not move the viewport. New zsh sessions supply these markers automatically.
+
+Find Older/Newer Match reopen a closed search using its remembered query and
+select a result on the first invocation. Explicit Find still prefers selected
+text when prefilling a new search. Find Older/Newer Match are available in Edit
+and the palette. Use Cmd+G /
+Cmd+Shift+G on macOS, or F3 / Shift+F3 on Linux/Windows, with the terminal or find
+field focused. If Find is closed, these commands open it. The find bar also has
+28-pixel hover controls with labels for navigation and closing.
+
+Unfocused terminals compress eligible scrollback after a quiet delay, using
+bounded background steps. History restores transparently when accessed. Focusing
+a terminal or opening Find cancels scheduling; completed passes stop until later
+activity. Savings depend on content and platform support.
+
+Edit → Clear Scrollback (also in the palette) removes retained history while
+preserving the current screen and running shell. It clears selection and closes
+Find; new output continues to accumulate within the normal history limit.
+
+Edit → Select All selects the active terminal screen and its scrollback. Use
+Cmd+A on macOS or Ctrl+Shift+A on Linux/Windows, then Copy. Alternate-screen
+applications select only their own screen. In text fields, Select All selects
+the field text instead.
+
+View → Move Workspace to New Window (also in the command palette) moves the whole
+workspace with its existing splits, tabs, live sessions, labels, color and pin
+state. The source window closes if it has no remaining workspaces.
+
+View → Equalize Pane Sizes (also in the palette) gives siblings equal space at
+every split, exits pane zoom and preserves the split tree, tabs and running shells.
+
+View → Detach Tab to New Window (also in the command palette) moves the active
+tab into its own window, retaining its running shell, output and font size.
+An emptied source pane/workspace closes.
+
+The command palette also offers `Move Tab to Workspace …` for each other workspace
+in this window. Search by its name to choose a destination directly; numbered
+results distinguish duplicate names and resolve targets by stable workspace ID.
+Multi-tab pane headers also have a `⌄` tab picker for crowded strips. Use its list
+to see titles and unread markers; Up/Down navigates, Enter selects, and Escape
+returns to the terminal without switching tabs.
+Open it directly with ⌘⇧T on macOS or Ctrl+Alt+Shift+T elsewhere, or choose
+“Choose Terminal Tab” in the command palette. Type to filter titles and working
+directories: all whitespace-separated query words must match either field,
+ignoring case. Each row shows its cached working directory below the title when
+available, with the full title and path in its tooltip. This uses the last
+shell-reported directory or initial directory, without filesystem polling.
+Moving focus elsewhere dismisses the picker.
+The picker displays original tab numbers, a matching count and navigation hints.
+Numbers are searchable text; Home/End edit the search field. Page Up/Down moves
+the highlighted choice by eight results without activating it; Enter opens the
+choice and Escape cancels. Empty results cannot activate a terminal. The search
+field uses the shared Unicode composition and editing component.
+Command-palette terminal results also show and search cached working directories
+across all open rmux windows. Other-window results include a window label;
+selecting one focuses its existing terminal and activates that window. Closed,
+moved or busy destinations show an error instead of switching to another tab.
+These paths and targets are captured when the palette opens; reopen it to refresh
+them after a shell changes directories or a terminal moves.
+Other-window workspaces also appear as `Switch to Window … / Workspace: …`.
+Selecting one restores that workspace's remembered pane focus and activates its
+window. Switching does not transfer tabs or restart shells; closed, moved or busy
+destinations produce a notice.
+Direct terminal navigation reveals its workspace if hidden inside a collapsed
+group and follows that terminal's pane when the workspace is zoomed.
+Tab transfers also reveal a collapsed destination group. Move Tab to Next
+Workspace follows sidebar order, including group members.
+Next Unread Terminal and the notification list also follow sidebar workspace
+order, including collapsed group members. Unread navigation checks the current
+workspace first, wraps once, and focuses only the chosen unread terminal.
+The notification panel shows a message count and a Clear all control. The command
+palette also offers Dismiss All Notifications. Both dismiss current messages in
+this window and clear their unread indicators without switching terminals;
+subsequent notification revisions remain visible.
+For another existing window, choose `Move Tab to Window … / Workspace: …`.
+The destination's remembered pane receives the existing terminal and custom tab
+label, becomes selected, and follows zoom if enabled. The destination window is
+activated. Closed or busy destinations report an error before removing the source
+tab. Native cross-window tab interaction acceptance is still pending.
+View → Move Tab to Next Workspace (also in the command palette) appends the active
+terminal to the next workspace's remembered pane, wrapping at the end. Its session
+stays alive and the destination becomes active. Empty source panes/workspaces
+collapse; with only one workspace, the action does nothing.
+View → Join Pane into Next (also in the command palette) appends the focused
+pane's tabs to the next pane in layout order, preserves their order and active
+terminal, then collapses the empty split. The last pane wraps to the first;
+a single pane is unchanged.
+View → Move Tab to Split Right / Below (also in the command palette) moves the
+active tab into a new adjacent pane without starting a new shell. It requires at
+least two tabs in the source pane and focuses the moved tab. A single-tab pane
+is unchanged.
+View → Swap Pane with Next (also in the command palette) exchanges the focused
+pane with the next pane in layout order, wrapping at the end. Tabs and sessions
+stay attached to their pane, focus follows the moved pane, and split proportions
+stay attached to their positions. Swapping exits zoom to reveal the new layout.
+Cmd+Shift+Enter toggles pane zoom (Ctrl+Shift+Enter on Linux/Windows), also available
+under View. Click the restore strip or repeat the shortcut to restore the splits.
+Ctrl+Tab cycles panes while zoomed. Creating or closing a pane restores the layout;
+directional focus shortcuts apply when the split layout is visible.
+
+Drag split dividers to resize adjacent panes; double-click to give the adjacent
+branches equal space. Resizing and closing panes preserve surviving sessions.
+
+OSC 9 and OSC 777 notification requests mark unfocused terminals unread, like BEL.
+OSC 9;4 progress reports show a percentage or Working/Paused/Error label in the
+terminal tab. Remove reports and terminal reset clear it; no polling is used.
+OSC 7501 program status shows a tab label and hover details. Blocked work takes
+priority, followed by errors, completed work, running work and idle state; `+N`
+indicates additional records. Up to 64 records are kept per terminal. Shell prompt,
+exit, reset and focus events clean up records according to their state.
+View → Toggle Program Status (also in the palette) shows all records for the
+focused terminal, including hierarchical IDs, inherited app names and messages.
+View → Toggle Notifications (also in the palette) opens a panel with the latest
+bounded message per live terminal. Click a message to focus its terminal, or Dismiss
+to acknowledge it without switching focus. Panes with unread tabs show an amber
+border. A new notification appears again after dismissal. Full
+notification history, OSC 99 and native OS notifications are not yet implemented.
+Cmd+N creates a workspace; click sidebar rows or use Cmd+Alt+Up/Down to switch.
+View → Workspace Icon offers Terminal, Code, Build, Cloud, Notes and None.
+The same choices are available in the palette. Icons persist in saved layouts
+and follow a workspace when it moves into a new window.
+File → Edit Workspace Icon accepts a single symbol or emoji. Edit Workspace Color
+accepts an exact six-digit hex color, with or without `#`. Both are also in the
+palette; an empty value clears the setting. Invalid input stays open for correction.
+Both editors also show preset icon buttons or color swatches. Click a preset to
+fill the draft, then press Enter to save or Escape to cancel. Preset edits support
+the text field's undo/redo; choosing None stages an empty value.
+
+View → Workspace Color offers six accent colors and None to clear the marker.
+The same named choices appear in the command palette. Colors persist in saved
+layouts and do not change the terminal's ANSI colors or unread indicator.
+
+File → Edit Workspace Description (also in the palette) edits a secondary sidebar
+label. Enter saves, Escape cancels, and an empty value clears it. Descriptions
+are retained in saved layouts; older layouts default to no description.
+
+View → Pin / Unpin Workspace (also in the palette) keeps pinned workspaces at the
+top. Reordering stays within pinned/unpinned groups. Save/Open Layout preserves
+pins; older layouts open unpinned.
+View → Last Workspace (also in the palette) toggles between the current and most
+recently visited workspace. Reordering preserves the target; closing it clears
+the remembered destination. This history is per window and is not saved.
+Cmd+= / Cmd+- change the focused terminal's font size; Cmd+0 resets it to 14.
+Linux/Windows use Ctrl+= / Ctrl+- / Ctrl+0. These controls are also in Edit and the
+command palette. Zoom is per terminal, ranges from 8 to 40, and follows a moved
+tab. New tabs and splits inherit the source terminal's size; a new workspace starts
+at 14. Save/Open Layout preserves each terminal's size; older layouts default to 14.
+Cmd+Shift+P opens the command palette (Ctrl+Shift+P on Linux/Windows). Type words
+to filter implemented actions and workspace names (abbreviations such as `splt blw`
+also match, with contiguous matches ranked first), use Up/Down and Enter to run
+an action or switch workspaces, or Escape to return to the previous focus.
+Workspace results include their sidebar position to distinguish duplicate names.
+Clicking outside dismisses it.
+Cmd+1 through Cmd+8 select the first eight workspaces; Cmd+9 selects the last.
+Linux/Windows use Ctrl+Alt+1 through Ctrl+Alt+9. Sidebar rows show shortcut hints,
+and keyboard selection scrolls the selected workspace into view.
+Cmd+B toggles the sidebar. Linux/Windows use Ctrl+Shift+N, Ctrl+Alt+Up/Down and
+Ctrl+Shift+B. Switching preserves each workspace's sessions, split layout and
+last focused pane. Cmd+Alt+Shift+Up/Down moves the active workspace in the sidebar
+(Ctrl+Alt+Shift+Up/Down on Linux/Windows).
+
+Cmd+Shift+R renames the active workspace (Ctrl+Shift+R on Linux/Windows), also
+available in the File menu. Enter saves and Escape cancels. Names appear in the
+sidebar and native window title; Save Layout preserves them for manual restoration.
+
+Cmd+Shift+N opens a separate native window; Cmd+Shift+W closes the current window.
+Linux/Windows use Ctrl+Alt+N and Ctrl+Alt+W. Each window owns its workspace list.
+Closing a window drops its terminal sessions; quitting the app cleans up sessions
+across all windows. Native menus expose the main window, workspace, tab, edit and
+split commands where the platform provides an application menu.
+System-originated quits that bypass rmux's Quit action request process cleanup
+through GPUI's shutdown hook. That hook cannot show a cancellable confirmation
+and allows only 100 ms to await completion; the normal Quit action retains its
+confirmation policy and three-second cleanup deadline.
+
+Cmd+T creates a tab in the focused pane; Cmd+Shift+[ / ] switches tabs.
+Cmd+Shift+1–9 selects a tab directly within that pane (Ctrl+Shift+1–9 on
+Linux/Windows). Missing tab numbers do nothing; 9 selects the ninth tab.
+The palette also offers Select Tab 1–9, Next Tab and Previous Tab.
+Double-click a tab to rename it, hover its title to read the full label, or
+middle-click to close it using the configured close-confirmation policy.
+
+Copy Working Directory in Edit or the palette copies the focused terminal's
+reported local directory as plain text, without shell quoting. It requires shell
+directory reporting; remote or unavailable directory metadata leaves the clipboard
+unchanged and shows a message.
+Reveal Working Directory uses the same local-only metadata to reveal the path
+in the system file manager (Finder on macOS). Neither action runs a shell command.
+Linux/Windows use Ctrl+Shift+T and Ctrl+PageUp/PageDown. Click tab labels to
+select them, × to close, or + to create. Ctrl+Shift+PageUp/PageDown moves the
+active tab left/right. Tabs retain their processes and scrollback while hidden.
+Drag a tab onto another tab to move it to that position within the pane. Drag a
+workspace row onto another row to reorder within its window. Drop a tab onto a
+tab in another pane of the same workspace to move it there. The existing session
+is retained and becomes active; an empty source pane collapses. Moving between
+workspaces or native windows is not implemented yet.
+Shell-provided OSC 0/2 titles replace the default tab labels when available.
+New tabs and splits inherit the focused shell's directory when it reports a local
+OSC 7 file URI. Without a usable report they use the normal shell startup directory.
+Remote-host directory reports are not interpreted as local paths. No shell startup
+files are modified; automatic reporting depends on your shell configuration.
+Workspace rows show the focused pane's reported local directory beneath its name.
+
+File → Save Layout… exports the current window's workspaces, splits, tabs, focus
+and reported directories to a JSON file. File → Open Layout in New Window… reads
+that file and starts fresh shells in the saved directories, restoring names,
+tabs, split proportions, focus and sidebar width. Preparation happens in the
+background with a Cancel control; errors leave existing windows intact. Closing
+the originating window also cancels preparation. Automatic restoration is not
+implemented. Layout files do not save running processes or terminal scrollback.
+
+Cmd+W closes the active tab (Ctrl+Shift+W on Linux/Windows). Closing its last tab
+removes the pane. Ctrl+Tab and Ctrl+Shift+Tab cycle pane focus. Closing the last
+pane removes its workspace; closing the last workspace closes the window.
+File → Close Workspace (also in the command palette) closes the active workspace
+and its terminal sessions together, then selects a remaining workspace.
+
+A bell from an unfocused terminal marks its tab and workspace with an amber dot. Focusing that
+terminal in the active window clears the marker. System notifications and sounds
+are not implemented yet.
+
+Cmd+Shift+U jumps to an unread terminal (Ctrl+Alt+U on Linux/Windows), also under
+View → Next Unread Terminal. It searches the current workspace first, then wraps
+through this window's other workspaces in sidebar order. If a workspace is zoomed,
+the target pane becomes the zoomed pane. With no unread terminals it does nothing.
+
+Cmd+Ctrl+Arrow focuses a pane in that direction (Alt+Shift+Arrow on Linux/Windows).
+Navigation uses the current pane geometry, prioritizing aligned neighbors, and
+does not wrap at the outer edge. Ctrl+Tab still cycles panes in layout order.
+
+Use the wheel/trackpad or Shift+PageUp/PageDown to browse scrollback; Shift+Home/End goes to the oldest/live output. Typing or pasting returns to the live viewport.
+
+Last Prompt in the menu or command palette jumps to the newest retained shell
+prompt, including one above a long command's output. It uses shell semantic
+markers; without them it returns to live output.
+
+Drag to select terminal text, double-click a word, or triple-click a line.
+Alt-drag selects a rectangular block. Cmd+C copies the selection on macOS;
+Ctrl+Shift+C copies on Linux/Windows. Hold Shift to select locally when a terminal
+application has enabled mouse reporting. Copy uses Ghostty's text extraction,
+including Unicode and soft-wrapped lines. Drag above/below the terminal to extend
+selection through scrollback; scrolling stops on release or at the history edge.
+
+Cmd-click an OSC 8 hyperlink or plain-text HTTP(S) URL to open it in the default
+browser (Ctrl-click on Linux/Windows). The lookup follows the displayed scrollback
+viewport and runs only on modifier-click; ordinary rendering does not copy link
+URLs. Plain URLs can span soft-wrapped rows, but must be fully visible and fit
+within an 8 KiB logical line. Surrounding quotes and trailing prose punctuation
+are excluded. Explicit OSC 8 targets take precedence. Link hover feedback and
+local/remote file-path routing are still pending.
+
+Cmd+F opens terminal search (Ctrl+Shift+F on Linux/Windows). A single-line selection
+of up to 4 KiB prefills a newly opened search, selected for easy replacement;
+otherwise Find restores that terminal's last query (empty for a new terminal).
+The query survives closing Find, clearing scrollback and moving the terminal to
+another window; it is not saved in layout files. Type a query, then
+Enter to visit older matches or Shift+Enter for newer ones; the arrow buttons do
+the same. Escape or × closes the find bar. Search includes scrollback, updates
+with output, and runs in a background worker. Matching ignores ASCII letter case;
+regex and case-sensitive modes are not yet available.
+Invoke Find again while it is open to focus and select the query for replacement.
+Active IME composition is preserved rather than selecting over marked text.
+
+When a terminal application enables mouse reporting, clicks, movement and vertical wheel events are sent through Ghostty's mouse encoder. Hold Shift while scrolling to browse local history instead.
+
+`mise run bundle-release` creates the optimized macOS bundle. For isolated idle measurements, run `mise exec -- sh scripts/prepare-macos-benchmark.sh 8`, open the resulting benchmark bundle, and sample its PID with `mise exec -- sh scripts/sample-macos-idle.sh PID`. The benchmark uses clean shells and disables the Metal HUD without changing normal launches or system settings.
+
+The current UI is a P0 rendering prototype. Control keys use Ghostty's encoder and paste respects bracketed-paste mode. Full keyboard protocols, selection/search, accessibility, nested layouts and persistence remain unfinished. Linux/Windows dependency setup is provided, but their desktop builds and runtime behavior have not been validated. See [platform build instructions](building.md) and [implementation progress](progress.md). `mise run bench-engine` measures release engine throughput and snapshot costs for 1/4/16 panes.
+
+`mise run bench-pty` measures input calls and response snapshots under output pressure from up to 15 other PTY sessions. It does not measure GUI or input-to-pixel latency.
+
+Start with the [roadmap](roadmap.md), then the [feature inventory](feature-parity.md).
+
+| Document | Purpose |
+| --- | --- |
+| [Roadmap](roadmap.md) | Delivery phases, dependencies and completion gates |
+| [Feature parity](feature-parity.md) | 132 capability families with evidence and acceptance criteria |
+| [Architecture](architecture.md) | Proposed cross-platform design and decisions requiring prototypes |
+| [Performance](performance.md) | Workloads, measurement definitions and initial targets |
+| [Research and sources](research.md) | Pinned baseline, evidence limits, discrepancies and refresh procedure |
+| [Contract inventories](reference/README.md) | Commands, settings, shortcut IDs and static RPC capabilities |
+
+The comparison baseline is cmux commit `a76816e4f0788003758b9434ab702068a640fb5d`, reviewed November 19, 2026. Main-branch capabilities are not all stable-release features. rmux's architecture and phase assignments are proposals; upstream evidence is identified separately.

@@ -1,0 +1,26 @@
+{
+  "repository": "https://github.com/manaflow-ai/cmux",
+  "revision": "a76816e4f0788003758b9434ab702068a640fb5d",
+  "sources": [
+    {
+      "path": "docs/cli-command-tree.txt",
+      "sha256": "227afd14d8f3407dfa0b59b87574020cdaa6af9683548291b90a34ac7c5af551",
+      "url": "https://github.com/manaflow-ai/cmux/blob/a76816e4f0788003758b9434ab702068a640fb5d/docs/cli-command-tree.txt"
+    },
+    {
+      "path": "web/data/cmux.schema.json",
+      "sha256": "68e8b7c5aa447be6baf29d464a06ed34feda940ca373be2cbb68ebfeaf896940",
+      "url": "https://github.com/manaflow-ai/cmux/blob/a76816e4f0788003758b9434ab702068a640fb5d/web/data/cmux.schema.json"
+    },
+    {
+      "path": "web/data/cmux-shortcuts.ts",
+      "sha256": "f7a2bddc86aef4fbd9c205d6978784ceba4e50d7f89c2b6bf4e255b89f684f02",
+      "url": "https://github.com/manaflow-ai/cmux/blob/a76816e4f0788003758b9434ab702068a640fb5d/web/data/cmux-shortcuts.ts"
+    },
+    {
+      "path": "Sources/TerminalController+Capabilities.swift",
+      "sha256": "fdf7fd9737cf8a985ac9258ac86e3b460c8e96707cf4f2945e1f7b827f6b7970",
+      "url": "https://github.com/manaflow-ai/cmux/blob/a76816e4f0788003758b9434ab702068a640fb5d/Sources/TerminalController%2BCapabilities.swift"
+    }
+  ]
+}

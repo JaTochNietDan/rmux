@@ -1,0 +1,16 @@
+[package]
+name = "rmux-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "rmuxctl"
+path = "src/main.rs"
+
+[dependencies]
+serde_json = "1.0.154"
+
+[dev-dependencies]
+tempfile = "3"

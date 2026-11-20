@@ -1,0 +1,6 @@
+{"scenario":"identical_rewrite","panes":1,"columns":160,"rows":48,"samples":2000,"frame_mean_ns":3849,"retained_rows":96000,"observed_rows":96000}
+{"scenario":"one_row_changes","panes":1,"columns":160,"rows":48,"samples":2000,"frame_mean_ns":2781,"retained_rows":94000,"observed_rows":96000}
+{"scenario":"identical_rewrite","panes":4,"columns":160,"rows":48,"samples":8000,"frame_mean_ns":3322,"retained_rows":384000,"observed_rows":384000}
+{"scenario":"one_row_changes","panes":4,"columns":160,"rows":48,"samples":8000,"frame_mean_ns":2230,"retained_rows":376000,"observed_rows":384000}
+{"scenario":"identical_rewrite","panes":16,"columns":160,"rows":48,"samples":32000,"frame_mean_ns":2771,"retained_rows":1536000,"observed_rows":1536000}
+{"scenario":"one_row_changes","panes":16,"columns":160,"rows":48,"samples":32000,"frame_mean_ns":2113,"retained_rows":1504000,"observed_rows":1536000}

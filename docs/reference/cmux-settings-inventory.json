@@ -1,0 +1,3328 @@
+{
+  "revision": "a76816e4f0788003758b9434ab702068a640fb5d",
+  "scope": "Schema nodes, including containers, alternatives, wildcard entries and definitions; count is not the number of independent settings. Descriptions omitted; consult pinned source.",
+  "count": 535,
+  "settings": [
+    {
+      "path": "$schema",
+      "schema_pointer": "/properties/$schema",
+      "type": "string",
+      "default": "https://raw.githubusercontent.com/manaflow-ai/cmux/main/web/data/cmux.schema.json"
+    },
+    {
+      "path": "schemaVersion",
+      "schema_pointer": "/properties/schemaVersion",
+      "type": "integer",
+      "default": 1,
+      "minimum": 1
+    },
+    {
+      "path": "paneBorderColor",
+      "schema_pointer": "/properties/paneBorderColor",
+      "default": null,
+      "$ref": "#/$defs/colorHexOrNull"
+    },
+    {
+      "path": "activePaneBorderColor",
+      "schema_pointer": "/properties/activePaneBorderColor",
+      "default": null,
+      "$ref": "#/$defs/colorHexOrNull"
+    },
+    {
+      "path": "packs",
+      "schema_pointer": "/properties/packs",
+      "type": "array",
+      "default": []
+    },
+    {
+      "path": "packs[]",
+      "schema_pointer": "/properties/packs/items"
+    },
+    {
+      "path": "packs[]<oneOf:0>",
+      "schema_pointer": "/properties/packs/items/oneOf/0",
+      "type": "string"
+    },
+    {
+      "path": "packs[]<oneOf:1>",
+      "schema_pointer": "/properties/packs/items/oneOf/1",
+      "type": "object",
+      "required": [
+        "path"
+      ]
+    },
+    {
+      "path": "packs[]<oneOf:1>.path",
+      "schema_pointer": "/properties/packs/items/oneOf/1/properties/path",
+      "type": "string"
+    },
+    {
+      "path": "actions",
+      "schema_pointer": "/properties/actions",
+      "type": "object"
+    },
+    {
+      "path": "ui",
+      "schema_pointer": "/properties/ui",
+      "type": "object"
+    },
+    {
+      "path": "ui.newWorkspace",
+      "schema_pointer": "/properties/ui/properties/newWorkspace",
+      "type": "object"
+    },
+    {
+      "path": "ui.newWorkspace.action",
+      "schema_pointer": "/properties/ui/properties/newWorkspace/properties/action",
+      "type": "string"
+    },
+    {
+      "path": "commands",
+      "schema_pointer": "/properties/commands",
+      "type": "array"
+    },
+    {
+      "path": "commands[]",
+      "schema_pointer": "/properties/commands/items",
+      "type": "object"
+    },
+    {
+      "path": "settingPresets",
+      "schema_pointer": "/properties/settingPresets",
+      "type": "object",
+      "default": {}
+    },
+    {
+      "path": "settingPresets.*",
+      "schema_pointer": "/properties/settingPresets/additionalProperties"
+    },
+    {
+      "path": "settingPresets.*<allOf:0>",
+      "schema_pointer": "/properties/settingPresets/additionalProperties/allOf/0",
+      "$ref": "#"
+    },
+    {
+      "path": "settingPresets.*<allOf:1>",
+      "schema_pointer": "/properties/settingPresets/additionalProperties/allOf/1",
+      "type": "object"
+    },
+    {
+      "path": "computerUse",
+      "schema_pointer": "/properties/computerUse",
+      "type": "object"
+    },
+    {
+      "path": "computerUse.enabled",
+      "schema_pointer": "/properties/computerUse/properties/enabled",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "computerUse.showInMenuBar",
+      "schema_pointer": "/properties/computerUse/properties/showInMenuBar",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "customSidebars",
+      "schema_pointer": "/properties/customSidebars",
+      "type": "object"
+    },
+    {
+      "path": "customSidebars.beta",
+      "schema_pointer": "/properties/customSidebars/properties/beta",
+      "type": "object"
+    },
+    {
+      "path": "customSidebars.beta.enabled",
+      "schema_pointer": "/properties/customSidebars/properties/beta/properties/enabled",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "customSidebars.renderer",
+      "schema_pointer": "/properties/customSidebars/properties/renderer",
+      "type": "string",
+      "enum": [
+        "inProcess",
+        "remote"
+      ],
+      "default": "inProcess"
+    },
+    {
+      "path": "extensions",
+      "schema_pointer": "/properties/extensions",
+      "type": "object"
+    },
+    {
+      "path": "extensions.beta",
+      "schema_pointer": "/properties/extensions/properties/beta",
+      "type": "object"
+    },
+    {
+      "path": "extensions.beta.enabled",
+      "schema_pointer": "/properties/extensions/properties/beta/properties/enabled",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "windowHints",
+      "schema_pointer": "/properties/windowHints",
+      "type": "object"
+    },
+    {
+      "path": "windowHints.beta",
+      "schema_pointer": "/properties/windowHints/properties/beta",
+      "type": "object"
+    },
+    {
+      "path": "windowHints.beta.enabled",
+      "schema_pointer": "/properties/windowHints/properties/beta/properties/enabled",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "cloud",
+      "schema_pointer": "/properties/cloud",
+      "type": "object"
+    },
+    {
+      "path": "cloud.beta",
+      "schema_pointer": "/properties/cloud/properties/beta",
+      "type": "object"
+    },
+    {
+      "path": "cloud.beta.machines",
+      "schema_pointer": "/properties/cloud/properties/beta/properties/machines",
+      "type": "object"
+    },
+    {
+      "path": "cloud.beta.machines.enabled",
+      "schema_pointer": "/properties/cloud/properties/beta/properties/machines/properties/enabled",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "remoteTmux",
+      "schema_pointer": "/properties/remoteTmux",
+      "type": "object"
+    },
+    {
+      "path": "remoteTmux.beta",
+      "schema_pointer": "/properties/remoteTmux/properties/beta",
+      "type": "object"
+    },
+    {
+      "path": "remoteTmux.beta.enabled",
+      "schema_pointer": "/properties/remoteTmux/properties/beta/properties/enabled",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "remoteTmux.beta.newWorkspaceOnHost",
+      "schema_pointer": "/properties/remoteTmux/properties/beta/properties/newWorkspaceOnHost",
+      "type": "object"
+    },
+    {
+      "path": "remoteTmux.beta.newWorkspaceOnHost.enabled",
+      "schema_pointer": "/properties/remoteTmux/properties/beta/properties/newWorkspaceOnHost/properties/enabled",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "remoteTmux.beta.originColors",
+      "schema_pointer": "/properties/remoteTmux/properties/beta/properties/originColors",
+      "type": "object"
+    },
+    {
+      "path": "remoteTmux.beta.originColors.enabled",
+      "schema_pointer": "/properties/remoteTmux/properties/beta/properties/originColors/properties/enabled",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "remoteTmux.beta.originHostTitles",
+      "schema_pointer": "/properties/remoteTmux/properties/beta/properties/originHostTitles",
+      "type": "object"
+    },
+    {
+      "path": "remoteTmux.beta.originHostTitles.enabled",
+      "schema_pointer": "/properties/remoteTmux/properties/beta/properties/originHostTitles/properties/enabled",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "remoteTmux.multiplexer",
+      "schema_pointer": "/properties/remoteTmux/properties/multiplexer",
+      "type": "object"
+    },
+    {
+      "path": "remoteTmux.multiplexer.beta",
+      "schema_pointer": "/properties/remoteTmux/properties/multiplexer/properties/beta",
+      "type": "object"
+    },
+    {
+      "path": "remoteTmux.multiplexer.beta.enabled",
+      "schema_pointer": "/properties/remoteTmux/properties/multiplexer/properties/beta/properties/enabled",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "remoteTmux.brokers",
+      "schema_pointer": "/properties/remoteTmux/properties/brokers",
+      "type": "object",
+      "default": {}
+    },
+    {
+      "path": "remoteTmux.brokers.{^[A-Za-z0-9_.-]+$}",
+      "schema_pointer": "/properties/remoteTmux/properties/brokers/patternProperties/^[A-Za-z0-9_.-]+$",
+      "type": "object",
+      "required": [
+        "executable"
+      ]
+    },
+    {
+      "path": "remoteTmux.brokers.{^[A-Za-z0-9_.-]+$}.executable",
+      "schema_pointer": "/properties/remoteTmux/properties/brokers/patternProperties/^[A-Za-z0-9_.-]+$/properties/executable",
+      "type": "string"
+    },
+    {
+      "path": "remoteTmux.brokers.{^[A-Za-z0-9_.-]+$}.arguments",
+      "schema_pointer": "/properties/remoteTmux/properties/brokers/patternProperties/^[A-Za-z0-9_.-]+$/properties/arguments",
+      "type": "array",
+      "default": []
+    },
+    {
+      "path": "remoteTmux.brokers.{^[A-Za-z0-9_.-]+$}.arguments[]",
+      "schema_pointer": "/properties/remoteTmux/properties/brokers/patternProperties/^[A-Za-z0-9_.-]+$/properties/arguments/items",
+      "type": "string"
+    },
+    {
+      "path": "agentChat",
+      "schema_pointer": "/properties/agentChat",
+      "type": "object"
+    },
+    {
+      "path": "agentChat.url",
+      "schema_pointer": "/properties/agentChat/properties/url",
+      "type": "string",
+      "default": "http://127.0.0.1:7739"
+    },
+    {
+      "path": "agentChat.startCommand",
+      "schema_pointer": "/properties/agentChat/properties/startCommand",
+      "type": "string"
+    },
+    {
+      "path": "agentChat.keys",
+      "schema_pointer": "/properties/agentChat/properties/keys",
+      "type": "object"
+    },
+    {
+      "path": "agentChat.keys.ctrlJ",
+      "schema_pointer": "/properties/agentChat/properties/keys/properties/ctrlJ",
+      "type": "string",
+      "enum": [
+        "newline",
+        "menu"
+      ],
+      "default": "newline"
+    },
+    {
+      "path": "agentChat.fonts",
+      "schema_pointer": "/properties/agentChat/properties/fonts",
+      "type": "object"
+    },
+    {
+      "path": "agentChat.fonts.sansFamily",
+      "schema_pointer": "/properties/agentChat/properties/fonts/properties/sansFamily",
+      "type": "string"
+    },
+    {
+      "path": "agentChat.fonts.bodyFamily",
+      "schema_pointer": "/properties/agentChat/properties/fonts/properties/bodyFamily",
+      "type": "string"
+    },
+    {
+      "path": "agentChat.fonts.family",
+      "schema_pointer": "/properties/agentChat/properties/fonts/properties/family",
+      "type": "string"
+    },
+    {
+      "path": "agentChat.fonts.baseSize",
+      "schema_pointer": "/properties/agentChat/properties/fonts/properties/baseSize",
+      "type": "number"
+    },
+    {
+      "path": "agentChat.fonts.bodySize",
+      "schema_pointer": "/properties/agentChat/properties/fonts/properties/bodySize",
+      "type": "number"
+    },
+    {
+      "path": "agentChat.fonts.monoFamily",
+      "schema_pointer": "/properties/agentChat/properties/fonts/properties/monoFamily",
+      "type": "string"
+    },
+    {
+      "path": "agentChat.fonts.codeFamily",
+      "schema_pointer": "/properties/agentChat/properties/fonts/properties/codeFamily",
+      "type": "string"
+    },
+    {
+      "path": "agentChat.fonts.codeSize",
+      "schema_pointer": "/properties/agentChat/properties/fonts/properties/codeSize",
+      "type": "number"
+    },
+    {
+      "path": "agentChat.fonts.monoSize",
+      "schema_pointer": "/properties/agentChat/properties/fonts/properties/monoSize",
+      "type": "number"
+    },
+    {
+      "path": "agentChat.fonts.codeLineHeight",
+      "schema_pointer": "/properties/agentChat/properties/fonts/properties/codeLineHeight",
+      "type": "number"
+    },
+    {
+      "path": "agents",
+      "schema_pointer": "/properties/agents",
+      "type": "object"
+    },
+    {
+      "path": "agents.launchers",
+      "schema_pointer": "/properties/agents/properties/launchers",
+      "type": "array",
+      "default": []
+    },
+    {
+      "path": "agents.launchers[]",
+      "schema_pointer": "/properties/agents/properties/launchers/items",
+      "type": "object",
+      "required": [
+        "id",
+        "detect",
+        "resumeArgvPrefix"
+      ]
+    },
+    {
+      "path": "agents.launchers[].id",
+      "schema_pointer": "/properties/agents/properties/launchers/items/properties/id",
+      "type": "string"
+    },
+    {
+      "path": "agents.launchers[].kind",
+      "schema_pointer": "/properties/agents/properties/launchers/items/properties/kind",
+      "type": "string"
+    },
+    {
+      "path": "agents.launchers[].kinds",
+      "schema_pointer": "/properties/agents/properties/launchers/items/properties/kinds",
+      "type": "array"
+    },
+    {
+      "path": "agents.launchers[].kinds[]",
+      "schema_pointer": "/properties/agents/properties/launchers/items/properties/kinds/items",
+      "type": "string"
+    },
+    {
+      "path": "agents.launchers[].detect",
+      "schema_pointer": "/properties/agents/properties/launchers/items/properties/detect",
+      "type": "object",
+      "required": [
+        "argvExecutables"
+      ]
+    },
+    {
+      "path": "agents.launchers[].detect.argvExecutables",
+      "schema_pointer": "/properties/agents/properties/launchers/items/properties/detect/properties/argvExecutables"
+    },
+    {
+      "path": "agents.launchers[].detect.argvExecutables<oneOf:0>",
+      "schema_pointer": "/properties/agents/properties/launchers/items/properties/detect/properties/argvExecutables/oneOf/0",
+      "type": "string"
+    },
+    {
+      "path": "agents.launchers[].detect.argvExecutables<oneOf:1>",
+      "schema_pointer": "/properties/agents/properties/launchers/items/properties/detect/properties/argvExecutables/oneOf/1",
+      "type": "array"
+    },
+    {
+      "path": "agents.launchers[].detect.argvExecutables<oneOf:1>[]",
+      "schema_pointer": "/properties/agents/properties/launchers/items/properties/detect/properties/argvExecutables/oneOf/1/items",
+      "type": "string"
+    },
+    {
+      "path": "agents.launchers[].resumeArgvPrefix",
+      "schema_pointer": "/properties/agents/properties/launchers/items/properties/resumeArgvPrefix",
+      "type": "array"
+    },
+    {
+      "path": "agents.launchers[].resumeArgvPrefix[]",
+      "schema_pointer": "/properties/agents/properties/launchers/items/properties/resumeArgvPrefix/items",
+      "type": "string"
+    },
+    {
+      "path": "agents.launchers[].includesAgentExecutable",
+      "schema_pointer": "/properties/agents/properties/launchers/items/properties/includesAgentExecutable",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "vault",
+      "schema_pointer": "/properties/vault",
+      "type": "object"
+    },
+    {
+      "path": "vault.agents",
+      "schema_pointer": "/properties/vault/properties/agents",
+      "type": "array",
+      "default": []
+    },
+    {
+      "path": "vault.agents[]",
+      "schema_pointer": "/properties/vault/properties/agents/items",
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "sessionIdSource",
+        "resumeCommand"
+      ]
+    },
+    {
+      "path": "vault.agents[].id",
+      "schema_pointer": "/properties/vault/properties/agents/items/properties/id",
+      "type": "string"
+    },
+    {
+      "path": "vault.agents[].name",
+      "schema_pointer": "/properties/vault/properties/agents/items/properties/name",
+      "type": "string"
+    },
+    {
+      "path": "vault.agents[].iconAssetName",
+      "schema_pointer": "/properties/vault/properties/agents/items/properties/iconAssetName",
+      "type": "string"
+    },
+    {
+      "path": "vault.agents[].detect",
+      "schema_pointer": "/properties/vault/properties/agents/items/properties/detect",
+      "type": "object"
+    },
+    {
+      "path": "vault.agents[].detect.processName",
+      "schema_pointer": "/properties/vault/properties/agents/items/properties/detect/properties/processName",
+      "type": "string"
+    },
+    {
+      "path": "vault.agents[].detect.argvContains",
+      "schema_pointer": "/properties/vault/properties/agents/items/properties/detect/properties/argvContains"
+    },
+    {
+      "path": "vault.agents[].detect.argvContains<oneOf:0>",
+      "schema_pointer": "/properties/vault/properties/agents/items/properties/detect/properties/argvContains/oneOf/0",
+      "type": "string"
+    },
+    {
+      "path": "vault.agents[].detect.argvContains<oneOf:1>",
+      "schema_pointer": "/properties/vault/properties/agents/items/properties/detect/properties/argvContains/oneOf/1",
+      "type": "array"
+    },
+    {
+      "path": "vault.agents[].detect.argvContains<oneOf:1>[]",
+      "schema_pointer": "/properties/vault/properties/agents/items/properties/detect/properties/argvContains/oneOf/1/items",
+      "type": "string"
+    },
+    {
+      "path": "vault.agents[].sessionIdSource",
+      "schema_pointer": "/properties/vault/properties/agents/items/properties/sessionIdSource"
+    },
+    {
+      "path": "vault.agents[].sessionIdSource<oneOf:0>",
+      "schema_pointer": "/properties/vault/properties/agents/items/properties/sessionIdSource/oneOf/0",
+      "type": "string"
+    },
+    {
+      "path": "vault.agents[].sessionIdSource<oneOf:1>",
+      "schema_pointer": "/properties/vault/properties/agents/items/properties/sessionIdSource/oneOf/1",
+      "type": "object",
+      "required": [
+        "type"
+      ]
+    },
+    {
+      "path": "vault.agents[].sessionIdSource<oneOf:1>.type",
+      "schema_pointer": "/properties/vault/properties/agents/items/properties/sessionIdSource/oneOf/1/properties/type",
+      "type": "string",
+      "enum": [
+        "argvOption",
+        "piSessionFile"
+      ]
+    },
+    {
+      "path": "vault.agents[].sessionIdSource<oneOf:1>.argvOption",
+      "schema_pointer": "/properties/vault/properties/agents/items/properties/sessionIdSource/oneOf/1/properties/argvOption",
+      "type": "string"
+    },
+    {
+      "path": "vault.agents[].sessionIdSource<oneOf:1><allOf:0>",
+      "schema_pointer": "/properties/vault/properties/agents/items/properties/sessionIdSource/oneOf/1/allOf/0"
+    },
+    {
+      "path": "vault.agents[].sessionIdSource<oneOf:1><allOf:1>",
+      "schema_pointer": "/properties/vault/properties/agents/items/properties/sessionIdSource/oneOf/1/allOf/1"
+    },
+    {
+      "path": "vault.agents[].resumeCommand",
+      "schema_pointer": "/properties/vault/properties/agents/items/properties/resumeCommand",
+      "type": "string"
+    },
+    {
+      "path": "vault.agents[].resumeCommand<anyOf:0>",
+      "schema_pointer": "/properties/vault/properties/agents/items/properties/resumeCommand/anyOf/0"
+    },
+    {
+      "path": "vault.agents[].resumeCommand<anyOf:1>",
+      "schema_pointer": "/properties/vault/properties/agents/items/properties/resumeCommand/anyOf/1"
+    },
+    {
+      "path": "vault.agents[].forkCommand",
+      "schema_pointer": "/properties/vault/properties/agents/items/properties/forkCommand",
+      "type": "string"
+    },
+    {
+      "path": "vault.agents[].forkCommand<anyOf:0>",
+      "schema_pointer": "/properties/vault/properties/agents/items/properties/forkCommand/anyOf/0"
+    },
+    {
+      "path": "vault.agents[].forkCommand<anyOf:1>",
+      "schema_pointer": "/properties/vault/properties/agents/items/properties/forkCommand/anyOf/1"
+    },
+    {
+      "path": "vault.agents[].cwd",
+      "schema_pointer": "/properties/vault/properties/agents/items/properties/cwd",
+      "type": "string",
+      "enum": [
+        "preserve",
+        "ignore"
+      ],
+      "default": "preserve"
+    },
+    {
+      "path": "vault.agents[].sessionDirectory",
+      "schema_pointer": "/properties/vault/properties/agents/items/properties/sessionDirectory",
+      "type": "string"
+    },
+    {
+      "path": "newWorkspaceCommand",
+      "schema_pointer": "/properties/newWorkspaceCommand",
+      "type": "string"
+    },
+    {
+      "path": "sleepyMode",
+      "schema_pointer": "/properties/sleepyMode",
+      "type": "object"
+    },
+    {
+      "path": "sleepyMode.theme",
+      "schema_pointer": "/properties/sleepyMode/properties/theme",
+      "type": "string",
+      "enum": [
+        "cmux",
+        "blossom",
+        "mint",
+        "mono",
+        "custom"
+      ],
+      "default": "cmux"
+    },
+    {
+      "path": "sleepyMode.mascot",
+      "schema_pointer": "/properties/sleepyMode/properties/mascot",
+      "type": "string",
+      "enum": [
+        "cmux",
+        "cat",
+        "ghost",
+        "logoFace"
+      ],
+      "default": "cmux"
+    },
+    {
+      "path": "sleepyMode.glow",
+      "schema_pointer": "/properties/sleepyMode/properties/glow",
+      "type": "string",
+      "enum": [
+        "black",
+        "midnight",
+        "cmux",
+        "aurora",
+        "sunset",
+        "ocean",
+        "custom"
+      ],
+      "default": "black"
+    },
+    {
+      "path": "sleepyMode.showMoon",
+      "schema_pointer": "/properties/sleepyMode/properties/showMoon",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "sleepyMode.showStars",
+      "schema_pointer": "/properties/sleepyMode/properties/showStars",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "sleepyMode.showZs",
+      "schema_pointer": "/properties/sleepyMode/properties/showZs",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "sleepyMode.showClock",
+      "schema_pointer": "/properties/sleepyMode/properties/showClock",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "sleepyMode.showStatus",
+      "schema_pointer": "/properties/sleepyMode/properties/showStatus",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "sleepyMode.showPets",
+      "schema_pointer": "/properties/sleepyMode/properties/showPets",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "sleepyMode.customFace",
+      "schema_pointer": "/properties/sleepyMode/properties/customFace",
+      "type": "string",
+      "default": "E0EDFF"
+    },
+    {
+      "path": "sleepyMode.customCap",
+      "schema_pointer": "/properties/sleepyMode/properties/customCap",
+      "type": "string",
+      "default": "5CD6FF"
+    },
+    {
+      "path": "sleepyMode.customBlush",
+      "schema_pointer": "/properties/sleepyMode/properties/customBlush",
+      "type": "string",
+      "default": "FF99B5"
+    },
+    {
+      "path": "sleepyMode.customInk",
+      "schema_pointer": "/properties/sleepyMode/properties/customInk",
+      "type": "string",
+      "default": "333D6B"
+    },
+    {
+      "path": "sleepyMode.customLogo",
+      "schema_pointer": "/properties/sleepyMode/properties/customLogo",
+      "type": "string",
+      "default": "6BDEFF"
+    },
+    {
+      "path": "sleepyMode.customBackground",
+      "schema_pointer": "/properties/sleepyMode/properties/customBackground",
+      "type": "string",
+      "default": "060812"
+    },
+    {
+      "path": "workspaceGroups",
+      "schema_pointer": "/properties/workspaceGroups",
+      "type": "object"
+    },
+    {
+      "path": "workspaceGroups.newWorkspacePlacement",
+      "schema_pointer": "/properties/workspaceGroups/properties/newWorkspacePlacement",
+      "type": "string",
+      "enum": [
+        "afterCurrent",
+        "top",
+        "end"
+      ],
+      "default": "afterCurrent"
+    },
+    {
+      "path": "workspaceGroups.byCwd",
+      "schema_pointer": "/properties/workspaceGroups/properties/byCwd",
+      "type": "object"
+    },
+    {
+      "path": "workspaceGroups.byCwd.*",
+      "schema_pointer": "/properties/workspaceGroups/properties/byCwd/additionalProperties",
+      "type": "object"
+    },
+    {
+      "path": "workspaceGroups.byCwd.*.color",
+      "schema_pointer": "/properties/workspaceGroups/properties/byCwd/additionalProperties/properties/color",
+      "type": "string"
+    },
+    {
+      "path": "workspaceGroups.byCwd.*.icon",
+      "schema_pointer": "/properties/workspaceGroups/properties/byCwd/additionalProperties/properties/icon",
+      "type": "string"
+    },
+    {
+      "path": "workspaceGroups.byCwd.*.contextMenu",
+      "schema_pointer": "/properties/workspaceGroups/properties/byCwd/additionalProperties/properties/contextMenu",
+      "type": "array"
+    },
+    {
+      "path": "workspaceGroups.byCwd.*.contextMenu[]",
+      "schema_pointer": "/properties/workspaceGroups/properties/byCwd/additionalProperties/properties/contextMenu/items"
+    },
+    {
+      "path": "workspaceGroups.byCwd.*.contextMenu[]<oneOf:0>",
+      "schema_pointer": "/properties/workspaceGroups/properties/byCwd/additionalProperties/properties/contextMenu/items/oneOf/0",
+      "type": "string"
+    },
+    {
+      "path": "workspaceGroups.byCwd.*.contextMenu[]<oneOf:1>",
+      "schema_pointer": "/properties/workspaceGroups/properties/byCwd/additionalProperties/properties/contextMenu/items/oneOf/1",
+      "type": "object"
+    },
+    {
+      "path": "workspaceGroups.byCwd.*.newWorkspacePlacement",
+      "schema_pointer": "/properties/workspaceGroups/properties/byCwd/additionalProperties/properties/newWorkspacePlacement",
+      "type": "string",
+      "enum": [
+        "afterCurrent",
+        "top",
+        "end"
+      ]
+    },
+    {
+      "path": "surfaceTabBarButtons",
+      "schema_pointer": "/properties/surfaceTabBarButtons",
+      "type": "array"
+    },
+    {
+      "path": "surfaceTabBarButtons[]",
+      "schema_pointer": "/properties/surfaceTabBarButtons/items"
+    },
+    {
+      "path": "surfaceTabBarButtons[]<oneOf:0>",
+      "schema_pointer": "/properties/surfaceTabBarButtons/items/oneOf/0",
+      "type": "string"
+    },
+    {
+      "path": "surfaceTabBarButtons[]<oneOf:1>",
+      "schema_pointer": "/properties/surfaceTabBarButtons/items/oneOf/1",
+      "type": "object"
+    },
+    {
+      "path": "app",
+      "schema_pointer": "/properties/app",
+      "type": "object"
+    },
+    {
+      "path": "app.language",
+      "schema_pointer": "/properties/app/properties/language",
+      "type": "string",
+      "enum": [
+        "system",
+        "en",
+        "ar",
+        "bs",
+        "zh-Hans",
+        "zh-Hant",
+        "da",
+        "de",
+        "es",
+        "fr",
+        "it",
+        "ja",
+        "ko",
+        "nb",
+        "pl",
+        "pt-BR",
+        "ru",
+        "th",
+        "tr"
+      ],
+      "default": "system"
+    },
+    {
+      "path": "app.appearance",
+      "schema_pointer": "/properties/app/properties/appearance",
+      "type": "string",
+      "enum": [
+        "system",
+        "light",
+        "dark"
+      ],
+      "default": "system"
+    },
+    {
+      "path": "app.accentColor",
+      "schema_pointer": "/properties/app/properties/accentColor",
+      "default": "cmux"
+    },
+    {
+      "path": "app.accentColor<oneOf:0>",
+      "schema_pointer": "/properties/app/properties/accentColor/oneOf/0",
+      "type": "string",
+      "enum": [
+        "cmux",
+        "system"
+      ]
+    },
+    {
+      "path": "app.accentColor<oneOf:1>",
+      "schema_pointer": "/properties/app/properties/accentColor/oneOf/1",
+      "$ref": "#/$defs/colorHex"
+    },
+    {
+      "path": "app.appIcon",
+      "schema_pointer": "/properties/app/properties/appIcon",
+      "type": "string",
+      "enum": [
+        "automatic",
+        "light",
+        "dark"
+      ],
+      "default": "automatic"
+    },
+    {
+      "path": "app.windowTitleTemplate",
+      "schema_pointer": "/properties/app/properties/windowTitleTemplate",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "path": "app.devWindowDisplay",
+      "schema_pointer": "/properties/app/properties/devWindowDisplay",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "path": "app.menuBarOnly",
+      "schema_pointer": "/properties/app/properties/menuBarOnly",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "app.newWorkspacePlacement",
+      "schema_pointer": "/properties/app/properties/newWorkspacePlacement",
+      "type": "string",
+      "enum": [
+        "top",
+        "afterCurrent",
+        "end"
+      ],
+      "default": "afterCurrent"
+    },
+    {
+      "path": "app.goToWorkspaceOrder",
+      "schema_pointer": "/properties/app/properties/goToWorkspaceOrder",
+      "type": "string",
+      "enum": [
+        "sidebar",
+        "recent"
+      ],
+      "default": "sidebar"
+    },
+    {
+      "path": "app.forkConversationDefaultDestination",
+      "schema_pointer": "/properties/app/properties/forkConversationDefaultDestination",
+      "type": "string",
+      "enum": [
+        "right",
+        "left",
+        "top",
+        "bottom",
+        "newTab",
+        "newWorkspace"
+      ],
+      "default": "right"
+    },
+    {
+      "path": "app.workspaceInheritWorkingDirectory",
+      "schema_pointer": "/properties/app/properties/workspaceInheritWorkingDirectory",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "app.minimalMode",
+      "schema_pointer": "/properties/app/properties/minimalMode",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "app.keepWorkspaceOpenWhenClosingLastSurface",
+      "schema_pointer": "/properties/app/properties/keepWorkspaceOpenWhenClosingLastSurface",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "app.focusPaneOnFirstClick",
+      "schema_pointer": "/properties/app/properties/focusPaneOnFirstClick",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "app.paneResizeStepPixels",
+      "schema_pointer": "/properties/app/properties/paneResizeStepPixels",
+      "type": "integer",
+      "default": 20,
+      "minimum": 1,
+      "maximum": 200
+    },
+    {
+      "path": "app.focusHistoryIncludesPanesAndTabs",
+      "schema_pointer": "/properties/app/properties/focusHistoryIncludesPanesAndTabs",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "app.equalizeSplitsOnCreate",
+      "schema_pointer": "/properties/app/properties/equalizeSplitsOnCreate",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "app.equalizeSplitsOnDividerDoubleClick",
+      "schema_pointer": "/properties/app/properties/equalizeSplitsOnDividerDoubleClick",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "app.preferredEditor",
+      "schema_pointer": "/properties/app/properties/preferredEditor",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "path": "app.defaultWorkspacePath",
+      "schema_pointer": "/properties/app/properties/defaultWorkspacePath",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "path": "app.openSupportedFilesInCmux",
+      "schema_pointer": "/properties/app/properties/openSupportedFilesInCmux",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "app.openMarkdownInCmuxViewer",
+      "schema_pointer": "/properties/app/properties/openMarkdownInCmuxViewer",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "app.globalFontMagnification",
+      "schema_pointer": "/properties/app/properties/globalFontMagnification",
+      "type": "integer",
+      "default": 100,
+      "minimum": 50,
+      "maximum": 200
+    },
+    {
+      "path": "app.reorderOnNotification",
+      "schema_pointer": "/properties/app/properties/reorderOnNotification",
+      "default": true
+    },
+    {
+      "path": "app.reorderOnNotification<oneOf:0>",
+      "schema_pointer": "/properties/app/properties/reorderOnNotification/oneOf/0",
+      "type": "boolean"
+    },
+    {
+      "path": "app.reorderOnNotification<oneOf:1>",
+      "schema_pointer": "/properties/app/properties/reorderOnNotification/oneOf/1",
+      "type": "string",
+      "enum": [
+        "off",
+        "notifications",
+        "agentActivity"
+      ]
+    },
+    {
+      "path": "app.iMessageMode",
+      "schema_pointer": "/properties/app/properties/iMessageMode",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "app.sendAnonymousTelemetry",
+      "schema_pointer": "/properties/app/properties/sendAnonymousTelemetry",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "app.confirmQuit",
+      "schema_pointer": "/properties/app/properties/confirmQuit",
+      "type": "string",
+      "enum": [
+        "always",
+        "dirty-only",
+        "never"
+      ],
+      "default": "always"
+    },
+    {
+      "path": "app.warnBeforeQuit",
+      "schema_pointer": "/properties/app/properties/warnBeforeQuit",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "app.warnBeforeClosingTab",
+      "schema_pointer": "/properties/app/properties/warnBeforeClosingTab",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "app.warnBeforeClosingAgentSession",
+      "schema_pointer": "/properties/app/properties/warnBeforeClosingAgentSession",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "app.warnBeforeClosingTabXButton",
+      "schema_pointer": "/properties/app/properties/warnBeforeClosingTabXButton",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "app.warnBeforeClosingWorkspace",
+      "schema_pointer": "/properties/app/properties/warnBeforeClosingWorkspace",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "app.alwaysConfirmWorkspaceClose",
+      "schema_pointer": "/properties/app/properties/alwaysConfirmWorkspaceClose",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "app.warnBeforeClosingWindow",
+      "schema_pointer": "/properties/app/properties/warnBeforeClosingWindow",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "app.hideTabCloseButton",
+      "schema_pointer": "/properties/app/properties/hideTabCloseButton",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "app.tabBarVisibility",
+      "schema_pointer": "/properties/app/properties/tabBarVisibility",
+      "type": "string",
+      "enum": [
+        "always",
+        "multiple-tabs"
+      ],
+      "default": "always"
+    },
+    {
+      "path": "app.renameSelectsExistingName",
+      "schema_pointer": "/properties/app/properties/renameSelectsExistingName",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "app.commandPaletteSearchesAllSurfaces",
+      "schema_pointer": "/properties/app/properties/commandPaletteSearchesAllSurfaces",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "surfaceTabBar",
+      "schema_pointer": "/properties/surfaceTabBar",
+      "type": "object"
+    },
+    {
+      "path": "surfaceTabBar.fontSize",
+      "schema_pointer": "/properties/surfaceTabBar/properties/fontSize",
+      "type": "number",
+      "default": 11.0,
+      "minimum": 8.0,
+      "maximum": 14.0
+    },
+    {
+      "path": "terminal",
+      "schema_pointer": "/properties/terminal",
+      "type": "object"
+    },
+    {
+      "path": "terminal.adaptiveDefaultTheme",
+      "schema_pointer": "/properties/terminal/properties/adaptiveDefaultTheme",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "terminal.showScrollBar",
+      "schema_pointer": "/properties/terminal/properties/showScrollBar",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "terminal.scrollSpeed",
+      "schema_pointer": "/properties/terminal/properties/scrollSpeed",
+      "type": "number",
+      "default": 1.0,
+      "minimum": 0.25,
+      "maximum": 3.0
+    },
+    {
+      "path": "terminal.sessionContentMaxWidth",
+      "schema_pointer": "/properties/terminal/properties/sessionContentMaxWidth",
+      "default": false
+    },
+    {
+      "path": "terminal.sessionContentMaxWidth<oneOf:0>",
+      "schema_pointer": "/properties/terminal/properties/sessionContentMaxWidth/oneOf/0",
+      "type": "boolean"
+    },
+    {
+      "path": "terminal.sessionContentMaxWidth<oneOf:1>",
+      "schema_pointer": "/properties/terminal/properties/sessionContentMaxWidth/oneOf/1",
+      "type": "number",
+      "minimum": 320
+    },
+    {
+      "path": "terminal.sessionContentAlignment",
+      "schema_pointer": "/properties/terminal/properties/sessionContentAlignment",
+      "type": "string",
+      "enum": [
+        "left",
+        "center",
+        "right"
+      ],
+      "default": "center"
+    },
+    {
+      "path": "terminal.copyOnSelect",
+      "schema_pointer": "/properties/terminal/properties/copyOnSelect",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "terminal.showCopyConfirmation",
+      "schema_pointer": "/properties/terminal/properties/showCopyConfirmation",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "terminal.reflowHardWrapOnCopy",
+      "schema_pointer": "/properties/terminal/properties/reflowHardWrapOnCopy",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "terminal.confirmUnsafePaste",
+      "schema_pointer": "/properties/terminal/properties/confirmUnsafePaste",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "terminal.textEditingGestures",
+      "schema_pointer": "/properties/terminal/properties/textEditingGestures",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "terminal.textEditingCommandMovesByWord",
+      "schema_pointer": "/properties/terminal/properties/textEditingCommandMovesByWord",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "terminal.textEditingGesturesInFullScreenApps",
+      "schema_pointer": "/properties/terminal/properties/textEditingGesturesInFullScreenApps",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "terminal.showPasswordInputIndicator",
+      "schema_pointer": "/properties/terminal/properties/showPasswordInputIndicator",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "terminal.showPasswordInputDots",
+      "schema_pointer": "/properties/terminal/properties/showPasswordInputDots",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "terminal.showJumpToBottomButton",
+      "schema_pointer": "/properties/terminal/properties/showJumpToBottomButton",
+      "type": "boolean"
+    },
+    {
+      "path": "terminal.predictiveLocalEcho",
+      "schema_pointer": "/properties/terminal/properties/predictiveLocalEcho",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "terminal.autoResumeAgentSessions",
+      "schema_pointer": "/properties/terminal/properties/autoResumeAgentSessions",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "terminal.showTextBoxOnNewTerminals",
+      "schema_pointer": "/properties/terminal/properties/showTextBoxOnNewTerminals",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "terminal.focusTextBoxOnNewTerminals",
+      "schema_pointer": "/properties/terminal/properties/focusTextBoxOnNewTerminals",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "terminal.agentHibernation",
+      "schema_pointer": "/properties/terminal/properties/agentHibernation",
+      "type": "object"
+    },
+    {
+      "path": "terminal.agentHibernation.enabled",
+      "schema_pointer": "/properties/terminal/properties/agentHibernation/properties/enabled",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "terminal.agentHibernation.idleSeconds",
+      "schema_pointer": "/properties/terminal/properties/agentHibernation/properties/idleSeconds",
+      "type": "integer",
+      "default": 5,
+      "minimum": 5,
+      "maximum": 604800
+    },
+    {
+      "path": "terminal.agentHibernation.maxLiveTerminals",
+      "schema_pointer": "/properties/terminal/properties/agentHibernation/properties/maxLiveTerminals",
+      "type": "integer",
+      "default": 12,
+      "minimum": 1,
+      "maximum": 256
+    },
+    {
+      "path": "terminal.rendererRealization",
+      "schema_pointer": "/properties/terminal/properties/rendererRealization",
+      "type": "object"
+    },
+    {
+      "path": "terminal.rendererRealization.enabled",
+      "schema_pointer": "/properties/terminal/properties/rendererRealization/properties/enabled",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "terminal.rendererRealization.idleSeconds",
+      "schema_pointer": "/properties/terminal/properties/rendererRealization/properties/idleSeconds",
+      "type": "integer",
+      "default": 5,
+      "minimum": 5,
+      "maximum": 604800
+    },
+    {
+      "path": "terminal.rendererRealization.maxWarmRenderers",
+      "schema_pointer": "/properties/terminal/properties/rendererRealization/properties/maxWarmRenderers",
+      "type": "integer",
+      "default": 1,
+      "minimum": 1,
+      "maximum": 256
+    },
+    {
+      "path": "terminal.titleUpdates",
+      "schema_pointer": "/properties/terminal/properties/titleUpdates",
+      "type": "object"
+    },
+    {
+      "path": "terminal.titleUpdates.coalescing",
+      "schema_pointer": "/properties/terminal/properties/titleUpdates/properties/coalescing",
+      "type": "object"
+    },
+    {
+      "path": "terminal.titleUpdates.coalescing.enabled",
+      "schema_pointer": "/properties/terminal/properties/titleUpdates/properties/coalescing/properties/enabled",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "terminal.titleUpdates.coalescing.delayMilliseconds",
+      "schema_pointer": "/properties/terminal/properties/titleUpdates/properties/coalescing/properties/delayMilliseconds",
+      "type": "integer",
+      "default": 1000,
+      "minimum": 33,
+      "maximum": 5000
+    },
+    {
+      "path": "terminal.titleUpdates.diagnostics",
+      "schema_pointer": "/properties/terminal/properties/titleUpdates/properties/diagnostics",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "terminal.runawayMemoryGuardrail",
+      "schema_pointer": "/properties/terminal/properties/runawayMemoryGuardrail",
+      "type": "object"
+    },
+    {
+      "path": "terminal.runawayMemoryGuardrail.enabled",
+      "schema_pointer": "/properties/terminal/properties/runawayMemoryGuardrail/properties/enabled",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "terminal.runawayMemoryGuardrail.thresholdGB",
+      "schema_pointer": "/properties/terminal/properties/runawayMemoryGuardrail/properties/thresholdGB",
+      "type": "number",
+      "default": 8,
+      "minimum": 1,
+      "maximum": 256
+    },
+    {
+      "path": "terminal.textBoxMaxLines",
+      "schema_pointer": "/properties/terminal/properties/textBoxMaxLines",
+      "type": "integer",
+      "default": 10,
+      "minimum": 1,
+      "maximum": 20
+    },
+    {
+      "path": "terminal.textBoxDefaultSubmitAction",
+      "schema_pointer": "/properties/terminal/properties/textBoxDefaultSubmitAction",
+      "type": "string",
+      "default": "text-entry"
+    },
+    {
+      "path": "terminal.textBoxSubmitActions",
+      "schema_pointer": "/properties/terminal/properties/textBoxSubmitActions",
+      "type": "array",
+      "default": []
+    },
+    {
+      "path": "terminal.textBoxSubmitActions[]",
+      "schema_pointer": "/properties/terminal/properties/textBoxSubmitActions/items",
+      "type": "object",
+      "required": [
+        "id",
+        "title",
+        "kind",
+        "systemImage",
+        "backgroundColorHex"
+      ]
+    },
+    {
+      "path": "terminal.textBoxSubmitActions[].id",
+      "schema_pointer": "/properties/terminal/properties/textBoxSubmitActions/items/properties/id",
+      "type": "string"
+    },
+    {
+      "path": "terminal.textBoxSubmitActions[].title",
+      "schema_pointer": "/properties/terminal/properties/textBoxSubmitActions/items/properties/title",
+      "type": "string"
+    },
+    {
+      "path": "terminal.textBoxSubmitActions[].kind",
+      "schema_pointer": "/properties/terminal/properties/textBoxSubmitActions/items/properties/kind",
+      "type": "string",
+      "enum": [
+        "textEntry",
+        "commandTemplate"
+      ]
+    },
+    {
+      "path": "terminal.textBoxSubmitActions[].commandTemplate",
+      "schema_pointer": "/properties/terminal/properties/textBoxSubmitActions/items/properties/commandTemplate",
+      "type": "string"
+    },
+    {
+      "path": "terminal.textBoxSubmitActions[].preservePromptAfterLaunch",
+      "schema_pointer": "/properties/terminal/properties/textBoxSubmitActions/items/properties/preservePromptAfterLaunch",
+      "type": "boolean"
+    },
+    {
+      "path": "terminal.textBoxSubmitActions[].systemImage",
+      "schema_pointer": "/properties/terminal/properties/textBoxSubmitActions/items/properties/systemImage",
+      "type": "string"
+    },
+    {
+      "path": "terminal.textBoxSubmitActions[].assetName",
+      "schema_pointer": "/properties/terminal/properties/textBoxSubmitActions/items/properties/assetName",
+      "type": "string"
+    },
+    {
+      "path": "terminal.textBoxSubmitActions[].imagePath",
+      "schema_pointer": "/properties/terminal/properties/textBoxSubmitActions/items/properties/imagePath",
+      "type": "string"
+    },
+    {
+      "path": "terminal.textBoxSubmitActions[].backgroundColorHex",
+      "schema_pointer": "/properties/terminal/properties/textBoxSubmitActions/items/properties/backgroundColorHex",
+      "type": "string"
+    },
+    {
+      "path": "terminal.textBoxSubmitActions[]<allOf:0>",
+      "schema_pointer": "/properties/terminal/properties/textBoxSubmitActions/items/allOf/0"
+    },
+    {
+      "path": "terminal.resumeCommands",
+      "schema_pointer": "/properties/terminal/properties/resumeCommands",
+      "type": "array",
+      "default": []
+    },
+    {
+      "path": "terminal.resumeCommands[]",
+      "schema_pointer": "/properties/terminal/properties/resumeCommands/items",
+      "type": "object",
+      "required": [
+        "version",
+        "id",
+        "commandPrefix",
+        "environmentKeys",
+        "policy",
+        "createdAt",
+        "updatedAt",
+        "signature"
+      ]
+    },
+    {
+      "path": "terminal.resumeCommands[].version",
+      "schema_pointer": "/properties/terminal/properties/resumeCommands/items/properties/version",
+      "type": "integer"
+    },
+    {
+      "path": "terminal.resumeCommands[].id",
+      "schema_pointer": "/properties/terminal/properties/resumeCommands/items/properties/id",
+      "type": "string"
+    },
+    {
+      "path": "terminal.resumeCommands[].name",
+      "schema_pointer": "/properties/terminal/properties/resumeCommands/items/properties/name",
+      "type": "string"
+    },
+    {
+      "path": "terminal.resumeCommands[].commandPrefix",
+      "schema_pointer": "/properties/terminal/properties/resumeCommands/items/properties/commandPrefix",
+      "type": "array"
+    },
+    {
+      "path": "terminal.resumeCommands[].commandPrefix[]",
+      "schema_pointer": "/properties/terminal/properties/resumeCommands/items/properties/commandPrefix/items",
+      "type": "string"
+    },
+    {
+      "path": "terminal.resumeCommands[].cwd",
+      "schema_pointer": "/properties/terminal/properties/resumeCommands/items/properties/cwd",
+      "type": "string"
+    },
+    {
+      "path": "terminal.resumeCommands[].environment",
+      "schema_pointer": "/properties/terminal/properties/resumeCommands/items/properties/environment",
+      "type": "object"
+    },
+    {
+      "path": "terminal.resumeCommands[].environment.*",
+      "schema_pointer": "/properties/terminal/properties/resumeCommands/items/properties/environment/additionalProperties",
+      "type": "string"
+    },
+    {
+      "path": "terminal.resumeCommands[].environmentKeys",
+      "schema_pointer": "/properties/terminal/properties/resumeCommands/items/properties/environmentKeys",
+      "type": "array"
+    },
+    {
+      "path": "terminal.resumeCommands[].environmentKeys[]",
+      "schema_pointer": "/properties/terminal/properties/resumeCommands/items/properties/environmentKeys/items",
+      "type": "string"
+    },
+    {
+      "path": "terminal.resumeCommands[].source",
+      "schema_pointer": "/properties/terminal/properties/resumeCommands/items/properties/source",
+      "type": "string"
+    },
+    {
+      "path": "terminal.resumeCommands[].policy",
+      "schema_pointer": "/properties/terminal/properties/resumeCommands/items/properties/policy",
+      "type": "string",
+      "enum": [
+        "manual",
+        "prompt",
+        "auto"
+      ]
+    },
+    {
+      "path": "terminal.resumeCommands[].createdAt",
+      "schema_pointer": "/properties/terminal/properties/resumeCommands/items/properties/createdAt",
+      "type": "number"
+    },
+    {
+      "path": "terminal.resumeCommands[].updatedAt",
+      "schema_pointer": "/properties/terminal/properties/resumeCommands/items/properties/updatedAt",
+      "type": "number"
+    },
+    {
+      "path": "terminal.resumeCommands[].lastUsedAt",
+      "schema_pointer": "/properties/terminal/properties/resumeCommands/items/properties/lastUsedAt",
+      "type": "number"
+    },
+    {
+      "path": "terminal.resumeCommands[].signature",
+      "schema_pointer": "/properties/terminal/properties/resumeCommands/items/properties/signature",
+      "type": "string"
+    },
+    {
+      "path": "terminal.uploadCommands",
+      "schema_pointer": "/properties/terminal/properties/uploadCommands",
+      "type": "array",
+      "default": []
+    },
+    {
+      "path": "terminal.uploadCommands[]",
+      "schema_pointer": "/properties/terminal/properties/uploadCommands/items",
+      "type": "object",
+      "required": [
+        "command"
+      ]
+    },
+    {
+      "path": "terminal.uploadCommands[].hostPattern",
+      "schema_pointer": "/properties/terminal/properties/uploadCommands/items/properties/hostPattern",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    {
+      "path": "terminal.uploadCommands[].command",
+      "schema_pointer": "/properties/terminal/properties/uploadCommands/items/properties/command",
+      "type": "string"
+    },
+    {
+      "path": "terminal.uploadCommands[].enabled",
+      "schema_pointer": "/properties/terminal/properties/uploadCommands/items/properties/enabled",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "notifications",
+      "schema_pointer": "/properties/notifications",
+      "type": "object"
+    },
+    {
+      "path": "notifications.dockBadge",
+      "schema_pointer": "/properties/notifications/properties/dockBadge",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "notifications.showInMenuBar",
+      "schema_pointer": "/properties/notifications/properties/showInMenuBar",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "notifications.unreadPaneRing",
+      "schema_pointer": "/properties/notifications/properties/unreadPaneRing",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "notifications.paneFlash",
+      "schema_pointer": "/properties/notifications/properties/paneFlash",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "notifications.paneFlashDoubleBlink",
+      "schema_pointer": "/properties/notifications/properties/paneFlashDoubleBlink",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "notifications.paneFlashOnTyping",
+      "schema_pointer": "/properties/notifications/properties/paneFlashOnTyping",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "notifications.paneFlashThemeColor",
+      "schema_pointer": "/properties/notifications/properties/paneFlashThemeColor",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "notifications.paneFlashColor",
+      "schema_pointer": "/properties/notifications/properties/paneFlashColor",
+      "default": null,
+      "$ref": "#/$defs/colorHexOrNull"
+    },
+    {
+      "path": "notifications.soundWhenFocused",
+      "schema_pointer": "/properties/notifications/properties/soundWhenFocused",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "notifications.suppressOnlyFocusedSurface",
+      "schema_pointer": "/properties/notifications/properties/suppressOnlyFocusedSurface",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "notifications.suppressWhenAppFocused",
+      "schema_pointer": "/properties/notifications/properties/suppressWhenAppFocused",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "notifications.agentPermissionPrompt",
+      "schema_pointer": "/properties/notifications/properties/agentPermissionPrompt",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "notifications.agentTurnComplete",
+      "schema_pointer": "/properties/notifications/properties/agentTurnComplete",
+      "type": "string",
+      "enum": [
+        "whenIdle",
+        "always",
+        "never"
+      ],
+      "default": "whenIdle"
+    },
+    {
+      "path": "notifications.agentIdleReminder",
+      "schema_pointer": "/properties/notifications/properties/agentIdleReminder",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "notifications.sound",
+      "schema_pointer": "/properties/notifications/properties/sound",
+      "type": "string",
+      "enum": [
+        "default",
+        "Basso",
+        "Blow",
+        "Bottle",
+        "Frog",
+        "Funk",
+        "Glass",
+        "Hero",
+        "Morse",
+        "Ping",
+        "Pop",
+        "Purr",
+        "Sosumi",
+        "Submarine",
+        "Tink",
+        "custom_file",
+        "none"
+      ],
+      "default": "default"
+    },
+    {
+      "path": "notifications.customSoundFilePath",
+      "schema_pointer": "/properties/notifications/properties/customSoundFilePath",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "path": "notifications.soundOverrides",
+      "schema_pointer": "/properties/notifications/properties/soundOverrides",
+      "type": "object",
+      "default": {}
+    },
+    {
+      "path": "notifications.soundOverrides.{^[A-Za-z0-9._-]+$}",
+      "schema_pointer": "/properties/notifications/properties/soundOverrides/patternProperties/^[A-Za-z0-9._-]+$",
+      "type": "object"
+    },
+    {
+      "path": "notifications.soundOverrides.{^[A-Za-z0-9._-]+$}.turnDone",
+      "schema_pointer": "/properties/notifications/properties/soundOverrides/patternProperties/^[A-Za-z0-9._-]+$/properties/turnDone",
+      "$ref": "#/$defs/notificationSoundOverride"
+    },
+    {
+      "path": "notifications.soundOverrides.{^[A-Za-z0-9._-]+$}.needsInput",
+      "schema_pointer": "/properties/notifications/properties/soundOverrides/patternProperties/^[A-Za-z0-9._-]+$/properties/needsInput",
+      "$ref": "#/$defs/notificationSoundOverride"
+    },
+    {
+      "path": "notifications.soundOverrides.{^[A-Za-z0-9._-]+$}.errorStalled",
+      "schema_pointer": "/properties/notifications/properties/soundOverrides/patternProperties/^[A-Za-z0-9._-]+$/properties/errorStalled",
+      "$ref": "#/$defs/notificationSoundOverride"
+    },
+    {
+      "path": "notifications.command",
+      "schema_pointer": "/properties/notifications/properties/command",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "path": "notifications.hooksMode",
+      "schema_pointer": "/properties/notifications/properties/hooksMode",
+      "type": "string",
+      "enum": [
+        "append",
+        "replace"
+      ],
+      "default": "append"
+    },
+    {
+      "path": "notifications.hooks",
+      "schema_pointer": "/properties/notifications/properties/hooks",
+      "type": "array",
+      "default": []
+    },
+    {
+      "path": "notifications.hooks[]",
+      "schema_pointer": "/properties/notifications/properties/hooks/items",
+      "type": "object",
+      "required": [
+        "id",
+        "command"
+      ]
+    },
+    {
+      "path": "notifications.hooks[].id",
+      "schema_pointer": "/properties/notifications/properties/hooks/items/properties/id",
+      "type": "string"
+    },
+    {
+      "path": "notifications.hooks[].command",
+      "schema_pointer": "/properties/notifications/properties/hooks/items/properties/command",
+      "type": "string"
+    },
+    {
+      "path": "notifications.hooks[].timeoutSeconds",
+      "schema_pointer": "/properties/notifications/properties/hooks/items/properties/timeoutSeconds",
+      "type": "number",
+      "default": 20
+    },
+    {
+      "path": "notifications.hooks[].enabled",
+      "schema_pointer": "/properties/notifications/properties/hooks/items/properties/enabled",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "sidebar",
+      "schema_pointer": "/properties/sidebar",
+      "type": "object"
+    },
+    {
+      "path": "sidebar.fontSize",
+      "schema_pointer": "/properties/sidebar/properties/fontSize",
+      "type": "number",
+      "default": 12.5,
+      "minimum": 10.0,
+      "maximum": 20.0
+    },
+    {
+      "path": "sidebar.hideAllDetails",
+      "schema_pointer": "/properties/sidebar/properties/hideAllDetails",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "sidebar.wrapWorkspaceTitles",
+      "schema_pointer": "/properties/sidebar/properties/wrapWorkspaceTitles",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "sidebar.showWorkspaceDescription",
+      "schema_pointer": "/properties/sidebar/properties/showWorkspaceDescription",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "sidebar.workspaceDescriptionColor",
+      "schema_pointer": "/properties/sidebar/properties/workspaceDescriptionColor",
+      "default": null,
+      "$ref": "#/$defs/colorHexOrNull"
+    },
+    {
+      "path": "sidebar.beta",
+      "schema_pointer": "/properties/sidebar/properties/beta",
+      "type": "object"
+    },
+    {
+      "path": "sidebar.beta.conversations",
+      "schema_pointer": "/properties/sidebar/properties/beta/properties/conversations",
+      "type": "object"
+    },
+    {
+      "path": "sidebar.beta.conversations.enabled",
+      "schema_pointer": "/properties/sidebar/properties/beta/properties/conversations/properties/enabled",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "sidebar.beta.workspaceTodos",
+      "schema_pointer": "/properties/sidebar/properties/beta/properties/workspaceTodos",
+      "type": "object"
+    },
+    {
+      "path": "sidebar.beta.workspaceTodos.controls",
+      "schema_pointer": "/properties/sidebar/properties/beta/properties/workspaceTodos/properties/controls",
+      "type": "object"
+    },
+    {
+      "path": "sidebar.beta.workspaceTodos.controls.enabled",
+      "schema_pointer": "/properties/sidebar/properties/beta/properties/workspaceTodos/properties/controls/properties/enabled",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "sidebar.beta.workspaceTodos.checklistStyle",
+      "schema_pointer": "/properties/sidebar/properties/beta/properties/workspaceTodos/properties/checklistStyle",
+      "type": "string",
+      "enum": [
+        "popover",
+        "inline"
+      ],
+      "default": "popover"
+    },
+    {
+      "path": "sidebar.branchLayout",
+      "schema_pointer": "/properties/sidebar/properties/branchLayout",
+      "type": "string",
+      "enum": [
+        "vertical",
+        "inline"
+      ],
+      "default": "vertical"
+    },
+    {
+      "path": "sidebar.branchVerticalLayout",
+      "schema_pointer": "/properties/sidebar/properties/branchVerticalLayout",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "sidebar.stackBranchDirectory",
+      "schema_pointer": "/properties/sidebar/properties/stackBranchDirectory",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "sidebar.pathLastSegmentOnly",
+      "schema_pointer": "/properties/sidebar/properties/pathLastSegmentOnly",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "sidebar.showNotificationMessage",
+      "schema_pointer": "/properties/sidebar/properties/showNotificationMessage",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "sidebar.notificationMessageLineLimit",
+      "schema_pointer": "/properties/sidebar/properties/notificationMessageLineLimit",
+      "type": "integer",
+      "default": 12,
+      "minimum": 1,
+      "maximum": 50
+    },
+    {
+      "path": "sidebar.showBranchDirectory",
+      "schema_pointer": "/properties/sidebar/properties/showBranchDirectory",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "sidebar.showCloudDeviceIcons",
+      "schema_pointer": "/properties/sidebar/properties/showCloudDeviceIcons",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "sidebar.showPullRequests",
+      "schema_pointer": "/properties/sidebar/properties/showPullRequests",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "sidebar.watchGitStatus",
+      "schema_pointer": "/properties/sidebar/properties/watchGitStatus",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "sidebar.makePullRequestsClickable",
+      "schema_pointer": "/properties/sidebar/properties/makePullRequestsClickable",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "sidebar.openPullRequestLinksInCmuxBrowser",
+      "schema_pointer": "/properties/sidebar/properties/openPullRequestLinksInCmuxBrowser",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "sidebar.openPortLinksInCmuxBrowser",
+      "schema_pointer": "/properties/sidebar/properties/openPortLinksInCmuxBrowser",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "sidebar.showSSH",
+      "schema_pointer": "/properties/sidebar/properties/showSSH",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "sidebar.showPorts",
+      "schema_pointer": "/properties/sidebar/properties/showPorts",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "sidebar.showLog",
+      "schema_pointer": "/properties/sidebar/properties/showLog",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "sidebar.showProgress",
+      "schema_pointer": "/properties/sidebar/properties/showProgress",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "sidebar.showAgentUsage",
+      "schema_pointer": "/properties/sidebar/properties/showAgentUsage",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "sidebar.showAgentActivity",
+      "schema_pointer": "/properties/sidebar/properties/showAgentActivity",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "sidebar.loadingSpinnerPosition",
+      "schema_pointer": "/properties/sidebar/properties/loadingSpinnerPosition",
+      "type": "string",
+      "enum": [
+        "leading",
+        "trailing"
+      ],
+      "default": "leading"
+    },
+    {
+      "path": "sidebar.notificationBadgePosition",
+      "schema_pointer": "/properties/sidebar/properties/notificationBadgePosition",
+      "type": "string",
+      "enum": [
+        "leading",
+        "trailing"
+      ],
+      "default": "leading"
+    },
+    {
+      "path": "sidebar.showCustomMetadata",
+      "schema_pointer": "/properties/sidebar/properties/showCustomMetadata",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "sidebar.compactAgentStatus",
+      "schema_pointer": "/properties/sidebar/properties/compactAgentStatus",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "sidebar.compactStatusIcons",
+      "schema_pointer": "/properties/sidebar/properties/compactStatusIcons",
+      "type": "object",
+      "default": {}
+    },
+    {
+      "path": "sidebar.compactStatusIcons.error",
+      "schema_pointer": "/properties/sidebar/properties/compactStatusIcons/properties/error",
+      "type": "string"
+    },
+    {
+      "path": "sidebar.compactStatusIcons.needsInput",
+      "schema_pointer": "/properties/sidebar/properties/compactStatusIcons/properties/needsInput",
+      "type": "string"
+    },
+    {
+      "path": "sidebar.compactStatusIcons.subagents",
+      "schema_pointer": "/properties/sidebar/properties/compactStatusIcons/properties/subagents",
+      "type": "string"
+    },
+    {
+      "path": "sidebar.compactStatusIcons.running",
+      "schema_pointer": "/properties/sidebar/properties/compactStatusIcons/properties/running",
+      "type": "string"
+    },
+    {
+      "path": "sidebar.compactStatusIcons.waiting",
+      "schema_pointer": "/properties/sidebar/properties/compactStatusIcons/properties/waiting",
+      "type": "string"
+    },
+    {
+      "path": "sidebar.compactStatusIcons.starting",
+      "schema_pointer": "/properties/sidebar/properties/compactStatusIcons/properties/starting",
+      "type": "string"
+    },
+    {
+      "path": "sidebar.compactStatusIcons.unseen",
+      "schema_pointer": "/properties/sidebar/properties/compactStatusIcons/properties/unseen",
+      "type": "string"
+    },
+    {
+      "path": "sidebar.compactStatusIcons.pullRequestOpen",
+      "schema_pointer": "/properties/sidebar/properties/compactStatusIcons/properties/pullRequestOpen",
+      "type": "string"
+    },
+    {
+      "path": "sidebar.compactStatusIcons.pullRequestMerged",
+      "schema_pointer": "/properties/sidebar/properties/compactStatusIcons/properties/pullRequestMerged",
+      "type": "string"
+    },
+    {
+      "path": "sidebar.compactStatusIcons.pullRequestClosed",
+      "schema_pointer": "/properties/sidebar/properties/compactStatusIcons/properties/pullRequestClosed",
+      "type": "string"
+    },
+    {
+      "path": "sidebar.compactStatusIcons.idle",
+      "schema_pointer": "/properties/sidebar/properties/compactStatusIcons/properties/idle",
+      "type": "string"
+    },
+    {
+      "path": "sidebar.compactStatusIcons.branch",
+      "schema_pointer": "/properties/sidebar/properties/compactStatusIcons/properties/branch",
+      "type": "string"
+    },
+    {
+      "path": "sidebar.compactStatusIcons.terminal",
+      "schema_pointer": "/properties/sidebar/properties/compactStatusIcons/properties/terminal",
+      "type": "string"
+    },
+    {
+      "path": "sidebar.activeTabIndicatorStyle",
+      "schema_pointer": "/properties/sidebar/properties/activeTabIndicatorStyle",
+      "type": "string",
+      "enum": [
+        "leftRail",
+        "solidFill",
+        "rail",
+        "border",
+        "wash",
+        "lift",
+        "typography",
+        "washRail",
+        "blueWashColorRail"
+      ],
+      "default": "leftRail"
+    },
+    {
+      "path": "sidebar.selectionColor",
+      "schema_pointer": "/properties/sidebar/properties/selectionColor",
+      "default": null,
+      "$ref": "#/$defs/colorHexOrNull"
+    },
+    {
+      "path": "sidebar.notificationBadgeColor",
+      "schema_pointer": "/properties/sidebar/properties/notificationBadgeColor",
+      "default": null,
+      "$ref": "#/$defs/colorHexOrNull"
+    },
+    {
+      "path": "sidebar.rightMaxWidth",
+      "schema_pointer": "/properties/sidebar/properties/rightMaxWidth",
+      "type": "number"
+    },
+    {
+      "path": "workspaceColors",
+      "schema_pointer": "/properties/workspaceColors",
+      "type": "object"
+    },
+    {
+      "path": "workspaceColors.indicatorStyle",
+      "schema_pointer": "/properties/workspaceColors/properties/indicatorStyle",
+      "type": "string",
+      "enum": [
+        "leftRail",
+        "solidFill",
+        "rail",
+        "border",
+        "wash",
+        "lift",
+        "typography",
+        "washRail",
+        "blueWashColorRail"
+      ],
+      "default": "leftRail"
+    },
+    {
+      "path": "workspaceColors.selectionColor",
+      "schema_pointer": "/properties/workspaceColors/properties/selectionColor",
+      "default": null,
+      "$ref": "#/$defs/colorHexOrNull"
+    },
+    {
+      "path": "workspaceColors.subtleSelection",
+      "schema_pointer": "/properties/workspaceColors/properties/subtleSelection",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "workspaceColors.brightenInDarkMode",
+      "schema_pointer": "/properties/workspaceColors/properties/brightenInDarkMode",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "workspaceColors.unselectedFillOpacity",
+      "schema_pointer": "/properties/workspaceColors/properties/unselectedFillOpacity",
+      "type": "number",
+      "default": 0.7,
+      "minimum": 0,
+      "maximum": 1
+    },
+    {
+      "path": "workspaceColors.notificationBadgeColor",
+      "schema_pointer": "/properties/workspaceColors/properties/notificationBadgeColor",
+      "default": null,
+      "$ref": "#/$defs/colorHexOrNull"
+    },
+    {
+      "path": "workspaceColors.colors",
+      "schema_pointer": "/properties/workspaceColors/properties/colors",
+      "type": "object",
+      "default": {
+        "Red": "#C0392B",
+        "Crimson": "#922B21",
+        "Orange": "#A04000",
+        "Amber": "#7D6608",
+        "Olive": "#4A5C18",
+        "Green": "#196F3D",
+        "Teal": "#006B6B",
+        "Aqua": "#0E6B8C",
+        "Blue": "#1565C0",
+        "Navy": "#1A5276",
+        "Indigo": "#283593",
+        "Purple": "#6A1B9A",
+        "Magenta": "#AD1457",
+        "Rose": "#880E4F",
+        "Brown": "#7B3F00",
+        "Charcoal": "#3E4B5E"
+      }
+    },
+    {
+      "path": "workspaceColors.colors.*",
+      "schema_pointer": "/properties/workspaceColors/properties/colors/additionalProperties",
+      "$ref": "#/$defs/colorHex"
+    },
+    {
+      "path": "workspaceColors.paletteOverrides",
+      "schema_pointer": "/properties/workspaceColors/properties/paletteOverrides",
+      "type": "object",
+      "default": {}
+    },
+    {
+      "path": "workspaceColors.paletteOverrides.*",
+      "schema_pointer": "/properties/workspaceColors/properties/paletteOverrides/additionalProperties",
+      "$ref": "#/$defs/colorHex"
+    },
+    {
+      "path": "workspaceColors.customColors",
+      "schema_pointer": "/properties/workspaceColors/properties/customColors",
+      "type": "array",
+      "default": []
+    },
+    {
+      "path": "workspaceColors.customColors[]",
+      "schema_pointer": "/properties/workspaceColors/properties/customColors/items",
+      "$ref": "#/$defs/colorHex"
+    },
+    {
+      "path": "sidebarAppearance",
+      "schema_pointer": "/properties/sidebarAppearance",
+      "type": "object"
+    },
+    {
+      "path": "sidebarAppearance.matchTerminalBackground",
+      "schema_pointer": "/properties/sidebarAppearance/properties/matchTerminalBackground",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "sidebarAppearance.tintColor",
+      "schema_pointer": "/properties/sidebarAppearance/properties/tintColor",
+      "default": "#000000",
+      "$ref": "#/$defs/colorHex"
+    },
+    {
+      "path": "sidebarAppearance.lightModeTintColor",
+      "schema_pointer": "/properties/sidebarAppearance/properties/lightModeTintColor",
+      "default": null,
+      "$ref": "#/$defs/colorHexOrNull"
+    },
+    {
+      "path": "sidebarAppearance.darkModeTintColor",
+      "schema_pointer": "/properties/sidebarAppearance/properties/darkModeTintColor",
+      "default": null,
+      "$ref": "#/$defs/colorHexOrNull"
+    },
+    {
+      "path": "sidebarAppearance.tintOpacity",
+      "schema_pointer": "/properties/sidebarAppearance/properties/tintOpacity",
+      "type": "number",
+      "default": 0.18,
+      "minimum": 0,
+      "maximum": 1
+    },
+    {
+      "path": "automation",
+      "schema_pointer": "/properties/automation",
+      "type": "object"
+    },
+    {
+      "path": "automation.socketControlMode",
+      "schema_pointer": "/properties/automation/properties/socketControlMode",
+      "type": "string",
+      "enum": [
+        "off",
+        "cmuxOnly",
+        "automation",
+        "password",
+        "allowAll",
+        "openAccess",
+        "fullOpenAccess",
+        "notifications",
+        "full"
+      ],
+      "default": "cmuxOnly"
+    },
+    {
+      "path": "automation.socketPassword",
+      "schema_pointer": "/properties/automation/properties/socketPassword",
+      "default": ""
+    },
+    {
+      "path": "automation.socketPassword<oneOf:0>",
+      "schema_pointer": "/properties/automation/properties/socketPassword/oneOf/0",
+      "type": "string"
+    },
+    {
+      "path": "automation.socketPassword<oneOf:1>",
+      "schema_pointer": "/properties/automation/properties/socketPassword/oneOf/1",
+      "type": "null"
+    },
+    {
+      "path": "automation.claudeCodeIntegration",
+      "schema_pointer": "/properties/automation/properties/claudeCodeIntegration",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "automation.codexIntegration",
+      "schema_pointer": "/properties/automation/properties/codexIntegration",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "automation.canonicalAgentScratch",
+      "schema_pointer": "/properties/automation/properties/canonicalAgentScratch",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "automation.piIntegration",
+      "schema_pointer": "/properties/automation/properties/piIntegration",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "automation.claudeBinaryPath",
+      "schema_pointer": "/properties/automation/properties/claudeBinaryPath",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "path": "automation.workspaceAutoNaming",
+      "schema_pointer": "/properties/automation/properties/workspaceAutoNaming",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "automation.autoNamingAgent",
+      "schema_pointer": "/properties/automation/properties/autoNamingAgent",
+      "type": "string",
+      "default": "auto"
+    },
+    {
+      "path": "automation.ripgrepBinaryPath",
+      "schema_pointer": "/properties/automation/properties/ripgrepBinaryPath",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "path": "automation.suppressSubagentNotifications",
+      "schema_pointer": "/properties/automation/properties/suppressSubagentNotifications",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "automation.agentAutoResume",
+      "schema_pointer": "/properties/automation/properties/agentAutoResume",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "automation.ampIntegration",
+      "schema_pointer": "/properties/automation/properties/ampIntegration",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "automation.cursorIntegration",
+      "schema_pointer": "/properties/automation/properties/cursorIntegration",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "automation.geminiIntegration",
+      "schema_pointer": "/properties/automation/properties/geminiIntegration",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "automation.kiroIntegration",
+      "schema_pointer": "/properties/automation/properties/kiroIntegration",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "automation.kiroNotificationLevel",
+      "schema_pointer": "/properties/automation/properties/kiroNotificationLevel",
+      "type": "string",
+      "enum": [
+        "minimal",
+        "standard",
+        "verbose"
+      ],
+      "default": "standard"
+    },
+    {
+      "path": "automation.portBase",
+      "schema_pointer": "/properties/automation/properties/portBase",
+      "type": "integer",
+      "default": 9100,
+      "minimum": 1
+    },
+    {
+      "path": "automation.portRange",
+      "schema_pointer": "/properties/automation/properties/portRange",
+      "type": "integer",
+      "default": 10,
+      "minimum": 1
+    },
+    {
+      "path": "integrations",
+      "schema_pointer": "/properties/integrations",
+      "type": "object"
+    },
+    {
+      "path": "integrations.claudeCode",
+      "schema_pointer": "/properties/integrations/properties/claudeCode",
+      "type": "object"
+    },
+    {
+      "path": "integrations.claudeCode.hooksEnabled",
+      "schema_pointer": "/properties/integrations/properties/claudeCode/properties/hooksEnabled",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "integrations.claudeCode.customClaudePath",
+      "schema_pointer": "/properties/integrations/properties/claudeCode/properties/customClaudePath",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "path": "integrations.codex",
+      "schema_pointer": "/properties/integrations/properties/codex",
+      "type": "object"
+    },
+    {
+      "path": "integrations.codex.hooksEnabled",
+      "schema_pointer": "/properties/integrations/properties/codex/properties/hooksEnabled",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "integrations.pi",
+      "schema_pointer": "/properties/integrations/properties/pi",
+      "type": "object"
+    },
+    {
+      "path": "integrations.pi.hooksEnabled",
+      "schema_pointer": "/properties/integrations/properties/pi/properties/hooksEnabled",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "integrations.amp",
+      "schema_pointer": "/properties/integrations/properties/amp",
+      "type": "object"
+    },
+    {
+      "path": "integrations.amp.hooksEnabled",
+      "schema_pointer": "/properties/integrations/properties/amp/properties/hooksEnabled",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "integrations.cursor",
+      "schema_pointer": "/properties/integrations/properties/cursor",
+      "type": "object"
+    },
+    {
+      "path": "integrations.cursor.hooksEnabled",
+      "schema_pointer": "/properties/integrations/properties/cursor/properties/hooksEnabled",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "integrations.gemini",
+      "schema_pointer": "/properties/integrations/properties/gemini",
+      "type": "object"
+    },
+    {
+      "path": "integrations.gemini.hooksEnabled",
+      "schema_pointer": "/properties/integrations/properties/gemini/properties/hooksEnabled",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "integrations.kiro",
+      "schema_pointer": "/properties/integrations/properties/kiro",
+      "type": "object"
+    },
+    {
+      "path": "integrations.kiro.hooksEnabled",
+      "schema_pointer": "/properties/integrations/properties/kiro/properties/hooksEnabled",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "integrations.kiro.notificationLevel",
+      "schema_pointer": "/properties/integrations/properties/kiro/properties/notificationLevel",
+      "type": "string",
+      "enum": [
+        "minimal",
+        "standard",
+        "verbose"
+      ],
+      "default": "standard"
+    },
+    {
+      "path": "integrations.ripgrep",
+      "schema_pointer": "/properties/integrations/properties/ripgrep",
+      "type": "object"
+    },
+    {
+      "path": "integrations.ripgrep.customBinaryPath",
+      "schema_pointer": "/properties/integrations/properties/ripgrep/properties/customBinaryPath",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "path": "integrations.suppressSubagentNotifications",
+      "schema_pointer": "/properties/integrations/properties/suppressSubagentNotifications",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "agentMessages",
+      "schema_pointer": "/properties/agentMessages",
+      "type": "object"
+    },
+    {
+      "path": "agentMessages.enabled",
+      "schema_pointer": "/properties/agentMessages/properties/enabled",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "chief",
+      "schema_pointer": "/properties/chief",
+      "type": "object"
+    },
+    {
+      "path": "chief.enabled",
+      "schema_pointer": "/properties/chief/properties/enabled",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "chief.harness",
+      "schema_pointer": "/properties/chief/properties/harness",
+      "type": "string",
+      "enum": [
+        "claude",
+        "codex"
+      ],
+      "default": "claude"
+    },
+    {
+      "path": "chief.model",
+      "schema_pointer": "/properties/chief/properties/model",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "path": "chief.effort",
+      "schema_pointer": "/properties/chief/properties/effort",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "path": "chief.dangerouslySkipPermissions",
+      "schema_pointer": "/properties/chief/properties/dangerouslySkipPermissions",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "browser",
+      "schema_pointer": "/properties/browser",
+      "type": "object"
+    },
+    {
+      "path": "browser.defaultSearchEngine",
+      "schema_pointer": "/properties/browser/properties/defaultSearchEngine",
+      "type": "string",
+      "enum": [
+        "google",
+        "duckduckgo",
+        "bing",
+        "kagi",
+        "startpage",
+        "brave",
+        "perplexity",
+        "exa",
+        "yahoo",
+        "ecosia",
+        "qwant",
+        "mojeek",
+        "wikipedia",
+        "github",
+        "baidu",
+        "yandex",
+        "custom"
+      ],
+      "default": "google"
+    },
+    {
+      "path": "browser.customSearchEngineName",
+      "schema_pointer": "/properties/browser/properties/customSearchEngineName",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "path": "browser.customSearchEngineURLTemplate",
+      "schema_pointer": "/properties/browser/properties/customSearchEngineURLTemplate",
+      "type": "string",
+      "default": "https://www.google.com/search?q={query}"
+    },
+    {
+      "path": "browser.showSearchSuggestions",
+      "schema_pointer": "/properties/browser/properties/showSearchSuggestions",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "browser.theme",
+      "schema_pointer": "/properties/browser/properties/theme",
+      "type": "string",
+      "enum": [
+        "system",
+        "light",
+        "dark"
+      ],
+      "default": "system"
+    },
+    {
+      "path": "browser.defaultZoomLevel",
+      "schema_pointer": "/properties/browser/properties/defaultZoomLevel",
+      "type": "number",
+      "default": 1,
+      "minimum": 0.25,
+      "maximum": 5
+    },
+    {
+      "path": "browser.discardHiddenWebViews",
+      "schema_pointer": "/properties/browser/properties/discardHiddenWebViews",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "browser.hiddenWebViewDiscardMode",
+      "schema_pointer": "/properties/browser/properties/hiddenWebViewDiscardMode",
+      "type": "string",
+      "enum": [
+        "budget",
+        "timer"
+      ],
+      "default": "budget"
+    },
+    {
+      "path": "browser.hiddenWebViewMemoryBudgetMB",
+      "schema_pointer": "/properties/browser/properties/hiddenWebViewMemoryBudgetMB",
+      "type": "integer",
+      "default": 2048,
+      "minimum": 256,
+      "maximum": 65536
+    },
+    {
+      "path": "browser.hiddenWebViewDiscardDelaySeconds",
+      "schema_pointer": "/properties/browser/properties/hiddenWebViewDiscardDelaySeconds",
+      "type": "number",
+      "default": 300,
+      "minimum": 0,
+      "maximum": 3600
+    },
+    {
+      "path": "browser.autoRestoreUnloadedPages",
+      "schema_pointer": "/properties/browser/properties/autoRestoreUnloadedPages",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "browser.askWhereToSaveDownloads",
+      "schema_pointer": "/properties/browser/properties/askWhereToSaveDownloads",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "browser.showLinkHoverURL",
+      "schema_pointer": "/properties/browser/properties/showLinkHoverURL",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "browser.openTerminalLinksInCmuxBrowser",
+      "schema_pointer": "/properties/browser/properties/openTerminalLinksInCmuxBrowser",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "browser.interceptTerminalOpenCommandInCmuxBrowser",
+      "schema_pointer": "/properties/browser/properties/interceptTerminalOpenCommandInCmuxBrowser",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "browser.hostsToOpenInEmbeddedBrowser",
+      "schema_pointer": "/properties/browser/properties/hostsToOpenInEmbeddedBrowser",
+      "type": "array",
+      "default": []
+    },
+    {
+      "path": "browser.hostsToOpenInEmbeddedBrowser[]",
+      "schema_pointer": "/properties/browser/properties/hostsToOpenInEmbeddedBrowser/items",
+      "type": "string"
+    },
+    {
+      "path": "browser.urlsToAlwaysOpenExternally",
+      "schema_pointer": "/properties/browser/properties/urlsToAlwaysOpenExternally",
+      "type": "array",
+      "default": []
+    },
+    {
+      "path": "browser.urlsToAlwaysOpenExternally[]",
+      "schema_pointer": "/properties/browser/properties/urlsToAlwaysOpenExternally/items",
+      "type": "string"
+    },
+    {
+      "path": "browser.insecureHttpHostsAllowedInEmbeddedBrowser",
+      "schema_pointer": "/properties/browser/properties/insecureHttpHostsAllowedInEmbeddedBrowser",
+      "type": "array",
+      "default": [
+        "localhost",
+        "*.localhost",
+        "127.0.0.1",
+        "::1",
+        "0.0.0.0",
+        "*.localtest.me"
+      ]
+    },
+    {
+      "path": "browser.insecureHttpHostsAllowedInEmbeddedBrowser[]",
+      "schema_pointer": "/properties/browser/properties/insecureHttpHostsAllowedInEmbeddedBrowser/items",
+      "type": "string"
+    },
+    {
+      "path": "browser.urlAllowlist",
+      "schema_pointer": "/properties/browser/properties/urlAllowlist",
+      "type": "array",
+      "default": [
+        "localhost",
+        "*.localhost",
+        "127.0.0.1",
+        "::1",
+        "0.0.0.0",
+        "*.localtest.me"
+      ]
+    },
+    {
+      "path": "browser.urlAllowlist[]",
+      "schema_pointer": "/properties/browser/properties/urlAllowlist/items",
+      "type": "string"
+    },
+    {
+      "path": "browser.showImportHintOnBlankTabs",
+      "schema_pointer": "/properties/browser/properties/showImportHintOnBlankTabs",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "browser.reactGrabVersion",
+      "schema_pointer": "/properties/browser/properties/reactGrabVersion",
+      "type": "string",
+      "default": "0.1.29"
+    },
+    {
+      "path": "mobile",
+      "schema_pointer": "/properties/mobile",
+      "type": "object"
+    },
+    {
+      "path": "mobile.artifactFolderAccess",
+      "schema_pointer": "/properties/mobile/properties/artifactFolderAccess",
+      "type": "string",
+      "enum": [
+        "subtree",
+        "oneLevel"
+      ],
+      "default": "subtree"
+    },
+    {
+      "path": "mobile.browserTunnel",
+      "schema_pointer": "/properties/mobile/properties/browserTunnel",
+      "type": "object"
+    },
+    {
+      "path": "mobile.browserTunnel.allowOtherHosts",
+      "schema_pointer": "/properties/mobile/properties/browserTunnel/properties/allowOtherHosts",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "markdown",
+      "schema_pointer": "/properties/markdown",
+      "type": "object"
+    },
+    {
+      "path": "markdown.fontSize",
+      "schema_pointer": "/properties/markdown/properties/fontSize",
+      "type": "integer",
+      "default": 15,
+      "minimum": 8,
+      "maximum": 96
+    },
+    {
+      "path": "markdown.fontFamily",
+      "schema_pointer": "/properties/markdown/properties/fontFamily",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "path": "markdown.maxWidth",
+      "schema_pointer": "/properties/markdown/properties/maxWidth",
+      "type": "integer",
+      "default": 980,
+      "minimum": 320,
+      "maximum": 2400
+    },
+    {
+      "path": "canvas",
+      "schema_pointer": "/properties/canvas",
+      "type": "object"
+    },
+    {
+      "path": "canvas.paneGap",
+      "schema_pointer": "/properties/canvas/properties/paneGap",
+      "type": "integer",
+      "default": 16,
+      "minimum": 0,
+      "maximum": 64
+    },
+    {
+      "path": "canvas.snappingEnabled",
+      "schema_pointer": "/properties/canvas/properties/snappingEnabled",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "fileEditor",
+      "schema_pointer": "/properties/fileEditor",
+      "type": "object"
+    },
+    {
+      "path": "fileEditor.wordWrap",
+      "schema_pointer": "/properties/fileEditor/properties/wordWrap",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "fileEditor.syntaxHighlighting",
+      "schema_pointer": "/properties/fileEditor/properties/syntaxHighlighting",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "fileEditor.lineNumbers",
+      "schema_pointer": "/properties/fileEditor/properties/lineNumbers",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "fileEditor.indentGuides",
+      "schema_pointer": "/properties/fileEditor/properties/indentGuides",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "fileEditor.currentLineHighlight",
+      "schema_pointer": "/properties/fileEditor/properties/currentLineHighlight",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "fileEditor.tabWidth",
+      "schema_pointer": "/properties/fileEditor/properties/tabWidth",
+      "type": "integer",
+      "default": 4,
+      "minimum": 1,
+      "maximum": 8
+    },
+    {
+      "path": "fileExplorer",
+      "schema_pointer": "/properties/fileExplorer",
+      "type": "object"
+    },
+    {
+      "path": "fileExplorer.doubleClickAction",
+      "schema_pointer": "/properties/fileExplorer/properties/doubleClickAction",
+      "type": "string",
+      "enum": [
+        "preview",
+        "defaultEditor",
+        "preferredEditor"
+      ],
+      "default": "preview"
+    },
+    {
+      "path": "diffViewer",
+      "schema_pointer": "/properties/diffViewer",
+      "type": "object"
+    },
+    {
+      "path": "diffViewer.defaultLayout",
+      "schema_pointer": "/properties/diffViewer/properties/defaultLayout",
+      "type": "string",
+      "enum": [
+        "unified",
+        "split"
+      ],
+      "default": "unified"
+    },
+    {
+      "path": "rightSidebar",
+      "schema_pointer": "/properties/rightSidebar",
+      "type": "object"
+    },
+    {
+      "path": "rightSidebar.beta",
+      "schema_pointer": "/properties/rightSidebar/properties/beta",
+      "type": "object"
+    },
+    {
+      "path": "rightSidebar.beta.feed",
+      "schema_pointer": "/properties/rightSidebar/properties/beta/properties/feed",
+      "type": "object"
+    },
+    {
+      "path": "rightSidebar.beta.feed.enabled",
+      "schema_pointer": "/properties/rightSidebar/properties/beta/properties/feed/properties/enabled",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "shortcuts",
+      "schema_pointer": "/properties/shortcuts",
+      "type": "object"
+    },
+    {
+      "path": "shortcuts.showModifierHoldHints",
+      "schema_pointer": "/properties/shortcuts/properties/showModifierHoldHints",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "path": "shortcuts.bindings",
+      "schema_pointer": "/properties/shortcuts/properties/bindings",
+      "type": "object",
+      "default": {}
+    },
+    {
+      "path": "shortcuts.bindings.fileExplorerOpenSelection",
+      "schema_pointer": "/properties/shortcuts/properties/bindings/properties/fileExplorerOpenSelection",
+      "$ref": "#/$defs/singleBareFirstStrokeShortcutBindingNullable"
+    },
+    {
+      "path": "shortcuts.bindings.fileExplorerOpenSelectionFinderAlias",
+      "schema_pointer": "/properties/shortcuts/properties/bindings/properties/fileExplorerOpenSelectionFinderAlias",
+      "$ref": "#/$defs/singleBareFirstStrokeShortcutBindingNullable"
+    },
+    {
+      "path": "shortcuts.bindings.diffViewerScrollDown",
+      "schema_pointer": "/properties/shortcuts/properties/bindings/properties/diffViewerScrollDown",
+      "$ref": "#/$defs/bareFirstStrokeShortcutBindingNullable"
+    },
+    {
+      "path": "shortcuts.bindings.diffViewerScrollUp",
+      "schema_pointer": "/properties/shortcuts/properties/bindings/properties/diffViewerScrollUp",
+      "$ref": "#/$defs/bareFirstStrokeShortcutBindingNullable"
+    },
+    {
+      "path": "shortcuts.bindings.diffViewerScrollHalfPageDown",
+      "schema_pointer": "/properties/shortcuts/properties/bindings/properties/diffViewerScrollHalfPageDown",
+      "$ref": "#/$defs/bareFirstStrokeShortcutBindingNullable"
+    },
+    {
+      "path": "shortcuts.bindings.diffViewerScrollHalfPageUp",
+      "schema_pointer": "/properties/shortcuts/properties/bindings/properties/diffViewerScrollHalfPageUp",
+      "$ref": "#/$defs/bareFirstStrokeShortcutBindingNullable"
+    },
+    {
+      "path": "shortcuts.bindings.diffViewerScrollDownEmacs",
+      "schema_pointer": "/properties/shortcuts/properties/bindings/properties/diffViewerScrollDownEmacs",
+      "$ref": "#/$defs/bareFirstStrokeShortcutBindingNullable"
+    },
+    {
+      "path": "shortcuts.bindings.diffViewerScrollUpEmacs",
+      "schema_pointer": "/properties/shortcuts/properties/bindings/properties/diffViewerScrollUpEmacs",
+      "$ref": "#/$defs/bareFirstStrokeShortcutBindingNullable"
+    },
+    {
+      "path": "shortcuts.bindings.diffViewerScrollToBottom",
+      "schema_pointer": "/properties/shortcuts/properties/bindings/properties/diffViewerScrollToBottom",
+      "$ref": "#/$defs/bareFirstStrokeShortcutBindingNullable"
+    },
+    {
+      "path": "shortcuts.bindings.diffViewerScrollToTop",
+      "schema_pointer": "/properties/shortcuts/properties/bindings/properties/diffViewerScrollToTop",
+      "$ref": "#/$defs/bareFirstStrokeShortcutBindingNullable"
+    },
+    {
+      "path": "shortcuts.bindings.diffViewerOpenFileSearch",
+      "schema_pointer": "/properties/shortcuts/properties/bindings/properties/diffViewerOpenFileSearch",
+      "$ref": "#/$defs/bareFirstStrokeShortcutBindingNullable"
+    },
+    {
+      "path": "shortcuts.bindings.diffViewerNextFile",
+      "schema_pointer": "/properties/shortcuts/properties/bindings/properties/diffViewerNextFile",
+      "$ref": "#/$defs/bareFirstStrokeShortcutBindingNullable"
+    },
+    {
+      "path": "shortcuts.bindings.diffViewerPreviousFile",
+      "schema_pointer": "/properties/shortcuts/properties/bindings/properties/diffViewerPreviousFile",
+      "$ref": "#/$defs/bareFirstStrokeShortcutBindingNullable"
+    },
+    {
+      "path": "shortcuts.bindings.diffViewerNextHunk",
+      "schema_pointer": "/properties/shortcuts/properties/bindings/properties/diffViewerNextHunk",
+      "$ref": "#/$defs/bareFirstStrokeShortcutBindingNullable"
+    },
+    {
+      "path": "shortcuts.bindings.diffViewerPreviousHunk",
+      "schema_pointer": "/properties/shortcuts/properties/bindings/properties/diffViewerPreviousHunk",
+      "$ref": "#/$defs/bareFirstStrokeShortcutBindingNullable"
+    },
+    {
+      "path": "shortcuts.bindings.diffViewerToggleViewed",
+      "schema_pointer": "/properties/shortcuts/properties/bindings/properties/diffViewerToggleViewed",
+      "$ref": "#/$defs/bareFirstStrokeShortcutBindingNullable"
+    },
+    {
+      "path": "shortcuts.bindings.*",
+      "schema_pointer": "/properties/shortcuts/properties/bindings/additionalProperties",
+      "$ref": "#/$defs/shortcutBindingNullable"
+    },
+    {
+      "path": "shortcuts.when",
+      "schema_pointer": "/properties/shortcuts/properties/when",
+      "type": "object",
+      "default": {}
+    },
+    {
+      "path": "shortcuts.when.*",
+      "schema_pointer": "/properties/shortcuts/properties/when/additionalProperties",
+      "type": "string"
+    },
+    {
+      "path": "$defs.colorHex",
+      "schema_pointer": "/$defs/colorHex",
+      "type": "string"
+    },
+    {
+      "path": "$defs.colorHexOrNull",
+      "schema_pointer": "/$defs/colorHexOrNull"
+    },
+    {
+      "path": "$defs.colorHexOrNull<oneOf:0>",
+      "schema_pointer": "/$defs/colorHexOrNull/oneOf/0",
+      "$ref": "#/$defs/colorHex"
+    },
+    {
+      "path": "$defs.colorHexOrNull<oneOf:1>",
+      "schema_pointer": "/$defs/colorHexOrNull/oneOf/1",
+      "type": "null"
+    },
+    {
+      "path": "$defs.notificationSoundOverride",
+      "schema_pointer": "/$defs/notificationSoundOverride"
+    },
+    {
+      "path": "$defs.notificationSoundOverride<oneOf:0>",
+      "schema_pointer": "/$defs/notificationSoundOverride/oneOf/0",
+      "type": "object",
+      "required": [
+        "sound"
+      ]
+    },
+    {
+      "path": "$defs.notificationSoundOverride<oneOf:0>.sound",
+      "schema_pointer": "/$defs/notificationSoundOverride/oneOf/0/properties/sound",
+      "type": "string",
+      "enum": [
+        "default",
+        "Basso",
+        "Blow",
+        "Bottle",
+        "Frog",
+        "Funk",
+        "Glass",
+        "Hero",
+        "Morse",
+        "Ping",
+        "Pop",
+        "Purr",
+        "Sosumi",
+        "Submarine",
+        "Tink",
+        "none"
+      ]
+    },
+    {
+      "path": "$defs.notificationSoundOverride<oneOf:1>",
+      "schema_pointer": "/$defs/notificationSoundOverride/oneOf/1",
+      "type": "object",
+      "required": [
+        "sound",
+        "customSoundFilePath"
+      ]
+    },
+    {
+      "path": "$defs.notificationSoundOverride<oneOf:1>.sound",
+      "schema_pointer": "/$defs/notificationSoundOverride/oneOf/1/properties/sound"
+    },
+    {
+      "path": "$defs.notificationSoundOverride<oneOf:1>.customSoundFilePath",
+      "schema_pointer": "/$defs/notificationSoundOverride/oneOf/1/properties/customSoundFilePath",
+      "type": "string"
+    },
+    {
+      "path": "$defs.shortcutBinding",
+      "schema_pointer": "/$defs/shortcutBinding"
+    },
+    {
+      "path": "$defs.shortcutBinding<oneOf:0>",
+      "schema_pointer": "/$defs/shortcutBinding/oneOf/0",
+      "$ref": "#/$defs/unboundShortcutBinding"
+    },
+    {
+      "path": "$defs.shortcutBinding<oneOf:1>",
+      "schema_pointer": "/$defs/shortcutBinding/oneOf/1",
+      "$ref": "#/$defs/shortcutFirstStroke"
+    },
+    {
+      "path": "$defs.shortcutBinding<oneOf:2>",
+      "schema_pointer": "/$defs/shortcutBinding/oneOf/2",
+      "type": "array"
+    },
+    {
+      "path": "$defs.shortcutBindingNullable",
+      "schema_pointer": "/$defs/shortcutBindingNullable"
+    },
+    {
+      "path": "$defs.shortcutBindingNullable<oneOf:0>",
+      "schema_pointer": "/$defs/shortcutBindingNullable/oneOf/0",
+      "$ref": "#/$defs/shortcutBinding"
+    },
+    {
+      "path": "$defs.shortcutBindingNullable<oneOf:1>",
+      "schema_pointer": "/$defs/shortcutBindingNullable/oneOf/1",
+      "type": "null"
+    },
+    {
+      "path": "$defs.singleBareFirstStrokeShortcutBinding",
+      "schema_pointer": "/$defs/singleBareFirstStrokeShortcutBinding"
+    },
+    {
+      "path": "$defs.singleBareFirstStrokeShortcutBinding<oneOf:0>",
+      "schema_pointer": "/$defs/singleBareFirstStrokeShortcutBinding/oneOf/0",
+      "$ref": "#/$defs/unboundShortcutBinding"
+    },
+    {
+      "path": "$defs.singleBareFirstStrokeShortcutBinding<oneOf:1>",
+      "schema_pointer": "/$defs/singleBareFirstStrokeShortcutBinding/oneOf/1",
+      "$ref": "#/$defs/bareFirstStrokeShortcutFirstStroke"
+    },
+    {
+      "path": "$defs.singleBareFirstStrokeShortcutBindingNullable",
+      "schema_pointer": "/$defs/singleBareFirstStrokeShortcutBindingNullable"
+    },
+    {
+      "path": "$defs.singleBareFirstStrokeShortcutBindingNullable<oneOf:0>",
+      "schema_pointer": "/$defs/singleBareFirstStrokeShortcutBindingNullable/oneOf/0",
+      "$ref": "#/$defs/singleBareFirstStrokeShortcutBinding"
+    },
+    {
+      "path": "$defs.singleBareFirstStrokeShortcutBindingNullable<oneOf:1>",
+      "schema_pointer": "/$defs/singleBareFirstStrokeShortcutBindingNullable/oneOf/1",
+      "type": "null"
+    },
+    {
+      "path": "$defs.bareFirstStrokeShortcutBinding",
+      "schema_pointer": "/$defs/bareFirstStrokeShortcutBinding"
+    },
+    {
+      "path": "$defs.bareFirstStrokeShortcutBinding<oneOf:0>",
+      "schema_pointer": "/$defs/bareFirstStrokeShortcutBinding/oneOf/0",
+      "$ref": "#/$defs/unboundShortcutBinding"
+    },
+    {
+      "path": "$defs.bareFirstStrokeShortcutBinding<oneOf:1>",
+      "schema_pointer": "/$defs/bareFirstStrokeShortcutBinding/oneOf/1",
+      "$ref": "#/$defs/bareFirstStrokeShortcutFirstStroke"
+    },
+    {
+      "path": "$defs.bareFirstStrokeShortcutBinding<oneOf:2>",
+      "schema_pointer": "/$defs/bareFirstStrokeShortcutBinding/oneOf/2",
+      "type": "array"
+    },
+    {
+      "path": "$defs.bareFirstStrokeShortcutBindingNullable",
+      "schema_pointer": "/$defs/bareFirstStrokeShortcutBindingNullable"
+    },
+    {
+      "path": "$defs.bareFirstStrokeShortcutBindingNullable<oneOf:0>",
+      "schema_pointer": "/$defs/bareFirstStrokeShortcutBindingNullable/oneOf/0",
+      "$ref": "#/$defs/bareFirstStrokeShortcutBinding"
+    },
+    {
+      "path": "$defs.bareFirstStrokeShortcutBindingNullable<oneOf:1>",
+      "schema_pointer": "/$defs/bareFirstStrokeShortcutBindingNullable/oneOf/1",
+      "type": "null"
+    },
+    {
+      "path": "$defs.unboundShortcutBinding",
+      "schema_pointer": "/$defs/unboundShortcutBinding",
+      "type": "string",
+      "enum": [
+        "",
+        "none",
+        "clear",
+        "unbound",
+        "disabled"
+      ]
+    },
+    {
+      "path": "$defs.shortcutFirstStroke",
+      "schema_pointer": "/$defs/shortcutFirstStroke"
+    },
+    {
+      "path": "$defs.shortcutFirstStroke<allOf:0>",
+      "schema_pointer": "/$defs/shortcutFirstStroke/allOf/0",
+      "$ref": "#/$defs/shortcutStroke"
+    },
+    {
+      "path": "$defs.shortcutFirstStroke<allOf:1>",
+      "schema_pointer": "/$defs/shortcutFirstStroke/allOf/1"
+    },
+    {
+      "path": "$defs.shortcutFirstStroke<allOf:1><anyOf:0>",
+      "schema_pointer": "/$defs/shortcutFirstStroke/allOf/1/anyOf/0"
+    },
+    {
+      "path": "$defs.shortcutFirstStroke<allOf:1><anyOf:1>",
+      "schema_pointer": "/$defs/shortcutFirstStroke/allOf/1/anyOf/1"
+    },
+    {
+      "path": "$defs.bareFirstStrokeShortcutFirstStroke",
+      "schema_pointer": "/$defs/bareFirstStrokeShortcutFirstStroke"
+    },
+    {
+      "path": "$defs.bareFirstStrokeShortcutFirstStroke<allOf:0>",
+      "schema_pointer": "/$defs/bareFirstStrokeShortcutFirstStroke/allOf/0",
+      "$ref": "#/$defs/shortcutStroke"
+    },
+    {
+      "path": "$defs.bareFirstStrokeShortcutFirstStroke<allOf:1>",
+      "schema_pointer": "/$defs/bareFirstStrokeShortcutFirstStroke/allOf/1"
+    },
+    {
+      "path": "$defs.bareFirstStrokeShortcutFirstStroke<allOf:1><anyOf:0>",
+      "schema_pointer": "/$defs/bareFirstStrokeShortcutFirstStroke/allOf/1/anyOf/0"
+    },
+    {
+      "path": "$defs.bareFirstStrokeShortcutFirstStroke<allOf:1><anyOf:1>",
+      "schema_pointer": "/$defs/bareFirstStrokeShortcutFirstStroke/allOf/1/anyOf/1"
+    },
+    {
+      "path": "$defs.bareFirstStrokeShortcutFirstStroke<allOf:1><anyOf:2>",
+      "schema_pointer": "/$defs/bareFirstStrokeShortcutFirstStroke/allOf/1/anyOf/2"
+    },
+    {
+      "path": "$defs.bareFirstStrokeShortcutFirstStroke<allOf:1><anyOf:3>",
+      "schema_pointer": "/$defs/bareFirstStrokeShortcutFirstStroke/allOf/1/anyOf/3"
+    },
+    {
+      "path": "$defs.bareFirstStrokeShortcutFirstStroke<allOf:1><anyOf:4>",
+      "schema_pointer": "/$defs/bareFirstStrokeShortcutFirstStroke/allOf/1/anyOf/4"
+    },
+    {
+      "path": "$defs.shortcutStroke",
+      "schema_pointer": "/$defs/shortcutStroke",
+      "type": "string"
+    }
+  ]
+}

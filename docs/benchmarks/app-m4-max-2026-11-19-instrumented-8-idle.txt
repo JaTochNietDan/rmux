@@ -1,0 +1,30 @@
+2026-11-20T03:14:53Z
+35435     1   0:01.03 113024 /Users/jatochnietdan/Workarea/rmux/target/release/rmux-bench-8.app/Contents/MacOS/rmux
+35446 35435   0:00.01   2800 /bin/sh -i
+35447 35435   0:00.01   2800 /bin/sh -i
+35448 35435   0:00.01   2800 /bin/sh -i
+35450 35435   0:00.01   2800 /bin/sh -i
+35451 35435   0:00.01   2800 /bin/sh -i
+35452 35435   0:00.01   2800 /bin/sh -i
+35453 35435   0:00.01   2800 /bin/sh -i
+35454 35435   0:00.01   2800 /bin/sh -i
+2026-11-20T03:15:23Z
+35435     1   0:01.04 112560 /Users/jatochnietdan/Workarea/rmux/target/release/rmux-bench-8.app/Contents/MacOS/rmux
+35446 35435   0:00.01   2800 /bin/sh -i
+35447 35435   0:00.01   2800 /bin/sh -i
+35448 35435   0:00.01   2800 /bin/sh -i
+35450 35435   0:00.01   2800 /bin/sh -i
+35451 35435   0:00.01   2800 /bin/sh -i
+35452 35435   0:00.01   2800 /bin/sh -i
+35453 35435   0:00.01   2800 /bin/sh -i
+35454 35435   0:00.01   2800 /bin/sh -i
+2026-11-20T03:15:53Z
+35435     1   0:01.04 112560 /Users/jatochnietdan/Workarea/rmux/target/release/rmux-bench-8.app/Contents/MacOS/rmux
+35446 35435   0:00.01   2800 /bin/sh -i
+35447 35435   0:00.01   2800 /bin/sh -i
+35448 35435   0:00.01   2800 /bin/sh -i
+35450 35435   0:00.01   2800 /bin/sh -i
+35451 35435   0:00.01   2800 /bin/sh -i
+35452 35435   0:00.01   2800 /bin/sh -i
+35453 35435   0:00.01   2800 /bin/sh -i
+35454 35435   0:00.01   2800 /bin/sh -i

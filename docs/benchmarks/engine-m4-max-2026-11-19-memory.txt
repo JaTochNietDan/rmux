@@ -1,0 +1,19 @@
+{"panes":16,"columns":160,"rows":48,"scrollback_bytes_per_pane":4194304,"input_mib":1008.000,"elapsed_seconds":4.146758,"mib_per_second":243.081,"snapshot_samples":16384,"snapshot_p50_ns":127458,"snapshot_p99_ns":158625,"unchanged_snapshot_mean_ns":289}
+        4.28 real         4.25 user         0.02 sys
+            84279296  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                5336  page reclaims
+                   0  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   0  voluntary context switches
+                 431  involuntary context switches
+        111467604418  instructions retired
+         17040723662  cycles elapsed
+            83001776  peak memory footprint

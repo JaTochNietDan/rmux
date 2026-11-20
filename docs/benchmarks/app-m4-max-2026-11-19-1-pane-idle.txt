@@ -1,0 +1,9 @@
+2026-11-20T02:29:06Z
+18131     1   0:00.46  96736 /Users/jatochnietdan/Workarea/rmux/target/release/rmux-bench-1.app/Contents/MacOS/rmux
+18141 18131   0:00.00   2800 /bin/sh -i
+2026-11-20T02:29:36Z
+18131     1   0:00.72  96736 /Users/jatochnietdan/Workarea/rmux/target/release/rmux-bench-1.app/Contents/MacOS/rmux
+18141 18131   0:00.00   2800 /bin/sh -i
+2026-11-20T02:30:06Z
+18131     1   0:00.99  96736 /Users/jatochnietdan/Workarea/rmux/target/release/rmux-bench-1.app/Contents/MacOS/rmux
+18141 18131   0:00.00   2800 /bin/sh -i

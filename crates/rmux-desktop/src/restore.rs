@@ -1,0 +1,307 @@
+//! Prepare fresh shells off the UI thread before publishing a restored window.
+use super::*;
+use std::collections::VecDeque;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+#[derive(Default)]
+pub struct Job(pub Arc<AtomicBool>);
+impl Job {
+    pub fn cancel(&self) {
+        self.0.store(true, Ordering::Release);
+    }
+}
+impl Drop for Job {
+    fn drop(&mut self) {
+        self.cancel();
+    }
+}
+
+pub fn cancelled(token: &AtomicBool) -> bool {
+    token.load(Ordering::Acquire)
+}
+fn check_cancelled(token: &AtomicBool) -> anyhow::Result<()> {
+    anyhow::ensure!(!cancelled(token), "layout restore cancelled");
+    Ok(())
+}
+
+pub struct Prepared {
+    pub snapshot: snapshot::WindowSnapshot,
+    sessions: VecDeque<Session>,
+}
+
+// Validate every directory before starting the first shell. Spawn still checks
+// again because directories can disappear between preflight and process start.
+fn preflight(node: &snapshot::Node, token: &AtomicBool) -> anyhow::Result<()> {
+    use anyhow::Context;
+    check_cancelled(token)?;
+    match node {
+        snapshot::Node::Pane { tabs, .. } => {
+            for tab in tabs {
+                check_cancelled(token)?;
+                if let Some(path) = &tab.directory {
+                    let metadata = std::fs::metadata(path)
+                        .with_context(|| format!("working directory {}", path.display()))?;
+                    anyhow::ensure!(
+                        metadata.is_dir(),
+                        "working directory {} is not a directory",
+                        path.display()
+                    );
+                }
+            }
+        }
+        snapshot::Node::Split { children, .. } => {
+            for child in children {
+                preflight(child, token)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+impl Prepared {
+    pub fn read(
+        path: &std::path::Path,
+        token: &AtomicBool,
+        scrollback_bytes: usize,
+    ) -> anyhow::Result<Self> {
+        check_cancelled(token)?;
+        let snapshot = snapshot::WindowSnapshot::load(path)?;
+        Self::from_snapshot(snapshot, token, scrollback_bytes)
+    }
+    fn from_snapshot(snapshot: snapshot::WindowSnapshot, token: &AtomicBool, scrollback_bytes: usize) -> anyhow::Result<Self> {
+        Self::prepare_with(snapshot, token, &mut |tab| Session::shell_in_with_scrollback(80, 24, tab.directory.as_deref(), scrollback_bytes))
+    }
+    fn prepare_with(snapshot: snapshot::WindowSnapshot, token: &AtomicBool, spawn: &mut impl FnMut(&snapshot::TabSnapshot) -> anyhow::Result<Session>) -> anyhow::Result<Self> {
+        for workspace in &snapshot.workspaces {
+            preflight(&workspace.layout, token)?;
+        }
+        let mut sessions = VecDeque::new();
+        fn prepare(
+            node: &snapshot::Node,
+            sessions: &mut VecDeque<Session>,
+            token: &AtomicBool,
+            spawn: &mut impl FnMut(&snapshot::TabSnapshot) -> anyhow::Result<Session>,
+        ) -> anyhow::Result<()> {
+            match node {
+                snapshot::Node::Pane { tabs, .. } => {
+                    for tab in tabs {
+                        check_cancelled(token)?;
+                        sessions.push_back(spawn(tab)?);
+                    }
+                }
+                snapshot::Node::Split { children, .. } => {
+                    for child in children {
+                        prepare(child, sessions, token, spawn)?;
+                    }
+                }
+            }
+            Ok(())
+        }
+        let result = (|| {
+            for workspace in &snapshot.workspaces {
+                prepare(&workspace.layout, &mut sessions, token, spawn)?;
+            }
+            check_cancelled(token)
+        })();
+        if let Err(error) = result {
+            // Startup callers may exit immediately on failure. Finish rollback
+            // here instead of abandoning asynchronous reapers at process exit.
+            let shutdowns: Vec<_> = sessions.iter().map(Session::shutdown_handle).collect();
+            drop(sessions);
+            for shutdown in shutdowns {
+                futures_lite::future::block_on(shutdown.wait());
+            }
+            return Err(error);
+        }
+        Ok(Self { snapshot, sessions })
+    }
+
+    pub fn into_parts(self) -> (snapshot::WindowSnapshot, VecDeque<Session>) {
+        (self.snapshot, self.sessions)
+    }
+}
+
+pub struct PreparedSession {
+    pub active_window: Option<usize>,
+    pub windows: Vec<Prepared>,
+}
+impl PreparedSession {
+    pub fn read(path: &std::path::Path, token: &AtomicBool, scrollback_bytes: usize) -> anyhow::Result<Self> {
+        check_cancelled(token)?;
+        let snapshot = snapshot::SessionSnapshot::load(path)?;
+        Self::prepare_with(snapshot, token, &mut |tab| Session::shell_in_with_scrollback(80, 24, tab.directory.as_deref(), scrollback_bytes))
+    }
+    fn prepare_with(snapshot: snapshot::SessionSnapshot, token: &AtomicBool, spawn: &mut impl FnMut(&snapshot::TabSnapshot) -> anyhow::Result<Session>) -> anyhow::Result<Self> {
+        // Preflight every window before starting any shell.
+        for window in &snapshot.windows {
+            for workspace in &window.workspaces { preflight(&workspace.layout, token)?; }
+        }
+        let mut windows: Vec<Prepared> = Vec::new();
+        for window in snapshot.windows {
+            match Prepared::prepare_with(window, token, spawn) {
+                Ok(prepared) => windows.push(prepared),
+                Err(error) => {
+                    let handles: Vec<_> = windows.iter().flat_map(|window| window.sessions.iter().map(Session::shutdown_handle)).collect();
+                    drop(windows);
+                    for handle in handles { futures_lite::future::block_on(handle.wait()); }
+                    return Err(error);
+                }
+            }
+        }
+        Ok(Self { active_window: snapshot.active_window, windows })
+    }
+}
+
+impl Workspace {
+    pub fn restore_node(
+        &mut self,
+        node: snapshot::Node,
+        sessions: &mut VecDeque<Session>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> PaneTree<Entity<PaneView>> {
+        match node {
+            snapshot::Node::Pane { active_tab, tabs } => {
+                let mut terminals = Vec::with_capacity(tabs.len());
+                let mut labels = Vec::with_capacity(tabs.len());
+                for tab in tabs {
+                    let session = sessions
+                        .pop_front()
+                        .expect("validated layout has a prepared shell per tab");
+                    terminals.push(cx.new(|cx| {
+                        let mut view = TerminalView::new(session, window, cx);
+                        view.custom_title = tab.custom_title;
+                        if let Some(family) = tab.font_family {
+                            view.font_family = family.into();
+                        }
+                        view.cells = CellMetrics::new(tab.font_size);
+                        view
+                    }));
+                    labels.push(tab.label);
+                }
+                let workspace = cx.entity_id();
+                let pane =
+                    cx.new(|cx| PaneView::restored(terminals, labels, active_tab, workspace, cx));
+                self.observe_pane(&pane, window, cx);
+                self.panes.push(pane.clone());
+                PaneTree::Pane(pane)
+            }
+            snapshot::Node::Split {
+                axis,
+                weights,
+                children,
+            } => PaneTree::Split {
+                axis,
+                weights,
+                children: children
+                    .into_iter()
+                    .map(|node| self.restore_node(node, sessions, window, cx))
+                    .collect(),
+            },
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Job, Prepared, cancelled};
+
+    #[cfg(unix)]
+    #[test]
+    fn partial_session_failure_and_cancellation_reap_every_prepared_shell() -> anyhow::Result<()> {
+        use super::{PreparedSession, Session, snapshot};
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let window = serde_json::json!({"version":1,"sidebar":true,"active_workspace":0,
+            "workspaces":[{"name":"rollback","active_pane":0,"layout":{"kind":"pane","active_tab":0,
+                "tabs":[{"label":"first","directory":null},{"label":"second","directory":null}]}}]});
+        let bytes = serde_json::to_vec(&serde_json::json!({"version":1,"active_window":0,"windows":[window.clone(),window]}))?;
+        // Fail within the first window, within the second window, and cancel
+        // after the first successful spawn. No environment overrides or mocks
+        // replace the real PTY/session cleanup path.
+        for (fail_at, cancel_after_first) in [(2, false), (4, false), (0, true)] {
+            let token = AtomicBool::new(false);
+            let mut calls = 0;
+            let mut shutdowns = Vec::new();
+            let result = PreparedSession::prepare_with(snapshot::SessionSnapshot::decode(&bytes)?, &token, &mut |_| {
+                calls += 1;
+                anyhow::ensure!(calls != fail_at, "injected later spawn failure");
+                let session = Session::command_in(&["/bin/sh".into(), "-c".into(), "IFS= read -r line".into()], 20, 3, None)?;
+                let handle = session.shutdown_handle();
+                assert!(!handle.is_finished());
+                shutdowns.push(handle);
+                if cancel_after_first { token.store(true, Ordering::Release); }
+                Ok(session)
+            });
+            let error = result.err().expect("preparation must fail");
+            assert!(error.to_string().contains(if cancel_after_first { "cancelled" } else { "injected" }));
+            assert_eq!(shutdowns.len(), if cancel_after_first { 1 } else { fail_at - 1 });
+            assert!(shutdowns.iter().all(|handle| handle.is_finished()), "rollback returned before reaping prepared shells");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn preflight_checks_nested_directories_and_cancellation() {
+        use super::{preflight, snapshot};
+        use crate::layout::Axis;
+        use std::sync::atomic::AtomicBool;
+        let directory = tempfile::tempdir().unwrap();
+        let missing = directory.path().join("missing");
+        let pane = |path| snapshot::Node::Pane {
+            active_tab: 0,
+            tabs: vec![snapshot::TabSnapshot {
+                custom_title: None,
+                font_family: None,
+                label: String::new(),
+                directory: path,
+                font_size: 14.,
+            }],
+        };
+        let node = snapshot::Node::Split {
+            axis: Axis::Columns,
+            weights: vec![1., 1.],
+            children: vec![
+                pane(Some(directory.path().into())),
+                pane(Some(missing.clone())),
+            ],
+        };
+        let token = AtomicBool::new(false);
+        assert!(
+            preflight(&node, &token)
+                .unwrap_err()
+                .to_string()
+                .contains("missing")
+        );
+        std::fs::write(&missing, "regular file").unwrap();
+        assert!(
+            preflight(&node, &token)
+                .unwrap_err()
+                .to_string()
+                .contains("not a directory")
+        );
+        std::fs::remove_file(&missing).unwrap();
+        std::fs::create_dir(&missing).unwrap();
+        preflight(&node, &token).unwrap();
+        preflight(&pane(None), &token).unwrap();
+        assert_eq!(
+            preflight(&node, &AtomicBool::new(true))
+                .unwrap_err()
+                .to_string(),
+            "layout restore cancelled"
+        );
+    }
+
+    #[test]
+    fn closing_owner_cancels_worker_before_file_access() {
+        let job = Job::default();
+        let token = job.0.clone();
+        assert!(!cancelled(&token));
+        drop(job);
+        assert!(cancelled(&token));
+        let directory = tempfile::tempdir().unwrap();
+        let error = Prepared::read(&directory.path().join("missing.json"), &token, 0)
+            .err()
+            .expect("cancelled preparation must fail");
+        assert_eq!(error.to_string(), "layout restore cancelled");
+    }
+}

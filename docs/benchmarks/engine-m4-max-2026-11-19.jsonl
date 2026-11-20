@@ -1,0 +1,3 @@
+{"panes":1,"columns":160,"rows":48,"scrollback_bytes_per_pane":4194304,"input_mib":63.000,"elapsed_seconds":0.246021,"mib_per_second":256.076,"snapshot_samples":1024,"snapshot_p50_ns":120333,"snapshot_p99_ns":148584,"unchanged_snapshot_mean_ns":274}
+{"panes":4,"columns":160,"rows":48,"scrollback_bytes_per_pane":4194304,"input_mib":252.000,"elapsed_seconds":0.987854,"mib_per_second":255.098,"snapshot_samples":4096,"snapshot_p50_ns":122625,"snapshot_p99_ns":143375,"unchanged_snapshot_mean_ns":276}
+{"panes":16,"columns":160,"rows":48,"scrollback_bytes_per_pane":4194304,"input_mib":1008.000,"elapsed_seconds":4.126425,"mib_per_second":244.279,"snapshot_samples":16384,"snapshot_p50_ns":128000,"snapshot_p99_ns":151000,"unchanged_snapshot_mean_ns":300}

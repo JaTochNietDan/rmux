@@ -1,0 +1,25 @@
+[workspace]
+members = ["crates/rmux-terminal", "crates/rmux-desktop", "crates/rmux-cli"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+publish = false
+
+[workspace.dependencies]
+anyhow = "1.0"
+async-channel = "2.5"
+gpui = "=0.2.2"
+portable-pty = "=0.9.0"
+
+[profile.dev]
+debug = 1
+
+[patch.crates-io]
+xattr = { path = "vendor/xattr" }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

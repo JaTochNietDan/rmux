@@ -1,0 +1,41 @@
+Linux terminal-core runtime check, November 19, 2026 (local date)
+Host: Apple M4 Max, OrbStack Linux kernel 7.2.12-orbstack-00394-gbecdd6130068
+Container: Debian GNU/Linux 13.7, ARM64
+Existing image: postgres:17
+Image ID: sha256:ff87138949ad9a46f32ff23bd6852b52ce024a13dffe9b4087be98292cdd3b4f
+Database entrypoint bypassed; networking disabled; /tests bind mount read-only.
+No tools or libraries installed in the container.
+Test binary SHA-256: e153bfa5810788cf911c02ba23ba5c39e7c0e29952665c526d2c334b945526c6
+
+Build:
+RMUX_GHOSTTY_TARGET=aarch64-linux-gnu mise exec -- sh scripts/build-ghostty-source.sh
+RMUX_LOCAL_NON_A53_TEST=1 mise run build-linux-arm64-tests
+
+The test-only linker opt-in removes --fix-cortex-a53-843419, which Zig 0.17
+rejects. This run uses an Apple Silicon VM; the executable is not a portable
+ARM64 release artifact. Rust targets and Zig are managed through mise.
+
+Execution:
+mise exec -- docker run --rm --network none \
+  --mount "type=bind,src=$PWD/target/aarch64-unknown-linux-gnu/debug/deps,dst=/tests,readonly" \
+  --entrypoint /tests/rmux_terminal-43c5b70b0c5f4953 postgres:17 --test-threads=1
+
+running 13 tests
+test keyboard::tests::encodes_terminal_modes_modifiers_and_paste ... ok
+test keyboard::tests::focus_reports_require_application_opt_in ... ok
+test keyboard::tests::key_release_and_repeat_follow_negotiated_protocol ... ok
+test mouse::tests::negotiated_mouse_reports_and_motion_filtering ... ok
+test session::tests::closing_session_terminates_a_shell_that_ignores_hangup ... ok
+test session::tests::dropping_sessions_releases_shell_and_terminal ... ok
+test session::tests::interactive_shell_accepts_input_after_resize ... ok
+test session::tests::real_shell_output_reaches_ghostty ... ok
+test session::tests::reports_exit_and_rejects_further_input ... ok
+test tests::exposes_text_decorations_and_cursor_styles ... ok
+test tests::parses_styles_unicode_cursor_and_terminal_reply ... ok
+test tests::scrollback_survives_output_and_alternate_screen ... ok
+test tests::synchronized_output_holds_then_publishes_with_bounded_recovery ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.79s
+
+This does not test GPUI, Linux desktop rendering, input methods, Wayland/X11,
+Windows, x86_64 Linux execution, or terminal application performance.

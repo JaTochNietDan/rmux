@@ -1,0 +1,671 @@
+{
+  "revision": "a76816e4f0788003758b9434ab702068a640fb5d",
+  "scope": "Literal action and category IDs from the public shortcut catalog; defaults remain in the linked source. Not every ID is a bindable action.",
+  "count": 166,
+  "entries": [
+    {
+      "id": "app",
+      "source_line": 29
+    },
+    {
+      "id": "openSettings",
+      "source_line": 33
+    },
+    {
+      "id": "openTeamPicker",
+      "source_line": 35
+    },
+    {
+      "id": "reloadConfiguration",
+      "source_line": 60
+    },
+    {
+      "id": "showHideAllWindows",
+      "source_line": 62
+    },
+    {
+      "id": "globalSearch",
+      "source_line": 68
+    },
+    {
+      "id": "commandPalette",
+      "source_line": 73
+    },
+    {
+      "id": "agentInbox",
+      "source_line": 75
+    },
+    {
+      "id": "openChief",
+      "source_line": 101
+    },
+    {
+      "id": "commandPaletteNext",
+      "source_line": 127
+    },
+    {
+      "id": "commandPalettePrevious",
+      "source_line": 133
+    },
+    {
+      "id": "newWindow",
+      "source_line": 138
+    },
+    {
+      "id": "closeWindow",
+      "source_line": 139
+    },
+    {
+      "id": "toggleFullScreen",
+      "source_line": 140
+    },
+    {
+      "id": "sendFeedback",
+      "source_line": 142
+    },
+    {
+      "id": "reopenPreviousSession",
+      "source_line": 148
+    },
+    {
+      "id": "quit",
+      "source_line": 152
+    },
+    {
+      "id": "workspaces",
+      "source_line": 156
+    },
+    {
+      "id": "toggleSidebar",
+      "source_line": 160
+    },
+    {
+      "id": "toggleFileExplorer",
+      "source_line": 161
+    },
+    {
+      "id": "newTab",
+      "source_line": 163
+    },
+    {
+      "id": "newLocalWorkspace",
+      "source_line": 189
+    },
+    {
+      "id": "newBrowserWorkspace",
+      "source_line": 195
+    },
+    {
+      "id": "newCloudWorkspace",
+      "source_line": 204
+    },
+    {
+      "id": "newCloudMachine",
+      "source_line": 230
+    },
+    {
+      "id": "saveLayoutTemplate",
+      "source_line": 231
+    },
+    {
+      "id": "openFolder",
+      "source_line": 232
+    },
+    {
+      "id": "goToWorkspace",
+      "source_line": 234
+    },
+    {
+      "id": "nextSidebarTab",
+      "source_line": 239
+    },
+    {
+      "id": "prevSidebarTab",
+      "source_line": 240
+    },
+    {
+      "id": "nextSidebarTabInGroup",
+      "source_line": 242
+    },
+    {
+      "id": "prevSidebarTabInGroup",
+      "source_line": 251
+    },
+    {
+      "id": "moveWorkspaceUp",
+      "source_line": 259
+    },
+    {
+      "id": "moveWorkspaceDown",
+      "source_line": 260
+    },
+    {
+      "id": "focusHistoryBack",
+      "source_line": 262
+    },
+    {
+      "id": "focusHistoryForward",
+      "source_line": 271
+    },
+    {
+      "id": "focusHistoryLast",
+      "source_line": 280
+    },
+    {
+      "id": "selectWorkspaceByNumber",
+      "source_line": 288
+    },
+    {
+      "id": "renameWorkspace",
+      "source_line": 289
+    },
+    {
+      "id": "editWorkspaceDescription",
+      "source_line": 290
+    },
+    {
+      "id": "markWorkspaceDone",
+      "source_line": 291
+    },
+    {
+      "id": "cycleWorkspaceStatus",
+      "source_line": 292
+    },
+    {
+      "id": "toggleChecklistItemComplete",
+      "source_line": 294
+    },
+    {
+      "id": "newWorkspaceGroup",
+      "source_line": 302
+    },
+    {
+      "id": "groupSelectedWorkspaces",
+      "source_line": 303
+    },
+    {
+      "id": "toggleFocusedWorkspaceGroupCollapsed",
+      "source_line": 305
+    },
+    {
+      "id": "focusSidebar",
+      "source_line": 310
+    },
+    {
+      "id": "showWindowHints",
+      "source_line": 319
+    },
+    {
+      "id": "focusRightSidebar",
+      "source_line": 324
+    },
+    {
+      "id": "navigateRightSidebarRows",
+      "source_line": 326
+    },
+    {
+      "id": "fileExplorerOpenSelection",
+      "source_line": 335
+    },
+    {
+      "id": "fileExplorerOpenSelectionFinderAlias",
+      "source_line": 383
+    },
+    {
+      "id": "closeWorkspace",
+      "source_line": 430
+    },
+    {
+      "id": "reopenClosedWorkspace",
+      "source_line": 431
+    },
+    {
+      "id": "surfaces",
+      "source_line": 435
+    },
+    {
+      "id": "newSurface",
+      "source_line": 439
+    },
+    {
+      "id": "nextSurface",
+      "source_line": 440
+    },
+    {
+      "id": "prevSurface",
+      "source_line": 441
+    },
+    {
+      "id": "moveSurfaceLeft",
+      "source_line": 442
+    },
+    {
+      "id": "moveSurfaceRight",
+      "source_line": 443
+    },
+    {
+      "id": "moveSurfaceToPreviousPane",
+      "source_line": 444
+    },
+    {
+      "id": "moveSurfaceToNextPane",
+      "source_line": 445
+    },
+    {
+      "id": "moveSurfaceToPaneLeft",
+      "source_line": 446
+    },
+    {
+      "id": "moveSurfaceToPaneRight",
+      "source_line": 447
+    },
+    {
+      "id": "moveSurfaceToPaneUp",
+      "source_line": 448
+    },
+    {
+      "id": "moveSurfaceToPaneDown",
+      "source_line": 449
+    },
+    {
+      "id": "selectSurfaceByNumber",
+      "source_line": 450
+    },
+    {
+      "id": "renameTab",
+      "source_line": 451
+    },
+    {
+      "id": "closeTab",
+      "source_line": 452
+    },
+    {
+      "id": "closeOtherTabsInPane",
+      "source_line": 453
+    },
+    {
+      "id": "reopenClosedBrowserPanel",
+      "source_line": 455
+    },
+    {
+      "id": "toggleTerminalCopyMode",
+      "source_line": 459
+    },
+    {
+      "id": "clearScreenKeepScrollback",
+      "source_line": 460
+    },
+    {
+      "id": "simulatorHome",
+      "source_line": 461
+    },
+    {
+      "id": "simulatorRotateLeft",
+      "source_line": 462
+    },
+    {
+      "id": "simulatorRotateRight",
+      "source_line": 463
+    },
+    {
+      "id": "simulatorToggleAppearance",
+      "source_line": 464
+    },
+    {
+      "id": "simulatorToggleSoftwareKeyboard",
+      "source_line": 465
+    },
+    {
+      "id": "focusTextBoxInput",
+      "source_line": 466
+    },
+    {
+      "id": "cycleTextBoxSubmitAction",
+      "source_line": 467
+    },
+    {
+      "id": "attachTextBoxFile",
+      "source_line": 468
+    },
+    {
+      "id": "sendCtrlFToTerminal",
+      "source_line": 470
+    },
+    {
+      "id": "sizeTerminalToMyWindow",
+      "source_line": 479
+    },
+    {
+      "id": "pasteLastScreenshot",
+      "source_line": 485
+    },
+    {
+      "id": "saveFilePreview",
+      "source_line": 491
+    },
+    {
+      "id": "toggleFileEditorWordWrap",
+      "source_line": 497
+    },
+    {
+      "id": "split-panes",
+      "source_line": 505
+    },
+    {
+      "id": "focusLeft",
+      "source_line": 508
+    },
+    {
+      "id": "focusRight",
+      "source_line": 509
+    },
+    {
+      "id": "focusUp",
+      "source_line": 510
+    },
+    {
+      "id": "focusDown",
+      "source_line": 511
+    },
+    {
+      "id": "focusPreviousPane",
+      "source_line": 513
+    },
+    {
+      "id": "focusNextPane",
+      "source_line": 522
+    },
+    {
+      "id": "focusPaneByNumber",
+      "source_line": 530
+    },
+    {
+      "id": "splitRight",
+      "source_line": 531
+    },
+    {
+      "id": "splitDown",
+      "source_line": 532
+    },
+    {
+      "id": "newPaneAutoLayout",
+      "source_line": 534
+    },
+    {
+      "id": "splitBrowserRight",
+      "source_line": 542
+    },
+    {
+      "id": "splitBrowserDown",
+      "source_line": 543
+    },
+    {
+      "id": "toggleSplitZoom",
+      "source_line": 544
+    },
+    {
+      "id": "increaseWorkspaceTerminalFontSize",
+      "source_line": 545
+    },
+    {
+      "id": "decreaseWorkspaceTerminalFontSize",
+      "source_line": 546
+    },
+    {
+      "id": "resetWorkspaceTerminalFontSize",
+      "source_line": 547
+    },
+    {
+      "id": "equalizeSplits",
+      "source_line": 548
+    },
+    {
+      "id": "resize-pane-left",
+      "source_line": 549
+    },
+    {
+      "id": "resize-pane-right",
+      "source_line": 550
+    },
+    {
+      "id": "resize-pane-up",
+      "source_line": 551
+    },
+    {
+      "id": "resize-pane-down",
+      "source_line": 552
+    },
+    {
+      "id": "canvas",
+      "source_line": 556
+    },
+    {
+      "id": "toggleCanvasLayout",
+      "source_line": 560
+    },
+    {
+      "id": "canvasRevealFocusedPane",
+      "source_line": 561
+    },
+    {
+      "id": "canvasOverview",
+      "source_line": 562
+    },
+    {
+      "id": "canvasZoomIn",
+      "source_line": 563
+    },
+    {
+      "id": "canvasZoomOut",
+      "source_line": 564
+    },
+    {
+      "id": "canvasZoomReset",
+      "source_line": 565
+    },
+    {
+      "id": "canvasTidy",
+      "source_line": 566
+    },
+    {
+      "id": "browser",
+      "source_line": 570
+    },
+    {
+      "id": "openBrowser",
+      "source_line": 573
+    },
+    {
+      "id": "focusBrowserAddressBar",
+      "source_line": 574
+    },
+    {
+      "id": "browserBack",
+      "source_line": 575
+    },
+    {
+      "id": "browserForward",
+      "source_line": 576
+    },
+    {
+      "id": "browserReload",
+      "source_line": 578
+    },
+    {
+      "id": "browserHardReload",
+      "source_line": 584
+    },
+    {
+      "id": "browserZoomIn",
+      "source_line": 631
+    },
+    {
+      "id": "browserZoomOut",
+      "source_line": 632
+    },
+    {
+      "id": "browserZoomReset",
+      "source_line": 633
+    },
+    {
+      "id": "markdownZoomIn",
+      "source_line": 635
+    },
+    {
+      "id": "markdownZoomOut",
+      "source_line": 641
+    },
+    {
+      "id": "markdownZoomReset",
+      "source_line": 647
+    },
+    {
+      "id": "toggleBrowserDeveloperTools",
+      "source_line": 652
+    },
+    {
+      "id": "showBrowserJavaScriptConsole",
+      "source_line": 653
+    },
+    {
+      "id": "toggleBrowserFocusMode",
+      "source_line": 655
+    },
+    {
+      "id": "toggleBrowserDesignMode",
+      "source_line": 661
+    },
+    {
+      "id": "toggleReactGrab",
+      "source_line": 667
+    },
+    {
+      "id": "diff-viewer",
+      "source_line": 678
+    },
+    {
+      "id": "openDiffViewer",
+      "source_line": 682
+    },
+    {
+      "id": "diffViewerScrollDown",
+      "source_line": 687
+    },
+    {
+      "id": "diffViewerScrollUp",
+      "source_line": 693
+    },
+    {
+      "id": "diffViewerScrollHalfPageDown",
+      "source_line": 699
+    },
+    {
+      "id": "diffViewerScrollHalfPageUp",
+      "source_line": 705
+    },
+    {
+      "id": "diffViewerScrollDownEmacs",
+      "source_line": 711
+    },
+    {
+      "id": "diffViewerScrollUpEmacs",
+      "source_line": 717
+    },
+    {
+      "id": "diffViewerScrollToBottom",
+      "source_line": 723
+    },
+    {
+      "id": "diffViewerScrollToTop",
+      "source_line": 729
+    },
+    {
+      "id": "diffViewerOpenFileSearch",
+      "source_line": 736
+    },
+    {
+      "id": "diffViewerNextFile",
+      "source_line": 742
+    },
+    {
+      "id": "diffViewerPreviousFile",
+      "source_line": 749
+    },
+    {
+      "id": "diffViewerNextHunk",
+      "source_line": 756
+    },
+    {
+      "id": "diffViewerPreviousHunk",
+      "source_line": 763
+    },
+    {
+      "id": "diffViewerToggleViewed",
+      "source_line": 770
+    },
+    {
+      "id": "find",
+      "source_line": 821
+    },
+    {
+      "id": "find",
+      "source_line": 824
+    },
+    {
+      "id": "findInDirectory",
+      "source_line": 825
+    },
+    {
+      "id": "findNext",
+      "source_line": 826
+    },
+    {
+      "id": "findPrevious",
+      "source_line": 827
+    },
+    {
+      "id": "hideFind",
+      "source_line": 828
+    },
+    {
+      "id": "useSelectionForFind",
+      "source_line": 829
+    },
+    {
+      "id": "notifications",
+      "source_line": 833
+    },
+    {
+      "id": "showNotifications",
+      "source_line": 836
+    },
+    {
+      "id": "jumpToUnread",
+      "source_line": 837
+    },
+    {
+      "id": "jumpToLastPrompt",
+      "source_line": 839
+    },
+    {
+      "id": "toggleUnread",
+      "source_line": 864
+    },
+    {
+      "id": "markOldestUnreadAndJumpNext",
+      "source_line": 865
+    },
+    {
+      "id": "markAllNotificationsRead",
+      "source_line": 867
+    },
+    {
+      "id": "clearAllNotifications",
+      "source_line": 915
+    },
+    {
+      "id": "triggerFlash",
+      "source_line": 962
+    }
+  ]
+}

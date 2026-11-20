@@ -1,0 +1,1793 @@
+{
+  "upstream_revision": "a76816e4f0788003758b9434ab702068a640fb5d",
+  "source_paths": {
+    "R": "README.md",
+    "C": "CHANGELOG.md",
+    "CLI": "docs/cli-contract.md",
+    "TREE": "docs/cli-command-tree.txt",
+    "RPC": "Sources/TerminalController+Capabilities.swift",
+    "SCHEMA": "web/data/cmux.schema.json",
+    "GROUP": "docs/workspace-groups.md",
+    "DOCK": "docs/dock.md",
+    "CANVAS": "docs/canvas-layout-design.md",
+    "APPEAR": "docs/customizing-appearance.md",
+    "KEY": "docs/ghostty-keybindings.md",
+    "SHELL": "docs/shell-integration.md",
+    "GHOST": "docs/ghostty-fork.md",
+    "NOTIFY": "docs/notifications.md",
+    "STATUS": "docs/program-status.md",
+    "EVENT": "docs/events.md",
+    "AUTO": "docs/automations.md",
+    "HOOK": "docs/agent-hooks.md",
+    "FEED": "docs/feed.md",
+    "MSG": "docs/agent-messages.md",
+    "VAULT": "docs/vault.md",
+    "NAME": "docs/workspace-auto-naming.md",
+    "CURRENT": "docs/current-work.md",
+    "TMUX": "docs/local-tmux.md",
+    "ZELLIJ": "docs/local-zellij.md",
+    "SIDE": "docs/custom-sidebars.md",
+    "CONFIG": "docs/configuration.md",
+    "UNDO": "docs/config-transactions.md",
+    "SIM": "docs/simulator-pane.md",
+    "CUA": "docs/computer-use.md",
+    "CLOUD": "docs/cloud-agent-primitives.md",
+    "CLOUDTUI": "docs/cloud-cmux-tui-daemon.md",
+    "NET": "docs/cloud-userspace-wireguard.md",
+    "DEVICE": "docs/multi-machine-sessions.md",
+    "SIZE": "docs/shared-terminal-sizing.md",
+    "POLICY": "docs/managed-device-policies.md",
+    "FAN": "docs/agent-fan-out-rfc.md",
+    "EXT": "docs/rfcs/extension-ecosystem.md",
+    "PR": "docs/pr-handoff.md",
+    "REPL": "docs/browser-repl/README.md",
+    "PARITY": "docs/browser-repl/parity-report.md",
+    "WEB": "web/messages/en.json",
+    "SSH": "web/app/[locale]/(landing)/docs/ssh/page.tsx",
+    "BROWSER": "web/app/[locale]/(landing)/docs/browser-automation/page.tsx",
+    "CUSTOM": "web/app/[locale]/(landing)/docs/custom-commands/page.tsx",
+    "RESTORE": "web/app/[locale]/(landing)/docs/session-restore/page.tsx",
+    "TOP": "web/app/[locale]/(landing)/docs/task-manager/page.tsx",
+    "IOS": "web/app/[locale]/(landing)/docs/ios/page.tsx",
+    "ROUTER": "web/app/[locale]/(landing)/docs/coderouter/page.tsx",
+    "LICENSE": "LICENSE",
+    "SHORT": "web/data/cmux-shortcuts.ts"
+  },
+  "features": [
+    {
+      "id": "W01",
+      "feature": "Multiple windows and independent workspace lists",
+      "phase": "P1",
+      "upstream_evidence": "D",
+      "sources": [
+        "R",
+        "WEB"
+      ],
+      "acceptance": "Create two windows; switching and closing workspaces in one does not mutate the other.",
+      "rmux_status": "in_progress",
+      "implementation": "Independent window roots and workspace lists.",
+      "remaining": "Multi-window lifecycle acceptance across platforms.",
+      "implementation_sources": [
+        "crates/rmux-desktop/src/window_view.rs"
+      ],
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "W02",
+      "feature": "Vertical workspaces and per-pane surface tabs",
+      "phase": "P1",
+      "upstream_evidence": "D",
+      "sources": [
+        "R",
+        "WEB"
+      ],
+      "acceptance": "Keep window, workspace, pane and surface identities distinct through all operations.",
+      "rmux_status": "in_progress",
+      "implementation": "Sidebar workspaces and per-pane terminal tabs.",
+      "remaining": "Full identity and interaction parity acceptance.",
+      "implementation_sources": [
+        "crates/rmux-desktop/src/pane_view.rs"
+      ],
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "W03",
+      "feature": "Nested horizontal and vertical splits",
+      "phase": "P1",
+      "upstream_evidence": "D",
+      "sources": [
+        "R"
+      ],
+      "acceptance": "Split recursively, resize dividers, and preserve running sessions.",
+      "rmux_status": "in_progress",
+      "implementation": "Nested weighted splits, divider resizing and collapse.",
+      "remaining": "Cross-platform native interaction and performance gates.",
+      "implementation_sources": [
+        "crates/rmux-desktop/src/layout.rs"
+      ],
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "W04",
+      "feature": "Directional and numeric focus navigation",
+      "phase": "P1",
+      "upstream_evidence": "D",
+      "sources": [
+        "R",
+        "C"
+      ],
+      "acceptance": "Keyboard navigation selects the expected pane with no accidental terminal input.",
+      "rmux_status": "in_progress",
+      "implementation": "Directional pane focus, numeric workspace shortcuts and Focus Pane 1–9 palette actions with Cmd+Option+number on macOS / Ctrl+Alt+Shift+number elsewhere. Numeric selection follows pane traversal order and moves zoom to the selected pane.",
+      "remaining": "Complete native navigation coverage, including new Select Tab 1–9 shortcuts (Cmd+Shift+number on macOS / Ctrl+Shift+number elsewhere) and palette actions. Missing tab numbers are no-ops; tab numbering is per focused pane.",
+      "implementation_sources": [
+        "crates/rmux-desktop/src/main.rs"
+      ],
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "W05",
+      "feature": "Tab movement, reordering and detaching",
+      "phase": "P1",
+      "upstream_evidence": "D",
+      "sources": [
+        "TREE",
+        "CLI"
+      ],
+      "acceptance": "Move a live surface between panes and workspaces without restarting its process.",
+      "rmux_status": "in_progress",
+      "implementation": "Tab reorder, movement between panes, palette transfer to named workspaces, tab drops onto sidebar workspaces, and detachment into a new window preserving the terminal entity/PTY with rebound focus subscriptions. Native macOS palette transfer of the last source tab preserved shell PID/state and removed the empty source.",
+      "remaining": "Native palette/detachment/sidebar drag and OS-focus acceptance. Live macOS RPC checks now verify the shared cross-window transfer path's PID/state continuity, multi-tab round trip, sole-tab source workspace/window cleanup and stale targets. Busy/restore destinations and complete multi-pane, zoom and cross-platform acceptance remain pending.",
+      "implementation_sources": [
+        "crates/rmux-desktop/src/pane_view.rs",
+        "crates/rmux-desktop/src/window_view.rs",
+        "crates/rmux-desktop/src/main.rs"
+      ],
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "W06",
+      "feature": "Workspace movement, reordering and pinning",
+      "phase": "P1",
+      "upstream_evidence": "D",
+      "sources": [
+        "GROUP",
+        "TREE"
+      ],
+      "acceptance": "Reordering persists and moving a workspace to another window preserves its sessions.",
+      "rmux_status": "in_progress",
+      "implementation": "Keyboard/drag workspace reorder within pinned/unpinned groups, pin/unpin actions, manual layout persistence of pin state, and movement into new or next existing windows retaining workspace/layout/terminal entities with rebound window subscriptions. Existing-window transfer preserves pinned-group placement and rejects restoring/closing destinations before mutation.",
+      "remaining": "Native movement into new/existing windows, named destination-window palette selection, stale destination handling, and pin/reorder/restore acceptance.",
+      "implementation_sources": [
+        "crates/rmux-desktop/src/window_view.rs"
+      ],
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "W07",
+      "feature": "Workspace names, descriptions, icons and colors",
+      "phase": "P1",
+      "upstream_evidence": "D",
+      "sources": [
+        "R",
+        "GROUP",
+        "SCHEMA"
+      ],
+      "acceptance": "User labels persist; automatic metadata never silently replaces a manual name.",
+      "rmux_status": "in_progress",
+      "implementation": "Manual names/descriptions, preset and custom glyph icons/hex colors, sidebar metadata display, and saved layout persistence with backward-compatible defaults.",
+      "remaining": "Native acceptance of the new graphical preset icon/color pickers and metadata editing, automatic persistence, and layout acceptance. Preset buttons stage changes in the existing editor with Enter to save and Escape to cancel; custom glyph/hex entry remains supported.",
+      "implementation_sources": [
+        "crates/rmux-desktop/src/window_view.rs"
+      ],
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "W08",
+      "feature": "Workspace groups and anchor behavior",
+      "phase": "P2",
+      "upstream_evidence": "D",
+      "sources": [
+        "GROUP"
+      ],
+      "acceptance": "Create, collapse, pin, regroup and ungroup; closing the anchor promotes a member without closing siblings.",
+      "rmux_status": "in_progress",
+      "implementation": "Window-local ownership and validated layout/session persistence with anchor promotion on close/detach. Sidebar anchor headers, indented/collapsible members, create/rename/pin/ungroup actions, new-group shortcut and header add button. New workspaces join the active group after the active member. Focused model/format tests and desktop compilation pass; native UI acceptance pending.",
+      "remaining": "Sidebar multi-selection, configurable new-workspace placement, explicit group cwd override and generated-anchor cleanup; native visual/keyboard/drag acceptance. Group create/update/ungroup/add/remove/set-anchor RPC and persistent external identity are implemented and smoke-tested. Ordering, member drag/drop, styling and anchor-position preservation are implemented; native appearance remains unverified.",
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "W09",
+      "feature": "Pane swap, break, join and zoom operations",
+      "phase": "P2",
+      "upstream_evidence": "I",
+      "sources": [
+        "TREE",
+        "RPC",
+        "SHORT"
+      ],
+      "acceptance": "Define each operation as a layout transaction with preserved surface identity and focus.",
+      "rmux_status": "in_progress",
+      "implementation": "Pane zoom, swap-with-next, active-tab break into right/below split and join-into-next retain existing terminal entities. A native macOS break-right/swap/join sequence preserved shell PID and variable state.",
+      "remaining": "Complete upstream operation semantics, multi-tab join order/unread handling, restore interactions and cross-platform acceptance.",
+      "implementation_sources": [
+        "crates/rmux-desktop/src/main.rs",
+        "crates/rmux-desktop/src/layout.rs",
+        "crates/rmux-desktop/src/pane_view.rs"
+      ],
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "W10",
+      "feature": "Command palette and workspace switcher",
+      "phase": "P1",
+      "upstream_evidence": "D",
+      "sources": [
+        "CUSTOM",
+        "C"
+      ],
+      "acceptance": "Search actions and workspaces; execute the same command path used by shortcuts and CLI.",
+      "rmux_status": "in_progress",
+      "implementation": "Action palette, named workspace and terminal switching, numeric pane focus and tab-transfer destinations with ranked per-word fuzzy search and stable entity targeting. Terminal entries include workspace/pane/tab identity and custom titles.",
+      "remaining": "Custom command shortcut/environment/upstream-contract parity, CLI routing, accessibility and complete native search/switching acceptance. Configured name/argv/cwd commands now appear in the palette and spawn their own workspace through background PTY preparation.",
+      "implementation_sources": [
+        "crates/rmux-desktop/src/command_palette.rs",
+        "crates/rmux-desktop/src/palette_match.rs",
+        "crates/rmux-desktop/src/window_view.rs"
+      ],
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "W11",
+      "feature": "Close confirmations and active-agent warnings",
+      "phase": "P2",
+      "upstream_evidence": "D",
+      "sources": [
+        "C",
+        "SCHEMA"
+      ],
+      "acceptance": "Respect configured warnings and distinguish closing a view from terminating owned work.",
+      "rmux_status": "in_progress",
+      "implementation": "Tab, workspace and window close requests prompt when any reported task is working or blocked. Window actions and native close callbacks share the warning path; the Quit rmux action scans all windows and confirms once before process cleanup. Confirmation resolves original entity IDs, with tab focus-handle validation; transfers do not ask to terminate processes.",
+      "remaining": "OS-originated quit routing outside the rmux action, persistent policy settings UI, non-reporting foreground process detection and native confirmation/cancellation acceptance. Startup policy is configurable through RMUX_CONFIRM_CLOSE=active|always|never.",
+      "implementation_sources": ["crates/rmux-desktop/src/pane_view.rs"],
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "W12",
+      "feature": "Focus history and last-prompt navigation",
+      "phase": "P2",
+      "upstream_evidence": "D",
+      "sources": [
+        "C"
+      ],
+      "acceptance": "Return to the previous focus location and last prompt without restoring stale handles.",
+      "rmux_status": "in_progress",
+      "implementation": "Last Workspace toggles to a remembered workspace entity per window; reorder preserves the target and closing it clears history. Last Terminal records up to 32 terminal IDs per window and resolves the previous live terminal across panes, tabs and workspaces through menu/palette actions. Previous/Next Prompt use Ghostty semantic viewport navigation through menu, palette and terminal shortcuts.",
+      "remaining": "Native focus-history acceptance and shortcut, broader shell integration and native prompt-navigation acceptance. Last Prompt is implemented through menu/palette and jumps to the newest retained semantic prompt, with live-output fallback when no markers exist.",
+      "implementation_sources": [
+        "crates/rmux-desktop/src/window_view.rs"
+      ],
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "W13",
+      "feature": "Right-side Dock with terminal and browser splits",
+      "phase": "P3",
+      "upstream_evidence": "D",
+      "sources": [
+        "DOCK"
+      ],
+      "acceptance": "Window and workspace Dock layouts restore; focused Dock shortcuts target the Dock.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "W14",
+      "feature": "Canvas layout and switching layout mode",
+      "phase": "P6",
+      "upstream_evidence": "D",
+      "sources": [
+        "CANVAS",
+        "C"
+      ],
+      "acceptance": "Switch tiled and canvas layouts while preserving surfaces; offscreen panes do not render continuously.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "W15",
+      "feature": "Merge one workspace into another",
+      "phase": "P6",
+      "upstream_evidence": "U",
+      "sources": [
+        "C"
+      ],
+      "acceptance": "Move all source surfaces atomically and preserve their order and sessions.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "W16",
+      "feature": "Keyboard click hints",
+      "phase": "P6",
+      "upstream_evidence": "B",
+      "sources": [
+        "C"
+      ],
+      "acceptance": "Hints cover documented UI targets; Escape cancels and terminal keys remain usable.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "T01",
+      "feature": "Ghostty terminal state and protocol behavior",
+      "phase": "P0",
+      "upstream_evidence": "D",
+      "sources": [
+        "R",
+        "GHOST"
+      ],
+      "acceptance": "Run shell, editor, alternate-screen, color, mouse and terminal query fixtures on all desktop platforms.",
+      "rmux_status": "in_progress",
+      "implementation": "Ghostty state, PTY input/output and incremental terminal rendering.",
+      "remaining": "Full protocol fixtures and native desktop coverage on all platforms.",
+      "implementation_sources": [
+        "crates/rmux-terminal/src/lib.rs",
+        "crates/rmux-terminal/src/session.rs",
+        "crates/rmux-desktop/src/main.rs"
+      ],
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "T02",
+      "feature": "Font fallback, Unicode and text shaping",
+      "phase": "P0",
+      "upstream_evidence": "D",
+      "sources": [
+        "APPEAR",
+        "GHOST"
+      ],
+      "acceptance": "Validate CJK, combining marks, emoji and ligatures at multiple DPI values.",
+      "rmux_status": "in_progress",
+      "implementation": "GPUI text shaping and cached terminal rows.",
+      "remaining": "CJK, combining marks, emoji, ligature and DPI acceptance matrix.",
+      "implementation_sources": [
+        "crates/rmux-desktop/src/row_cache.rs"
+      ],
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "T03",
+      "feature": "Theme, cursor, background and font settings",
+      "phase": "P1",
+      "upstream_evidence": "D",
+      "sources": [
+        "APPEAR"
+      ],
+      "acceptance": "Apply supported settings live; explicitly report unsupported Ghostty settings.",
+      "rmux_status": "in_progress",
+      "implementation": "Bounded per-terminal font zoom/reset and configured font family with shared cell metrics, font-sensitive row cache and saved-layout fonts. Live-reloaded hollow/hidden unfocused cursor, default foreground/background/cursor colors and 16-color ANSI palette. Application cursor shapes and OSC color overrides remain honored. Unchanged configured colors/palettes skip engine updates.",
+      "remaining": "Named themes, additional cursor/background settings, native color reload, font/zoom/restore and focus-transition acceptance, and complete configuration acceptance.",
+      "implementation_sources": [
+        "crates/rmux-desktop/src/cell_metrics.rs",
+        "crates/rmux-desktop/src/preferences.rs",
+        "crates/rmux-terminal/src/lib.rs",
+        "crates/rmux-desktop/src/main.rs",
+        "crates/rmux-desktop/src/row_cache.rs"
+      ],
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "T04",
+      "feature": "Opacity, blur, background images and shaders",
+      "phase": "P6",
+      "upstream_evidence": "D",
+      "sources": [
+        "APPEAR"
+      ],
+      "acceptance": "Publish per-platform capabilities; enabling effects must pass frame and memory budgets.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "T05",
+      "feature": "Ghostty keybindings, sequences and key tables",
+      "phase": "P2",
+      "upstream_evidence": "D",
+      "sources": [
+        "KEY"
+      ],
+      "acceptance": "Document action mapping and precedence; distinguish terminal actions from host actions.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "T06",
+      "feature": "Selection, clipboard, scrollback and find",
+      "phase": "P1",
+      "upstream_evidence": "D",
+      "sources": [
+        "R",
+        "C"
+      ],
+      "acceptance": "Search and copy from bounded scrollback while output continues; preserve Unicode selections.",
+      "rmux_status": "in_progress",
+      "implementation": "Selection, clipboard, bounded scrollback, on-demand find with bounded selection prefill and per-terminal last-query recall, engine-backed Select All, and Clear Scrollback preserving the current screen and restoring history retention.",
+      "remaining": "Full Unicode, native interaction and platform acceptance.",
+      "implementation_sources": [
+        "crates/rmux-desktop/src/find_bar.rs"
+      ],
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "T07",
+      "feature": "Bracketed paste and large input delivery",
+      "phase": "P1",
+      "upstream_evidence": "D",
+      "sources": [
+        "GHOST",
+        "C"
+      ],
+      "acceptance": "Deliver large and multiline input in order without interleaving control bytes or losing input.",
+      "rmux_status": "in_progress",
+      "implementation": "Bounded input queue; up to 1 MiB UTF-8 paste in one writer message, with one queued/in-flight paste per session. Focused limit/permit tests and macOS PTY delivery of 140 KB Unicode/multiline text followed by ordinary input passed.",
+      "remaining": "Large-input delivery under output pressure, cancellation and native clipboard acceptance across platforms.",
+      "implementation_sources": [
+        "crates/rmux-terminal/src/session.rs",
+        "crates/rmux-terminal/src/keyboard.rs"
+      ],
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "T08",
+      "feature": "Shell integration and working-directory tracking",
+      "phase": "P2",
+      "upstream_evidence": "D",
+      "sources": [
+        "SHELL"
+      ],
+      "acceptance": "Follow directory changes and prompt boundaries across supported shells; avoid per-pane git polling.",
+      "rmux_status": "in_progress",
+      "implementation": "OSC 7 directory tracking, sidebar labels, new-shell directory inheritance, and automatically loaded zsh hooks emitting OSC 133 boundaries plus encoded directory reports. Private temporary wrappers preserve user startup order and ZDOTDIR; environment opt-out is supported.",
+      "remaining": "Automatic Bash login/fish loading, fish runtime acceptance and input-start markers, PowerShell integration, broader prompt-theme/global-startup compatibility, Linux runtime validation and native acceptance. Non-login Bash auto-loads via RMUX_SHELL_LOGIN=0; manual Bash and fish scripts are present; fish is unverified without an installed executable.",
+      "implementation_sources": [
+        "crates/rmux-terminal/src/directory.rs",
+        "crates/rmux-desktop/src/window_view.rs"
+      ],
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "T09",
+      "feature": "Git branch, PR and listening-port metadata",
+      "phase": "P2",
+      "upstream_evidence": "D",
+      "sources": [
+        "R",
+        "PR",
+        "SHELL"
+      ],
+      "acceptance": "Update the correct workspace asynchronously with bounded polling and explicit unknown states.",
+      "rmux_status": "in_progress",
+      "implementation": "Sidebar branch/detached-HEAD context reads bounded Git metadata in background on directory reports, with worktree indirection and coalesced requests.",
+      "remaining": "PR and listening-port metadata, manual or filesystem-triggered branch refresh, failure/unknown presentation and native visual acceptance.",
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "T10",
+      "feature": "Clickable URLs and local or remote file paths",
+      "phase": "P3",
+      "upstream_evidence": "D",
+      "sources": [
+        "C",
+        "SSH"
+      ],
+      "acceptance": "Route URLs and paths correctly; remote paths never open an unrelated same-named local file.",
+      "rmux_status": "in_progress",
+      "implementation": "Modifier-click opens OSC 8 and plain-text HTTP(S) links through the platform browser. On-demand detection supports wide Unicode cells and fully visible soft-wrapped logical lines up to 8 KiB; clipped plain URLs are rejected. Explicit OSC 8 targets take precedence. Hover feedback, local/remote path routing and native interaction acceptance remain pending."
+    },
+    {
+      "id": "T11",
+      "feature": "Image paste, file drop and remote upload",
+      "phase": "P4",
+      "upstream_evidence": "D",
+      "sources": [
+        "SSH",
+        "R"
+      ],
+      "acceptance": "Transfer to the correct host, quote resulting paths, and clean bounded temporary storage.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "T12",
+      "feature": "Program status over OSC 7501",
+      "phase": "P2",
+      "upstream_evidence": "D",
+      "sources": [
+        "STATUS"
+      ],
+      "acceptance": "Handle status priority, prompt reset and focus acknowledgement without conflating agent lifecycle.",
+      "rmux_status": "in_progress",
+      "implementation": "Bounded OSC 7501 records with lifecycle cleanup, tab summaries/attention and an on-demand full-record detail view with hierarchy and inherited app names.",
+      "remaining": "Full reply-content acceptance, native detail-view accessibility/layout, lifecycle ordering and complete protocol acceptance.",
+      "implementation_sources": [
+        "crates/rmux-terminal/src/program_status.rs",
+        "crates/rmux-terminal/src/lib.rs",
+        "crates/rmux-terminal/src/session.rs",
+        "crates/rmux-desktop/src/pane_view.rs",
+        "crates/rmux-desktop/src/status_view.rs"
+      ],
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "T13",
+      "feature": "Terminal screenshots, screen reads and selection reads",
+      "phase": "P2",
+      "upstream_evidence": "I",
+      "sources": [
+        "TREE",
+        "RPC"
+      ],
+      "acceptance": "Capture the addressed surface without stealing focus; bound response size and scrollback reads.",
+      "rmux_status": "in_progress",
+      "implementation": "Bounded viewport/history RPC reads and background selection export. UTF-8-safe streaming selection/history tests pass without selection or viewport changes.",
+      "remaining": "Native selected-text RPC acceptance and graphical surface screenshot capture.",
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "T14",
+      "feature": "Terminal copy mode and buffers",
+      "phase": "P2",
+      "upstream_evidence": "I",
+      "sources": [
+        "TREE"
+      ],
+      "acceptance": "Validate copy-mode and buffer semantics separately from ordinary clipboard operations.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "T15",
+      "feature": "Terminal recording and output piping",
+      "phase": "P6",
+      "upstream_evidence": "I",
+      "sources": [
+        "TREE"
+      ],
+      "acceptance": "Define record start, stop, notes, output retention and pipe cleanup with bounded queues.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "T16",
+      "feature": "Predictive local echo for remote sessions",
+      "phase": "P4",
+      "upstream_evidence": "D",
+      "sources": [
+        "C",
+        "SCHEMA"
+      ],
+      "acceptance": "Correct predictions when remote echo differs; never predict password input or corrupt TUIs.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "T17",
+      "feature": "Password indicator and optional editing gestures",
+      "phase": "P2",
+      "upstream_evidence": "D",
+      "sources": [
+        "C",
+        "SCHEMA"
+      ],
+      "acceptance": "Track echo state accurately and limit prompt-editing gestures to eligible shell contexts.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "T18",
+      "feature": "Remote OSC 52 clipboard permission",
+      "phase": "P4",
+      "upstream_evidence": "U",
+      "sources": [
+        "C"
+      ],
+      "acceptance": "Scope clipboard consent to the remote source and permit revocation.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "T19",
+      "feature": "Hard-wrap copy reflow and per-session shell history",
+      "phase": "P2",
+      "upstream_evidence": "D",
+      "sources": [
+        "C"
+      ],
+      "acceptance": "Preserve user-selected copy policy and restore session history without duplicating prompt execution.",
+      "rmux_status": "in_progress",
+      "implementation": "Copy formatter unwraps terminal soft wraps.",
+      "remaining": "Per-session shell history and broader reflow acceptance.",
+      "implementation_sources": [
+        "crates/rmux-terminal/src/selection.rs"
+      ],
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "T20",
+      "feature": "Hidden terminal renderer reclamation",
+      "phase": "P2",
+      "upstream_evidence": "D",
+      "sources": [
+        "SCHEMA",
+        "GHOST"
+      ],
+      "acceptance": "Release inactive GPU surfaces without killing shells or losing terminal state; recreate correctly on focus.",
+      "rmux_status": "in_progress",
+      "implementation": "Inactive tabs are unmounted while sessions remain retained.",
+      "remaining": "Demonstrated renderer resource reclamation and memory budgets.",
+      "implementation_sources": [
+        "crates/rmux-desktop/src/pane_view.rs"
+      ],
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "N01",
+      "feature": "OSC 9, 99 and 777 notifications",
+      "phase": "P2",
+      "upstream_evidence": "D",
+      "sources": [
+        "NOTIFY",
+        "R"
+      ],
+      "acceptance": "Route notification sequences to their originating surface and deduplicate hook overlap.",
+      "rmux_status": "in_progress",
+      "implementation": "OSC 9/777 callback with bounded latest-message storage and unread markers for unfocused terminals; focused protocol test passed.",
+      "remaining": "OSC 99, full notification history/semantics and native acceptance.",
+      "implementation_sources": [
+        "crates/rmux-terminal/src/lib.rs",
+        "crates/rmux-terminal/src/session.rs",
+        "crates/rmux-desktop/src/main.rs"
+      ],
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "N02",
+      "feature": "Pane rings, unread badges and notification panel",
+      "phase": "P2",
+      "upstream_evidence": "D",
+      "sources": [
+        "NOTIFY"
+      ],
+      "acceptance": "Read, dismiss, clear and jump actions keep pane and workspace unread state consistent.",
+      "rmux_status": "in_progress",
+      "implementation": "BEL/OSC unread markers and pane borders, next-unread navigation, and a latest-message panel with focus links and revision-checked dismissal.",
+      "remaining": "Full notification history/semantics, native panel accessibility and interaction/appearance acceptance.",
+      "implementation_sources": [
+        "crates/rmux-desktop/src/window_view.rs"
+      ],
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "N03",
+      "feature": "Native desktop notifications and focus suppression",
+      "phase": "P2",
+      "upstream_evidence": "D",
+      "sources": [
+        "NOTIFY"
+      ],
+      "acceptance": "Implement OS adapters; respect focused-surface and app-wide suppression settings.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "N04",
+      "feature": "Notification hooks and origin metadata",
+      "phase": "P2",
+      "upstream_evidence": "D",
+      "sources": [
+        "NOTIFY"
+      ],
+      "acceptance": "Dispatch hook context with bounded execution and distinguish hook-generated notifications.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "N05",
+      "feature": "Status, progress and log reporting APIs",
+      "phase": "P2",
+      "upstream_evidence": "I",
+      "sources": [
+        "TREE",
+        "RPC"
+      ],
+      "acceptance": "Set, list and clear metadata without parsing the terminal buffer on every frame.",
+      "rmux_status": "in_progress",
+      "implementation": "OSC 9;4 terminal progress callbacks and tab indicators for running/error/paused/indeterminate states; remove/reset clear state.",
+      "remaining": "CLI/RPC status, progress and log reporting APIs, native indicator acceptance and full upstream semantics.",
+      "implementation_sources": [
+        "crates/rmux-terminal/src/lib.rs",
+        "crates/rmux-terminal/src/session.rs",
+        "crates/rmux-desktop/src/pane_view.rs"
+      ],
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "A01",
+      "feature": "CLI discovery, stable IDs and targeting",
+      "phase": "P2",
+      "upstream_evidence": "D",
+      "sources": [
+        "CLI"
+      ],
+      "acceptance": "Preserve documented UUID/ref/index targeting and explicit no-focus behavior.",
+      "rmux_status": "in_progress",
+      "implementation": "Standalone lightweight rmuxctl sends bounded JSON-RPC requests to an existing Unix endpoint, with explicit path or environment discovery, opaque ID parameters, full JSON output and defined exit codes. Common list/select/rename/focus/send/read and new-window/new-workspace CLI commands expand to typed RPC calls with strict options and explicit IDs. Workspace/pane/panel lists accept window filters, and pane/panel lists also accept workspace filters, applied before unrelated snapshot traversal. Native client capability/error and rename/list smoke passed.",
+      "remaining": "Remaining cmux commands/options and output compatibility, ref/index resolution, automatic caller targeting and Windows transport."
+    },
+    {
+      "id": "A02",
+      "feature": "Versioned socket RPC and capability discovery",
+      "phase": "P2",
+      "upstream_evidence": "D",
+      "sources": [
+        "CLI",
+        "RPC"
+      ],
+      "acceptance": "Return typed success/errors; advertise only available capabilities and enforce caller scope.",
+      "rmux_status": "in_progress",
+      "implementation": "Standalone --rpc-stdio discovery plus opt-in --rpc-stdio-live GUI launch with window/workspace/pane/surface lists, nested layout discovery, window.create and ID-targeted workspace.select/workspace.rename/surface.focus/pane.zoom.set over inherited pipes. Bounded requests and UI queue, deadline cancellation before execution, typed errors, mode-specific capabilities and process-local IDs. Opt-in private Unix socket transport shares the dispatcher, limits clients and timeouts, and passes native multi-client/reconnect/quit cleanup smoke.",
+      "remaining": "Visual/OS-focus and performance acceptance beyond the passed multi-window/workspace/pane/tab/zoom-state macOS smoke, Windows socket transport and caller scope, additional targeting/mutations, events, cmux protocol compatibility and other-platform acceptance."
+    },
+    {
+      "id": "A03",
+      "feature": "CLI help, JSON, exit behavior and completions",
+      "phase": "P2",
+      "upstream_evidence": "D",
+      "sources": [
+        "CLI",
+        "R"
+      ],
+      "acceptance": "Help works with no app running; completions cover bash, zsh and fish equivalents.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "A04",
+      "feature": "Events stream with replay cursors and reconnect",
+      "phase": "P2",
+      "upstream_evidence": "D",
+      "sources": [
+        "EVENT"
+      ],
+      "acceptance": "Reconnect with explicit gaps when retention expires; slow subscribers cannot stall terminal input.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "A05",
+      "feature": "Event-triggered automation rules",
+      "phase": "P5",
+      "upstream_evidence": "D",
+      "sources": [
+        "AUTO"
+      ],
+      "acceptance": "Support filters, notifications, RPC, commands and webhooks with rate limits and cycle prevention.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "A06",
+      "feature": "Project commands and reusable workspace layouts",
+      "phase": "P2",
+      "upstream_evidence": "D",
+      "sources": [
+        "CUSTOM"
+      ],
+      "acceptance": "Resolve global/project precedence and create the expected split tree and startup commands.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "A07",
+      "feature": "Action registry, buttons and action shortcuts",
+      "phase": "P5",
+      "upstream_evidence": "B",
+      "sources": [
+        "CUSTOM",
+        "WEB"
+      ],
+      "acceptance": "Share action IDs across palette, buttons and bindings; enforce project-action trust.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "A08",
+      "feature": "Config packs and settings presets",
+      "phase": "P5",
+      "upstream_evidence": "D",
+      "sources": [
+        "C",
+        "CUSTOM"
+      ],
+      "acceptance": "Resolve pack precedence deterministically and show actionable schema errors.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "A09",
+      "feature": "Config validation, live reload and conditional undo",
+      "phase": "P2",
+      "upstream_evidence": "D",
+      "sources": [
+        "UNDO",
+        "C",
+        "CONFIG"
+      ],
+      "acceptance": "Reject invalid writes atomically; undo only values still matching the receipt.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "A10",
+      "feature": "Custom sidebar scripting and templates",
+      "phase": "P6",
+      "upstream_evidence": "D",
+      "sources": [
+        "SIDE"
+      ],
+      "acceptance": "Supply bounded reactive metadata and actions without periodic whole-app reconstruction.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "A11",
+      "feature": "tmux-compatible automation commands",
+      "phase": "P5",
+      "upstream_evidence": "I",
+      "sources": [
+        "TREE",
+        "CLI"
+      ],
+      "acceptance": "Publish the supported subset; reject unsupported tmux semantics explicitly.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "A12",
+      "feature": "Current work and surface catalog discovery",
+      "phase": "P5",
+      "upstream_evidence": "D",
+      "sources": [
+        "CURRENT"
+      ],
+      "acceptance": "Separate durable resources from view projections; reads do not create sessions or change focus.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "A13",
+      "feature": "Extensions ecosystem",
+      "phase": "P7",
+      "upstream_evidence": "P",
+      "sources": [
+        "EXT"
+      ],
+      "acceptance": "Turn the RFC into a separately reviewed extension contract before declaring parity.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "G01",
+      "feature": "Agent hook installation and clean removal",
+      "phase": "P5",
+      "upstream_evidence": "D",
+      "sources": [
+        "HOOK"
+      ],
+      "acceptance": "Install idempotently, preserve unrelated user hooks, and remove only rmux-owned entries.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "G02",
+      "feature": "Agent running, idle and needs-input state",
+      "phase": "P2",
+      "upstream_evidence": "D",
+      "sources": [
+        "HOOK"
+      ],
+      "acceptance": "Associate events with process generation and surface; discard late events from replaced sessions.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "G03",
+      "feature": "Native agent session resume",
+      "phase": "P5",
+      "upstream_evidence": "D",
+      "sources": [
+        "HOOK",
+        "R"
+      ],
+      "acceptance": "Resume supported provider sessions with sanitized arguments and original working directory.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "G04",
+      "feature": "Agent launcher wrappers and custom registrations",
+      "phase": "P5",
+      "upstream_evidence": "D",
+      "sources": [
+        "VAULT",
+        "C"
+      ],
+      "acceptance": "Resume through declared launchers; absent or rejected launch metadata yields a visible explanation.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "G05",
+      "feature": "Claude Code Teams and Codex Teams",
+      "phase": "P5",
+      "upstream_evidence": "D",
+      "sources": [
+        "R",
+        "C"
+      ],
+      "acceptance": "Create native panes for teammates, attribute ownership, and clean only owned resources.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "G06",
+      "feature": "oh-my agent orchestration integrations",
+      "phase": "P5",
+      "upstream_evidence": "D",
+      "sources": [
+        "R",
+        "WEB"
+      ],
+      "acceptance": "Validate each supported integration independently; CLI passthrough alone is not integration parity.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "G07",
+      "feature": "Feed permission, question and plan decisions",
+      "phase": "P5",
+      "upstream_evidence": "D",
+      "sources": [
+        "FEED"
+      ],
+      "acceptance": "Reply once to the correct request; timeouts and pane closure never grant implicit approval.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "G08",
+      "feature": "Agent messages and inbox delivery",
+      "phase": "P5",
+      "upstream_evidence": "D",
+      "sources": [
+        "MSG"
+      ],
+      "acceptance": "Deliver through supported hooks, preserve drafts, and expose queued/delivered/read/failed states.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "G09",
+      "feature": "Vault transcript search and session reopening",
+      "phase": "P5",
+      "upstream_evidence": "D",
+      "sources": [
+        "VAULT",
+        "WEB"
+      ],
+      "acceptance": "Search supported native histories and reopen exact sessions with bounded index work.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "G10",
+      "feature": "Conversation fork, checkpoints and recovery",
+      "phase": "P5",
+      "upstream_evidence": "I",
+      "sources": [
+        "VAULT",
+        "TREE"
+      ],
+      "acceptance": "Declare support per agent; verify original session remains intact after a fork.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "G11",
+      "feature": "Automatic workspace and tab naming",
+      "phase": "P6",
+      "upstream_evidence": "D",
+      "sources": [
+        "NAME"
+      ],
+      "acceptance": "Opt-in naming respects manual names, provider support and rate limits.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "G12",
+      "feature": "Agent hibernation and wake recovery",
+      "phase": "P6",
+      "upstream_evidence": "D",
+      "sources": [
+        "HOOK"
+      ],
+      "acceptance": "Only eligible idle restorable agents may stop; protect active/background work and display failed resume.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "G13",
+      "feature": "Rich TextBox composer and attachments",
+      "phase": "P5",
+      "upstream_evidence": "B",
+      "sources": [
+        "WEB",
+        "SCHEMA"
+      ],
+      "acceptance": "Draft survives focus changes; submission and attachments target the intended surface once.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "G14",
+      "feature": "Workspace todos and subagent hierarchy",
+      "phase": "P5",
+      "upstream_evidence": "D",
+      "sources": [
+        "CLI",
+        "C"
+      ],
+      "acceptance": "Update checklist and child-agent status without rewriting unrelated workspace state.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "G15",
+      "feature": "Agent chat surfaces and conversation sidebar",
+      "phase": "P6",
+      "upstream_evidence": "B",
+      "sources": [
+        "C",
+        "SCHEMA"
+      ],
+      "acceptance": "Stream, cancel, resume and notify with provider-specific capability flags.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "G16",
+      "feature": "Move a stopped agent session between hosts",
+      "phase": "P6",
+      "upstream_evidence": "D",
+      "sources": [
+        "C"
+      ],
+      "acceptance": "Transfer supported session/context and worktree safely; verify destination before resuming.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "G17",
+      "feature": "Chief and autonomous agent coordination",
+      "phase": "P7",
+      "upstream_evidence": "I",
+      "sources": [
+        "CONFIG",
+        "TREE"
+      ],
+      "acceptance": "Specify user-visible behavior, authority and lifecycle before implementing discovered commands.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "G18",
+      "feature": "Cloud agent fan-out",
+      "phase": "P7",
+      "upstream_evidence": "P",
+      "sources": [
+        "FAN"
+      ],
+      "acceptance": "Require a confirmed implemented contract; enforce cancellation and per-machine resource budgets.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "B01",
+      "feature": "Browser panes, omnibar and navigation",
+      "phase": "P3",
+      "upstream_evidence": "D",
+      "sources": [
+        "R",
+        "BROWSER"
+      ],
+      "acceptance": "Navigate, reload, search and change focus without blocking adjacent terminals.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "B02",
+      "feature": "Browser profiles, cookies and session persistence",
+      "phase": "P3",
+      "upstream_evidence": "D",
+      "sources": [
+        "R",
+        "BROWSER"
+      ],
+      "acceptance": "Isolate profiles and persist the intended state across restart.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "B03",
+      "feature": "Import browser history and authenticated state",
+      "phase": "P6",
+      "upstream_evidence": "D",
+      "sources": [
+        "R"
+      ],
+      "acceptance": "List supported source browsers per OS; test consent, locked stores and partial import.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "B04",
+      "feature": "Developer tools, console and page errors",
+      "phase": "P3",
+      "upstream_evidence": "D",
+      "sources": [
+        "R",
+        "BROWSER"
+      ],
+      "acceptance": "Open tools for the addressed pane and expose bounded console/error records.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "B05",
+      "feature": "DOM snapshots, selectors and semantic locators",
+      "phase": "P3",
+      "upstream_evidence": "D",
+      "sources": [
+        "BROWSER",
+        "REPL"
+      ],
+      "acceptance": "Resolve frames and references correctly; stale references produce explicit errors.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "B06",
+      "feature": "Click, type, fill, select, scroll and keyboard input",
+      "phase": "P3",
+      "upstream_evidence": "D",
+      "sources": [
+        "BROWSER"
+      ],
+      "acceptance": "Test state changes and input semantics, including dialogs and iframe targets.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "B07",
+      "feature": "JavaScript evaluation and script/style injection",
+      "phase": "P3",
+      "upstream_evidence": "D",
+      "sources": [
+        "BROWSER"
+      ],
+      "acceptance": "Define execution context, timeouts and structured result limits.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "B08",
+      "feature": "Waits, assertions and post-action snapshots",
+      "phase": "P3",
+      "upstream_evidence": "D",
+      "sources": [
+        "BROWSER"
+      ],
+      "acceptance": "Deterministic deadlines and cancellation; no unbounded UI-thread waits.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "B09",
+      "feature": "Screenshots, viewport, zoom and highlighting",
+      "phase": "P3",
+      "upstream_evidence": "D",
+      "sources": [
+        "BROWSER",
+        "RPC"
+      ],
+      "acceptance": "Capture correct pixels at requested scale without changing other panes.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "B10",
+      "feature": "Storage, cookies and state save/load APIs",
+      "phase": "P3",
+      "upstream_evidence": "D",
+      "sources": [
+        "BROWSER"
+      ],
+      "acceptance": "Round-trip scoped state and handle unsupported or invalid data explicitly.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "B11",
+      "feature": "Tabs, frames, dialogs and downloads",
+      "phase": "P3",
+      "upstream_evidence": "D",
+      "sources": [
+        "BROWSER",
+        "REPL"
+      ],
+      "acceptance": "Manage each lifecycle independently and associate downloads with the initiating surface.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "B12",
+      "feature": "Network observation, routes, traces and screencasts",
+      "phase": "P6",
+      "upstream_evidence": "I",
+      "sources": [
+        "RPC",
+        "TREE"
+      ],
+      "acceptance": "Probe actual backend support; declarations alone cannot pass acceptance.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "B13",
+      "feature": "Geolocation and offline emulation",
+      "phase": "P6",
+      "upstream_evidence": "U",
+      "sources": [
+        "C"
+      ],
+      "acceptance": "Demonstrate page-visible behavior per engine and reject unsupported settings honestly.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "B14",
+      "feature": "Persistent browser REPL and event subscriptions",
+      "phase": "P6",
+      "upstream_evidence": "D",
+      "sources": [
+        "REPL",
+        "PARITY"
+      ],
+      "acceptance": "Validate locator and event semantics against fixtures; report unsupported methods separately.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "B15",
+      "feature": "Design mode, React Grab and browser focus mode",
+      "phase": "P6",
+      "upstream_evidence": "I",
+      "sources": [
+        "RPC",
+        "TREE"
+      ],
+      "acceptance": "Document each mode and test transitions, selected element metadata and cleanup.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "B16",
+      "feature": "Hidden browser memory reclamation",
+      "phase": "P3",
+      "upstream_evidence": "I",
+      "sources": [
+        "SCHEMA"
+      ],
+      "acceptance": "Set a bounded inactive-browser policy with explicit reload semantics and protected active media.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "R01",
+      "feature": "SSH workspaces with user config and authentication",
+      "phase": "P4",
+      "upstream_evidence": "D",
+      "sources": [
+        "SSH",
+        "WEB"
+      ],
+      "acceptance": "Support aliases, keys, proxy settings, host-key verification and interactive authentication.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "R02",
+      "feature": "Remote relay bootstrap and CLI routing",
+      "phase": "P4",
+      "upstream_evidence": "D",
+      "sources": [
+        "SSH",
+        "WEB"
+      ],
+      "acceptance": "Install compatible helper and restrict commands to the originating remote workspace.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "R03",
+      "feature": "Remote browser HTTP and WebSocket routing",
+      "phase": "P4",
+      "upstream_evidence": "D",
+      "sources": [
+        "SSH",
+        "WEB"
+      ],
+      "acceptance": "Remote localhost resolves on the host; separate host origins and cookie stores.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "R04",
+      "feature": "SSH reconnect and persistent remote processes",
+      "phase": "P4",
+      "upstream_evidence": "D",
+      "sources": [
+        "SSH",
+        "WEB"
+      ],
+      "acceptance": "Reconnect with bounded backoff and restore current state without duplicate commands.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "R05",
+      "feature": "Mosh terminal transport",
+      "phase": "P4",
+      "upstream_evidence": "D",
+      "sources": [
+        "SSH",
+        "WEB"
+      ],
+      "acceptance": "Keep management and terminal transport distinct; test network switching and unavailable binaries.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "R06",
+      "feature": "Remote tmux native pane mirroring",
+      "phase": "P4",
+      "upstream_evidence": "B",
+      "sources": [
+        "WEB"
+      ],
+      "acceptance": "Mirror server-owned layout, sizes and pane identity; validate reconnect and unsupported split options.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "R07",
+      "feature": "EternalTerminal transport for tmux",
+      "phase": "P6",
+      "upstream_evidence": "B",
+      "sources": [
+        "C"
+      ],
+      "acceptance": "Feature-detect transport availability and test authentication/reconnection independently.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "R08",
+      "feature": "Local tmux lifecycle and detach/reattach",
+      "phase": "P4",
+      "upstream_evidence": "D",
+      "sources": [
+        "TMUX"
+      ],
+      "acceptance": "Closing the view can detach while explicit session termination kills only the intended owner.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "R09",
+      "feature": "Local zellij persistence",
+      "phase": "P6",
+      "upstream_evidence": "D",
+      "sources": [
+        "ZELLIJ"
+      ],
+      "acceptance": "Differentiate reconnecting live sessions from reconstructing sessions after reboot.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "R10",
+      "feature": "Shared surface participants and size policy",
+      "phase": "P7",
+      "upstream_evidence": "D",
+      "sources": [
+        "SIZE",
+        "TREE"
+      ],
+      "acceptance": "Multiple viewers negotiate size and disconnect without killing the underlying session.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "R11",
+      "feature": "Personal device discovery and workspace mirrors",
+      "phase": "P7",
+      "upstream_evidence": "D",
+      "sources": [
+        "DEVICE",
+        "C"
+      ],
+      "acceptance": "Authenticate each host, preserve layout and remote identity, and show connection freshness.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "R12",
+      "feature": "SSH and agent deep links",
+      "phase": "P4",
+      "upstream_evidence": "D",
+      "sources": [
+        "SSH",
+        "WEB"
+      ],
+      "acceptance": "Parse an allowlisted link schema, preview the destination, and reject injected options.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "S01",
+      "feature": "Versioned layout and metadata restoration",
+      "phase": "P2",
+      "upstream_evidence": "D",
+      "sources": [
+        "R",
+        "RESTORE"
+      ],
+      "acceptance": "Restore windows, splits, selection and cwd; corrupted state cannot prevent app launch.",
+      "rmux_status": "in_progress",
+      "implementation": "Versioned single-window layout save/open and multi-window Save Session / --session restore with bounded atomic files, shared 256-tab budget, metadata, selection, proportions and directories. Native multi-window startup, all-window directory preflight and shell cleanup smoke passed.",
+      "remaining": "Opt-in session_file startup recovery and normal-quit checkpointing now pass native smoke. Change-triggered/crash checkpoints, corrupt-state fallback runtime coverage, native Save Session dialogs, OS quit/confirmation, partial-spawn rollback, geometry and actual focus/visual acceptance across platforms remain pending.",
+      "implementation_sources": [
+        "crates/rmux-desktop/src/snapshot.rs",
+        "crates/rmux-desktop/src/restore.rs"
+      ],
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "S02",
+      "feature": "Best-effort scrollback and browser history restore",
+      "phase": "P2",
+      "upstream_evidence": "D",
+      "sources": [
+        "R",
+        "RESTORE"
+      ],
+      "acceptance": "Treat saved output as inert content; test truncation and missing browser profiles.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "S03",
+      "feature": "Custom resume commands and approval policy",
+      "phase": "P5",
+      "upstream_evidence": "D",
+      "sources": [
+        "HOOK",
+        "R"
+      ],
+      "acceptance": "Imported commands do not auto-run; approvals are scoped and inspectable.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "S04",
+      "feature": "Session export, import and build-channel migration",
+      "phase": "P5",
+      "upstream_evidence": "D",
+      "sources": [
+        "R"
+      ],
+      "acceptance": "Reject newer incompatible schema; import opens additional windows with reduced trust.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "S05",
+      "feature": "Saved layout templates and workflow examples",
+      "phase": "P2",
+      "upstream_evidence": "D",
+      "sources": [
+        "C",
+        "CLI"
+      ],
+      "acceptance": "Apply repeatably with explicit cwd and startup semantics; no accidental command replay.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "F01",
+      "feature": "File explorer and local/remote file preview",
+      "phase": "P3",
+      "upstream_evidence": "D",
+      "sources": [
+        "C",
+        "SCHEMA"
+      ],
+      "acceptance": "Open correct local or remote files; directory navigation and refresh remain asynchronous.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "F02",
+      "feature": "File editor, word wrap and external open integration",
+      "phase": "P3",
+      "upstream_evidence": "D",
+      "sources": [
+        "C",
+        "SCHEMA"
+      ],
+      "acceptance": "Save safely, detect external changes and open scripts as data rather than execute them.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "F03",
+      "feature": "Markdown viewer and appearance controls",
+      "phase": "P3",
+      "upstream_evidence": "I",
+      "sources": [
+        "SCHEMA",
+        "TREE"
+      ],
+      "acceptance": "Render local documents with bounded assets and predictable navigation.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "F04",
+      "feature": "Diff viewer, review findings and comments",
+      "phase": "P5",
+      "upstream_evidence": "I",
+      "sources": [
+        "SCHEMA",
+        "TREE",
+        "RPC"
+      ],
+      "acceptance": "Track file/line identity and expose navigable results; verify supported review operations.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "F05",
+      "feature": "Global search across terminals and agent sessions",
+      "phase": "P5",
+      "upstream_evidence": "D",
+      "sources": [
+        "C"
+      ],
+      "acceptance": "Navigate to the matching surface and text without scanning all scrollback on each keypress.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "F06",
+      "feature": "Task manager and memory diagnostics",
+      "phase": "P2",
+      "upstream_evidence": "D",
+      "sources": [
+        "TOP",
+        "WEB"
+      ],
+      "acceptance": "Attribute CPU and memory to surfaces and helper processes using bounded sampling.",
+      "rmux_status": "in_progress",
+      "implementation": "On-demand surface.memory_usage RPC and a manual-refresh memory panel sample Ghostty storage with nonblocking engine access. Panel includes root-shell RSS/CPU, bounded to 256 terminals, background sampling, sorting, focus navigation and JSON copy.",
+      "remaining": "Descendant/helper process CPU and RSS attribution, GPU allocation accounting, native panel visual/interaction acceptance and sampling performance measurements.",
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "F07",
+      "feature": "Sleepy Mode appearance and keep-awake controls",
+      "phase": "P6",
+      "upstream_evidence": "I",
+      "sources": [
+        "SCHEMA",
+        "RPC"
+      ],
+      "acceptance": "Specify visual Sleepy Mode separately from power inhibition; release keep-awake inhibitors on exit.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "F08",
+      "feature": "Per-pane process memory monitoring",
+      "phase": "P6",
+      "upstream_evidence": "I",
+      "sources": [
+        "SCHEMA"
+      ],
+      "acceptance": "Attribute runaway memory to the correct process generation; distinguish warning from termination policy.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "P01",
+      "feature": "Settings UI, schema and shortcut customization",
+      "phase": "P2",
+      "upstream_evidence": "D",
+      "sources": [
+        "SCHEMA",
+        "R"
+      ],
+      "acceptance": "Show effective values and conflicts; validate updates using one configuration model.",
+      "rmux_status": "in_progress",
+      "implementation": "Settings side panel exposes five appearance/interaction controls, session updates, explicit atomic save through the existing configuration model and an editor link. Saving preserves unrelated settings and refuses invalid disk content; focused persistence test passed.",
+      "remaining": "Full schema UI, graphical shortcut editing/conflict display, full shortcut action coverage, screen-reader accessibility and native visual/keyboard-focus acceptance. Validated scoped action/custom-command bindings now reload from a preserved default keymap without accumulation. Keyboard control navigation, adjustment, activation and return focus are implemented."
+    },
+    {
+      "id": "P02",
+      "feature": "Accessibility, IME and keyboard layouts",
+      "phase": "P0",
+      "upstream_evidence": "D",
+      "sources": [
+        "C"
+      ],
+      "acceptance": "Test composition, screen-reader navigation, non-US keys and mixed-DPI window movement.",
+      "rmux_status": "in_progress",
+      "implementation": "Native text input handlers, UTF-16 composition helpers, grapheme-aware keyboard editing, and anchored mouse drag/Shift-click selection in persistent UI text fields.",
+      "remaining": "Custom-control accessibility and native IME/keyboard-layout coverage.",
+      "implementation_sources": [
+        "crates/rmux-desktop/src/composition.rs"
+      ],
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "P03",
+      "feature": "Managed device policies and browser allowlist",
+      "phase": "P6",
+      "upstream_evidence": "D",
+      "sources": [
+        "POLICY"
+      ],
+      "acceptance": "OS-specific policy adapters override user config and report effective restrictions.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "P04",
+      "feature": "Installation, updates and separate build channels",
+      "phase": "P2",
+      "upstream_evidence": "D",
+      "sources": [
+        "R"
+      ],
+      "acceptance": "Signed installers/update paths per OS preserve sessions and isolate nightly state.",
+      "rmux_status": "in_progress",
+      "implementation": "Local macOS and Windows bundle scripts.",
+      "remaining": "Installers, signing, updates and build-channel lifecycle.",
+      "implementation_sources": [
+        "scripts/bundle-macos.sh",
+        "scripts/bundle-windows.ps1"
+      ],
+      "progress_record": "docs/progress.md"
+    },
+    {
+      "id": "P05",
+      "feature": "Computer-use tools for native apps",
+      "phase": "P7",
+      "upstream_evidence": "D",
+      "sources": [
+        "CUA",
+        "WEB"
+      ],
+      "acceptance": "Implement platform permission adapters and separate helper lifecycle from terminal ownership.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "P06",
+      "feature": "iPhone/iPad Simulator surface and device tools",
+      "phase": "P7",
+      "upstream_evidence": "D",
+      "sources": [
+        "SIM"
+      ],
+      "acceptance": "macOS-only local capability; other platforms report unavailable or use an explicit remote host.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "P07",
+      "feature": "Skills, help and workflow documentation",
+      "phase": "P2",
+      "upstream_evidence": "D",
+      "sources": [
+        "R",
+        "CLI"
+      ],
+      "acceptance": "Publish rmux-specific automation guidance with tested examples and capability discovery.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "E01",
+      "feature": "Cloud machine lifecycle and resource controls",
+      "phase": "P7",
+      "upstream_evidence": "B",
+      "sources": [
+        "CLOUD",
+        "WEB",
+        "TREE"
+      ],
+      "acceptance": "Provision, pause, resume, resize and delete through a provider adapter with explicit ownership.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "E02",
+      "feature": "Cloud workspaces, terminal control and layouts",
+      "phase": "P7",
+      "upstream_evidence": "B",
+      "sources": [
+        "CLOUD",
+        "CLOUDTUI"
+      ],
+      "acceptance": "Keep remote processes and layout authoritative beyond desktop disconnection.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "E03",
+      "feature": "Cloud files, environment and project setup",
+      "phase": "P7",
+      "upstream_evidence": "B",
+      "sources": [
+        "CLOUD",
+        "TREE"
+      ],
+      "acceptance": "Transfer files, set scoped environment and run setup without exposing secrets in logs.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "E04",
+      "feature": "Cloud networking, domains, ports and VPN",
+      "phase": "P7",
+      "upstream_evidence": "B",
+      "sources": [
+        "NET",
+        "TREE"
+      ],
+      "acceptance": "Authenticate routes and isolate hosts; publish ports only through explicit actions.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "E05",
+      "feature": "Cloud desktop displays and computer use",
+      "phase": "P7",
+      "upstream_evidence": "B",
+      "sources": [
+        "C",
+        "TREE"
+      ],
+      "acceptance": "Independent displays preserve input ownership and tolerate transport failure.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "E06",
+      "feature": "Cloud base machine, snapshots and forks",
+      "phase": "P7",
+      "upstream_evidence": "B",
+      "sources": [
+        "WEB",
+        "TREE"
+      ],
+      "acceptance": "Separate reopen, reset, clone and destructive operations with recoverable metadata.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "E07",
+      "feature": "Accounts, teams, invitations and billing",
+      "phase": "P7",
+      "upstream_evidence": "D",
+      "sources": [
+        "TREE",
+        "WEB"
+      ],
+      "acceptance": "Implement a separate service contract; desktop terminal use remains independent of sign-in.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "E08",
+      "feature": "CodeRouter accounts, routing and provider failover",
+      "phase": "P7",
+      "upstream_evidence": "D",
+      "sources": [
+        "ROUTER",
+        "WEB"
+      ],
+      "acceptance": "Verify supported provider contracts and team credential boundaries before enabling routing.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "E09",
+      "feature": "iOS companion pairing and terminal access",
+      "phase": "P7",
+      "upstream_evidence": "B",
+      "sources": [
+        "IOS",
+        "R"
+      ],
+      "acceptance": "Pair/revoke devices and negotiate compatible protocols; mobile is a separate client project.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "E10",
+      "feature": "Mobile notifications, replies and privacy",
+      "phase": "P7",
+      "upstream_evidence": "B",
+      "sources": [
+        "IOS",
+        "C"
+      ],
+      "acceptance": "Resolve source contradictions before specifying transport; verify end-to-end behavior experimentally.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "E11",
+      "feature": "Mobile browser, artifacts and state synchronization",
+      "phase": "P7",
+      "upstream_evidence": "I",
+      "sources": [
+        "RPC"
+      ],
+      "acceptance": "Confirm feature gates, bandwidth bounds and runtime availability for each advertised method.",
+      "rmux_status": "not_started"
+    },
+    {
+      "id": "E12",
+      "feature": "Standalone TUI client and remote daemon",
+      "phase": "P7",
+      "upstream_evidence": "D",
+      "sources": [
+        "C",
+        "CLOUDTUI"
+      ],
+      "acceptance": "Share resource identity and transport contracts; establish an explicit terminal-only client scope.",
+      "rmux_status": "not_started"
+    }
+  ]
+}

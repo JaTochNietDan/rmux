@@ -1,0 +1,74 @@
+# cmux visual and interaction target
+
+Progress screenshots must use the real main app, per the user's preference.
+Do not substitute a synthetic preview for evidence of current UI progress.
+
+The optional `mise run preview-ui` fixture is retained for future regression work. It uses
+temporary configuration and synthetic shell output, not the user's sessions.
+Close the preview window to finish. Additional scenes after building:
+
+```
+mise exec -- python3 scripts/preview-workspace.py --scene overflow
+mise exec -- python3 scripts/preview-workspace.py --scene compact
+```
+
+`--check` validates the generated layout without starting the GUI. The main scene
+requests 1280×800 logical pixels with a 280px sidebar; compact requests 800×540.
+Screen bounds may clamp these values. Capture the actual size and display scale
+alongside screenshots. The scene labels all terminal output as synthetic and
+does not imply real build, Git checkout, agent or network-service activity.
+
+Reference inspected November 20, 2026: the official landing screenshot at
+https://cmux.com/_next/static/immutable/media/landing-image.1y26igml71ekg.png
+(3840 × 2224 source image), linked from https://cmux.com/.
+
+Observed visual hierarchy: compact top controls and pane tabs; neutral dark
+chrome; thin pane dividers; bright blue selected workspace; semibold workspace
+titles; subdued description/directory metadata; dense sidebar rows with limited
+rounding. The terminal theme in this screenshot is user-configurable, so its
+olive terminal background is not a universal cmux chrome requirement.
+
+First rmux pass: neutral charcoal chrome across sidebar, tabs, palette and
+diagnostics; blue workspace selection with lighter secondary text; semibold
+13px workspace names; 12px tab labels in 30px strips; reduced tab accent thickness;
+thin visible sidebar separator retaining its resize hit area; header add button.
+These are implementation targets, not pixel measurements or verified parity.
+
+Remaining visual acceptance must compare rendered rmux with the reference at
+matched logical size, font scale and content: single terminal, nested splits,
+tab overflow, selected/hover/unread states, groups, palette and notification
+panel. Check alignment, clipping, hit areas, keyboard focus, drag previews and
+small-window behavior. Replace inconsistent text glyph controls with consistent
+icons, align the titlebar/toolbar hierarchy, and implement missing metadata
+before claiming the same information density. Browser surfaces remain a separate
+functional gap; do not fake them for a screenshot.
+
+The follow-up replaces text glyphs for add, close, disclosure, copy, refresh and
+split controls with an embedded monochrome SVG set (16-unit viewbox, 1.25-unit
+stroke, 14px display). Pane toolbar controls retain 28px hit areas. The workspace
+header now exposes sidebar visibility and notifications alongside the workspace
+name. These assets are built into the executable and require no icon font or
+runtime file lookup. Rendered alignment, contrast and recognizability remain
+acceptance work.
+
+Native screenshot access is currently blocked by the locked Mac. Compilation
+does not establish polish, and the first pass must remain unaccepted until viewed.
+
+Branch and path now have separate truncation budgets and a full-context tooltip.
+Pin status uses a compact icon on the title row rather than consuming another
+metadata line. Branch/pin icons use the same stroke language as toolbar controls.
+Split dividers draw 1px lines with their existing 5px interaction areas. Workspace
+creation lives in the compact header rather than a second footer button, leaving
+more vertical room for the sidebar list. Terminal content retains configurable
+8px default padding.
+On macOS, native traffic lights now share the 36px app header. An 80px reserved
+area follows sidebar visibility, and title labels handle native dragging and
+double-click zoom. Validate traffic-light clearance, window move, fullscreen and
+sidebar toggling before accepting this layout; other OS titlebars stay native.
+
+Sidebar context follow-up: blue/white unread badges replace tiny amber dots, and
+an unread notification preview occupies at most two lines beneath workspace
+metadata. Group headers can show a hidden member's unread message. The preview
+uses the first unread message in pane/member order, not an invented globally
+ordered notification timestamp. Existing shell paths and descriptions remain
+secondary. Git branch context is now implemented via background HEAD discovery; PR and port rows remain missing. Native rendering of the branch/path combination is unverified.

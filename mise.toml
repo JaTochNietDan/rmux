@@ -1,0 +1,135 @@
+[tools]
+python = "3.13.15"
+gh = "2.103.0"
+"github:sparkle-project/Sparkle" = "2.10.0"
+rust = { version = "1.99.1", targets = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", "x86_64-pc-windows-msvc"] }
+zig = "0.17.0"
+
+[env]
+_.path = ["{{config_root}}/.deps/ghostty-vt/bin"]
+
+[tasks.check]
+run = "cargo check --workspace"
+
+[tasks.check-linux-terminal]
+description = "Cross-check Linux terminal code after building its Ghostty dependency"
+env.GHOSTTY_VT_DIR = "{{config_root}}/.deps/ghostty-vt-x86_64-linux-gnu"
+run = "cargo check -p rmux-terminal --target x86_64-unknown-linux-gnu"
+
+[tasks.check-windows-terminal]
+description = "Cross-check Windows terminal code and tests using the extracted pinned package"
+env.GHOSTTY_VT_DIR = "{{config_root}}/.deps/ghostty-vt-1.0.1-x86_64-windows-gnu"
+run = "cargo check -p rmux-terminal --tests --target x86_64-pc-windows-msvc"
+
+[tasks.build-linux-tests]
+description = "Cross-link Linux terminal tests with mise-managed Zig"
+env.GHOSTTY_VT_DIR = "{{config_root}}/.deps/ghostty-vt-x86_64-linux-gnu"
+env.CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER = "{{config_root}}/scripts/zig-linux-linker.sh"
+run = "cargo test -p rmux-terminal --lib --target x86_64-unknown-linux-gnu --no-run"
+
+[tasks.build-linux-arm64-tests]
+description = "Cross-link ARM64 Linux terminal tests with mise-managed Zig"
+env.GHOSTTY_VT_DIR = "{{config_root}}/.deps/ghostty-vt-aarch64-linux-gnu"
+env.CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER = "{{config_root}}/scripts/zig-linux-linker.sh"
+env.RMUX_ZIG_TARGET = "aarch64-linux-gnu"
+run = "cargo test -p rmux-terminal --lib --target aarch64-unknown-linux-gnu --no-run"
+
+[tasks.check-linux-desktop]
+description = "Cross-check GPUI and rmux desktop for ARM64 Linux (no link or runtime validation)"
+env.GHOSTTY_VT_DIR = "{{config_root}}/.deps/ghostty-vt-aarch64-linux-gnu"
+env.RMUX_ZIG_TARGET = "aarch64-linux-gnu"
+env.CC_aarch64_unknown_linux_gnu = "{{config_root}}/scripts/zig-linux-linker.sh"
+env.CXX_aarch64_unknown_linux_gnu = "{{config_root}}/scripts/zig-linux-linker.sh"
+env.AR_aarch64_unknown_linux_gnu = "{{config_root}}/scripts/zig-ar.sh"
+run = "cargo check -p rmux-desktop --target aarch64-unknown-linux-gnu"
+
+[tasks.test]
+run = "cargo test --workspace"
+
+[tasks.test-zsh-integration]
+description = "Check shell integration with an existing zsh, without user rc files"
+run = "python3 scripts/test-zsh-integration.py"
+
+[tasks.test-bash-integration]
+description = "Check shell integration with an existing Bash, without user startup files"
+run = "python3 scripts/test-bash-integration.py"
+
+[tasks.run]
+run = "cargo run -p rmux-desktop"
+
+[tasks.bundle]
+run = "sh scripts/bundle-macos.sh"
+
+[tasks.bundle-release]
+run = "RMUX_BUILD_PROFILE=release sh scripts/bundle-macos.sh"
+
+[tasks.open-app]
+description = "Build and open the local macOS release app"
+depends = ["bundle-release"]
+run = "open target/release/rmux.app"
+
+[tasks.preview-ui]
+description = "Launch isolated synthetic workspace for native visual comparison"
+run = ["cargo build -p rmux-desktop", "python3 scripts/preview-workspace.py"]
+
+[tasks.smoke-release]
+description = "Exercise the bundled release executable with isolated live shells"
+depends = ["bundle-release"]
+run = "python3 scripts/smoke-live-rpc.py target/release/rmux.app/Contents/MacOS/rmux --live-shell"
+
+[tasks.fmt]
+run = "cargo fmt --all"
+
+[tasks.bootstrap]
+run = "sh scripts/bootstrap-ghostty.sh"
+
+[tasks.bootstrap-windows]
+run = "powershell -NoProfile -File scripts/bootstrap-ghostty.ps1"
+
+[tasks.bundle-windows]
+run = "powershell -NoProfile -File scripts/bundle-windows.ps1"
+
+[tasks.bench-engine]
+description = "Release engine-only throughput and snapshot baseline for 1/4/8/16 panes"
+run = "cargo build --release -p rmux-terminal --example engine_bench && for panes in 1 4 8 16; do target/release/examples/engine_bench $panes; done"
+
+[tasks.bench-pty]
+description = "Release input/response timings under PTY output pressure at 1/4/8/16 panes"
+run = "cargo run --release -p rmux-terminal --example pty_bench -- all"
+
+[tasks.bench-history]
+description = "Release history export lock-duration baseline at 4/64 MiB retention"
+run = "cargo run --release -p rmux-terminal --example history_bench"
+
+[tasks.bench-process-sampling]
+description = "Manual Unix debug-build process sampling baseline for 1/8/32 shells"
+run = "cargo test -p rmux-desktop process_metrics::tests::sampling_scaling -- --ignored --nocapture"
+
+[tasks.smoke-session-restore]
+description = "Native Unix multi-window session restore with isolated fixture shells"
+run = ["cargo build -p rmux-desktop", "python3 scripts/smoke-session-restore.py"]
+
+[tasks.smoke-live-rpc]
+description = "Short Unix native GUI/RPC check using an isolated process and immediately exiting shell"
+run = ["cargo build -p rmux-desktop", "python3 scripts/smoke-live-rpc.py"]
+
+[tasks.test-fish-integration]
+description = "Check manual fish hooks using an already-installed fish"
+run = "python3 scripts/test-fish-integration.py"
+
+[tasks.smoke-live-sessions]
+description = "Verify native workspace transfer preserves live fixture-shell PIDs"
+run = ["cargo build -p rmux-desktop", "python3 scripts/smoke-live-rpc.py --live-shell"]
+
+[tasks.smoke-socket]
+description = "Check private Unix socket RPC clients and endpoint lifecycle"
+run = ["cargo build -p rmux-desktop -p rmux-cli", "python3 scripts/smoke-socket-rpc.py"]
+
+[tasks.smoke-bundle-socket]
+description = "Exercise both packaged macOS executables over the private socket"
+depends = ["bundle"]
+run = "python3 scripts/smoke-socket-rpc.py --app target/debug/rmux.app/Contents/MacOS/rmux --client target/debug/rmux.app/Contents/MacOS/rmuxctl"
+
+[tasks.release-macos]
+description = "Build, Developer ID sign, notarize, staple and Sparkle-sign the macOS release"
+run = "sh scripts/release-macos.sh"

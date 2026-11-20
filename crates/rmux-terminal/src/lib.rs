@@ -1,0 +1,1550 @@
+//! A small ownership boundary around the pinned Ghostty VT engine.
+//!
+//! A terminal may move between threads but must only be accessed exclusively.
+//! Screen snapshots own their text; no borrowed engine pointers leave this crate.
+#[allow(
+    non_camel_case_types,
+    non_snake_case,
+    non_upper_case_globals,
+    dead_code
+)]
+mod ffi {
+    include!(concat!(env!("OUT_DIR"), "/ghostty.rs"));
+}
+
+use anyhow::{Result, ensure};
+use ffi::*;
+use std::time::{Duration, Instant};
+use std::{ffi::c_void, ptr, sync::Arc};
+
+const RENDER_HOLD_LIMIT: Duration = Duration::from_millis(250);
+
+#[derive(Default)]
+struct Callbacks {
+    replies: Vec<u8>,
+    hold_started: Option<Instant>,
+    title_revision: u64,
+    bell_revision: u64,
+    directory_revision: u64,
+    notification: Option<Arc<DesktopNotification>>,
+    progress: Option<Progress>,
+    program_status: program_status::Records,
+    program_finished: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProgressState {
+    Running,
+    Error,
+    Indeterminate,
+    Paused,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Progress {
+    pub state: ProgressState,
+    pub percent: Option<u8>,
+}
+
+unsafe extern "C" fn progress_report(
+    _: GhosttyTerminal,
+    userdata: *mut c_void,
+    report: *const GhosttyTerminalProgressReport,
+) {
+    if report.is_null() {
+        return;
+    }
+    // SAFETY: synchronous callback; borrowed report and stable userdata remain
+    // valid throughout this exclusive engine access. No allocation or UI work.
+    unsafe {
+        let report = &*report;
+        let state = match report.state {
+            GHOSTTY_TERMINAL_PROGRESS_STATE_SET => Some(ProgressState::Running),
+            GHOSTTY_TERMINAL_PROGRESS_STATE_ERROR => Some(ProgressState::Error),
+            GHOSTTY_TERMINAL_PROGRESS_STATE_INDETERMINATE => Some(ProgressState::Indeterminate),
+            GHOSTTY_TERMINAL_PROGRESS_STATE_PAUSE => Some(ProgressState::Paused),
+            _ => None,
+        };
+        (*userdata.cast::<Callbacks>()).progress = state.map(|state| Progress {
+            state,
+            percent: (0..=100)
+                .contains(&report.progress)
+                .then_some(report.progress as u8),
+        });
+    }
+}
+
+#[derive(Debug)]
+pub struct DesktopNotification {
+    pub revision: u64,
+    pub title: String,
+    pub body: String,
+}
+
+unsafe extern "C" fn desktop_notification(
+    _: GhosttyTerminal,
+    userdata: *mut c_void,
+    notification: *const GhosttyTerminalDesktopNotification,
+) {
+    if notification.is_null() {
+        return;
+    }
+    // SAFETY: Ghostty invokes this synchronously with borrowed strings valid
+    // throughout the callback and our stable, exclusively accessed userdata.
+    unsafe {
+        let request = &*notification;
+        let copy = |value: &GhosttyString, limit: usize| -> String {
+            if value.len == 0 || value.ptr.is_null() {
+                return String::new();
+            }
+            String::from_utf8_lossy(std::slice::from_raw_parts(value.ptr, value.len.min(limit)))
+                .chars()
+                .filter(|ch| !ch.is_control())
+                .take(limit)
+                .collect()
+        };
+        let state = &mut *userdata.cast::<Callbacks>();
+        let revision = state
+            .notification
+            .as_ref()
+            .map_or(1, |previous| previous.revision.wrapping_add(1));
+        state.notification = Some(Arc::new(DesktopNotification {
+            revision,
+            title: copy(&request.title, 256),
+            body: copy(&request.body, 1024),
+        }));
+    }
+}
+
+pub mod compression;
+mod directory;
+mod hyperlink;
+pub mod keyboard;
+pub mod mouse;
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+mod process_wakeup;
+pub mod program_status;
+pub mod search;
+pub mod search_worker;
+pub mod selection;
+pub mod session;
+mod text_export;
+#[cfg(unix)]
+mod shell_integration;
+
+#[derive(Clone, Copy)]
+pub enum Scroll {
+    Lines(isize),
+    Prompts(isize),
+    LastPrompt,
+    Top,
+    Bottom,
+}
+
+/// Ghostty screen-page storage, excluding Rust snapshots, fonts and GPU assets.
+#[derive(Clone, Copy, Debug)]
+pub struct MemoryUsage {
+    pub primary_resident_bytes: u64,
+    pub alternate_resident_bytes: u64,
+    pub virtual_bytes: u64,
+    pub compressed_bytes: u64,
+    pub image_bytes: u64,
+    pub compression_supported: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Compression {
+    Unsupported,
+    Pending,
+    Complete,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CursorShape {
+    Bar,
+    Block,
+    Underline,
+    Hollow,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Color(pub u8, pub u8, pub u8);
+impl From<GhosttyColorRgb> for Color {
+    fn from(c: GhosttyColorRgb) -> Self {
+        Self(c.r, c.g, c.b)
+    }
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Cell {
+    pub text: smol_str::SmolStr,
+    pub column: u16,
+    pub width: u8,
+    pub foreground: Color,
+    pub background: Color,
+    pub bold: bool,
+    pub italic: bool,
+    pub underline: bool,
+    pub underline_color: Color,
+    pub underline_curly: bool,
+    pub strikethrough: bool,
+    pub overline: bool,
+    pub hidden: bool,
+}
+#[derive(Clone, Debug)]
+pub struct Frame {
+    pub revision: u64,
+    pub selections: Arc<Vec<Option<(u16, u16)>>>,
+    pub columns: u16,
+    pub rows: Arc<Vec<Arc<Vec<Cell>>>>,
+    pub background: Color,
+    pub cursor: Option<(u16, u16)>,
+    pub cursor_shape: CursorShape,
+    pub cursor_color: Color,
+    pub scrollback_lines: u64,
+    pub scrollback_offset: u64,
+}
+impl Frame {
+    /// Logical storage represented by this snapshot. Shared allocations are not
+    /// deduplicated across frames; this excludes allocator/Arc and GPU overhead.
+    pub fn storage(&self) -> FrameStorage {
+        let mut storage = FrameStorage::default();
+        for row in self.rows.iter() {
+            storage.cell_capacity_bytes += row.capacity() * size_of::<Cell>();
+            for cell in row.iter() {
+                storage.text_bytes += cell.text.len();
+                if cell.text.is_heap_allocated() {
+                    storage.heap_cells += 1;
+                    storage.heap_text_payload_bytes += cell.text.len();
+                } else {
+                    storage.inline_cells += 1;
+                }
+            }
+        }
+        storage
+    }
+    pub fn text(&self) -> String {
+        self.text_with_limit(usize::MAX).0
+    }
+    /// Visible viewport text, trimming row endings and preserving UTF-8 boundaries.
+    /// Stops constructing output at the limit rather than allocating then truncating.
+    pub fn text_with_limit(&self, limit: usize) -> (String, bool) {
+        fn append(output: &mut String, text: &str, limit: usize) -> bool {
+            let mut end = text.len().min(limit.saturating_sub(output.len()));
+            while !text.is_char_boundary(end) { end -= 1; }
+            output.push_str(&text[..end]);
+            end == text.len()
+        }
+        let mut output = String::new();
+        for (index, row) in self.rows.iter().enumerate() {
+            if index != 0 && !append(&mut output, "\n", limit) { return (output, true); }
+            let Some(last) = row.iter().rposition(|cell| cell.width != 0 && !cell.text.trim_end().is_empty()) else { continue; };
+            for (column, cell) in row[..=last].iter().enumerate() {
+                if cell.width == 0 { continue; }
+                let text = if cell.text.is_empty() { " " } else if column == last { cell.text.trim_end() } else { &cell.text };
+                if !append(&mut output, text, limit) { return (output, true); }
+            }
+        }
+        (output, false)
+    }
+}
+
+#[derive(Default, Debug, PartialEq, Eq)]
+pub struct FrameStorage {
+    pub cell_capacity_bytes: usize,
+    pub text_bytes: usize,
+    pub inline_cells: usize,
+    pub heap_cells: usize,
+    pub heap_text_payload_bytes: usize,
+}
+
+pub struct Terminal {
+    selection: selection::Gesture,
+    terminal: GhosttyTerminal,
+    render: GhosttyRenderState,
+    iterator: GhosttyRenderStateRowIterator,
+    cells: GhosttyRenderStateRowCells,
+    callbacks: Box<Callbacks>,
+    frame: Frame,
+    revision: u64,
+    keyboard: keyboard::Encoder,
+    mouse: mouse::Encoder,
+}
+// SAFETY: All handles are exclusively owned and never accessed without &mut self.
+// The boxed callback state has a stable address across moves. No GUI/thread-local
+// resources are used by libghostty-vt. Callers sharing Terminal must use a mutex.
+unsafe impl Send for Terminal {}
+
+fn check(result: GhosttyResult) -> Result<()> {
+    ensure!(result == GHOSTTY_SUCCESS, "Ghostty VT error {result}");
+    Ok(())
+}
+fn out<T>(value: &mut T) -> *mut c_void {
+    ptr::from_mut(value).cast()
+}
+fn input<T>(value: &T) -> *const c_void {
+    ptr::from_ref(value).cast()
+}
+
+unsafe extern "C" fn reply(
+    _terminal: GhosttyTerminal,
+    userdata: *mut c_void,
+    bytes: *const u8,
+    len: usize,
+) {
+    if len == 0 {
+        return;
+    }
+    // SAFETY: registered userdata points to our stable boxed state and the callback
+    // is synchronous during exclusive engine access. Ghostty owns bytes for len.
+    unsafe {
+        (&mut *userdata.cast::<Callbacks>())
+            .replies
+            .extend_from_slice(std::slice::from_raw_parts(bytes, len));
+    }
+}
+
+unsafe extern "C" fn render_hold(_: GhosttyTerminal, userdata: *mut c_void, held: bool) {
+    // SAFETY: the callback is synchronous and userdata is our stable owned box.
+    unsafe {
+        (*userdata.cast::<Callbacks>()).hold_started = held.then(Instant::now);
+    }
+}
+
+unsafe extern "C" fn title_changed(_: GhosttyTerminal, userdata: *mut c_void) {
+    // SAFETY: synchronous callback under exclusive access to the stable box.
+    unsafe {
+        let state = &mut *userdata.cast::<Callbacks>();
+        state.title_revision = state.title_revision.wrapping_add(1);
+    }
+}
+
+unsafe extern "C" fn bell(_: GhosttyTerminal, userdata: *mut c_void) {
+    // SAFETY: synchronous callback under exclusive access to our stable box.
+    unsafe {
+        let state = &mut *userdata.cast::<Callbacks>();
+        state.bell_revision = state.bell_revision.wrapping_add(1);
+    }
+}
+
+unsafe extern "C" fn directory_changed(_: GhosttyTerminal, userdata: *mut c_void) {
+    // SAFETY: synchronous callback under exclusive access to our stable box.
+    unsafe {
+        let state = &mut *userdata.cast::<Callbacks>();
+        state.directory_revision = state.directory_revision.wrapping_add(1);
+    }
+}
+unsafe extern "C" fn metadata_reset(terminal: GhosttyTerminal, userdata: *mut c_void) {
+    // SAFETY: same registered userdata and synchronous access as the callbacks.
+    unsafe {
+        title_changed(terminal, userdata);
+        directory_changed(terminal, userdata);
+        (*userdata.cast::<Callbacks>()).progress = None;
+    }
+}
+
+impl Terminal {
+    pub fn program_status(&self) -> &program_status::Records {
+        &self.callbacks.program_status
+    }
+    pub fn finish_program_status(&mut self) {
+        self.callbacks.program_finished = true;
+        self.callbacks.program_status.finish_active();
+    }
+    pub fn acknowledge_program_status(&mut self) {
+        self.callbacks.program_status.acknowledge();
+    }
+    pub fn progress(&self) -> Option<Progress> {
+        self.callbacks.progress
+    }
+    pub fn notification_since(&self, revision: u64) -> Option<Arc<DesktopNotification>> {
+        self.callbacks
+            .notification
+            .as_ref()
+            .filter(|notification| notification.revision != revision)
+            .cloned()
+    }
+    pub fn directory_since(
+        &self,
+        revision: u64,
+    ) -> Result<Option<(u64, Option<std::path::PathBuf>)>> {
+        if revision == self.callbacks.directory_revision {
+            return Ok(None);
+        }
+        Ok(Some((
+            self.callbacks.directory_revision,
+            self.current_directory()?,
+        )))
+    }
+    pub fn bell_revision(&self) -> u64 {
+        self.callbacks.bell_revision
+    }
+    pub fn current_directory(&self) -> Result<Option<std::path::PathBuf>> {
+        let mut value = GhosttyString {
+            ptr: ptr::null(),
+            len: 0,
+        };
+        // SAFETY: the borrowed string is consumed under exclusive engine access.
+        unsafe {
+            check(ghostty_terminal_get(
+                self.terminal,
+                GHOSTTY_TERMINAL_DATA_PWD,
+                out(&mut value),
+            ))?;
+            if value.len == 0 || value.len > 8192 {
+                return Ok(None);
+            }
+            let Ok(uri) = std::str::from_utf8(std::slice::from_raw_parts(value.ptr, value.len))
+            else {
+                return Ok(None);
+            };
+            Ok(directory::local_path(
+                uri,
+                directory::local_hostname().as_deref(),
+            ))
+        }
+    }
+    /// Return a bounded, owned UI title only when Ghostty reports a change.
+    pub fn title_since(&self, revision: u64) -> Result<Option<(u64, String)>> {
+        if revision == self.callbacks.title_revision {
+            return Ok(None);
+        }
+        let mut value = GhosttyString {
+            ptr: ptr::null(),
+            len: 0,
+        };
+        // SAFETY: exclusive terminal ownership keeps the borrowed bytes valid
+        // until copied; an empty GhosttyString may have a null pointer.
+        unsafe {
+            check(ghostty_terminal_get(
+                self.terminal,
+                GHOSTTY_TERMINAL_DATA_TITLE,
+                out(&mut value),
+            ))?;
+            let title = if value.len == 0 {
+                String::new()
+            } else {
+                String::from_utf8_lossy(std::slice::from_raw_parts(value.ptr, value.len.min(1024)))
+                    .chars()
+                    .filter(|c| !c.is_control())
+                    .take(128)
+                    .collect()
+            };
+            Ok(Some((self.callbacks.title_revision, title)))
+        }
+    }
+    pub fn new(columns: u16, rows: u16) -> Result<Self> {
+        ensure!(
+            columns > 0 && rows > 0,
+            "terminal dimensions must be nonzero"
+        );
+        let mut this = Self {
+            selection: selection::Gesture::new()?,
+            mouse: mouse::Encoder::new()?,
+            keyboard: keyboard::Encoder::new()?,
+            terminal: ptr::null_mut(),
+            render: ptr::null_mut(),
+            iterator: ptr::null_mut(),
+            cells: ptr::null_mut(),
+            callbacks: Box::default(),
+            revision: 1,
+            frame: Frame {
+                revision: 0,
+                selections: Arc::new(vec![None; rows as usize]),
+                columns,
+                rows: Arc::new(vec![Arc::default(); rows as usize]),
+                background: Color(18, 20, 26),
+                cursor: None,
+                cursor_shape: CursorShape::Block,
+                cursor_color: Color(140, 180, 255),
+                scrollback_lines: 0,
+                scrollback_offset: 0,
+            },
+        };
+        // SAFETY: constructors initialize owned handles. Drop handles partial init.
+        unsafe {
+            check(ghostty_terminal_new(
+                ptr::null(),
+                &mut this.terminal,
+                columns,
+                rows,
+            ))?;
+            check(ghostty_render_state_new(ptr::null(), &mut this.render))?;
+            check(ghostty_render_state_row_iterator_new(
+                ptr::null(),
+                &mut this.iterator,
+            ))?;
+            check(ghostty_render_state_row_cells_new(
+                ptr::null(),
+                &mut this.cells,
+            ))?;
+            check(ghostty_terminal_set(
+                this.terminal,
+                GHOSTTY_TERMINAL_OPT_USERDATA,
+                out(&mut *this.callbacks),
+            ))?;
+            check(ghostty_terminal_set(
+                this.terminal,
+                GHOSTTY_TERMINAL_OPT_WRITE_PTY,
+                reply as *const c_void,
+            ))?;
+            check(ghostty_terminal_set(
+                this.terminal,
+                GHOSTTY_TERMINAL_OPT_RENDER_HOLD,
+                render_hold as *const c_void,
+            ))?;
+            check(ghostty_terminal_set(
+                this.terminal,
+                GHOSTTY_TERMINAL_OPT_BELL,
+                bell as *const c_void,
+            ))?;
+            check(ghostty_terminal_set(
+                this.terminal,
+                GHOSTTY_TERMINAL_OPT_DESKTOP_NOTIFICATION,
+                desktop_notification as *const c_void,
+            ))?;
+            check(ghostty_terminal_set(
+                this.terminal,
+                GHOSTTY_TERMINAL_OPT_PROGRESS_REPORT,
+                progress_report as *const c_void,
+            ))?;
+            check(ghostty_terminal_set(
+                this.terminal,
+                GHOSTTY_TERMINAL_OPT_PROGRAM_STATUS,
+                program_status::report as *const c_void,
+            ))?;
+            check(ghostty_terminal_set(
+                this.terminal,
+                GHOSTTY_TERMINAL_OPT_SEMANTIC_PROMPT,
+                program_status::prompt as *const c_void,
+            ))?;
+            check(ghostty_terminal_set(
+                this.terminal,
+                GHOSTTY_TERMINAL_OPT_TITLE_CHANGED,
+                title_changed as *const c_void,
+            ))?;
+            check(ghostty_terminal_set(
+                this.terminal,
+                GHOSTTY_TERMINAL_OPT_PWD_CHANGED,
+                directory_changed as *const c_void,
+            ))?;
+            check(ghostty_terminal_set(
+                this.terminal,
+                GHOSTTY_TERMINAL_OPT_RESET,
+                metadata_reset as *const c_void,
+            ))?;
+            let limit: usize = 4 * 1024 * 1024;
+            check(ghostty_terminal_set(
+                this.terminal,
+                GHOSTTY_TERMINAL_OPT_SCROLLBACK_MAX_BYTES,
+                input(&limit),
+            ))?;
+            let fg = GhosttyColorRgb {
+                r: 220,
+                g: 223,
+                b: 230,
+            };
+            let bg = GhosttyColorRgb {
+                r: 18,
+                g: 20,
+                b: 26,
+            };
+            check(ghostty_terminal_set(
+                this.terminal,
+                GHOSTTY_TERMINAL_OPT_COLOR_FOREGROUND,
+                input(&fg),
+            ))?;
+            check(ghostty_terminal_set(
+                this.terminal,
+                GHOSTTY_TERMINAL_OPT_COLOR_BACKGROUND,
+                input(&bg),
+            ))?;
+        }
+        Ok(this)
+    }
+
+    pub fn write(&mut self, bytes: &[u8]) {
+        self.revision = self.revision.wrapping_add(1);
+        self.mouse.refresh = true;
+        // SAFETY: terminal is owned, and bytes remains valid through the call.
+        unsafe {
+            ghostty_terminal_vt_write(self.terminal, bytes.as_ptr(), bytes.len());
+        }
+    }
+    pub fn take_replies(&mut self) -> Vec<u8> {
+        std::mem::take(&mut self.callbacks.replies)
+    }
+    pub fn scroll(&mut self, scroll: Scroll) -> Result<()> {
+        if matches!(scroll, Scroll::LastPrompt) {
+            // Begin near the end, then advance through any prompt inside the
+            // active viewport. Going backward alone can skip a visible prompt.
+            self.scroll(Scroll::Bottom)?;
+            self.scroll(Scroll::Prompts(-1))?;
+            return self.scroll(Scroll::Prompts(isize::MAX));
+        }
+        self.revision = self.revision.wrapping_add(1);
+        let (tag, delta) = match scroll {
+            Scroll::Lines(delta) => (GHOSTTY_TERMINAL_SCROLL_VIEWPORT_DELTA, delta),
+            Scroll::Prompts(delta) => (GHOSTTY_TERMINAL_SCROLL_VIEWPORT_DELTA_PROMPT, delta),
+            Scroll::Top => (GHOSTTY_TERMINAL_SCROLL_VIEWPORT_TOP, 0),
+            Scroll::Bottom => (GHOSTTY_TERMINAL_SCROLL_VIEWPORT_BOTTOM, 0),
+            Scroll::LastPrompt => unreachable!(),
+        };
+        // SAFETY: owned terminal and correctly tagged viewport union.
+        unsafe {
+            check(ghostty_terminal_scroll_viewport(
+                self.terminal,
+                GhosttyTerminalScrollViewport {
+                    tag,
+                    value: if matches!(scroll, Scroll::Prompts(_)) {
+                        GhosttyTerminalScrollViewportValue {
+                            delta_prompt: delta,
+                        }
+                    } else {
+                        GhosttyTerminalScrollViewportValue { delta }
+                    },
+                },
+            ))
+        }
+    }
+    /// One bounded storage-only step. Call again on Pending while idle; normal
+    /// terminal access transparently restores any compressed pages it needs.
+    pub fn compress_scrollback_step(&mut self) -> Result<Compression> {
+        let mut result = GHOSTTY_TERMINAL_COMPRESSION_RESULT_UNSUPPORTED;
+        unsafe {
+            check(ghostty_terminal_compress(
+                self.terminal,
+                GHOSTTY_TERMINAL_COMPRESSION_MODE_INCREMENTAL,
+                &mut result,
+            ))?;
+        }
+        match result {
+            GHOSTTY_TERMINAL_COMPRESSION_RESULT_UNSUPPORTED => Ok(Compression::Unsupported),
+            GHOSTTY_TERMINAL_COMPRESSION_RESULT_PENDING => Ok(Compression::Pending),
+            GHOSTTY_TERMINAL_COMPRESSION_RESULT_COMPLETE => Ok(Compression::Complete),
+            _ => anyhow::bail!("unknown compression result {result}"),
+        }
+    }
+    pub fn compression_activity(&self) -> Result<u64> {
+        let mut token = 0;
+        unsafe {
+            check(ghostty_terminal_compression_activity(
+                self.terminal,
+                &mut token,
+            ))?;
+        }
+        Ok(token)
+    }
+    pub fn memory_usage(&self) -> Result<MemoryUsage> {
+        let mut usage = GhosttyTerminalMemoryUsage {
+            size: std::mem::size_of::<GhosttyTerminalMemoryUsage>(),
+            ..Default::default()
+        };
+        // SAFETY: sized output is valid for this serialized terminal access.
+        unsafe {
+            check(ghostty_terminal_get(
+                self.terminal,
+                GHOSTTY_TERMINAL_DATA_MEMORY_USAGE,
+                out(&mut usage),
+            ))?;
+        }
+        Ok(MemoryUsage {
+            primary_resident_bytes: usage.primary_resident_bytes,
+            alternate_resident_bytes: usage.alternate_resident_bytes,
+            virtual_bytes: usage
+                .primary_virtual_bytes
+                .saturating_add(usage.alternate_virtual_bytes),
+            compressed_bytes: usage
+                .primary_compressed_bytes
+                .saturating_add(usage.alternate_compressed_bytes),
+            image_bytes: usage
+                .primary_image_bytes
+                .saturating_add(usage.alternate_image_bytes),
+            compression_supported: usage.compression_supported,
+        })
+    }
+    pub fn clear_scrollback(&mut self) -> Result<()> {
+        self.revision = self.revision.wrapping_add(1);
+        self.selection.reset(self.terminal);
+        self.clear_selection()?;
+        // Change retention through the API, never by injecting bytes into a
+        // potentially incomplete application escape sequence.
+        unsafe {
+            let mut limit: usize = 0;
+            check(ghostty_terminal_get(
+                self.terminal,
+                GHOSTTY_TERMINAL_DATA_SCROLLBACK_MAX_BYTES,
+                out(&mut limit),
+            ))?;
+            let zero: usize = 0;
+            check(ghostty_terminal_set(
+                self.terminal,
+                GHOSTTY_TERMINAL_OPT_SCROLLBACK_MAX_BYTES,
+                input(&zero),
+            ))?;
+            check(ghostty_terminal_set(
+                self.terminal,
+                GHOSTTY_TERMINAL_OPT_SCROLLBACK_MAX_BYTES,
+                input(&limit),
+            ))?;
+        }
+        Ok(())
+    }
+    /// Update configured defaults without replacing application OSC overrides.
+    /// Missing foreground/background restore rmux defaults; cursor uses fallback.
+    pub fn set_default_colors(&mut self, colors: [Option<Color>; 3]) -> Result<()> {
+        self.revision = self.revision.wrapping_add(1);
+        let colors = [
+            colors[0].or(Some(Color(220, 223, 230))),
+            colors[1].or(Some(Color(18, 20, 26))),
+            colors[2],
+        ];
+        for (option, color) in [
+            GHOSTTY_TERMINAL_OPT_COLOR_FOREGROUND,
+            GHOSTTY_TERMINAL_OPT_COLOR_BACKGROUND,
+            GHOSTTY_TERMINAL_OPT_COLOR_CURSOR,
+        ].into_iter().zip(colors) {
+            let value = color.map(|Color(r, g, b)| GhosttyColorRgb { r, g, b });
+            // SAFETY: exclusive handle; option expects RGB or a null reset.
+            unsafe {
+                check(ghostty_terminal_set(
+                    self.terminal,
+                    option,
+                    value.as_ref().map_or(ptr::null(), input),
+                ))?;
+            }
+        }
+        Ok(())
+    }
+    pub fn set_ansi_palette(&mut self, colors: Option<[Color; 16]>) -> Result<()> {
+        self.revision = self.revision.wrapping_add(1);
+        // SAFETY: both tagged APIs require exactly 256 RGB values. Read defaults
+        // rather than effective colors so OSC overrides never become defaults.
+        unsafe {
+            if let Some(colors) = colors {
+                let mut palette = [GhosttyColorRgb::default(); 256];
+                check(ghostty_terminal_get(self.terminal, GHOSTTY_TERMINAL_DATA_COLOR_PALETTE_DEFAULT, out(&mut palette)))?;
+                for (slot, Color(r, g, b)) in palette.iter_mut().zip(colors) {
+                    *slot = GhosttyColorRgb { r, g, b };
+                }
+                check(ghostty_terminal_set(self.terminal, GHOSTTY_TERMINAL_OPT_COLOR_PALETTE, input(&palette)))
+            } else {
+                check(ghostty_terminal_set(self.terminal, GHOSTTY_TERMINAL_OPT_COLOR_PALETTE, ptr::null()))
+            }
+        }
+    }
+    pub fn set_scrollback_limit(&mut self, bytes: usize) -> Result<()> {
+        self.revision = self.revision.wrapping_add(1);
+        self.selection.reset(self.terminal);
+        self.clear_selection()?;
+        // SAFETY: owned terminal, usize payload required by this option.
+        unsafe {
+            check(ghostty_terminal_set(
+                self.terminal,
+                GHOSTTY_TERMINAL_OPT_SCROLLBACK_MAX_BYTES,
+                input(&bytes),
+            ))
+        }
+    }
+    pub fn resize(&mut self, columns: u16, rows: u16) -> Result<()> {
+        self.revision = self.revision.wrapping_add(1);
+        ensure!(
+            columns > 0 && rows > 0,
+            "terminal dimensions must be nonzero"
+        );
+        unsafe {
+            check(ghostty_terminal_resize(self.terminal, columns, rows, 0, 0))?;
+        }
+        self.frame.columns = columns;
+        Arc::make_mut(&mut self.frame.rows).resize_with(rows as usize, Arc::default);
+        Arc::make_mut(&mut self.frame.selections).resize(rows as usize, None);
+        Ok(())
+    }
+
+    /// Updates changed rows only; unchanged rows share their existing allocations.
+    pub fn frame(&mut self) -> Result<Frame> {
+        if self.render_delay().is_some() {
+            return Ok(self.frame.clone());
+        }
+        if self.callbacks.hold_started.take().is_some() {
+            // A crashed producer must not freeze the screen indefinitely.
+            let mode = GhosttyTerminalModeConfig {
+                mode: 2026,
+                value: false,
+            };
+            unsafe {
+                check(ghostty_terminal_set(
+                    self.terminal,
+                    GHOSTTY_TERMINAL_OPT_MODE,
+                    input(&mode),
+                ))?;
+            }
+        }
+        // SAFETY: all queried types match Ghostty's tagged output API. Iterators
+        // are consumed before the next update and all cell text is copied out.
+        unsafe {
+            check(ghostty_render_state_update(self.render, self.terminal))?;
+            let mut scrollbar = GhosttyTerminalScrollbar::default();
+            check(ghostty_terminal_get(
+                self.terminal,
+                GHOSTTY_TERMINAL_DATA_SCROLLBAR,
+                out(&mut scrollbar),
+            ))?;
+            self.frame.scrollback_lines = scrollbar.total.saturating_sub(scrollbar.len);
+            self.frame.scrollback_offset =
+                self.frame.scrollback_lines.saturating_sub(scrollbar.offset);
+            let mut colors = GhosttyRenderStateColors {
+                size: size_of::<GhosttyRenderStateColors>(),
+                ..Default::default()
+            };
+            check(ghostty_render_state_get(
+                self.render,
+                GHOSTTY_RENDER_STATE_DATA_COLORS,
+                out(&mut colors),
+            ))?;
+            self.frame.background = colors.background.into();
+            self.frame.cursor_color = if colors.cursor_has_value {
+                colors.cursor.into()
+            } else {
+                Color(140, 180, 255)
+            };
+            let mut cursor = GhosttyRenderStateCursor {
+                size: size_of::<GhosttyRenderStateCursor>(),
+                ..Default::default()
+            };
+            check(ghostty_render_state_get(
+                self.render,
+                GHOSTTY_RENDER_STATE_DATA_CURSOR,
+                out(&mut cursor),
+            ))?;
+            self.frame.cursor = (cursor.visible && cursor.viewport_has_value).then_some((
+                cursor
+                    .viewport_x
+                    .saturating_sub(u16::from(cursor.wide_tail)),
+                cursor.viewport_y,
+            ));
+            self.frame.cursor_shape = match cursor.visual_style {
+                GHOSTTY_CURSOR_STYLE_BAR => CursorShape::Bar,
+                GHOSTTY_CURSOR_STYLE_UNDERLINE => CursorShape::Underline,
+                GHOSTTY_CURSOR_STYLE_BLOCK_HOLLOW => CursorShape::Hollow,
+                _ => CursorShape::Block,
+            };
+            check(ghostty_render_state_get(
+                self.render,
+                GHOSTTY_RENDER_STATE_DATA_ROW_ITERATOR,
+                out(&mut self.iterator),
+            ))?;
+            let mut y = 0;
+            let mut glyph_bytes = Vec::new();
+            while ghostty_render_state_row_iterator_next_dirty(self.iterator, &mut y) {
+                if glyph_bytes.is_empty() {
+                    glyph_bytes.resize(64, 0u8);
+                }
+                let mut selection = GhosttyRenderStateRowSelection {
+                    size: size_of::<GhosttyRenderStateRowSelection>(),
+                    ..Default::default()
+                };
+                let result = ghostty_render_state_row_get(
+                    self.iterator,
+                    GHOSTTY_RENDER_STATE_ROW_DATA_SELECTION,
+                    out(&mut selection),
+                );
+                if result != GHOSTTY_NO_VALUE {
+                    check(result)?;
+                }
+                let next_selection =
+                    (result == GHOSTTY_SUCCESS).then_some((selection.start_x, selection.end_x));
+                if self.frame.selections[y as usize] != next_selection {
+                    Arc::make_mut(&mut self.frame.selections)[y as usize] = next_selection;
+                }
+                check(ghostty_render_state_row_get(
+                    self.iterator,
+                    GHOSTTY_RENDER_STATE_ROW_DATA_CELLS,
+                    out(&mut self.cells),
+                ))?;
+                let mut row = Vec::with_capacity(self.frame.columns as usize);
+                let mut x = 0;
+                while ghostty_render_state_row_cells_next(self.cells) {
+                    let mut raw = GhosttyCell::default();
+                    check(ghostty_render_state_row_cells_get(
+                        self.cells,
+                        GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_RAW,
+                        out(&mut raw),
+                    ))?;
+                    let mut wide = GHOSTTY_CELL_WIDE_NARROW;
+                    check(ghostty_cell_get(
+                        raw,
+                        GHOSTTY_CELL_DATA_WIDE,
+                        out(&mut wide),
+                    ))?;
+                    let width = match wide {
+                        GHOSTTY_CELL_WIDE_WIDE => 2,
+                        GHOSTTY_CELL_WIDE_SPACER_TAIL | GHOSTTY_CELL_WIDE_SPACER_HEAD => 0,
+                        _ => 1,
+                    };
+                    let mut style = GhosttyStyle::default();
+                    check(ghostty_render_state_row_cells_get(
+                        self.cells,
+                        GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_STYLE,
+                        out(&mut style),
+                    ))?;
+                    let mut buf = GhosttyBuffer {
+                        ptr: glyph_bytes.as_mut_ptr(),
+                        cap: glyph_bytes.len(),
+                        len: 0,
+                    };
+                    let result = ghostty_render_state_row_cells_get(
+                        self.cells,
+                        GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_GRAPHEMES_UTF8,
+                        out(&mut buf),
+                    );
+                    if result == GHOSTTY_OUT_OF_SPACE {
+                        glyph_bytes.resize(buf.len, 0);
+                        buf.ptr = glyph_bytes.as_mut_ptr();
+                        buf.cap = glyph_bytes.len();
+                        check(ghostty_render_state_row_cells_get(
+                            self.cells,
+                            GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_GRAPHEMES_UTF8,
+                            out(&mut buf),
+                        ))?;
+                    } else {
+                        check(result)?;
+                    }
+                    let mut fg = resolve_color(style.fg_color, &colors, colors.foreground);
+                    let mut bg = resolve_color(style.bg_color, &colors, colors.background);
+                    if style.flags & 16 != 0 {
+                        std::mem::swap(&mut fg, &mut bg);
+                    }
+                    let mut underline_color = resolve_color(style.underline_color, &colors, fg);
+                    if style.flags & 4 != 0 {
+                        fg = dim_color(fg, bg);
+                        underline_color = dim_color(underline_color, bg);
+                    }
+                    if style.flags & 32 != 0 {
+                        fg = bg;
+                        underline_color = bg;
+                    }
+                    row.push(Cell {
+                        text: smol_str::SmolStr::new(String::from_utf8_lossy(&glyph_bytes[..buf.len])),
+                        column: x,
+                        width,
+                        foreground: fg.into(),
+                        background: bg.into(),
+                        bold: style.flags & 1 != 0,
+                        italic: style.flags & 2 != 0,
+                        underline: style.flags & 0x700 != 0,
+                        underline_color: underline_color.into(),
+                        underline_curly: (style.flags >> 8) & 7
+                            == GHOSTTY_SGR_UNDERLINE_CURLY as u16,
+                        strikethrough: style.flags & 64 != 0,
+                        overline: style.flags & 128 != 0,
+                        hidden: style.flags & 32 != 0,
+                    });
+                    x += 1;
+                }
+                if self
+                    .frame
+                    .rows
+                    .get(y as usize)
+                    .is_some_and(|previous| previous.as_ref() != &row)
+                {
+                    Arc::make_mut(&mut self.frame.rows)[y as usize] = Arc::new(row);
+                }
+            }
+            // The owned snapshot has consumed every dirty row. Clearing only
+            // the global flag leaves stale per-row flags for the next update.
+            check(ghostty_render_state_clean(self.render))?;
+        }
+        self.frame.revision = self.revision;
+        Ok(self.frame.clone())
+    }
+
+    pub fn render_delay(&self) -> Option<Duration> {
+        self.callbacks.hold_started.and_then(|started| {
+            RENDER_HOLD_LIMIT
+                .checked_sub(started.elapsed())
+                .filter(|delay| !delay.is_zero())
+        })
+    }
+}
+
+fn resolve_color(
+    color: GhosttyStyleColor,
+    colors: &GhosttyRenderStateColors,
+    fallback: GhosttyColorRgb,
+) -> GhosttyColorRgb {
+    // SAFETY: the tag selects the initialized union member per the C API.
+    unsafe {
+        match color.tag as GhosttyStyleColorTag {
+            GHOSTTY_STYLE_COLOR_RGB => color.value.rgb,
+            GHOSTTY_STYLE_COLOR_PALETTE => colors.palette[color.value.palette as usize],
+            _ => fallback,
+        }
+    }
+}
+fn dim_color(foreground: GhosttyColorRgb, background: GhosttyColorRgb) -> GhosttyColorRgb {
+    let blend = |a: u8, b: u8| ((u16::from(a) + u16::from(b)) / 2) as u8;
+    GhosttyColorRgb {
+        r: blend(foreground.r, background.r),
+        g: blend(foreground.g, background.g),
+        b: blend(foreground.b, background.b),
+    }
+}
+impl Drop for Terminal {
+    fn drop(&mut self) {
+        self.selection.reset(self.terminal);
+        // Free functions accept null, including when construction failed halfway.
+        unsafe {
+            ghostty_render_state_row_cells_free(self.cells);
+            ghostty_render_state_row_iterator_free(self.iterator);
+            ghostty_render_state_free(self.render);
+            ghostty_terminal_free(self.terminal);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[cfg(unix)]
+    #[test]
+    fn shell_directory_report_tracks_changes_and_reset() -> Result<()> {
+        let mut terminal = Terminal::new(20, 3)?;
+        assert!(terminal.current_directory()?.is_none());
+        terminal.write(b"\x1b]7;file://localhost/tmp/hello%20world\x07");
+        assert_eq!(
+            terminal.current_directory()?,
+            Some(std::path::PathBuf::from("/tmp/hello world"))
+        );
+        terminal.write(b"\x1b]7;file://another-remote-host/tmp\x07");
+        assert!(terminal.current_directory()?.is_none());
+        terminal.write(b"\x1b]7;file:///tmp\x07\x1bc");
+        assert!(terminal.current_directory()?.is_none());
+        Ok(())
+    }
+    #[test]
+    fn synchronized_output_holds_then_publishes_with_bounded_recovery() -> Result<()> {
+        let mut terminal = Terminal::new(20, 3)?;
+        terminal.write(b"before");
+        let before = terminal.frame()?;
+        terminal.write(b"\x1b[?2026h\r\x1b[2Kafter");
+        assert!(terminal.render_delay().is_some());
+        let held = terminal.frame()?;
+        assert!(Arc::ptr_eq(&before.rows[0], &held.rows[0]));
+        terminal.write(b"\x1b[?2026l");
+        assert!(terminal.render_delay().is_none());
+        assert!(terminal.frame()?.text().starts_with("after"));
+
+        terminal.write(b"\x1b[?2026h\r\x1b[2Ktimeout");
+        let started = terminal.callbacks.hold_started;
+        terminal.write(b"\x1b[?2026h");
+        assert_eq!(terminal.callbacks.hold_started, started);
+        // Advance the stored deadline instead of sleeping in a unit test.
+        terminal.callbacks.hold_started = Some(Instant::now() - RENDER_HOLD_LIMIT);
+        assert!(terminal.frame()?.text().starts_with("timeout"));
+        assert!(terminal.callbacks.hold_started.is_none());
+        // Timeout clears engine mode too, permitting a fresh hold callback.
+        terminal.write(b"\x1b[?2026h");
+        assert!(terminal.render_delay().is_some());
+        terminal.resize(21, 3)?;
+        assert!(terminal.render_delay().is_none());
+        terminal.write(b"\x1b[?2026h\x1bc");
+        assert!(terminal.render_delay().is_none());
+        Ok(())
+    }
+    #[test]
+    fn exposes_text_decorations_and_cursor_styles() -> Result<()> {
+        let mut terminal = Terminal::new(20, 3)?;
+        terminal.write(b"\x1b[2mA\x1b[0;9;53mB\x1b[0;4:3;58:2::1:2:3mC\x1b[0;8mD\x1b[0m");
+        let frame = terminal.frame()?;
+        assert_eq!(frame.rows[0][0].foreground, Color(119, 121, 128));
+        assert!(frame.rows[0][1].strikethrough && frame.rows[0][1].overline);
+        assert!(frame.rows[0][2].underline && frame.rows[0][2].underline_curly);
+        assert_eq!(frame.rows[0][2].underline_color, Color(1, 2, 3));
+        assert!(frame.rows[0][3].hidden);
+        for (sequence, shape) in [
+            (b"\x1b[2 q".as_slice(), CursorShape::Block),
+            (b"\x1b[4 q".as_slice(), CursorShape::Underline),
+            (b"\x1b[6 q".as_slice(), CursorShape::Bar),
+        ] {
+            terminal.write(sequence);
+            assert_eq!(terminal.frame()?.cursor_shape, shape);
+        }
+        terminal.write(b"\x1b]12;#123456\x07");
+        assert_eq!(terminal.frame()?.cursor_color, Color(0x12, 0x34, 0x56));
+        terminal.write(b"\x1b[?25l");
+        assert_eq!(terminal.frame()?.cursor, None);
+        Ok(())
+    }
+    #[test]
+    fn prompt_navigation_uses_semantic_markers_and_ignores_unmarked_output() -> Result<()> {
+        let mut terminal = Terminal::new(30, 3)?;
+        for command in 0..4 {
+            terminal.write(format!("\x1b]133;A\x07prompt-{command}> \x1b]133;B\x07run\r\n\x1b]133;C\x07output-{command}\r\nmore\r\n\x1b]133;D;0\x07").as_bytes());
+        }
+        terminal.scroll(Scroll::Top)?;
+        assert!(terminal.frame()?.text().starts_with("prompt-0>"));
+        terminal.scroll(Scroll::Prompts(1))?;
+        assert!(terminal.frame()?.text().starts_with("prompt-1>"));
+        terminal.scroll(Scroll::Prompts(1))?;
+        assert!(terminal.frame()?.text().starts_with("prompt-2>"));
+        terminal.scroll(Scroll::Prompts(-1))?;
+        assert!(terminal.frame()?.text().starts_with("prompt-1>"));
+        terminal.scroll(Scroll::Prompts(-100))?;
+        assert!(terminal.frame()?.text().starts_with("prompt-0>"));
+        terminal.write(b"long output\r\nline\r\nline\r\nline\r\n");
+        terminal.scroll(Scroll::LastPrompt)?;
+        assert!(terminal.frame()?.text().starts_with("prompt-3>"));
+        terminal.scroll(Scroll::Top)?;
+        terminal.scroll(Scroll::LastPrompt)?;
+        assert!(terminal.frame()?.text().starts_with("prompt-3>"));
+        terminal.write(b"\x1b]133;A\x07latest> \x1b]133;B\x07");
+        terminal.scroll(Scroll::LastPrompt)?;
+        assert_eq!(terminal.frame()?.scrollback_offset, 0);
+        assert!(terminal.frame()?.text().contains("latest>"));
+        let mut plain = Terminal::new(20, 3)?;
+        plain.write(b"one\r\ntwo\r\nthree\r\nfour\r\nfive");
+        let before = plain.frame()?.scrollback_offset;
+        plain.scroll(Scroll::Prompts(-1))?;
+        assert_eq!(plain.frame()?.scrollback_offset, before);
+        plain.scroll(Scroll::Top)?;
+        plain.scroll(Scroll::LastPrompt)?;
+        assert_eq!(plain.frame()?.scrollback_offset, 0);
+        Ok(())
+    }
+    #[test]
+    fn incremental_compression_preserves_history_and_future_output() -> Result<()> {
+        let mut terminal = Terminal::new(80, 24)?;
+        for line in 0..10000 {
+            terminal.write(format!("line-{line} repeated text 世界\r\n").as_bytes());
+        }
+        terminal.select_all()?;
+        let before = terminal.selected_text()?;
+        terminal.clear_selection()?;
+        let mut finished = false;
+        for _ in 0..10000 {
+            if terminal.compress_scrollback_step()? != Compression::Pending {
+                finished = true;
+                break;
+            }
+        }
+        assert!(finished);
+        terminal.select_all()?;
+        assert_eq!(terminal.selected_text()?, before);
+        terminal.write(b"after-compression");
+        terminal.scroll(Scroll::Bottom)?;
+        assert!(terminal.frame()?.text().contains("after-compression"));
+        Ok(())
+    }
+    #[test]
+    fn memory_usage_reports_primary_and_lazy_alternate_storage() -> Result<()> {
+        let mut terminal = Terminal::new(80, 24)?;
+        terminal.write(b"primary");
+        let primary = terminal.memory_usage()?;
+        assert!(primary.primary_resident_bytes > 0);
+        assert_eq!(primary.alternate_resident_bytes, 0);
+        assert!(primary.virtual_bytes >= primary.primary_resident_bytes);
+        assert_eq!(primary.image_bytes, 0);
+        terminal.write(b"\x1b[?1049halternate");
+        let alternate = terminal.memory_usage()?;
+        assert!(alternate.alternate_resident_bytes > 0);
+        assert!(
+            alternate.virtual_bytes
+                >= alternate.primary_resident_bytes + alternate.alternate_resident_bytes
+        );
+        assert!(terminal.frame()?.text().contains("alternate"));
+        terminal.write(b"\x1b[?1049l");
+        assert!(terminal.frame()?.text().contains("primary"));
+        Ok(())
+    }
+    #[test]
+    fn clear_scrollback_preserves_screen_parser_and_future_history() -> Result<()> {
+        let mut terminal = Terminal::new(20, 3)?;
+        for line in 0..10 {
+            terminal.write(format!("line-{line}\r\n").as_bytes());
+        }
+        let before = terminal.frame()?;
+        assert!(before.scrollback_lines > 0);
+        let text = before.text();
+        terminal.select_all()?;
+        terminal.write(b"\x1b[3");
+        terminal.clear_scrollback()?;
+        let cleared = terminal.frame()?;
+        assert_eq!(cleared.scrollback_lines, 0);
+        assert_eq!(cleared.text(), text);
+        assert!(terminal.selected_text()?.is_none());
+        terminal.write(b"1mred\r\nnew\r\nmore\r\n");
+        assert!(terminal.frame()?.scrollback_lines > 0);
+        terminal.scroll(Scroll::Top)?;
+        let history = terminal.frame()?.text();
+        assert!(history.contains("red"));
+        assert!(
+            !history.contains("1mred"),
+            "clear must preserve the VT parser state"
+        );
+        Ok(())
+    }
+    #[test]
+    fn scrollback_limit_can_disable_and_resume_history() -> Result<()> {
+        let mut terminal = Terminal::new(20, 3)?;
+        for _ in 0..20 {
+            terminal.write(b"history\r\n");
+        }
+        assert!(terminal.frame()?.scrollback_lines > 0);
+        let screen = terminal.frame()?.text();
+        terminal.set_scrollback_limit(0)?;
+        assert_eq!(terminal.frame()?.text(), screen);
+        assert_eq!(terminal.frame()?.scrollback_lines, 0);
+        for _ in 0..20 {
+            terminal.write(b"new output\r\n");
+        }
+        assert_eq!(terminal.frame()?.scrollback_lines, 0);
+        terminal.set_scrollback_limit(1024 * 1024)?;
+        for _ in 0..20 {
+            terminal.write(b"retained\r\n");
+        }
+        assert!(terminal.frame()?.scrollback_lines > 0);
+        Ok(())
+    }
+    #[test]
+    fn scrollback_survives_output_and_alternate_screen() -> Result<()> {
+        let mut terminal = Terminal::new(20, 3)?;
+        for row in 0..10 {
+            terminal.write(format!("line-{row}\r\n").as_bytes());
+        }
+        let live = terminal.frame()?;
+        assert!(live.text().contains("line-9"));
+        assert_eq!(live.scrollback_offset, 0);
+        terminal.scroll(Scroll::Top)?;
+        let history = terminal.frame()?;
+        assert!(history.text().starts_with("line-0"));
+        assert!(history.scrollback_offset > 0);
+        terminal.write(b"line-10\r\n");
+        assert!(terminal.frame()?.text().starts_with("line-0"));
+        terminal.scroll(Scroll::Lines(2))?;
+        assert!(terminal.frame()?.text().starts_with("line-2"));
+        terminal.write(b"\x1b[?1049hfull-screen");
+        terminal.scroll(Scroll::Top)?;
+        let alternate = terminal.frame()?;
+        assert!(alternate.text().contains("full-screen"));
+        assert_eq!(alternate.scrollback_lines, 0);
+        terminal.write(b"\x1b[?1049l");
+        terminal.scroll(Scroll::Bottom)?;
+        let restored = terminal.frame()?;
+        assert!(restored.text().contains("line-10"));
+        assert_eq!(restored.scrollback_offset, 0);
+        Ok(())
+    }
+    #[test]
+    fn directory_revisions_are_lazy_and_reset() -> Result<()> {
+        let mut terminal = Terminal::new(40, 4)?;
+        assert!(terminal.directory_since(0)?.is_none());
+        terminal.write(if cfg!(windows) {
+            b"\x1b]7;file:///C:/rmux\x07"
+        } else {
+            b"\x1b]7;file:///tmp/rmux\x07"
+        });
+        let (revision, path) = terminal.directory_since(0)?.unwrap();
+        assert!(path.is_some());
+        assert!(terminal.directory_since(revision)?.is_none());
+        terminal.write(if cfg!(windows) { b"\x1b]7;file:///C:/rmux\x07" } else { b"\x1b]7;file:///tmp/rmux\x07" });
+        let (revision, repeated_path) = terminal.directory_since(revision)?.expect("repeated prompt directory report must remain observable");
+        assert_eq!(path, repeated_path);
+        terminal.write(b"ordinary output");
+        assert!(terminal.directory_since(revision)?.is_none());
+        terminal.write(b"\x1bc");
+        assert_eq!(terminal.directory_since(revision)?.unwrap().1, None);
+        Ok(())
+    }
+    #[test]
+    fn program_status_after_exit_keeps_results_without_resurrecting_work() -> Result<()> {
+        let mut terminal = Terminal::new(20, 4)?;
+        terminal.write(b"\x1b]7501;state=working:id=build\x07");
+        terminal.finish_program_status();
+        terminal.write(b"\x1b]7501;state=working:id=late\x07\x1b]7501;state=blocked:id=wait\x07\x1b]7501;state=done:id=build\x07");
+        let records: Vec<_> = terminal.program_status().iter().collect();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].id, "build");
+        assert_eq!(records[0].state, program_status::State::Done);
+        terminal.finish_program_status();
+        assert_eq!(terminal.program_status().iter().count(), 1);
+        terminal.acknowledge_program_status();
+        assert_eq!(terminal.program_status().iter().count(), 0);
+        Ok(())
+    }
+    #[test]
+    fn program_status_protocol_decodes_clears_and_tracks_prompt_lifecycle() -> Result<()> {
+        let mut terminal = Terminal::new(20, 4)?;
+        terminal.write(b"\x1b]7501;state=blocked:kind=permission:app=terraform:msg=QXBwbHk/\x07");
+        let report = terminal.program_status().iter().next().unwrap();
+        assert_eq!(report.state, program_status::State::Blocked);
+        assert_eq!(report.kind, program_status::Kind::Permission);
+        assert_eq!(report.message, "Apply?");
+        terminal.write(b"\x1b]7501;state=done:id=build/test\x1b\\");
+        assert_eq!(
+            terminal.program_status().effective_app("build/test"),
+            Some("terraform")
+        );
+        terminal.write(b"\x1b]133;A\x07");
+        assert_eq!(terminal.program_status().iter().count(), 1);
+        terminal.acknowledge_program_status();
+        assert_eq!(terminal.program_status().iter().count(), 0);
+        terminal.write(
+            b"\x1b]7501;state=working:id=build\x07\x1b]7501;state=working:id=build/test\x07",
+        );
+        terminal.write(b"\x1b]7501;state=clear:id=build\x07");
+        assert_eq!(terminal.program_status().iter().count(), 0);
+        terminal.write(b"\x1b]7501;state=working\x07\x1bc");
+        assert_eq!(terminal.program_status().iter().count(), 0);
+        terminal.write(b"\x1b]7501;?\x07");
+        assert!(!terminal.take_replies().is_empty());
+        Ok(())
+    }
+    #[test]
+    fn progress_reports_update_remove_and_reset_without_notifications() -> Result<()> {
+        let mut terminal = Terminal::new(20, 4)?;
+        for (code, state) in [
+            (1, ProgressState::Running),
+            (2, ProgressState::Error),
+            (4, ProgressState::Paused),
+        ] {
+            terminal.write(format!("\x1b]9;4;{code};42\x07").as_bytes());
+            assert_eq!(
+                terminal.progress(),
+                Some(Progress {
+                    state,
+                    percent: Some(42)
+                })
+            );
+        }
+        terminal.write(b"\x1b]9;4;3\x1b\\");
+        assert_eq!(
+            terminal.progress().unwrap().state,
+            ProgressState::Indeterminate
+        );
+        terminal.write(b"\x1b]9;4;0\x07");
+        assert_eq!(terminal.progress(), None);
+        terminal.write(b"\x1b]9;4;1;25\x07\x1bc");
+        assert_eq!(terminal.progress(), None);
+        assert!(terminal.notification_since(0).is_none());
+        assert_eq!(terminal.bell_revision(), 0);
+        Ok(())
+    }
+    #[test]
+    fn osc_notifications_are_bounded_revisioned_and_distinct_from_bells() -> Result<()> {
+        let mut terminal = Terminal::new(20, 4)?;
+        terminal.write(b"\x1b]9;build complete\x07");
+        let first = terminal.notification_since(0).expect("OSC 9 notification");
+        assert_eq!(first.body, "build complete");
+        assert!(first.title.is_empty());
+        assert_eq!(terminal.bell_revision(), 0);
+        assert!(terminal.notification_since(first.revision).is_none());
+        terminal.write(b"\x1b]777;notify;Build;tests passed\x1b\\");
+        let second = terminal
+            .notification_since(first.revision)
+            .expect("OSC 777 notification");
+        assert_eq!((&*second.title, &*second.body), ("Build", "tests passed"));
+        terminal.write(b"\x1b]9;4;1;50\x07");
+        assert!(terminal.notification_since(second.revision).is_none());
+        let mut large = b"\x1b]9;".to_vec();
+        large.extend(std::iter::repeat_n(b'x', 1500));
+        large.push(7);
+        terminal.write(&large);
+        let latest = terminal.notification_since(second.revision).unwrap();
+        assert_eq!(latest.body.len(), 1024);
+        assert_eq!(first.body, "build complete"); // Previous owned message stays valid.
+        Ok(())
+    }
+    #[test]
+    fn bell_revision_ignores_osc_terminators() -> Result<()> {
+        let mut terminal = Terminal::new(40, 4)?;
+        assert_eq!(terminal.bell_revision(), 0);
+        terminal.write(b"\x1b]2;title\x07");
+        assert_eq!(terminal.bell_revision(), 0);
+        terminal.write(b"hello\x07\x07");
+        assert_eq!(terminal.bell_revision(), 2);
+        terminal.write(b"\x1bc");
+        terminal.write(b"\x07");
+        assert_eq!(terminal.bell_revision(), 3);
+        Ok(())
+    }
+    #[test]
+    fn title_changes_are_coalesced_bounded_and_reset() -> Result<()> {
+        let mut terminal = Terminal::new(40, 4)?;
+        assert!(terminal.title_since(0)?.is_none());
+        terminal.write(b"\x1b]2;project");
+        assert!(terminal.title_since(0)?.is_none());
+        terminal.write(b" shell\x07");
+        let (revision, title) = terminal.title_since(0)?.unwrap();
+        assert_eq!(title, "project shell");
+        terminal.write(b"ordinary output");
+        assert!(terminal.title_since(revision)?.is_none());
+        terminal.write(format!("\x1b]2;{}\x07", "界".repeat(400)).as_bytes());
+        let (revision, title) = terminal.title_since(revision)?.unwrap();
+        assert_eq!(title, "界".repeat(128));
+        terminal.write(b"\x1bc");
+        assert_eq!(terminal.title_since(revision)?.unwrap().1, "");
+        Ok(())
+    }
+    #[test]
+    fn parses_styles_unicode_cursor_and_terminal_reply() -> Result<()> {
+        let mut terminal = Terminal::new(40, 4)?;
+        terminal.write("\x1b[31mred\x1b[0m 界e\u{301}\r\nnext\x1b[6n".as_bytes());
+        let frame = terminal.frame()?;
+        assert!(
+            frame.text().starts_with("red 界e\u{301}\nnext"),
+            "{}",
+            frame.text()
+        );
+        assert_ne!(frame.rows[0][0].foreground, frame.rows[1][0].foreground);
+        assert_eq!(frame.rows[0][4].width, 2);
+        assert_eq!(frame.cursor, Some((4, 1)));
+        assert_eq!(terminal.take_replies(), b"\x1b[2;5R");
+        let second = terminal.frame()?;
+        assert!(Arc::ptr_eq(&frame.rows[0], &second.rows[0]));
+        assert!(Arc::ptr_eq(&frame.rows, &second.rows));
+        assert!(Arc::ptr_eq(&frame.selections, &second.selections));
+        terminal.write(b" changed");
+        let changed = terminal.frame()?;
+        assert!(!Arc::ptr_eq(&second.rows, &changed.rows));
+        // Ghostty can mark unchanged rows dirty; preserve their identities so
+        // the renderer does not reshape identical cells.
+        assert!(Arc::ptr_eq(&second.rows[0], &changed.rows[0]));
+        assert!(!second.text().contains("changed"));
+        assert!(changed.text().contains("changed"));
+        terminal.resize(20, 6)?;
+        assert_eq!(terminal.frame()?.rows.len(), 6);
+        assert_eq!(second.rows.len(), 4);
+        Ok(())
+    }
+
+    #[test]
+    fn bounded_viewport_text_preserves_utf8_spacing_and_truncation() -> Result<()> {
+        let mut terminal = Terminal::new(12, 3)?;
+        terminal.write(" A界e\u{301}  \r\nnext  ".as_bytes());
+        let frame = terminal.frame()?;
+        let expected = " A界e\u{301}\nnext\n";
+        assert_eq!(frame.text(), expected);
+        for limit in 0..=expected.len() + 1 {
+            let (text, truncated) = frame.text_with_limit(limit);
+            assert!(text.len() <= limit);
+            assert!(expected.starts_with(&text));
+            let mut boundary = expected.len().min(limit);
+            while !expected.is_char_boundary(boundary) { boundary -= 1; }
+            assert_eq!(text, expected[..boundary]);
+            assert_eq!(truncated, limit < expected.len());
+        }
+        Ok(())
+    }
+    #[test]
+    fn completed_snapshot_consumes_row_dirtiness() -> Result<()> {
+        let mut terminal = Terminal::new(40, 4)?;
+        terminal.write(b"first\r\nsecond");
+        let previous = terminal.frame()?;
+        terminal.write(b"!");
+        // Inspect the next update before snapshot extraction: only the edited
+        // row should remain dirty, not all rows from the initial full frame.
+        unsafe {
+            check(ghostty_render_state_update(terminal.render, terminal.terminal))?;
+            check(ghostty_render_state_get(
+                terminal.render,
+                GHOSTTY_RENDER_STATE_DATA_ROW_ITERATOR,
+                out(&mut terminal.iterator),
+            ))?;
+            let mut rows = Vec::new();
+            let mut y = 0;
+            while ghostty_render_state_row_iterator_next_dirty(terminal.iterator, &mut y) {
+                rows.push(y);
+            }
+            assert_eq!(rows, vec![1]);
+        }
+        let next = terminal.frame()?;
+        assert!(next.text().starts_with("first\nsecond!"));
+        assert!(previous.text().starts_with("first\nsecond"));
+        assert!(Arc::ptr_eq(&previous.rows[0], &next.rows[0]));
+        Ok(())
+    }
+    #[test]
+    fn default_colors_reload_without_replacing_application_overrides() -> Result<()> {
+        let mut terminal = Terminal::new(20, 3)?;
+        terminal.write(b"text");
+        let original = terminal.frame()?;
+        terminal.set_default_colors([Some(Color(1, 2, 3)), Some(Color(4, 5, 6)), Some(Color(7, 8, 9))])?;
+        let changed = terminal.frame()?;
+        assert_eq!(changed.background, Color(4, 5, 6));
+        assert_eq!(changed.rows[0][0].foreground, Color(1, 2, 3));
+        assert_eq!(changed.cursor_color, Color(7, 8, 9));
+        assert_eq!(original.background, Color(18, 20, 26));
+        terminal.write(b"\x1b]11;#112233\x07");
+        terminal.set_default_colors([None, Some(Color(10, 11, 12)), None])?;
+        assert_eq!(terminal.frame()?.background, Color(17, 34, 51));
+        terminal.write(b"\x1b]111\x07");
+        assert_eq!(terminal.frame()?.background, Color(10, 11, 12));
+        terminal.set_default_colors([None; 3])?;
+        let reset = terminal.frame()?;
+        assert_eq!(reset.background, original.background);
+        assert_eq!(reset.rows[0][0].foreground, original.rows[0][0].foreground);
+        assert_eq!(reset.cursor_color, original.cursor_color);
+        Ok(())
+    }
+    #[test]
+    fn ansi_palette_updates_existing_cells_and_preserves_extended_colors() -> Result<()> {
+        let mut terminal = Terminal::new(20, 3)?;
+        terminal.write(b"\x1b[31mR\x1b[91mB\x1b[38;5;200mE\x1b[38;2;9;8;7mT");
+        let original = terminal.frame()?;
+        let mut colors = [Color(20, 30, 40); 16];
+        colors[1] = Color(100, 110, 120);
+        terminal.set_ansi_palette(Some(colors))?;
+        let changed = terminal.frame()?;
+        assert_eq!(changed.rows[0][0].foreground, colors[1]);
+        assert_eq!(changed.rows[0][1].foreground, colors[9]);
+        assert_eq!(changed.rows[0][2].foreground, original.rows[0][2].foreground);
+        assert_eq!(changed.rows[0][3].foreground, Color(9, 8, 7));
+        terminal.write(b"\x1b]4;1;#112233\x07");
+        colors[1] = Color(200, 210, 220);
+        terminal.set_ansi_palette(Some(colors))?;
+        assert_eq!(terminal.frame()?.rows[0][0].foreground, Color(17, 34, 51));
+        terminal.write(b"\x1b]104;1\x07");
+        assert_eq!(terminal.frame()?.rows[0][0].foreground, colors[1]);
+        terminal.set_ansi_palette(None)?;
+        assert_eq!(terminal.frame()?.rows[0][0].foreground, original.rows[0][0].foreground);
+        Ok(())
+    }
+    #[test]
+    fn cell_text_keeps_short_graphemes_inline_and_long_graphemes_intact() -> Result<()> {
+        let mut terminal = Terminal::new(40, 3)?;
+        terminal.write("A界e\u{301}".as_bytes());
+        let first = terminal.frame()?;
+        assert!(first.rows[0].iter().all(|cell| !cell.text.is_heap_allocated()));
+        assert!(first.text().starts_with("A界e\u{301}"));
+        let long = format!("e{}", "\u{301}".repeat(20));
+        terminal.write(format!("\r\n{long}").as_bytes());
+        let next = terminal.frame()?;
+        assert_eq!(next.rows[1][0].text.as_str(), long);
+        assert!(next.rows[1][0].text.is_heap_allocated());
+        let storage = next.storage();
+        assert_eq!(storage.heap_cells, 1);
+        assert_eq!(storage.inline_cells + storage.heap_cells, 40 * 3);
+        assert_eq!(storage.heap_text_payload_bytes, long.len());
+        assert!(storage.cell_capacity_bytes >= 40 * 3 * size_of::<Cell>());
+        assert!(!first.text().contains(&long));
+        Ok(())
+    }
+    #[test]
+    fn identical_rewrites_reuse_rows_but_style_changes_replace_them() -> Result<()> {
+        let mut terminal = Terminal::new(20, 3)?;
+        terminal.write(b"hello");
+        let first = terminal.frame()?;
+        terminal.write(b"\rhello");
+        let identical = terminal.frame()?;
+        assert!(Arc::ptr_eq(&first.rows, &identical.rows));
+        terminal.select_all()?;
+        let selected = terminal.frame()?;
+        assert!(Arc::ptr_eq(&identical.rows, &selected.rows));
+        assert!(!Arc::ptr_eq(&identical.selections, &selected.selections));
+        terminal.write(b"\r\x1b[4;31mhello\x1b[0m");
+        let styled = terminal.frame()?;
+        assert!(!Arc::ptr_eq(&selected.rows[0], &styled.rows[0]));
+        assert!(styled.rows[0][0].underline);
+        assert!(!first.rows[0][0].underline);
+        Ok(())
+    }
+}

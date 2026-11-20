@@ -1,0 +1,53 @@
+# PTY output-pressure baseline
+
+Run November 19, 2026 on Apple M4 Max / 48 GiB, arm64 macOS 27.2.1, Rust 1.99.1 release profile and libghostty-vt 1.0.1. Reproduce with `mise run bench-pty`. Executable SHA-256: `1fafb73812b10b41d88ab05ed6e14f13375a237d6b968c8ce5ae20561e1081e7`.
+
+The harness starts real PTY sessions using child modes of the same executable, avoiding user shell configuration. One child reads requests and produces distinct response markers. Every other child continuously writes styled Unicode output. Each terminal has 160×48 cells and the normal 4 MiB scrollback budget. After readiness and 200 ms warm-up, the harness sends 128 requests, separated by 5 ms. For each response probe it extracts snapshots from every busy pane before inspecting the responder snapshot. A 100 µs sleep separates unsuccessful probes; a two-second deadline fails missing responses.
+
+The response marker differs from the input, so local PTY echo cannot count as a response. All flood panes were checked for positive parsed-byte progress during the measurement. A relaxed atomic counter records bytes actually fed into Ghostty after PTY reads, rather than bytes merely offered by the producer.
+
+| Total panes | Flooding panes | Aggregate parsed output | Input call p99 | Response snapshot p50 | Response snapshot p95 | Response snapshot p99 | All-pane snapshot batch p99 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 0 | — | 0.052 ms | 0.994 ms | 2.172 ms | 3.826 ms | 1.666 ms |
+| 4 | 3 | 254.9 MiB/s | 0.006 ms | 0.584 ms | 0.644 ms | 0.928 ms | 0.852 ms |
+| 16 | 15 | 113.6 MiB/s | 0.024 ms | 2.143 ms | 2.369 ms | 2.723 ms | 2.688 ms |
+
+[Raw JSONL](pty-m4-max-2026-11-19.jsonl). Percentiles use nearest-rank selection. All 384 requests received the expected response. No benchmark child processes were found after completion.
+
+These are one-run observations, not performance acceptance results. The one-pane case was slower/noisier than the four-pane case; this does not establish that adding panes improves latency. Machine activity, scheduling and run order were not controlled, and run-to-run variance is not established.
+
+“Input call” starts at `Session::input` entry and includes queue admission and return-to-live viewport handling. It excludes native key dispatch, key encoding and writer drain delay. “Response snapshot” ends when the expected marker is found in an owned engine snapshot, and includes PTY round trip, parsing, busy-pane snapshot contention and harness polling. Neither metric measures input-to-pixel latency. The GUI, glyph shaping, row cache, rendering and presentation are absent; the earlier rendering-cache change is not benchmarked by this harness. Aggregate output throughput is also affected by PTY scheduling and snapshot work, so it is not comparable directly with the parser-only benchmark.
+
+Next relevant measurements are controlled GUI redraw/presentation instrumentation and responsiveness while interacting with the actual app under output load. Linux and Windows runs remain pending.
+
+## November 20 refresh
+
+Current release engine on the same verified M4 Max / 48 GiB machine. Executable
+SHA-256: `ff244f01f7872a0607ec37d5866ea62724cd68d8d357807e8f5246ac016433d8`.
+Same harness and workload; one 1/4/8/16-pane sequence followed by two extra
+16-pane runs to inspect the higher tail. [Raw results](pty-m4-max-2026-11-20.jsonl)
+are in execution order. All 768 requests completed; every flooding producer made
+progress, and no benchmark echo/flood children remained after completion.
+
+| Panes | Input call p99 | Response snapshot p50 | Response snapshot p95 | Response snapshot p99 | Snapshot batch p99 |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 0.013 ms | 0.949 ms | 0.981 ms | 1.138 ms | 0.747 ms |
+| 4 | 0.007 ms | 0.630 ms | 0.671 ms | 0.682 ms | 0.663 ms |
+| 8 | 0.006 ms | 1.259 ms | 1.317 ms | 1.331 ms | 1.316 ms |
+| 16, run 1 | 0.019 ms | 2.444 ms | 3.924 ms | 5.662 ms | 5.633 ms |
+| 16, run 2 | 0.013 ms | 2.445 ms | 3.939 ms | 4.249 ms | 4.222 ms |
+| 16, run 3 | 0.017 ms | 2.440 ms | 3.917 ms | 4.865 ms | 4.840 ms |
+
+Sixteen-pane p99 ranged 4.249–5.662 ms across these short runs, higher than the
+November 19 single-run value. Scheduling/environment were not controlled enough
+to attribute that difference to a code regression. The close match between
+response and all-pane snapshot tails identifies snapshot collection as a useful
+area for investigation, not proof of a particular bottleneck. This benchmark
+still excludes GPUI and cannot validate input-to-pixel latency.
+
+Following source inspection, desktop prepaint now tries snapshot access without
+waiting and retains the last coherent frame on contention, scheduling a next-frame
+retry. Opt-in renderer metrics expose `snapshot_busy`. This desktop change is
+**not measured by the results above**; native output-pressure/presentation and
+resize behavior still require acceptance. Resize and other engine access paths
+can still block, so the app is not claimed to be lock-free or lag-free.

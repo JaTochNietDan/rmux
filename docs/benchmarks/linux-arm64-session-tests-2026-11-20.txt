@@ -1,0 +1,39 @@
+ARM64 Linux session runtime refresh — November 20, 2026
+
+Current rmux-desktop and rmux-cli cross-checks passed for aarch64-unknown-linux-gnu.
+Session tests ran in the existing local postgres:17 image:
+sha256:ff87138949ad9a46f32ff23bd6852b52ce024a13dffe9b4087be98292cdd3b4f
+Docker run used --pull never, --network none, read-only root and test-binary
+mount, and a writable temporary /tmp. The database entrypoint was bypassed.
+No tooling or packages were installed.
+
+Build: RMUX_LOCAL_NON_A53_TEST=1 mise run build-linux-arm64-tests
+Test binary SHA-256: 7fd1e1f961bedd8131e0a0b2ca035cef9106580c91d51abb32e57c3508ef06d5
+The test-only non-A53 linker exception is unchanged; not a portable release artifact.
+Filter: session::tests:: --test-threads=1
+
+
+running 16 tests
+test session::tests::automation_paste_is_nonblocking_bracketed_and_preserves_viewport ... ok
+test session::tests::close_detection_tracks_foreground_jobs_and_direct_commands ... ok
+test session::tests::closing_session_terminates_a_shell_that_ignores_hangup ... ok
+test session::tests::command_environment_is_literal_and_scoped_to_child ... ok
+test session::tests::configured_retention_applies_to_first_process_output ... ok
+test session::tests::direct_command_preserves_arguments_directory_and_terminal_environment ... ok
+test session::tests::dropping_sessions_releases_shell_and_terminal ... ok
+test session::tests::interactive_shell_accepts_input_after_resize ... ok
+test session::tests::invalid_explicit_directory_is_rejected_before_process_start ... ok
+test session::tests::large_bracketed_paste_arrives_before_following_input ... ok
+test session::tests::opportunistic_resize_leaves_busy_pty_unchanged_and_applies_latest_size ... ok
+test session::tests::opportunistic_snapshot_and_targeted_input_do_not_wait_for_parser_lock ... ok
+test session::tests::paste_permit_survives_queueing_and_recovers_from_rejection ... ok
+test session::tests::real_shell_output_reaches_ghostty ... ok
+test session::tests::reports_exit_and_rejects_further_input ... ok
+test session::tests::shell_override_preserves_literal_paths_and_rejects_empty_override ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 54 filtered out; finished in 1.16s
+
+
+This covers PTY/session runtime only. GPUI was cross-checked, not linked/run on
+Linux. Wayland/X11 rendering, native IME/focus, x86_64 runtime, Windows runtime
+and measured application latency remain unproven.

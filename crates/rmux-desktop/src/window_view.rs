@@ -1,0 +1,3128 @@
+use super::*;
+
+#[derive(Clone)]
+struct NotificationNavigation {
+    focus: FocusHandle,
+    origin: Option<FocusHandle>,
+    selected: Option<EntityId>,
+    scroll: ScrollHandle,
+}
+
+pub(super) fn normalized_workspace_name(text: &str) -> Option<String> {
+    let name: String = text.trim().chars().filter(|c| !c.is_control()).take(128).collect();
+    let name = name.trim().to_owned();
+    (!name.is_empty()).then_some(name)
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum MetadataField {
+    GroupName,
+    GroupColor,
+    GroupIcon,
+    Name,
+    Description,
+    Icon,
+    Color,
+}
+impl MetadataField {
+    fn label(self) -> &'static str {
+        match self {
+            Self::GroupName => "Group name",
+            Self::Name => "Workspace name",
+            Self::Description => "Workspace description",
+            Self::Icon | Self::GroupIcon => "Icon: one symbol or emoji; empty clears",
+            Self::Color | Self::GroupColor => "Color: #RRGGBB; empty clears",
+        }
+    }
+}
+fn parse_workspace_color(text: &str) -> Result<Option<u32>, &'static str> {
+    let text = text.trim();
+    if text.is_empty() {
+        return Ok(None);
+    }
+    let hex = text.strip_prefix('#').unwrap_or(text);
+    if hex.len() != 6 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err("Enter a six-digit color such as #7AA2F7, or leave it empty to clear.");
+    }
+    Ok(Some(u32::from_str_radix(hex, 16).unwrap()))
+}
+
+struct Entry {
+    workspace: Entity<Workspace>,
+    name: String,
+    description: String,
+    color: Option<u32>,
+    icon: Option<String>,
+    pinned: bool,
+    last_pane: Option<EntityId>,
+    _closed: Subscription,
+    _metadata: Subscription,
+}
+
+pub(super) struct WorkspaceWindow {
+    palette: Option<(Entity<command_palette::CommandPalette>, Option<FocusHandle>)>,
+    restore_job: Option<restore::Job>,
+    workspace_scroll: ScrollHandle,
+    notice: Option<String>,
+    memory_rows: Option<Vec<memory_view::Row>>,
+    memory_application: Option<process_metrics::Sample>,
+    memory_sort: memory_view::Sort,
+    memory_loading: bool,
+    memory_generation: u64,
+    process_sampler: Arc<std::sync::Mutex<process_metrics::Sampler>>,
+    rename: Option<(EntityId, Entity<text_field::TextField>, MetadataField)>,
+    entries: Vec<Entry>,
+    groups: workspace_groups::Groups<EntityId>,
+    sidebar_selection: Vec<EntityId>,
+    sidebar_selection_anchor: Option<EntityId>,
+    active: usize,
+    rendered_workspace: Option<WeakEntity<Workspace>>,
+    previous_workspace: Option<EntityId>,
+    close_prompt: Option<EntityId>,
+    window_close_prompt: bool,
+    close_handler_installed: bool,
+    focus_history: Vec<EntityId>,
+    notification_navigation: Option<NotificationNavigation>,
+    settings_state: Option<settings_view::State>,
+    command_launching: bool,
+    next_number: usize,
+    sidebar: bool,
+    sidebar_width: f32,
+    sidebar_drag: Option<(Pixels, f32)>,
+    benchmark: bool,
+}
+impl WorkspaceWindow {
+    pub(super) fn focus_memory_terminal(&mut self, workspace: EntityId, surface: EntityId, window: &mut Window, cx: &mut Context<Self>) {
+        if self.automation_available(cx).is_ok() { self.focus_terminal(workspace, surface, window, cx); }
+    }
+    fn refresh_memory(&mut self, cx: &mut Context<Self>) {
+        if self.memory_loading { return; }
+        let mut jobs = Vec::new();
+        'workspaces: for index in self.workspace_order(true) {
+            let entry = &self.entries[index];
+            for pane in &entry.workspace.read(cx).panes {
+                let pane = pane.read(cx);
+                for (tab, terminal) in pane.terminals.iter().enumerate() {
+                    if jobs.len() == 256 { break 'workspaces; }
+                    let view = terminal.read(cx);
+                    jobs.push((entry.workspace.entity_id(), terminal.entity_id(), format!("{} / {}", entry.name, pane.tab_title(tab, cx)), view.session.process_id(), view.session.memory_sample()));
+                }
+            }
+        }
+        self.memory_rows.get_or_insert_with(Vec::new);
+        self.memory_loading = true;
+        self.memory_generation = self.memory_generation.wrapping_add(1);
+        let generation = self.memory_generation;
+        let executor = cx.background_executor().clone();
+        let process_sampler = self.process_sampler.clone();
+        cx.spawn(async move |entity, cx| {
+            let rows = executor.spawn(async move {
+                let processes = process_sampler.lock().unwrap_or_else(|error| error.into_inner())
+                    .sample(std::iter::once(std::process::id()).chain(jobs.iter().filter_map(|(_, _, _, pid, _)| *pid)));
+                let application = processes.get(&std::process::id()).copied();
+                let rows: Vec<_> = jobs.into_iter().map(|(workspace_id, surface_id, name, pid, sample)| {
+                    let (usage, status) = match sample() {
+                        Ok(Some(usage)) => (Some(usage), "Sampled"),
+                        Ok(None) => (None, "Busy · refresh to retry"),
+                        Err(_) => (None, "Terminal closed or sample unavailable"),
+                    };
+                    let process = pid.and_then(|pid| processes.get(&pid).copied());
+                    memory_view::Row { workspace_id, surface_id, name, pid, process, usage, status }
+                }).collect();
+                (rows, application)
+            }).await;
+            let _ = entity.update(cx, |this, cx| {
+                if this.memory_generation != generation || this.memory_rows.is_none() { return; }
+                this.memory_rows = Some(rows.0);
+                this.memory_application = rows.1;
+                this.memory_loading = false;
+                cx.notify();
+            });
+        }).detach();
+        cx.notify();
+    }
+
+    fn group_selected(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let members: Vec<_> = self.workspace_order(true).into_iter().map(|index| self.entries[index].workspace.entity_id())
+            .filter(|id| self.sidebar_selection.contains(id)).map(|id| id.to_string()).collect();
+        if members.len() < 2 { cx.propagate(); return; }
+        let name = (1..).map(|number| format!("Group {number}"))
+            .find(|name| !self.groups.entries().iter().any(|group| &group.name == name)).unwrap();
+        let create = automation::GroupCreate { cwd: None, window_id: cx.entity_id().to_string(), name, workspace_ids: Some(members), external_id: None };
+        match self.automation_group_create(&create, window, cx) {
+            Ok(_) => { self.sidebar_selection.clear(); self.sidebar_selection_anchor = None; }
+            Err(error) => self.notice = Some(error.message.into()),
+        }
+        cx.notify();
+    }
+
+    fn extend_sidebar_selection(&mut self, target: EntityId, range: bool, cx: &mut Context<Self>) {
+        let active = self.entries.get(self.active).map(|entry| entry.workspace.entity_id());
+        let anchor = self.sidebar_selection_anchor.or(active).unwrap_or(target);
+        if range {
+            let visible: Vec<_> = self.sidebar_order().into_iter().map(|index| self.entries[index].workspace.entity_id()).collect();
+            let start = visible.iter().position(|id| *id == anchor);
+            let end = visible.iter().position(|id| *id == target);
+            if let (Some(start), Some(end)) = (start, end) {
+                self.sidebar_selection = visible[start.min(end)..=start.max(end)].to_vec();
+            } else { self.sidebar_selection = vec![target]; }
+        } else {
+            if self.sidebar_selection.is_empty() { self.sidebar_selection.extend(active); }
+            if self.sidebar_selection.contains(&target) { self.sidebar_selection.retain(|id| *id != target); }
+            else { self.sidebar_selection.push(target); }
+        }
+        self.sidebar_selection_anchor = Some(anchor);
+        cx.notify();
+    }
+
+    pub(super) fn automation_group_create(&mut self, create: &automation::GroupCreate, window: &mut Window, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
+        self.automation_available(cx)?;
+        if let Some(external) = &create.external_id {
+            if let Some(group) = self.groups.entries().iter().find(|group| group.external_id.as_ref() == Some(external)) {
+                let id = format!("workspace_group:{}", group.id);
+                return Ok(self.automation_snapshot(create.window_id.clone(), false, cx)["groups"].as_array().unwrap().iter().find(|group| group["id"] == id).unwrap().clone());
+            }
+        }
+        let generated = create.workspace_ids.is_none();
+        let mut members = Vec::new();
+        if let Some(ids) = &create.workspace_ids {
+            for id in ids {
+                members.push(self.entries.iter().find(|entry| entry.workspace.entity_id().to_string() == *id)
+                    .map(|entry| entry.workspace.entity_id()).ok_or(automation::Failure { code: -32004, message: "Workspace not found in window" })?);
+            }
+        } else if self.entries.len() >= 64 {
+            return Err(automation::Failure { code: -32005, message: "Window workspace limit reached" });
+        }
+        let selected = self.entries.get(self.active).map(|entry| entry.workspace.entity_id());
+        let slots: Vec<_> = members.iter().filter_map(|member| self.group_anchor_slot(*member)).collect();
+        if generated {
+            let previous = self.previous_workspace;
+            let next_number = self.next_number;
+            self.add_with_directory(1, false, None, create.cwd.clone(), window, cx);
+            let index = self.entries.len() - 1;
+            if self.entries[index].workspace.read(cx).panes.is_empty() {
+                // No shell or pane was created, so no focus changed. Discard
+                // only the empty entry; normal close would select/acknowledge a
+                // neighboring terminal and could expand a collapsed group.
+                self.entries.pop();
+                self.active = selected.and_then(|id| self.entries.iter().position(|entry| entry.workspace.entity_id() == id)).unwrap_or(0);
+                self.previous_workspace = previous;
+                self.next_number = next_number;
+                if let Some(entry) = self.entries.get(self.active) { window.set_window_title(&format!("{} — rmux", entry.name)); }
+                self.scroll_to_workspace(self.active);
+                cx.notify();
+                return Err(automation::Failure { code: -32005, message: "Could not start group anchor shell" });
+            }
+            members.push(self.entries[index].workspace.entity_id());
+        }
+        let id = match self.groups.create(create.name.clone(), members, generated) {
+            Ok(id) => id,
+            Err(_) => {
+                if generated { self.close_workspace(self.entries.len() - 1, window, cx); }
+                return Err(automation::Failure { code: -32005, message: "Could not create group" });
+            }
+        };
+        self.groups.get_mut(id).unwrap().external_id = create.external_id.clone();
+        // A source group may contribute several members; preserve its slot once.
+        let mut preserved = Vec::new();
+        for slot in slots {
+            if !preserved.contains(&slot.0) {
+                preserved.push(slot.0);
+                self.preserve_group_slot(Some(slot), selected);
+            }
+        }
+        self.sidebar = true;
+        self.scroll_to_workspace(self.active);
+        cx.notify();
+        let id = format!("workspace_group:{id}");
+        Ok(self.automation_snapshot(create.window_id.clone(), false, cx)["groups"].as_array().unwrap().iter().find(|group| group["id"] == id).unwrap().clone())
+    }
+
+    pub(super) fn automation_close_workspace(&mut self, target: EntityId, window: &mut Window, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
+        self.automation_available(cx)?;
+        let index = self.entries.iter().position(|entry| entry.workspace.entity_id() == target)
+            .ok_or(automation::Failure { code: -32004, message: "Workspace not found" })?;
+        let workspace = self.entries[index].workspace.read(cx);
+        let has_terminals = workspace.panes.iter().any(|pane| !pane.read(cx).terminals.is_empty());
+        if cx.global::<ClosePolicy>().confirms(has_terminals, || workspace.panes.iter().any(|pane| pane.read(cx).terminals.iter().any(|terminal| terminal.read(cx).has_active_work()))) {
+            return Err(automation::Failure { code: -32003, message: "Workspace requires close confirmation; close it in the UI" });
+        }
+        let closes_window = self.entries.len() == 1;
+        self.close_workspace(index, window, cx);
+        Ok(serde_json::json!({"workspace_id":target.to_string(),"closed":true,"window_closed":closes_window}))
+    }
+
+    pub(super) fn automation_create_workspace(&mut self, create: &automation::WorkspaceCreate, window: &mut Window, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
+        self.automation_available(cx)?;
+        if self.entries.len() >= 64 { return Err(automation::Failure { code: -32005, message: "Window workspace limit reached" }); }
+        let next_number = self.next_number;
+        self.add_configured(1, false, None, create.cwd.clone(), false, None, window, cx);
+        let index = self.entries.len() - 1;
+        if self.entries[index].workspace.read(cx).panes.is_empty() {
+            self.entries.pop();
+            self.next_number = next_number;
+            cx.notify();
+            return Err(automation::Failure { code: -32005, message: "Could not start workspace shell" });
+        }
+        if let Some(name) = &create.name { self.entries[index].name = name.clone(); }
+        if let Some(description) = &create.description { self.entries[index].description = description.clone(); }
+        let id = self.entries[index].workspace.entity_id().to_string();
+        if create.focus || create.activate { self.select(index, window, cx); }
+        if create.activate { window.activate_window(); }
+        cx.notify();
+        Ok(self.automation_snapshot(create.window_id.clone(), true, cx)["workspaces"].as_array().unwrap().iter().find(|row| row["id"] == id).unwrap().clone())
+    }
+
+    pub(super) fn automation_group_mutation(&mut self, change: &automation::GroupMutation, method: &str, window: &mut Window, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
+        self.automation_available(cx)?;
+        let id = change.group_id.strip_prefix("workspace_group:").and_then(|id| id.parse::<u64>().ok())
+            .ok_or(automation::Failure { code: -32602, message: "Invalid group ID" })?;
+        let group = self.groups.get_mut(id).ok_or(automation::Failure { code: -32004, message: "Group not found in window" })?;
+        if method == "workspace.group.new_workspace" {
+            let anchor = group.members[0];
+            if self.entries.len() >= 64 { return Err(automation::Failure { code: -32005, message: "Window workspace limit reached" }); }
+            let index = self.entries.iter().position(|entry| entry.workspace.entity_id() == anchor)
+                .ok_or(automation::Failure { code: -32004, message: "Group anchor not found" })?;
+            self.select(index, window, cx);
+            self.add_with_placement(1, true, change.placement, window, cx);
+            let index = self.active;
+            if self.entries[index].workspace.read(cx).panes.is_empty() {
+                self.close_workspace(index, window, cx);
+                return Err(automation::Failure { code: -32005, message: "Could not start group member shell" });
+            }
+            let workspace_id = self.entries[index].workspace.entity_id().to_string();
+            return Ok(serde_json::json!({"window_id":change.window_id,"group_id":change.group_id,"workspace_id":workspace_id}));
+        }
+        if method == "workspace.group.ungroup" {
+            if change.remove_generated_anchor == Some(true) {
+                let anchor = group.removable_generated_anchor().copied().ok_or(automation::Failure { code: -32005, message: "Cleanup requires a sole generated anchor" })?;
+                let index = self.entries.iter().position(|entry| entry.workspace.entity_id() == anchor)
+                    .ok_or(automation::Failure { code: -32004, message: "Group anchor not found" })?;
+                let workspace = self.entries[index].workspace.read(cx);
+                let has_terminals = workspace.panes.iter().any(|pane| !pane.read(cx).terminals.is_empty());
+                if cx.global::<ClosePolicy>().confirms(has_terminals, || workspace.panes.iter().any(|pane| pane.read(cx).terminals.iter().any(|terminal| terminal.read(cx).has_active_work()))) {
+                    return Err(automation::Failure { code: -32003, message: "Anchor cleanup requires confirmation; close it in the UI" });
+                }
+                self.close_workspace(index, window, cx);
+                return Ok(serde_json::json!({"window_id":change.window_id,"group_id":change.group_id,"ungrouped":true,"closed_workspace_id":anchor.to_string()}));
+            }
+            let members = group.members.iter().map(|id| id.to_string()).collect::<Vec<_>>();
+            self.ungroup_preserving_order(id);
+            cx.notify();
+            return Ok(serde_json::json!({"group_id":change.group_id,"window_id":change.window_id,"workspace_ids":members,"ungrouped":true}));
+        }
+        if let Some(workspace_id) = &change.workspace_id {
+            let member = self.entries.iter().find(|entry| entry.workspace.entity_id().to_string() == *workspace_id)
+                .map(|entry| entry.workspace.entity_id()).ok_or(automation::Failure { code: -32004, message: "Workspace not found in window" })?;
+            if method != "workspace.group.add" && !group.members.contains(&member) {
+                return Err(automation::Failure { code: -32004, message: "Workspace is not a member of this group" });
+            }
+            let slot = self.group_anchor_slot(member);
+            let selected = self.entries.get(self.active).map(|entry| entry.workspace.entity_id());
+            let result = match method {
+                "workspace.group.add" => self.groups.add(id, member, None),
+                "workspace.group.remove" => { self.groups.remove(member); Ok(()) },
+                "workspace.group.set_anchor" => self.groups.set_anchor(id, member),
+                _ => unreachable!("validated membership method"),
+            };
+            result.map_err(|_| automation::Failure { code: -32004, message: "Group membership target no longer exists" })?;
+            self.preserve_group_slot(slot, selected);
+            self.scroll_to_workspace(self.active);
+            cx.notify();
+            let snapshot = self.automation_snapshot(change.window_id.clone(), false, cx);
+            let group = snapshot["groups"].as_array().unwrap().iter().find(|group| group["id"] == change.group_id).cloned();
+            return Ok(serde_json::json!({"window_id":change.window_id,"workspace_id":workspace_id,"group":group}));
+        }
+        if let Some(name) = &change.name { group.name = name.clone(); }
+        if let Some(collapsed) = change.collapsed { group.collapsed = collapsed; }
+        if let Some(pinned) = change.pinned { group.pinned = pinned; }
+        self.scroll_to_workspace(self.active);
+        cx.notify();
+        let result = self.automation_snapshot(change.window_id.clone(), false, cx);
+        Ok(result["groups"].as_array().unwrap().iter().find(|group| group["id"] == change.group_id).unwrap().clone())
+    }
+
+    fn group_anchor_slot(&self, member: EntityId) -> Option<(u64, EntityId, usize)> {
+        let group = self.groups.containing(member)?;
+        let anchor = *group.members.first()?;
+        let index = self.entries.iter().position(|entry| entry.workspace.entity_id() == anchor)?;
+        Some((group.id, anchor, index))
+    }
+
+    fn preserve_group_slot(&mut self, slot: Option<(u64, EntityId, usize)>, selected: Option<EntityId>) {
+        if let Some((id, previous, index)) = slot {
+            if let Some(anchor) = self.groups.entries().iter().find(|group| group.id == id).and_then(|group| group.members.first()).copied() {
+                workspace_groups::preserve_anchor_slot(&mut self.entries, |entry| entry.workspace.entity_id(), previous, index, anchor);
+            }
+        }
+        if let Some(index) = selected.and_then(|id| self.entries.iter().position(|entry| entry.workspace.entity_id() == id)) {
+            self.active = index;
+        }
+    }
+
+    fn top_level_pinned(&self, index: usize) -> bool {
+        let entry = &self.entries[index];
+        self.groups.containing(entry.workspace.entity_id()).map(|group| group.pinned).unwrap_or(entry.pinned)
+    }
+    fn workspace_order(&self, include_collapsed: bool) -> Vec<usize> {
+        let workspaces: Vec<_> = self.entries.iter().map(|entry| (entry.workspace.entity_id(), entry.pinned)).collect();
+        self.groups.ordered_indices(&workspaces, include_collapsed)
+    }
+
+    fn ungroup_preserving_order(&mut self, id: u64) {
+        // Materialize logical member order before removing its container. Pins
+        // remain workspace-owned and still determine their resulting top tier.
+        let selected = self.entries.get(self.active).map(|entry| entry.workspace.entity_id());
+        let ranks: std::collections::HashMap<_, _> = self.workspace_order(true).into_iter().enumerate()
+            .map(|(rank, index)| (self.entries[index].workspace.entity_id(), rank)).collect();
+        if self.groups.ungroup(id).is_none() { return; }
+        self.entries.sort_by_key(|entry| ranks[&entry.workspace.entity_id()]);
+        if let Some(index) = selected.and_then(|id| self.entries.iter().position(|entry| entry.workspace.entity_id() == id)) {
+            self.active = index;
+        }
+        self.scroll_to_workspace(self.active);
+    }
+
+    fn sidebar_order(&self) -> Vec<usize> { self.workspace_order(false) }
+
+    fn reveal_workspace(&mut self, index: usize) {
+        let Some(entry) = self.entries.get(index) else { return; };
+        let member = entry.workspace.entity_id();
+        if let Some(group) = self.groups.containing(member) {
+            if group.members.first() != Some(&member) {
+                let id = group.id;
+                self.groups.get_mut(id).unwrap().collapsed = false;
+            }
+        }
+    }
+
+    fn scroll_to_workspace(&self, index: usize) {
+        let visible_index = self.entries.get(index)
+            .and_then(|entry| self.groups.containing(entry.workspace.entity_id()))
+            .filter(|group| group.collapsed)
+            .and_then(|group| group.members.first())
+            .and_then(|anchor| self.entries.iter().position(|entry| entry.workspace.entity_id() == *anchor))
+            .unwrap_or(index);
+        if let Some(row) = self.sidebar_order().iter().position(|candidate| *candidate == visible_index) {
+            self.workspace_scroll.scroll_to_item(row);
+        }
+    }
+
+    fn create_group(&mut self, empty: bool, window: &mut Window, cx: &mut Context<Self>) {
+        if self.automation_available(cx).is_err() { return; }
+        if empty { self.add_with_group(1, false, window, cx); }
+        let Some(entry) = self.entries.get(self.active) else { return; };
+        let name = (1..).map(|number| format!("Group {number}"))
+            .find(|name| !self.groups.entries().iter().any(|group| &group.name == name)).unwrap();
+        let selected = entry.workspace.entity_id();
+        let slot = self.group_anchor_slot(selected);
+        match self.groups.create(name, vec![selected], empty) {
+            Ok(_) => { self.preserve_group_slot(slot, Some(selected)); self.sidebar = true; self.scroll_to_workspace(self.active); }
+            Err(error) => self.notice = Some(format!("Create group: {error}")),
+        }
+        cx.notify();
+    }
+
+    fn ungroup_active(&mut self, cx: &mut Context<Self>) {
+        if self.automation_available(cx).is_err() { return; }
+        if let Some(id) = self.entries.get(self.active).and_then(|entry| self.groups.containing(entry.workspace.entity_id())).map(|group| group.id) {
+            self.ungroup_preserving_order(id);
+            cx.notify();
+        }
+    }
+
+    fn request_close_group(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.automation_available(cx).is_err() { return; }
+        let Some(group) = self.entries.get(self.active).and_then(|entry| self.groups.containing(entry.workspace.entity_id())) else { return; };
+        if group.members.len() == 1 {
+            self.request_close_workspace(self.active, window, cx);
+            return;
+        }
+        let id = group.id;
+        let anchor = group.members[0];
+        let members = group.members.clone();
+        let message = format!("Close ‘{}’ and its {} workspaces?", group.name, members.len());
+        let Some(permit) = cx.global::<PromptGate>().acquire() else { return; };
+        self.close_prompt = Some(anchor);
+        let answer = window.prompt(PromptLevel::Warning, &message,
+            Some("This terminates the group's terminal processes and discards their output history. To keep the terminals, cancel and choose Ungroup Workspaces."),
+            &["Cancel", "Close Group"], cx);
+        cx.spawn_in(window, async move |entity, cx| {
+            let confirmed = matches!(answer.await, Ok(1));
+            drop(permit);
+            let _ = cx.update(|window, cx| {
+                entity.update(cx, |this, cx| {
+                    if this.close_prompt != Some(anchor) { return; }
+                    this.close_prompt = None;
+                    if confirmed {
+                        // Close only the members named by the original prompt
+                        // which still belong to this group. Anchor goes last.
+                        for member in members.into_iter().rev() {
+                            if !this.groups.containing(member).is_some_and(|group| group.id == id) { continue; }
+                            if let Some(index) = this.entries.iter().position(|entry| entry.workspace.entity_id() == member) {
+                                this.close_workspace(index, window, cx);
+                            }
+                        }
+                    }
+                    cx.notify();
+                })
+            });
+        }).detach();
+    }
+
+    fn toggle_group_pin(&mut self, cx: &mut Context<Self>) {
+        if self.automation_available(cx).is_err() { return; }
+        if let Some(id) = self.entries.get(self.active).and_then(|entry| self.groups.containing(entry.workspace.entity_id())).map(|group| group.id) {
+            let group = self.groups.get_mut(id).unwrap();
+            group.pinned = !group.pinned;
+            self.scroll_to_workspace(self.active);
+            cx.notify();
+        }
+    }
+
+    pub(super) fn show_startup_notice(&mut self, notice: String, cx: &mut Context<Self>) {
+        self.notice = Some(notice);
+        cx.notify();
+    }
+
+    fn move_workspace_to_group(&mut self, group: u64, cx: &mut Context<Self>) {
+        if self.automation_available(cx).is_err() { return; }
+        let Some(entry) = self.entries.get(self.active) else { return; };
+        let selected = entry.workspace.entity_id();
+        let slot = self.group_anchor_slot(selected);
+        match self.groups.add(group, selected, None) {
+            Ok(()) => {
+                self.preserve_group_slot(slot, Some(selected));
+                self.groups.get_mut(group).unwrap().collapsed = false;
+                self.scroll_to_workspace(self.active);
+            }
+            Err(error) => self.notice = Some(format!("Move workspace to group: {error}")),
+        }
+        cx.notify();
+    }
+
+    fn remove_workspace_from_group(&mut self, cx: &mut Context<Self>) {
+        if self.automation_available(cx).is_err() { return; }
+        if let Some(entry) = self.entries.get(self.active) {
+            let selected = entry.workspace.entity_id();
+            let slot = self.group_anchor_slot(selected);
+            self.groups.remove(selected);
+            self.preserve_group_slot(slot, Some(selected));
+            self.scroll_to_workspace(self.active);
+            cx.notify();
+        }
+    }
+
+    fn set_group_anchor(&mut self, cx: &mut Context<Self>) {
+        if self.automation_available(cx).is_err() { return; }
+        let Some(member) = self.entries.get(self.active).map(|entry| entry.workspace.entity_id()) else { return; };
+        let Some(group) = self.groups.containing(member).map(|group| group.id) else { return; };
+        let slot = self.group_anchor_slot(member);
+        if let Err(error) = self.groups.set_anchor(group, member) {
+            self.notice = Some(format!("Set group anchor: {error}"));
+        }
+        self.preserve_group_slot(slot, Some(member));
+        self.scroll_to_workspace(self.active);
+        cx.notify();
+    }
+    fn metadata_presets(input: &Entity<text_field::TextField>, field: MetadataField, cx: &App) -> AnyElement {
+        let choices: Vec<(&str, String, Option<u32>)> = match field {
+            MetadataField::Color | MetadataField::GroupColor => WORKSPACE_COLORS.iter().map(|(name, color)| (*name, color.map(|color| format!("#{color:06X}")).unwrap_or_default(), *color)).collect(),
+            MetadataField::Icon | MetadataField::GroupIcon => WORKSPACE_ICONS.iter().map(|(name, icon)| (*name, icon.unwrap_or_default().to_owned(), None)).collect(),
+            _ => return gpui::div().into_any_element(),
+        };
+        let draft = input.read(cx).value().trim();
+        gpui::div().flex().flex_wrap().gap_1().py_1()
+            .children(choices.into_iter().enumerate().map(|(index, (name, value, color))| {
+                let selected = if matches!(field, MetadataField::Color | MetadataField::GroupColor) {
+                    parse_workspace_color(draft).is_ok_and(|current| current == color)
+                } else { draft == value };
+                let input = input.clone();
+                let label = if matches!(field, MetadataField::Icon | MetadataField::GroupIcon) && !value.is_empty() { value.clone() } else if value.is_empty() { "×".into() } else { String::new() };
+                gpui::div().id(("metadata-preset", index)).w(px(28.)).h(px(28.))
+                    .flex().items_center().justify_center().rounded_md().border_1()
+                    .border_color(rgb(if selected { 0xa7c7ff } else { 0x465063 }))
+                    .bg(rgb(0x252d3b)).cursor_pointer()
+                    .hover(|button| button.bg(rgb(0x3a465c)))
+                    .tooltip(move |_, cx| cx.new(|_| pane_view::ControlHint(name.into())).into())
+                    .child(gpui::div().w(px(16.)).h(px(16.)).rounded_sm().text_center().line_height(px(16.))
+                        .when_some(color, |swatch, color| swatch.bg(rgb(color))).child(label))
+                    .on_click(move |event, window, cx| {
+                        if !event.standard_click() { return; }
+                        cx.stop_propagation();
+                        input.update(cx, |input, cx| input.replace_draft(&value, cx));
+                        input.read(cx).focus.focus(window);
+                    })
+            })).into_any_element()
+    }
+    pub(super) fn automation_text_export(&self, target: EntityId, max_bytes: usize, selected: bool, cx: &App) -> Option<rmux_terminal::session::HistoryExport> {
+        self.entries.iter().find_map(|entry| entry.workspace.read(cx).panes.iter().find_map(|pane| {
+            pane.read(cx).terminals.iter().find(|terminal| terminal.entity_id() == target)
+                .map(|terminal| if selected { terminal.read(cx).session.selection_export(max_bytes) } else { terminal.read(cx).session.history_export(max_bytes) })
+        }))
+    }
+    pub(super) fn automation_memory_sample(&self, target: EntityId, cx: &App) -> Option<rmux_terminal::session::MemorySample> {
+        self.entries.iter().find_map(|entry| entry.workspace.read(cx).panes.iter().find_map(|pane| {
+            pane.read(cx).terminals.iter().find(|terminal| terminal.entity_id() == target)
+                .map(|terminal| terminal.read(cx).session.memory_sample())
+        }))
+    }
+    pub(super) fn automation_read_text(&self, read: &automation::SurfaceRead, target: EntityId, cx: &App) -> Result<serde_json::Value, automation::Failure> {
+        let terminal = self.entries.iter().find_map(|entry| entry.workspace.read(cx).panes.iter().find_map(|pane| {
+            pane.read(cx).terminals.iter().find(|terminal| terminal.entity_id() == target).cloned()
+        })).ok_or(automation::Failure { code: -32004, message: "Surface not found" })?;
+        let frame = terminal.read(cx).session.try_frame()
+            .map_err(|_| automation::Failure { code: -32007, message: "Terminal snapshot failed" })?
+            .ok_or(automation::Failure { code: -32007, message: "Terminal is busy; retry snapshot" })?;
+        let (text, truncated) = frame.text_with_limit(read.max_bytes);
+        let mut result = serde_json::json!({"surface_id":read.surface_id,"scope":"viewport","columns":frame.columns,"rows":frame.rows.len(),"scrollback_offset":frame.scrollback_offset,"truncated":truncated});
+        result["text"] = serde_json::Value::String(text);
+        Ok(result)
+    }
+    pub(super) fn automation_notification(&mut self, change: &automation::NotificationChange, target: EntityId, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
+        let terminal = self.entries.iter().find_map(|entry| entry.workspace.read(cx).panes.iter().find_map(|pane| {
+            pane.read(cx).terminals.iter().find(|terminal| terminal.entity_id() == target).cloned()
+        })).ok_or(automation::Failure { code: -32004, message: "Surface not found" })?;
+        terminal.update(cx, |terminal, cx| {
+            if let Some(revision) = change.revision {
+                let matches = terminal.notification.as_ref().is_some_and(|message| message.revision == revision);
+                if matches { terminal.dismiss_notification(revision, cx); }
+                Ok(serde_json::json!({"surface_id":change.surface_id,"revision":revision,"dismissed":matches}))
+            } else {
+                let revision = terminal.store_notification(change.title.clone().unwrap_or_default(), change.body.clone().unwrap_or_default());
+                cx.emit(TabMetadataChanged);
+                cx.notify();
+                Ok(serde_json::json!({"surface_id":change.surface_id,"revision":revision}))
+            }
+        })
+    }
+    pub(super) fn automation_send_key(&self, input: &automation::SurfaceKey, target: EntityId, cx: &App) -> Result<serde_json::Value, automation::Failure> {
+        self.automation_available(cx)?;
+        let terminal = self.entries.iter().find_map(|entry| entry.workspace.read(cx).panes.iter().find_map(|pane| {
+            pane.read(cx).terminals.iter().find(|terminal| terminal.entity_id() == target).cloned()
+        })).ok_or(automation::Failure { code: -32004, message: "Surface not found" })?;
+        let mods = rmux_terminal::keyboard::Modifiers { control: input.control, alt: input.alt, shift: input.shift };
+        let queued = terminal.read(cx).session.try_key_tap_without_scroll(&input.key, mods)
+            .map_err(|_| automation::Failure { code: -32006, message: "Key unavailable, terminal exited or input queue unavailable" })?
+            .ok_or(automation::Failure { code: -32007, message: "Terminal is busy; no key queued" })?;
+        Ok(serde_json::json!({"surface_id":input.surface_id,"queued_bytes":queued}))
+    }
+    pub(super) fn automation_send_text(&self, input: &automation::SurfaceText, target: EntityId, cx: &App) -> Result<serde_json::Value, automation::Failure> {
+        self.automation_available(cx)?;
+        let terminal = self.entries.iter().find_map(|entry| entry.workspace.read(cx).panes.iter().find_map(|pane| {
+            pane.read(cx).terminals.iter().find(|terminal| terminal.entity_id() == target).cloned()
+        })).ok_or(automation::Failure { code: -32004, message: "Surface not found" })?;
+        let session = &terminal.read(cx).session;
+        if input.paste {
+            let queued = session.try_paste_without_scroll(&input.text)
+                .map_err(|_| automation::Failure { code: -32006, message: "Terminal exited, paste pending or input queue unavailable" })?;
+            if !queued { return Err(automation::Failure { code: -32007, message: "Terminal is busy; no paste queued" }); }
+        } else {
+            session.input_without_scroll(input.text.as_bytes())
+                .map_err(|_| automation::Failure { code: -32006, message: "Terminal exited or input queue unavailable" })?;
+        }
+        Ok(serde_json::json!({"surface_id":input.surface_id,"queued_bytes":input.text.len(),"paste":input.paste}))
+    }
+    pub(super) fn automation_rename(&mut self, rename: &automation::WorkspaceRename, target: EntityId, window: &mut Window, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
+        self.automation_available(cx)?;
+        let Some(index) = self.entries.iter().position(|entry| entry.workspace.entity_id() == target) else {
+            return Err(automation::Failure { code: -32004, message: "Workspace not found" });
+        };
+        if self.entries[index].name != rename.name {
+            self.entries[index].name.clone_from(&rename.name);
+            if index == self.active { window.set_window_title(&format!("{} — rmux", rename.name)); }
+            cx.notify();
+        }
+        Ok(serde_json::json!({"workspace_id":rename.workspace_id,"name":self.entries[index].name}))
+    }
+    pub(super) fn automation_pane_target(&self, id: EntityId, cx: &App) -> Option<(Entity<Workspace>, Entity<PaneView>)> {
+        self.entries.iter().find_map(|entry| entry.workspace.read(cx).panes.iter()
+            .find(|pane| pane.entity_id() == id).map(|pane| (entry.workspace.clone(), pane.clone())))
+    }
+    pub(super) fn automation_zoom_pane(&mut self, zoom: &automation::PaneZoom, target: EntityId, window: &mut Window, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
+        self.automation_available(cx)?;
+        let Some((workspace, pane)) = self.automation_pane_target(target, cx) else {
+            return Err(automation::Failure { code: -32004, message: "Pane not found" });
+        };
+        if zoom.zoomed {
+            let Some(terminal) = pane.read(cx).active_terminal_id() else {
+                return Err(automation::Failure { code: -32004, message: "Pane has no terminal" });
+            };
+            self.focus_terminal(workspace.entity_id(), terminal, window, cx);
+        }
+        workspace.update(cx, |workspace, cx| {
+            let next = if zoom.zoomed { Some(pane.entity_id()) }
+                else { workspace.zoomed.filter(|id| *id != pane.entity_id()) };
+            if workspace.zoomed != next { workspace.zoomed = next; cx.notify(); }
+        });
+        Ok(serde_json::json!({"pane_id":zoom.pane_id,"zoomed":workspace.read(cx).zoomed == Some(pane.entity_id())}))
+    }
+    pub(super) fn automation_children(&self, window_id: String, surfaces: bool, workspace_filter: Option<&str>, cx: &App) -> Vec<serde_json::Value> {
+        let mut items = Vec::new();
+        for entry in &self.entries {
+            let workspace_id = entry.workspace.entity_id().to_string();
+            if workspace_filter.is_some_and(|id| id != workspace_id) { continue; }
+            let workspace = entry.workspace.read(cx);
+            for (index, entity) in workspace.panes.iter().enumerate() {
+                let pane = entity.read(cx);
+                let pane_id = entity.entity_id().to_string();
+                if surfaces {
+                    items.extend(pane.automation_surfaces(&window_id, &workspace_id, &pane_id, cx));
+                } else {
+                    items.push(serde_json::json!({
+                        "id":pane_id, "window_id":window_id, "workspace_id":workspace_id,
+                        "index":index, "surface_count":pane.terminals.len(),
+                        "selected_surface_id":pane.active_terminal_id().map(|id| id.to_string()),
+                        "zoomed":workspace.zoomed == Some(entity.entity_id()),
+                    }));
+                }
+            }
+        }
+        items
+    }
+    pub(super) fn automation_contains_workspace(&self, id: EntityId) -> bool {
+        self.entries.iter().any(|entry| entry.workspace.entity_id() == id)
+    }
+    pub(super) fn automation_surface_target(&self, id: EntityId, cx: &App) -> Option<(EntityId, EntityId)> {
+        self.entries.iter().find_map(|entry| {
+            entry.workspace.read(cx).panes.iter().find_map(|pane| {
+                pane.read(cx).terminals.iter().find(|terminal| terminal.entity_id() == id)
+                    .map(|terminal| (entry.workspace.entity_id(), terminal.entity_id()))
+            })
+        })
+    }
+    pub(super) fn automation_focus_surface(&mut self, focus: &automation::SurfaceFocus, target: EntityId, window: &mut Window, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
+        self.automation_available(cx)?;
+        let Some((workspace, terminal)) = self.automation_surface_target(target, cx) else {
+            return Err(automation::Failure { code: -32004, message: "Surface not found" });
+        };
+        self.focus_terminal(workspace, terminal, window, cx);
+        if focus.activate { window.activate_window(); }
+        Ok(serde_json::json!({"surface_id":focus.surface_id,"workspace_id":workspace.to_string(),"selected":true}))
+    }
+    fn automation_available(&self, cx: &App) -> Result<(), automation::Failure> {
+        if self.benchmark || self.restore_job.is_some() || self.window_close_prompt
+            || self.close_prompt.is_some() || self.rename.is_some() || self.palette.is_some()
+            || cx.global::<Shutdowns>().quitting || cx.global::<Shutdowns>().quit_prompt
+            || cx.global::<PromptGate>().is_active()
+            || self.entries.iter().any(|entry| entry.workspace.read(cx).panes.iter().any(|pane| pane.read(cx).automation_busy())) {
+            return Err(automation::Failure { code: -32003, message: "Window is busy; retry after the current interaction" });
+        }
+        Ok(())
+    }
+    pub(super) fn automation_select(&mut self, selection: &automation::Selection, target: EntityId, window: &mut Window, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
+        self.automation_available(cx)?;
+        let Some(index) = self.entries.iter().position(|entry| entry.workspace.entity_id() == target) else {
+            return Err(automation::Failure { code: -32004, message: "Workspace not found" });
+        };
+        self.select(index, window, cx);
+        if selection.activate { window.activate_window(); }
+        Ok(serde_json::json!({"workspace_id":selection.workspace_id,"selected":true}))
+    }
+    pub(super) fn automation_snapshot(&self, window_id: String, include_workspaces: bool, cx: &App) -> serde_json::Value {
+        let order = self.workspace_order(true);
+        let workspaces: Vec<_> = order.iter().enumerate().filter(|_| include_workspaces).map(|(position, index)| {
+            let entry = &self.entries[*index];
+            let group = self.groups.containing(entry.workspace.entity_id());
+            let workspace = entry.workspace.read(cx);
+            let mut result = serde_json::json!({
+                "id":entry.workspace.entity_id().to_string(), "window_id":window_id,
+                "index":position, "name":entry.name, "description":entry.description,
+                "group_id":group.map(|group| format!("workspace_group:{}", group.id)),
+                "group_anchor":group.is_some_and(|group| group.members.first() == Some(&entry.workspace.entity_id())),
+                "icon":entry.icon, "color":entry.color.map(|color| format!("#{color:06x}")),
+                "pinned":entry.pinned, "selected":*index == self.active,
+                "pane_count":workspace.panes.len(),
+                "zoomed_pane_id":workspace.zoomed.map(|id| id.to_string()),
+                "terminal_count":workspace.panes.iter().map(|pane| pane.read(cx).terminals.len()).sum::<usize>(),
+            });
+            result["layout"] = workspace.layout.as_ref().map(|tree| automation::layout_snapshot(tree, &|pane| pane.entity_id().to_string())).unwrap_or(serde_json::Value::Null);
+            result
+        }).collect();
+        let groups: Vec<_> = order.iter().filter_map(|index| {
+            let id = self.entries[*index].workspace.entity_id();
+            self.groups.containing(id).filter(|group| group.members.first() == Some(&id))
+        }).map(|group| serde_json::json!({
+            "id":format!("workspace_group:{}", group.id), "window_id":window_id,
+            "name":group.name, "color":group.color.map(|color| format!("#{color:06x}")),
+            "external_id":group.external_id,
+            "icon":group.icon, "pinned":group.pinned, "collapsed":group.collapsed,
+            "generated_anchor":group.generated_anchor,
+            "anchor_workspace_id":group.members.first().map(|id| id.to_string()),
+            "workspace_ids":group.members.iter().map(|id| id.to_string()).collect::<Vec<_>>(),
+        })).collect();
+        let mut result = serde_json::json!({
+            "id":window_id, "workspace_count":self.entries.len(),
+            "selected_workspace_id":self.entries.get(self.active).map(|entry| entry.workspace.entity_id().to_string()),
+            "groups":groups,
+        });
+        result["workspaces"] = serde_json::Value::Array(workspaces);
+        result
+    }
+    fn run_custom_command(&mut self, name: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if self.command_launching { self.notice = Some("A command is already starting in this window".into()); cx.notify(); return; }
+        if self.automation_available(cx).is_err() || self.entries.len() >= 64 { self.notice = Some("Window is busy or has reached its workspace limit".into()); cx.notify(); return; }
+        let Some(command) = cx.global::<Preferences>().commands.iter().find(|command| command.name == name).cloned() else {
+            self.notice = Some("Custom command is no longer configured".into()); cx.notify(); return;
+        };
+        let directory = command.cwd.clone().or_else(|| self.entries.get(self.active).and_then(|entry| {
+            let workspace = entry.workspace.read(cx);
+            workspace.panes.iter().find(|pane| Some(pane.entity_id()) == entry.last_pane).or_else(|| workspace.panes.first())
+                .and_then(|pane| pane.read(cx).cached_directory(cx))
+        }));
+        let scrollback = cx.global::<Preferences>().scrollback_bytes();
+        let executor = cx.background_executor().clone();
+        self.command_launching = true;
+        self.notice = Some(format!("Starting {}…", command.name));
+        cx.notify();
+        cx.spawn_in(window, async move |entity, cx| {
+            let name = command.name;
+            let result = executor.spawn(async move {
+                let argv: Vec<_> = command.argv.into_iter().map(std::ffi::OsString::from).collect();
+                let environment: Vec<_> = command.env.into_iter().map(|(name, value)| (name.into(), value.into())).collect();
+                Session::command_in_with_environment(&argv, 80, 24, directory.as_deref(), scrollback, &environment)
+            }).await;
+            let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
+                this.command_launching = false;
+                match result {
+                    Ok(session) if this.automation_available(cx).is_ok() && this.entries.len() < 64 => {
+                        this.add_configured(1, false, None, None, false, Some((session, Some(name.clone()))), window, cx);
+                        let index = this.entries.len() - 1;
+                        this.entries[index].name = name;
+                        this.select(index, window, cx);
+                        this.notice = None;
+                    }
+                    Ok(_) => this.notice = Some("Command terminal closed because the window became unavailable".into()),
+                    Err(error) => this.notice = Some(format!("Could not start {name}: {error:#}")),
+                }
+                cx.notify();
+            }));
+        }).detach();
+    }
+
+    fn toggle_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(state) = self.settings_state.take() {
+            if state.focus.is_focused(window) {
+                if let Some(origin) = state.origin { origin.focus(window); } else { self.select(self.active, window, cx); }
+            }
+        } else {
+            if self.notification_navigation.is_some() { self.toggle_notifications(window, cx); }
+            let state = settings_view::State { focus: cx.focus_handle(), origin: window.focused(cx), selected: 0, scroll: ScrollHandle::new() };
+            state.focus.focus(window);
+            self.settings_state = Some(state);
+        }
+        cx.notify();
+    }
+    pub(super) fn settings_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(state) = &mut self.settings_state else { return; };
+        let key = event.keystroke.key.as_str();
+        if event.keystroke.modifiers.platform || event.keystroke.modifiers.control || event.keystroke.modifiers.alt { return; }
+        if let Some(index) = settings_view::next_control(state.selected, key, event.keystroke.modifiers.shift) {
+            state.selected = index;
+            // The scroll container has a heading before the five controls, then
+            // the hint, Save and editor link.
+            state.scroll.scroll_to_item(if index < 5 { index + 1 } else { index + 2 });
+            cx.notify();
+        } else if key == "escape" {
+            self.toggle_settings(window, cx);
+        } else if matches!(key, "left" | "right" | "enter" | "space") {
+            let selected = state.selected;
+            if selected < 5 {
+                let mut settings = cx.global::<Preferences>().clone();
+                settings_view::adjust(&mut settings, settings_view::KEYS[selected], if key == "left" { -1 } else { 1 });
+                cx.set_global(settings);
+                cx.notify();
+            } else if matches!(key, "enter" | "space") {
+                if selected == 5 { self.save_appearance_settings(cx); } else { self.open_settings_file(cx); }
+            }
+        }
+        // Plain typing belongs to this panel, never the shell behind it.
+        cx.stop_propagation();
+    }
+
+    fn save_appearance_settings(&mut self, cx: &mut Context<Self>) {
+        if cx.global::<preferences::ReloadState>().0 { return; }
+        cx.global_mut::<preferences::ReloadState>().0 = true;
+        let settings = cx.global::<Preferences>().clone();
+        let executor = cx.background_executor().clone();
+        self.notice = Some("Saving appearance settings…".into());
+        cx.notify();
+        cx.spawn(async move |entity, cx| {
+            let result = executor.spawn(async move { settings.save_appearance() }).await;
+            let _ = cx.update(|cx| {
+                cx.global_mut::<preferences::ReloadState>().0 = false;
+                let _ = entity.update(cx, |this, cx| {
+                    this.notice = Some(match result { Ok(path) => format!("Settings saved to {}", path.display()), Err(error) => format!("Settings not saved: {error:#}") });
+                    cx.notify();
+                });
+            });
+        }).detach();
+    }
+
+    fn reload_settings(&mut self, cx: &mut Context<Self>) {
+        if cx.global::<preferences::ReloadState>().0 {
+            return;
+        }
+        cx.global_mut::<preferences::ReloadState>().0 = true;
+        let current = cx.global::<Preferences>().clone();
+        let executor = cx.background_executor().clone();
+        self.notice = Some("Reloading settings…".into());
+        cx.notify();
+        cx.spawn(async move |entity, cx| {
+            let result = executor.spawn(async move { current.reload() }).await;
+            let _ = cx.update(|cx| {
+                cx.global_mut::<preferences::ReloadState>().0 = false;
+                let notice = match result {
+                    Ok(next) => {
+                        cx.set_global(next.confirm_close);
+                        cx.set_global(next);
+                        shortcuts::install(cx);
+                        "Settings reloaded. Fonts using previous defaults updated; per-terminal overrides retained.".into()
+                    }
+                    Err(error) => format!("Settings unchanged: {error:#}"),
+                };
+                let _ = entity.update(cx, |this, cx| { this.notice = Some(notice); cx.notify(); });
+            });
+        }).detach();
+    }
+    fn open_settings_file(&mut self, cx: &mut Context<Self>) {
+        if cx.global::<preferences::ReloadState>().0 {
+            return;
+        }
+        cx.global_mut::<preferences::ReloadState>().0 = true;
+        let preferences = cx.global::<Preferences>().clone();
+        let executor = cx.background_executor().clone();
+        cx.spawn(async move |entity, cx| {
+            let result = executor
+                .spawn(async move { preferences.prepare_file() })
+                .await;
+            let _ = cx.update(|cx| {
+                cx.global_mut::<preferences::ReloadState>().0 = false;
+                match result {
+                    Ok(path) => cx.open_with_system(&path),
+                    Err(error) => {
+                        let _ = entity.update(cx, |this, cx| {
+                            this.notice = Some(format!("Could not open settings: {error:#}"));
+                            cx.notify();
+                        });
+                    }
+                }
+            });
+        })
+        .detach();
+    }
+    pub(super) fn should_confirm_close(&self, cx: &App) -> bool {
+        let has_terminals = self.entries.iter().any(|entry| {
+            entry
+                .workspace
+                .read(cx)
+                .panes
+                .iter()
+                .any(|pane| !pane.read(cx).terminals.is_empty())
+        });
+        cx.global::<ClosePolicy>()
+            .confirms(has_terminals, || self.has_active_work(cx))
+    }
+    pub(super) fn has_active_work(&self, cx: &App) -> bool {
+        self.entries.iter().any(|entry| {
+            entry.workspace.read(cx).panes.iter().any(|pane| {
+                pane.read(cx)
+                    .terminals
+                    .iter()
+                    .any(|terminal| terminal.read(cx).has_active_work())
+            })
+        })
+    }
+    fn request_close_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.should_confirm_close(cx) || cx.global::<Shutdowns>().quitting {
+            window.remove_window();
+            return;
+        }
+        if self.window_close_prompt || self.close_prompt.is_some() {
+            return;
+        }
+        let Some(permit) = cx.global::<PromptGate>().acquire() else {
+            return;
+        };
+        self.window_close_prompt = true;
+        let answer = window.prompt(PromptLevel::Warning, "Close window?",
+            Some("Closing this window terminates the terminal processes in all of its workspaces and discards their output history."),
+            &["Cancel", "Close Window"], cx);
+        cx.spawn_in(window, async move |entity, cx| {
+            let confirmed = matches!(answer.await, Ok(1));
+            drop(permit);
+            let _ = cx.update(|window, cx| {
+                entity.update(cx, |this, _| {
+                    this.window_close_prompt = false;
+                    if confirmed {
+                        window.remove_window();
+                    }
+                })
+            });
+        })
+        .detach();
+    }
+    fn observe_metadata(
+        workspace: &Entity<Workspace>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Subscription {
+        cx.subscribe_in(
+            workspace,
+            window,
+            |this, _, _: &WorkspaceMetadataChanged, window, cx| {
+                this.record_terminal_focus(window, cx);
+                cx.notify();
+            },
+        )
+    }
+
+    fn record_terminal_focus(&mut self, window: &Window, cx: &App) {
+        let Some(entry) = self.entries.get(self.active) else {
+            return;
+        };
+        let workspace = entry.workspace.read(cx);
+        let Some(index) = workspace.focused_index(window, cx) else {
+            return;
+        };
+        let Some(id) = workspace.panes[index].read(cx).active_terminal_id() else {
+            return;
+        };
+        if self.focus_history.last() == Some(&id) {
+            return;
+        }
+        self.focus_history.retain(|previous| *previous != id);
+        self.focus_history.push(id);
+        if self.focus_history.len() > 32 {
+            self.focus_history.remove(0);
+        }
+    }
+
+    fn last_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.record_terminal_focus(window, cx);
+        let current = self.focus_history.last().copied();
+        let mut live = Vec::new();
+        for (index, entry) in self.entries.iter().enumerate() {
+            for pane in &entry.workspace.read(cx).panes {
+                for (tab, terminal) in pane.read(cx).terminals.iter().enumerate() {
+                    live.push((terminal.entity_id(), index, pane.clone(), tab));
+                }
+            }
+        }
+        self.focus_history
+            .retain(|id| live.iter().any(|(candidate, ..)| candidate == id));
+        let target = self
+            .focus_history
+            .iter()
+            .rev()
+            .filter(|id| Some(**id) != current)
+            .find_map(|id| live.iter().find(|(candidate, ..)| candidate == id))
+            .cloned();
+        if let Some((_, index, pane, tab)) = target {
+            self.remember_focus(window, cx);
+            self.entries[index].last_pane = Some(pane.entity_id());
+            self.entries[index].workspace.update(cx, |workspace, cx| {
+                workspace.zoomed = None;
+                cx.notify();
+            });
+            // Select the intended tab before select() focuses this pane. Otherwise
+            // its old active tab would briefly gain focus and lose unread state.
+            pane.update(cx, |pane, cx| pane.select(tab, window, cx));
+            self.select(index, window, cx);
+            self.record_terminal_focus(window, cx);
+        }
+    }
+    fn move_workspace_to_next_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.entries.is_empty() || cx.global::<Shutdowns>().quitting {
+            return;
+        }
+        let current = window.window_handle();
+        let windows = cx.windows();
+        let start = windows.iter().position(|candidate| *candidate == current).unwrap_or(0);
+        let target = (1..=windows.len()).find_map(|offset| {
+            let candidate = windows[(start + offset) % windows.len()];
+            if candidate == current { return None; }
+            candidate.downcast::<Self>().filter(|candidate| {
+                candidate.read(cx).is_ok_and(|root| !root.benchmark)
+            })
+        });
+        let Some(target) = target else {
+            self.notice = Some("Open another rmux window to move this workspace there.".into());
+            cx.notify();
+            return;
+        };
+        let source = self.entries[self.active].workspace.entity_id();
+        self.move_workspace_to_window(source, target.into(), window, cx);
+    }
+    fn move_workspace_to_window(
+        &mut self,
+        source: EntityId,
+        target: AnyWindowHandle,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Err(error) = self.try_move_workspace_to_window(source, target, true, window, cx) {
+            self.notice = Some(format!("Move workspace: {error}"));
+            cx.notify();
+        }
+    }
+    pub(super) fn try_move_workspace_to_window(&mut self, source: EntityId, target: AnyWindowHandle, activate: bool, window: &mut Window, cx: &mut Context<Self>) -> Result<()> {
+        self.automation_available(cx).map_err(|failure| anyhow::anyhow!(failure.message))?;
+        let index = self.entries.iter().position(|entry| entry.workspace.entity_id() == source)
+            .ok_or_else(|| anyhow::anyhow!("workspace not found"))?;
+        if target == window.window_handle() { return Ok(()); }
+        let target = target.downcast::<Self>().ok_or_else(|| anyhow::anyhow!("invalid destination window"))?;
+        self.remember_focus(window, cx);
+        let entry = &self.entries[index];
+        let workspace = entry.workspace.clone();
+        let name = entry.name.clone();
+        let description = entry.description.clone();
+        let color = entry.color;
+        let icon = entry.icon.clone();
+        let pinned = entry.pinned;
+        let last_pane = entry.last_pane;
+        let result = target.update(cx, move |destination, window, cx| -> Result<()> {
+            destination.automation_available(cx).map_err(|failure| anyhow::anyhow!(failure.message))?;
+            destination.remember_focus(window, cx);
+            workspace.update(cx, |workspace, cx| workspace.rebind_window(window, cx));
+            let closed = Self::observe_workspace(&workspace, window, cx);
+            let metadata = Self::observe_metadata(&workspace, window, cx);
+            let index = destination.entries.len();
+            destination.entries.insert(index, Entry {
+                workspace, name, description, color, icon, pinned, last_pane,
+                _closed: closed, _metadata: metadata,
+            });
+            // Keep the previous active entry's identity until select records it.
+            if destination.active >= index { destination.active += 1; }
+            destination.select(index, window, cx);
+            Ok(())
+        });
+        result.and_then(|result| result)?;
+        self.close_workspace(index, window, cx);
+        if activate { let _ = target.update(cx, |_, window, _| window.activate_window()); }
+        Ok(())
+    }
+    fn detach_workspace(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.entries.is_empty() || cx.global::<Shutdowns>().quitting {
+            return;
+        }
+        self.remember_focus(window, cx);
+        let entry = &self.entries[self.active];
+        let workspace = entry.workspace.clone();
+        let rollback = workspace.clone();
+        let name = entry.name.clone();
+        let description = entry.description.clone();
+        let color = entry.color;
+        let icon = entry.icon.clone();
+        let pinned = entry.pinned;
+        let last_pane = entry.last_pane;
+        let sidebar_width = self.sidebar_width;
+        let bounds = Bounds::centered(None, size(px(1000.), px(680.)), cx);
+        let result = cx.open_window(
+            WindowOptions {
+                            titlebar: workspace_titlebar(),
+                window_bounds: Some(WindowBounds::Windowed(bounds)),
+                ..Default::default()
+            },
+            move |window, cx| {
+                cx.new(|cx| {
+                    workspace.update(cx, |workspace, cx| workspace.rebind_window(window, cx));
+                    let closed = Self::observe_workspace(&workspace, window, cx);
+                    let metadata = Self::observe_metadata(&workspace, window, cx);
+                    let mut this = Self::empty(None);
+                    this.sidebar_width = sidebar_width;
+                    this.next_number = 2;
+                    this.entries.push(Entry {
+                        workspace,
+                        name,
+                        description,
+                        color,
+                        icon,
+                        pinned,
+                        last_pane,
+                        _closed: closed,
+                        _metadata: metadata,
+                    });
+                    this.select(0, window, cx);
+                    this
+                })
+            },
+        );
+        match result {
+            Ok(_) => {
+                self.close_workspace(self.active, window, cx);
+                cx.activate(true);
+            }
+            Err(error) => {
+                rollback.update(cx, |workspace, cx| workspace.rebind_window(window, cx));
+                self.select(self.active, window, cx);
+                self.notice = Some(format!("Move workspace: {error}"));
+                cx.notify();
+            }
+        }
+    }
+    fn detach_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if cx.global::<Shutdowns>().quitting {
+            return;
+        }
+        let workspace = self.entries[self.active].workspace.clone();
+        let Some(index) = workspace.read(cx).focused_index(window, cx) else {
+            return;
+        };
+        let source = workspace.read(cx).panes[index].clone();
+        let Some((id, tab)) = source.read(cx).active_tab_transfer() else {
+            return;
+        };
+        let terminal = tab.terminal.clone();
+        let name = self.entries[self.active].name.clone();
+        let bounds = Bounds::centered(None, size(px(1000.), px(680.)), cx);
+        let result = cx.open_window(
+            WindowOptions {
+                            titlebar: workspace_titlebar(),
+                window_bounds: Some(WindowBounds::Windowed(bounds)),
+                ..Default::default()
+            },
+            move |window, cx| cx.new(|cx| Self::from_tab(tab, name, window, cx)),
+        );
+        match result {
+            Ok(_) => {
+                source.update(cx, |pane, cx| pane.take_tab(id, cx));
+                if source.read(cx).terminals.is_empty() {
+                    workspace.update(cx, |workspace, cx| workspace.remove_pane(&source, cx));
+                }
+                cx.activate(true);
+                cx.notify();
+            }
+            Err(error) => {
+                terminal.update(cx, |terminal, cx| terminal.rebind_window(window, cx));
+                source.read(cx).focus(window, cx);
+                self.notice = Some(format!("Detach tab: {error}"));
+                cx.notify();
+            }
+        }
+    }
+    fn from_tab(
+        tab: pane_view::TabTransfer,
+        name: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        tab.terminal
+            .update(cx, |terminal, cx| terminal.rebind_window(window, cx));
+        let mut this = Self::empty(None);
+        let workspace = cx.new(|cx| {
+            let id = cx.entity_id();
+            let pane = cx.new(|cx| PaneView::from_transfer(tab, id, cx));
+            let mut workspace = Workspace {
+                pane_subscriptions: Default::default(),
+                zoomed: None,
+                split_drag: None,
+                panes: vec![pane.clone()],
+                layout: Some(PaneTree::Pane(pane.clone())),
+                error: None,
+                benchmark: false,
+            };
+            workspace.observe_pane(&pane, window, cx);
+            pane.read(cx).focus(window, cx);
+            workspace
+        });
+        let closed = Self::observe_workspace(&workspace, window, cx);
+        let metadata = Self::observe_metadata(&workspace, window, cx);
+        let last_pane = Some(workspace.read(cx).panes[0].entity_id());
+        this.entries.push(Entry {
+            workspace,
+            name: name.clone(),
+            description: String::new(),
+            color: None,
+            icon: None,
+            pinned: false,
+            last_pane,
+            _closed: closed,
+            _metadata: metadata,
+        });
+        this.next_number = 2;
+        window.set_window_title(&format!("{name} — rmux"));
+        this
+    }
+    fn set_workspace_icon(&mut self, icon: Option<String>, cx: &mut Context<Self>) {
+        if icon
+            .as_deref()
+            .is_some_and(|icon| !snapshot::valid_workspace_icon(icon))
+        {
+            return;
+        }
+        if let Some(entry) = self.entries.get_mut(self.active) {
+            entry.icon = icon;
+            cx.notify();
+        }
+    }
+    fn set_workspace_color(&mut self, color: Option<u32>, cx: &mut Context<Self>) {
+        if color.is_some_and(|color| color > 0xffffff) {
+            return;
+        }
+        if let Some(entry) = self.entries.get_mut(self.active) {
+            entry.color = color;
+            cx.notify();
+        }
+    }
+    fn toggle_workspace_pin(&mut self, cx: &mut Context<Self>) {
+        if self.entries.is_empty() {
+            return;
+        }
+        self.entries[self.active].pinned = !self.entries[self.active].pinned;
+        self.scroll_to_workspace(self.active);
+        cx.notify();
+    }
+    fn dismiss_notification(&mut self, id: EntityId, revision: u64, cx: &mut Context<Self>) {
+        let target = self.entries.iter().find_map(|entry| {
+            entry.workspace.read(cx).panes.iter().find_map(|pane| {
+                pane.read(cx)
+                    .terminals
+                    .iter()
+                    .find(|terminal| terminal.entity_id() == id)
+                    .cloned()
+            })
+        });
+        if let Some(target) = target {
+            target.update(cx, |terminal, cx| {
+                terminal.dismiss_notification(revision, cx)
+            });
+        }
+    }
+    fn focus_terminal(
+        &mut self,
+        workspace: EntityId,
+        terminal: EntityId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(index) = self
+            .entries
+            .iter()
+            .position(|entry| entry.workspace.entity_id() == workspace)
+        else {
+            return;
+        };
+        let target = self.entries[index]
+            .workspace
+            .read(cx)
+            .panes
+            .iter()
+            .find_map(|pane| {
+                pane.read(cx)
+                    .terminals
+                    .iter()
+                    .position(|view| view.entity_id() == terminal)
+                    .map(|tab| (pane.clone(), tab))
+            });
+        let Some((pane, tab)) = target else {
+            return;
+        };
+        self.remember_focus(window, cx);
+        self.remember_workspace_switch(index);
+        self.active = index;
+        self.rename = None;
+        self.entries[index].last_pane = Some(pane.entity_id());
+        self.reveal_workspace(index);
+        self.scroll_to_workspace(index);
+        window.set_window_title(&format!("{} — rmux", self.entries[index].name));
+        self.entries[index].workspace.update(cx, |workspace, cx| {
+            if workspace.zoomed.is_some() {
+                workspace.zoomed = Some(pane.entity_id());
+            }
+            cx.notify();
+        });
+        pane.update(cx, |pane, cx| pane.select(tab, window, cx));
+        cx.notify();
+    }
+    fn dismiss_all_notifications(&mut self, cx: &mut Context<Self>) {
+        let mut pending = Vec::new();
+        for entry in &self.entries {
+            for pane in &entry.workspace.read(cx).panes {
+                for terminal in &pane.read(cx).terminals {
+                    let view = terminal.read(cx);
+                    if let Some(message) = &view.notification {
+                        if view.dismissed_notification != Some(message.revision) {
+                            pending.push((terminal.clone(), message.revision));
+                        }
+                    }
+                }
+            }
+        }
+        for (terminal, revision) in pending {
+            terminal.update(cx, |terminal, cx| terminal.dismiss_notification(revision, cx));
+        }
+        cx.notify();
+    }
+
+    fn notification_targets(&self, cx: &App) -> Vec<(EntityId, EntityId, u64)> {
+        let mut targets = Vec::new();
+        for index in self.workspace_order(true) {
+            let entry = &self.entries[index];
+            for pane in &entry.workspace.read(cx).panes {
+                for terminal in &pane.read(cx).terminals {
+                    let view = terminal.read(cx);
+                    if let Some(message) = &view.notification && view.dismissed_notification != Some(message.revision) {
+                        targets.push((entry.workspace.entity_id(), terminal.entity_id(), message.revision));
+                    }
+                }
+            }
+        }
+        targets
+    }
+    fn toggle_notifications(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(state) = self.notification_navigation.take() {
+            if state.focus.is_focused(window) {
+                if let Some(origin) = state.origin { origin.focus(window); } else { self.select(self.active, window, cx); }
+            }
+        } else {
+            if self.settings_state.is_some() { self.toggle_settings(window, cx); }
+            let state = NotificationNavigation { focus: cx.focus_handle(), origin: window.focused(cx),
+                selected: self.notification_targets(cx).first().map(|row| row.1), scroll: ScrollHandle::new() };
+            state.focus.focus(window);
+            self.notification_navigation = Some(state);
+        }
+        cx.notify();
+    }
+    fn notification_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if event.keystroke.modifiers.platform || event.keystroke.modifiers.control || event.keystroke.modifiers.alt { return; }
+        let targets = self.notification_targets(cx);
+        let Some(state) = &mut self.notification_navigation else { return; };
+        let key = event.keystroke.key.as_str();
+        let selected = targets.iter().position(|row| Some(row.1) == state.selected).unwrap_or(0);
+        let direction = if key == "tab" { if event.keystroke.modifiers.shift { "up" } else { "down" } } else { key };
+        if let Some(index) = command_palette::navigated_result(selected, targets.len(), direction) {
+            state.selected = Some(targets[index].1);
+            state.scroll.scroll_to_item(index + 1);
+            cx.notify();
+        } else if key == "escape" {
+            self.toggle_notifications(window, cx);
+        } else if let Some(&(workspace, terminal, revision)) = targets.get(selected) {
+            if matches!(key, "enter" | "space") {
+                self.notification_navigation = None;
+                self.focus_terminal(workspace, terminal, window, cx);
+            } else if matches!(key, "backspace" | "delete") {
+                state.selected = targets.get(selected + 1).or_else(|| selected.checked_sub(1).and_then(|i| targets.get(i))).map(|row| row.1);
+                self.dismiss_notification(terminal, revision, cx);
+            }
+        }
+        cx.stop_propagation();
+    }
+
+    fn notification_panel(&self, cx: &mut Context<Self>) -> AnyElement {
+        let navigation = self.notification_navigation.as_ref().expect("open notification panel").clone();
+        let mut messages = Vec::new();
+        for index in self.workspace_order(true) {
+            let entry = &self.entries[index];
+            for pane in &entry.workspace.read(cx).panes {
+                for (tab, terminal) in pane.read(cx).terminals.iter().enumerate() {
+                    let view = terminal.read(cx);
+                    if let Some(message) = &view.notification
+                        && view.dismissed_notification != Some(message.revision)
+                    {
+                        messages.push((
+                            entry.workspace.entity_id(),
+                            terminal.entity_id(),
+                            entry.name.clone(),
+                            pane.read(cx).tab_title(tab, cx),
+                            view.attention.any(),
+                            message.clone(),
+                        ));
+                    }
+                }
+            }
+        }
+        let selected = messages.iter().find(|row| Some(row.1) == navigation.selected).or_else(|| messages.first()).map(|row| row.1);
+        div().track_focus(&navigation.focus).key_context("Notifications")
+            .on_mouse_down(MouseButton::Left, { let focus = navigation.focus.clone(); move |_, window, _| focus.focus(window) })
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| this.notification_key(event, window, cx)))
+            .w(px(340.))
+            .max_w(relative(0.45))
+            .h_full()
+            .flex_shrink_0()
+            .flex()
+            .flex_col()
+            .bg(rgb(0x242424))
+            .border_l_1()
+            .border_color(rgb(0x383838))
+            .child(
+                div()
+                    .h(px(36.))
+                    .px_3()
+                    .flex_shrink_0()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .child(div().flex_1().min_w_0().truncate().child(format!("Notifications ({})", messages.len())))
+                    .when(!messages.is_empty(), |header| header.child(
+                        div().id("dismiss-all-notifications").px_2().py_1().rounded_sm().text_xs().cursor_pointer()
+                            .hover(|style| style.bg(rgb(0x353535)))
+                            .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("Dismiss all notifications in this window".into())).into())
+                            .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
+                                if event.standard_click() { this.dismiss_all_notifications(cx); }
+                            })).child("Clear all")
+                    ))
+                    .child(
+                        div()
+                            .id("close-notifications")
+                            .px_2()
+                            .cursor_pointer()
+                            .hover(|style| style.bg(rgb(0x353535)))
+                            .on_click(cx.listener(|this, _, window, cx| this.toggle_notifications(window, cx)))
+                            .child(icons::icon("close")),
+                    ),
+            )
+            .child(
+                div()
+                    .id("notification-list")
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_y_scroll()
+                    .track_scroll(&navigation.scroll)
+                    .p_2()
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(0xa0a0a0))
+                            .mb_2()
+                            .child("↑↓ / Tab to navigate · Enter to open · Delete to dismiss · Esc to close"),
+                    )
+                    .when(messages.is_empty(), |list| {
+                        list.child(div().p_3().text_sm().child("No notifications to show"))
+                    })
+                    .children(messages.into_iter().map(
+                        |(workspace, terminal, name, terminal_title, unread, message)| {
+                            let revision = message.revision;
+                            div()
+                                .id(("notification", terminal))
+                                .p_3()
+                                .mb_2()
+                                .rounded_md()
+                                .text_sm()
+                                .cursor_pointer()
+                                .bg(if selected == Some(terminal) { rgb(0x303b4a) } else { rgb(0x292929) })
+                                .hover(|style| style.bg(rgb(0x303b50)))
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.notification_navigation = None;
+                                    this.focus_terminal(workspace, terminal, window, cx)
+                                }))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap_2()
+                                        .when(unread, |row| {
+                                            row.child(
+                                                div()
+                                                    .w(px(6.))
+                                                    .h(px(6.))
+                                                    .flex_shrink_0()
+                                                    .rounded_full()
+                                                    .bg(rgb(0xf0b85b)),
+                                            )
+                                        })
+                                        .child(
+                                            div()
+                                                .min_w_0()
+                                                .truncate()
+                                                .text_xs()
+                                                .text_color(rgb(0xa0a0a0))
+                                                .child(format!("{name} · {terminal_title}")),
+                                        ),
+                                )
+                                .when(!message.title.is_empty(), |card| {
+                                    card.child(
+                                        div()
+                                            .mt_1()
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .child(message.title.clone()),
+                                    )
+                                })
+                                .child(div().mt_1().child(message.body.clone()))
+                                .child(
+                                    div().mt_2().flex().justify_end().child(
+                                        div()
+                                            .id(("dismiss-notification", terminal))
+                                            .px_2()
+                                            .py_1()
+                                            .rounded_sm()
+                                            .text_xs()
+                                            .hover(|style| style.bg(rgb(0x43506a)))
+                                            .on_click(cx.listener(move |this, _, _, cx| {
+                                                cx.stop_propagation();
+                                                this.dismiss_notification(terminal, revision, cx);
+                                            }))
+                                            .child("Dismiss"),
+                                    ),
+                                )
+                        },
+                    )),
+            )
+            .into_any_element()
+    }
+    fn remember_workspace_switch(&mut self, index: usize) {
+        if index != self.active {
+            self.previous_workspace = self
+                .entries
+                .get(self.active)
+                .map(|entry| entry.workspace.entity_id());
+        }
+    }
+    fn last_workspace(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(index) = self
+            .entries
+            .iter()
+            .position(|entry| Some(entry.workspace.entity_id()) == self.previous_workspace)
+        {
+            self.select(index, window, cx);
+        }
+    }
+    fn request_close_workspace(
+        &mut self,
+        index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(entry) = self.entries.get(index) else {
+            return;
+        };
+        let active_work = || {
+            entry.workspace.read(cx).panes.iter().any(|pane| {
+                pane.read(cx)
+                    .terminals
+                    .iter()
+                    .any(|terminal| terminal.read(cx).has_active_work())
+            })
+        };
+        let has_terminals = entry
+            .workspace
+            .read(cx)
+            .panes
+            .iter()
+            .any(|pane| !pane.read(cx).terminals.is_empty());
+        if !cx
+            .global::<ClosePolicy>()
+            .confirms(has_terminals, active_work)
+        {
+            self.close_workspace(index, window, cx);
+            return;
+        }
+        if self.close_prompt.is_some() {
+            return;
+        }
+        let id = entry.workspace.entity_id();
+        let Some(permit) = cx.global::<PromptGate>().acquire() else {
+            return;
+        };
+        self.close_prompt = Some(id);
+        let answer = window.prompt(PromptLevel::Warning, "Close workspace?",
+            Some("Closing this workspace terminates all of its owned terminal processes and discards their output history."),
+            &["Cancel", "Close Workspace"], cx);
+        cx.spawn_in(window, async move |entity, cx| {
+            let confirmed = matches!(answer.await, Ok(1));
+            drop(permit);
+            let _ = cx.update(|window, cx| {
+                entity.update(cx, |this, cx| {
+                    if this.close_prompt != Some(id) {
+                        return;
+                    }
+                    this.close_prompt = None;
+                    if confirmed {
+                        if let Some(index) = this
+                            .entries
+                            .iter()
+                            .position(|entry| entry.workspace.entity_id() == id)
+                        {
+                            this.close_workspace(index, window, cx);
+                        }
+                    }
+                })
+            });
+        })
+        .detach();
+    }
+    fn close_workspace(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if index >= self.entries.len() {
+            return;
+        }
+        self.rename = None;
+        let selected = self.entries.get(self.active).map(|entry| entry.workspace.entity_id());
+        let slot = self.group_anchor_slot(self.entries[index].workspace.entity_id());
+        let removed = self.entries.remove(index);
+        let removed_active = selected == Some(removed.workspace.entity_id());
+        self.sidebar_selection.retain(|id| *id != removed.workspace.entity_id());
+        if self.sidebar_selection_anchor == Some(removed.workspace.entity_id()) { self.sidebar_selection_anchor = None; }
+        self.groups.remove(removed.workspace.entity_id());
+        if self.previous_workspace == Some(removed.workspace.entity_id()) {
+            self.previous_workspace = None;
+        }
+        if self.entries.is_empty() {
+            window.remove_window();
+            return;
+        }
+        if self.active > index {
+            self.active -= 1;
+        }
+        self.active = self.active.min(self.entries.len() - 1);
+        let selected = if selected == Some(removed.workspace.entity_id()) {
+            slot.filter(|(_, anchor, _)| *anchor == removed.workspace.entity_id())
+                .and_then(|(id, _, _)| self.groups.entries().iter().find(|group| group.id == id))
+                .and_then(|group| group.members.first()).copied()
+        } else { selected };
+        self.preserve_group_slot(slot, selected);
+        if removed_active {
+            self.select(self.active, window, cx);
+        } else {
+            cx.notify();
+        }
+    }
+    fn entry_directory(entry: &Entry, window: &Window, cx: &App) -> Option<(Option<String>, Option<String>)> {
+        let workspace = entry.workspace.read(cx);
+        workspace
+            .focused_index(window, cx)
+            .and_then(|index| workspace.panes.get(index))
+            .or_else(|| {
+                workspace
+                    .panes
+                    .iter()
+                    .find(|pane| Some(pane.entity_id()) == entry.last_pane)
+            })
+            .or_else(|| workspace.panes.first())?
+            .read(cx)
+            .context_label(cx)
+    }
+    fn close_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some((_, focus)) = self.palette.take() {
+            if let Some(focus) = focus {
+                focus.focus(window);
+            } else {
+                self.select(self.active, window, cx);
+            }
+            cx.notify();
+        }
+    }
+    fn show_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.palette.is_some() {
+            self.close_palette(window, cx);
+            return;
+        }
+        let focus = window.focused(cx);
+        let workspaces = self.workspace_order(true)
+            .into_iter()
+            .map(|index| { let entry = &self.entries[index]; (entry.workspace.entity_id(), entry.name.clone()) })
+            .collect();
+        let active_workspace = self.entries[self.active].workspace.entity_id();
+        let mut terminals = Vec::new();
+        for entry in &self.entries {
+            for (pane_index, pane) in entry.workspace.read(cx).panes.iter().enumerate() {
+                let pane = pane.read(cx);
+                for (tab, terminal) in pane.terminals.iter().enumerate() {
+                    terminals.push((
+                        None,
+                        entry.workspace.entity_id(),
+                        terminal.entity_id(),
+                        format!(
+                            "{} / Pane {} / Tab {} — {}",
+                            entry.name,
+                            pane_index + 1,
+                            tab + 1,
+                            pane.tab_title(tab, cx)
+                        ),
+                        terminal.read(cx).snapshot_directory.as_ref().map(|path| path.to_string_lossy().into_owned()),
+                    ));
+                }
+            }
+        }
+        let current_window = window.window_handle();
+        let mut external_workspaces = Vec::new();
+        let windows = cx.windows().into_iter().enumerate().filter_map(|(index, handle)| {
+            if handle == current_window { return None; }
+            let root = handle.downcast::<Self>()?.read(cx).ok()?;
+            if root.benchmark { return None; }
+            for entry in &root.entries {
+                external_workspaces.push((handle, entry.workspace.entity_id(), format!("Window {} / Workspace: {}", index + 1, entry.name)));
+                for (pane_index, pane) in entry.workspace.read(cx).panes.iter().enumerate() {
+                    let pane = pane.read(cx);
+                    for (tab, terminal) in pane.terminals.iter().enumerate() {
+                        terminals.push((Some(handle), entry.workspace.entity_id(), terminal.entity_id(),
+                            format!("Window {} / {} / Pane {} / Tab {} — {}", index + 1, entry.name, pane_index + 1, tab + 1, pane.tab_title(tab, cx)),
+                            terminal.read(cx).snapshot_directory.as_ref().map(|path| path.to_string_lossy().into_owned())));
+                    }
+                }
+            }
+            let name = &root.entries.get(root.active)?.name;
+            Some((handle, format!("Window {} — {name}", index + 1)))
+        }).collect();
+        let palette = cx.new(|cx| {
+            command_palette::CommandPalette::new(
+                workspaces,
+                terminals,
+                windows,
+                external_workspaces,
+                self.groups.entries().iter().filter(|group| !group.members.contains(&active_workspace))
+                    .map(|group| (group.id, group.name.clone())).collect(),
+                active_workspace,
+                window,
+                cx,
+            )
+        });
+        cx.subscribe_in(
+            &palette,
+            window,
+            |this, _, event: &command_palette::PaletteEvent, window, cx| {
+                this.close_palette(window, cx);
+                match event {
+                    command_palette::PaletteEvent::Run(action) => {
+                        window.dispatch_action(action.boxed_clone(), cx)
+                    }
+                    command_palette::PaletteEvent::SelectWorkspace(id) => {
+                        if let Some(index) = this
+                            .entries
+                            .iter()
+                            .position(|entry| entry.workspace.entity_id() == *id)
+                        {
+                            this.select(index, window, cx);
+                        }
+                    }
+                    command_palette::PaletteEvent::MoveTabToWorkspace(id) => {
+                        this.move_tab_to_workspace(*id, window, cx)
+                    }
+                    command_palette::PaletteEvent::MoveTabToWindowWorkspace(destination, workspace) => {
+                        if let Err(error) = this.move_tab_to_window_workspace(*destination, *workspace, window, cx) {
+                            this.notice = Some(format!("Move tab: {error}"));
+                            cx.notify();
+                        }
+                    }
+                    command_palette::PaletteEvent::MoveWorkspaceToWindow(source, destination) => {
+                        this.move_workspace_to_window(*source, *destination, window, cx);
+                    }
+                    command_palette::PaletteEvent::SelectTerminal(workspace, terminal) => {
+                        this.focus_terminal(*workspace, *terminal, window, cx);
+                    }
+                    command_palette::PaletteEvent::SelectWindowTerminal(target, workspace, terminal) => {
+                        let result = target.downcast::<Self>().ok_or_else(|| anyhow::anyhow!("window unavailable"))
+                            .and_then(|target| target.update(cx, |destination, window, cx| -> Result<()> {
+                                destination.automation_available(cx).map_err(|failure| anyhow::anyhow!(failure.message))?;
+                                anyhow::ensure!(destination.automation_surface_target(*terminal, cx).is_some_and(|(owner, _)| owner == *workspace), "terminal moved or closed");
+                                destination.focus_terminal(*workspace, *terminal, window, cx);
+                                window.activate_window();
+                                Ok(())
+                            })?);
+                        if let Err(error) = result { this.notice = Some(format!("Switch terminal: {error}")); cx.notify(); }
+                    }
+                    command_palette::PaletteEvent::SelectWindowWorkspace(target, workspace) => {
+                        let result = target.downcast::<Self>().ok_or_else(|| anyhow::anyhow!("window unavailable"))
+                            .and_then(|target| target.update(cx, |destination, window, cx| -> Result<()> {
+                                destination.automation_available(cx).map_err(|failure| anyhow::anyhow!(failure.message))?;
+                                let index = destination.entries.iter().position(|entry| entry.workspace.entity_id() == *workspace)
+                                    .ok_or_else(|| anyhow::anyhow!("workspace moved or closed"))?;
+                                destination.select(index, window, cx);
+                                window.activate_window();
+                                Ok(())
+                            })?);
+                        if let Err(error) = result { this.notice = Some(format!("Switch workspace: {error}")); cx.notify(); }
+                    }
+                    command_palette::PaletteEvent::Close => {}
+                }
+            },
+        )
+        .detach();
+        self.palette = Some((palette, focus));
+        cx.notify();
+    }
+    fn move_tab_to_window_workspace(&mut self, target: AnyWindowHandle, destination_id: EntityId, window: &mut Window, cx: &mut Context<Self>) -> Result<()> {
+        let workspace = self.entries.get(self.active).ok_or_else(|| anyhow::anyhow!("source workspace closed"))?.workspace.clone();
+        let index = workspace.read(cx).focused_index(window, cx).ok_or_else(|| anyhow::anyhow!("no focused pane"))?;
+        let id = workspace.read(cx).panes[index].read(cx).active_terminal_id().ok_or_else(|| anyhow::anyhow!("source tab closed"))?;
+        self.move_surface_to_workspace(id, target, destination_id, true, window, cx)
+    }
+    pub(super) fn move_surface_to_workspace(&mut self, id: EntityId, target: AnyWindowHandle, destination_id: EntityId, activate: bool, window: &mut Window, cx: &mut Context<Self>) -> Result<()> {
+        self.automation_available(cx).map_err(|failure| anyhow::anyhow!(failure.message))?;
+        let (workspace, source) = self.entries.iter().find_map(|entry| {
+            entry.workspace.read(cx).panes.iter().find(|pane| pane.read(cx).terminals.iter().any(|terminal| terminal.entity_id() == id))
+                .map(|pane| (entry.workspace.clone(), pane.clone()))
+        }).ok_or_else(|| anyhow::anyhow!("source tab closed"))?;
+        if target == window.window_handle() {
+            anyhow::ensure!(self.automation_contains_workspace(destination_id), "destination workspace closed");
+            self.transfer_tab(workspace.entity_id(), source.entity_id(), id, destination_id, window, cx);
+            if activate { window.activate_window(); }
+            return Ok(());
+        }
+        let target = target.downcast::<Self>().ok_or_else(|| anyhow::anyhow!("invalid destination window"))?;
+        let (_, tab) = source.read(cx).tab_transfer(id).ok_or_else(|| anyhow::anyhow!("source tab closed"))?;
+        // Validate the live destination before rebinding or removing the source.
+        // GPUI updates are synchronous; no other command can interleave here.
+        target.update(cx, move |destination, window, cx| -> Result<()> {
+            destination.automation_available(cx).map_err(|failure| anyhow::anyhow!(failure.message))?;
+            let index = destination.entries.iter().position(|entry| entry.workspace.entity_id() == destination_id)
+                .ok_or_else(|| anyhow::anyhow!("destination workspace closed"))?;
+            let entry = &destination.entries[index];
+            let workspace = entry.workspace.clone();
+            let pane = workspace.read(cx).panes.iter()
+                .find(|pane| Some(pane.entity_id()) == entry.last_pane)
+                .or_else(|| workspace.read(cx).panes.first()).cloned()
+                .ok_or_else(|| anyhow::anyhow!("destination has no pane"))?;
+            destination.remember_focus(window, cx);
+            tab.terminal.update(cx, |terminal, cx| terminal.rebind_window(window, cx));
+            workspace.update(cx, |workspace, cx| {
+                if workspace.zoomed.is_some() { workspace.zoomed = Some(pane.entity_id()); }
+                cx.notify();
+            });
+            destination.remember_workspace_switch(index);
+            destination.active = index;
+            destination.entries[index].last_pane = Some(pane.entity_id());
+            destination.reveal_workspace(index);
+            destination.scroll_to_workspace(index);
+            window.set_window_title(&format!("{} — rmux", destination.entries[index].name));
+            pane.update(cx, |pane, cx| pane.append_tabs(vec![tab], 0, window, cx));
+            cx.notify();
+            Ok(())
+        })??;
+        source.update(cx, |pane, cx| pane.take_tab(id, cx));
+        if source.read(cx).terminals.is_empty() {
+            workspace.update(cx, |workspace, cx| workspace.remove_pane(&source, cx));
+        } else if self.entries.get(self.active).is_some_and(|entry| entry.workspace == workspace) {
+            source.read(cx).focus(window, cx);
+        }
+        if activate { let _ = target.update(cx, |_, window, _| window.activate_window()); }
+        cx.notify();
+        Ok(())
+    }
+    fn move_tab_next_workspace(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.entries.len() < 2 {
+            return;
+        }
+        let order = self.workspace_order(true);
+        let Some(position) = order.iter().position(|index| *index == self.active) else { return; };
+        let destination = order[(position + 1) % order.len()];
+        self.move_tab_to_workspace(self.entries[destination].workspace.entity_id(), window, cx);
+    }
+    fn move_tab_to_workspace(&mut self, id: EntityId, window: &mut Window, cx: &mut Context<Self>) {
+        let source_workspace = self.entries[self.active].workspace.clone();
+        let Some(source_index) = source_workspace.read(cx).focused_index(window, cx) else {
+            return;
+        };
+        let source = &source_workspace.read(cx).panes[source_index];
+        let Some(terminal) = source.read(cx).active_terminal_id() else {
+            return;
+        };
+        self.transfer_tab(
+            source_workspace.entity_id(),
+            source.entity_id(),
+            terminal,
+            id,
+            window,
+            cx,
+        );
+    }
+    fn transfer_tab(
+        &mut self,
+        workspace_id: EntityId,
+        pane_id: EntityId,
+        terminal: EntityId,
+        destination_id: EntityId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.entries.len() < 2 || cx.global::<Shutdowns>().quitting {
+            return;
+        }
+        let Some(destination) = self
+            .entries
+            .iter()
+            .position(|entry| entry.workspace.entity_id() == destination_id)
+        else {
+            return;
+        };
+        let Some(origin) = self
+            .entries
+            .iter()
+            .position(|entry| entry.workspace.entity_id() == workspace_id)
+        else {
+            return;
+        };
+        if destination == origin {
+            return;
+        }
+        let source_workspace = self.entries[origin].workspace.clone();
+        let Some(source) = source_workspace
+            .read(cx)
+            .panes
+            .iter()
+            .find(|pane| pane.entity_id() == pane_id)
+            .cloned()
+        else {
+            return;
+        };
+        let entry = &self.entries[destination];
+        let destination_workspace = entry.workspace.clone();
+        let Some(target) = destination_workspace
+            .read(cx)
+            .panes
+            .iter()
+            .find(|pane| Some(pane.entity_id()) == entry.last_pane)
+            .or_else(|| destination_workspace.read(cx).panes.first())
+            .cloned()
+        else {
+            return;
+        };
+        self.entries[origin].last_pane = Some(source.entity_id());
+        let Some(tab) = source.update(cx, |pane, cx| pane.take_tab(terminal, cx)) else {
+            return;
+        };
+        if source.read(cx).terminals.is_empty() {
+            source_workspace.update(cx, |workspace, cx| workspace.remove_pane(&source, cx));
+        }
+        destination_workspace.update(cx, |workspace, cx| {
+            if workspace.zoomed.is_some() {
+                workspace.zoomed = Some(target.entity_id());
+            }
+            cx.notify();
+        });
+        // Set the destination before selecting the transferred terminal, without
+        // briefly focusing (and acknowledging) the destination's old active tab.
+        self.rename = None;
+        self.remember_workspace_switch(destination);
+        self.active = destination;
+        self.entries[destination].last_pane = Some(target.entity_id());
+        self.reveal_workspace(destination);
+        self.scroll_to_workspace(destination);
+        window.set_window_title(&format!("{} — rmux", self.entries[destination].name));
+        target.update(cx, |pane, cx| pane.append_tabs(vec![tab], 0, window, cx));
+        cx.notify();
+    }
+
+    fn next_unread(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let order = self.workspace_order(true);
+        let start = order.iter().position(|index| *index == self.active).unwrap_or(0);
+        let target = order.iter().cycle().skip(start).take(order.len()).find_map(|index| {
+            let workspace = self.entries[*index].workspace.read(cx);
+            workspace.panes.iter().find_map(|pane| {
+                pane.read(cx).terminals.iter()
+                    .find(|terminal| terminal.read(cx).attention.any())
+                    .map(|terminal| (self.entries[*index].workspace.entity_id(), terminal.entity_id()))
+            })
+        });
+        let Some((workspace, terminal)) = target else { return; };
+        if let Some(id) = self.groups.containing(workspace).map(|group| group.id) {
+            self.groups.get_mut(id).unwrap().collapsed = false;
+        }
+        // Shared direct focus avoids acknowledging a previously active tab,
+        // reveals the target pane under zoom and remembers the destination.
+        self.focus_terminal(workspace, terminal, window, cx);
+    }
+
+    pub(super) fn restored(
+        prepared: restore::Prepared,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let (snapshot, mut sessions) = prepared.into_parts();
+        let mut this = Self {
+            palette: None,
+            restore_job: None,
+            workspace_scroll: ScrollHandle::new(),
+            notice: None,
+            memory_rows: None,
+            memory_application: None,
+            memory_sort: Default::default(),
+            memory_loading: false,
+            memory_generation: 0,
+            process_sampler: Default::default(),
+            rename: None,
+            entries: Vec::new(),
+            active: snapshot.active_workspace,
+            groups: workspace_groups::Groups::default(),
+            sidebar_selection: Vec::new(),
+            sidebar_selection_anchor: None,
+            rendered_workspace: None,
+            previous_workspace: None,
+            close_prompt: None,
+            window_close_prompt: false,
+            close_handler_installed: false,
+            focus_history: Vec::new(),
+            notification_navigation: None,
+            settings_state: None,
+            command_launching: false,
+            next_number: snapshot.workspaces.len() + 1,
+            sidebar: snapshot.sidebar,
+            sidebar_width: snapshot.sidebar_width,
+            sidebar_drag: None,
+            benchmark: false,
+        };
+        for saved in snapshot.workspaces {
+            let workspace = cx.new(|cx| {
+                let mut workspace = Workspace {
+                    pane_subscriptions: Default::default(),
+                    zoomed: None,
+                    split_drag: None,
+                    panes: Vec::new(),
+                    layout: None,
+                    error: None,
+                    benchmark: false,
+                };
+                workspace.layout =
+                    Some(workspace.restore_node(saved.layout, &mut sessions, window, cx));
+                workspace.zoomed = saved.zoomed_pane.map(|index| workspace.panes[index].entity_id());
+                workspace
+            });
+            let last_pane = Some(workspace.read(cx).panes[saved.zoomed_pane.unwrap_or(saved.active_pane)].entity_id());
+            let closed = Self::observe_workspace(&workspace, window, cx);
+            let metadata = Self::observe_metadata(&workspace, window, cx);
+            this.entries.push(Entry {
+                workspace,
+                name: saved.name,
+                description: saved.description,
+                color: saved.color,
+                icon: saved.icon,
+                pinned: saved.pinned,
+                last_pane,
+                _closed: closed,
+                _metadata: metadata,
+            });
+        }
+        // Resolve persisted indices to live workspace identities.
+        let groups = snapshot.groups.iter().map(|group| group.map_members(|index| {
+            Ok(this.entries[*index].workspace.entity_id())
+        })).collect::<Result<Vec<_>>>().expect("validated group indices");
+        this.groups = workspace_groups::Groups::from_entries(groups, |_| true).expect("validated groups");
+        // Saved entry order is authoritative; sidebar pin tiers are a projection.
+        // Terminal constructors may focus the final prepared tab. Establish the
+        // saved focus before select() records the current workspace's focus.
+        let entry = &this.entries[this.active];
+        let workspace = entry.workspace.read(cx);
+        if let Some(pane) = workspace
+            .panes
+            .iter()
+            .find(|pane| Some(pane.entity_id()) == entry.last_pane)
+        {
+            pane.read(cx).focus(window, cx);
+        }
+        this.select(this.active, window, cx);
+        // Selecting a hidden member normally expands its group. Startup instead
+        // preserves the saved collapsed state while keeping that terminal active.
+        for saved in &snapshot.groups {
+            if let Some(group) = this.groups.get_mut(saved.id) { group.collapsed = saved.collapsed; }
+        }
+        this.scroll_to_workspace(this.active);
+        this
+    }
+
+    fn open_layout(&mut self, cx: &mut Context<Self>) {
+        if cx.global::<Shutdowns>().quitting || self.restore_job.is_some() {
+            return;
+        }
+        let job = restore::Job::default();
+        let token = job.0.clone();
+        self.restore_job = Some(job);
+        cx.notify();
+        let picker = cx.prompt_for_paths(PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+            prompt: Some("Open Layout".into()),
+        });
+        let scrollback_bytes = cx.global::<Preferences>().scrollback_bytes();
+        let executor = cx.background_executor().clone();
+        cx.spawn(async move |entity, cx| {
+            let result = async {
+                let Some(paths) = picker.await?? else {
+                    return Ok::<_, anyhow::Error>(());
+                };
+                let Some(path) = paths.into_iter().next() else {
+                    return Ok(());
+                };
+                let _ = entity.update(cx, |this, cx| {
+                    this.notice = Some("Opening layout…".into());
+                    cx.notify();
+                });
+                let worker_token = token.clone();
+                let prepared = executor
+                    .spawn(async move {
+                        restore::Prepared::read(&path, &worker_token, scrollback_bytes)
+                    })
+                    .await?;
+                cx.update(|cx| -> anyhow::Result<()> {
+                    if cx.global::<Shutdowns>().quitting || restore::cancelled(&token) {
+                        return Ok(());
+                    }
+                    cx.open_window(
+                        WindowOptions {
+                            titlebar: workspace_titlebar(),
+                            window_bounds: Some(prepared.snapshot.geometry.map(|geometry| geometry.restore(cx))
+                                .unwrap_or_else(|| WindowBounds::centered(size(px(1000.), px(680.)), cx))),
+                            ..Default::default()
+                        },
+                        move |window, cx| cx.new(|cx| Self::restored(prepared, window, cx)),
+                    )?;
+                    cx.activate(true);
+                    Ok(())
+                })??;
+                Ok(())
+            }
+            .await;
+            let was_cancelled = restore::cancelled(&token);
+            let _ = entity.update(cx, |this, cx| {
+                this.restore_job = None;
+                this.notice = if was_cancelled {
+                    Some("Layout restore cancelled".into())
+                } else {
+                    result.err().map(|error| format!("Open layout: {error}"))
+                };
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    pub fn new(panes: Option<usize>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let mut this = Self::empty(panes);
+        this.add(panes.unwrap_or(1), window, cx);
+        this
+    }
+    fn empty(panes: Option<usize>) -> Self {
+        Self {
+            palette: None,
+            restore_job: None,
+            workspace_scroll: ScrollHandle::new(),
+            notice: None,
+            memory_rows: None,
+            memory_application: None,
+            memory_sort: Default::default(),
+            memory_loading: false,
+            memory_generation: 0,
+            process_sampler: Default::default(),
+            rename: None,
+            entries: Vec::new(),
+            active: 0,
+            groups: workspace_groups::Groups::default(),
+            sidebar_selection: Vec::new(),
+            sidebar_selection_anchor: None,
+            rendered_workspace: None,
+            previous_workspace: None,
+            close_prompt: None,
+            window_close_prompt: false,
+            close_handler_installed: false,
+            focus_history: Vec::new(),
+            notification_navigation: None,
+            settings_state: None,
+            command_launching: false,
+            next_number: 1,
+            sidebar: panes.is_none(),
+            sidebar_width: 200.,
+            sidebar_drag: None,
+            benchmark: panes.is_some(),
+        }
+    }
+
+    fn remember_focus(&mut self, window: &Window, cx: &App) {
+        if let Some(entry) = self.entries.get_mut(self.active) {
+            let workspace = entry.workspace.read(cx);
+            if let Some(index) = workspace.focused_index(window, cx) {
+                entry.last_pane = Some(workspace.panes[index].entity_id());
+            }
+        }
+    }
+
+    pub(super) fn layout_snapshot(&mut self, window: &Window, cx: &App) -> Result<snapshot::WindowSnapshot> {
+        self.remember_focus(window, cx);
+        Ok(snapshot::WindowSnapshot {
+                groups: self.groups.entries().iter().map(|group| group.map_members(|id| {
+                    self.entries.iter().position(|entry| entry.workspace.entity_id() == *id)
+                        .ok_or_else(|| anyhow::anyhow!("group references a missing workspace"))
+                })).collect::<Result<_>>()?,
+                geometry: Some(window_geometry::Geometry::capture(window)),
+                version: 1,
+                sidebar: self.sidebar,
+                sidebar_width: self.sidebar_width,
+                active_workspace: self.active,
+                workspaces: self
+                    .entries
+                    .iter()
+                    .map(|entry| {
+                        let workspace = entry.workspace.read(cx);
+                        let layout = workspace
+                            .layout
+                            .as_ref()
+                            .ok_or_else(|| anyhow::anyhow!("workspace has no terminal layout"))?;
+                        Ok(snapshot::WorkspaceSnapshot {
+                            name: entry.name.clone(),
+                            description: entry.description.clone(),
+                            color: entry.color,
+                            icon: entry.icon.clone(),
+                            pinned: entry.pinned,
+                            active_pane: workspace
+                                .panes
+                                .iter()
+                                .find(|pane| Some(pane.entity_id()) == entry.last_pane)
+                                .and_then(|pane| layout.pane_index(pane))
+                                .unwrap_or(0),
+                            zoomed_pane: workspace.zoomed.and_then(|id| workspace.panes.iter().find(|pane| pane.entity_id() == id))
+                                .and_then(|pane| layout.pane_index(pane)),
+                            layout: Workspace::snapshot_tree(layout, cx),
+                        })
+                    })
+                    .collect::<anyhow::Result<_>>()?,
+        })
+    }
+
+    pub(super) fn session_snapshot(&mut self, window: &Window, cx: &mut Context<Self>) -> Result<snapshot::SessionSnapshot> {
+        self.automation_available(cx).map_err(|failure| anyhow::anyhow!(failure.message))?;
+        let current = window.window_handle();
+        let active = cx.active_window();
+        let mut snapshot = snapshot::SessionSnapshot { version: 1, active_window: None, windows: Vec::new() };
+        for handle in cx.windows() {
+            let Some(typed) = handle.downcast::<Self>() else { continue; };
+            let saved = if handle == current {
+                self.layout_snapshot(window, cx)?
+            } else {
+                if typed.read(cx).is_ok_and(|view| view.benchmark) { continue; }
+                typed.update(cx, |view, window, cx| -> Result<_> {
+                    view.automation_available(cx).map_err(|failure| anyhow::anyhow!(failure.message))?;
+                    view.layout_snapshot(window, cx)
+                })??
+            };
+            if active == Some(handle) { snapshot.active_window = Some(snapshot.windows.len()); }
+            snapshot.windows.push(saved);
+        }
+        Ok(snapshot)
+    }
+
+    fn save_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let snapshot = match self.session_snapshot(window, cx) {
+            Ok(snapshot) => snapshot,
+            Err(error) => { self.notice = Some(format!("Save session: {error}")); cx.notify(); return; }
+        };
+        let directory = std::env::current_dir().unwrap_or_default();
+        let picker = cx.prompt_for_new_path(&directory, Some("rmux-session.json"));
+        let executor = cx.background_executor().clone();
+        cx.spawn(async move |entity, cx| {
+            let result = async {
+                let Some(path) = picker.await?? else { return Ok::<_, anyhow::Error>(None); };
+                let label = path.display().to_string();
+                executor.spawn(async move { snapshot.save(&path) }).await?;
+                Ok(Some(format!("Saved session to {label}")))
+            }.await;
+            let _ = entity.update(cx, |this, cx| {
+                this.notice = match result { Ok(message) => message, Err(error) => Some(format!("Save session: {error}")) };
+                cx.notify();
+            });
+        }).detach();
+    }
+
+    fn save_layout(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let snapshot = match self.layout_snapshot(window, cx) {
+            Ok(snapshot) => snapshot,
+            Err(error) => {
+                self.notice = Some(error.to_string());
+                cx.notify();
+                return;
+            }
+        };
+        let directory = std::env::current_dir().unwrap_or_default();
+        let picker = cx.prompt_for_new_path(&directory, Some("rmux-layout.json"));
+        let executor = cx.background_executor().clone();
+        cx.spawn(async move |entity, cx| {
+            let result = async {
+                let Some(path) = picker.await?? else {
+                    return Ok::<_, anyhow::Error>(None);
+                };
+                let label = path.display().to_string();
+                executor.spawn(async move { snapshot.save(&path) }).await?;
+                Ok(Some(format!("Saved layout to {label}")))
+            }
+            .await;
+            let _ = entity.update(cx, |this, cx| {
+                this.notice = match result {
+                    Ok(message) => message,
+                    Err(error) => Some(format!("Save layout: {error}")),
+                };
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn select(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if index >= self.entries.len() {
+            return;
+        }
+        self.rename = None;
+        self.remember_focus(window, cx);
+        self.remember_workspace_switch(index);
+        self.active = index;
+        self.reveal_workspace(index);
+        self.scroll_to_workspace(index);
+        let entry = &self.entries[index];
+        window.set_window_title(&format!("{} — rmux", entry.name));
+        let workspace = entry.workspace.read(cx);
+        if let Some(pane) = workspace
+            .panes
+            .iter()
+            .find(|pane| Some(pane.entity_id()) == entry.last_pane)
+            .or_else(|| workspace.panes.first())
+        {
+            pane.read(cx).focus(window, cx);
+        }
+        cx.notify();
+    }
+
+    fn add(&mut self, panes: usize, window: &mut Window, cx: &mut Context<Self>) {
+        self.add_with_group(panes, true, window, cx);
+    }
+
+    fn add_with_group(&mut self, panes: usize, inherit_group: bool, window: &mut Window, cx: &mut Context<Self>) {
+        self.add_with_placement(panes, inherit_group, None, window, cx);
+    }
+
+    fn add_with_placement(&mut self, panes: usize, inherit_group: bool, placement: Option<workspace_groups::Placement>, window: &mut Window, cx: &mut Context<Self>) {
+        self.add_with_directory(panes, inherit_group, placement, None, window, cx);
+    }
+
+    fn add_with_directory(&mut self, panes: usize, inherit_group: bool, placement: Option<workspace_groups::Placement>, directory_override: Option<std::path::PathBuf>, window: &mut Window, cx: &mut Context<Self>) {
+        self.add_configured(panes, inherit_group, placement, directory_override, true, None, window, cx);
+    }
+
+    fn add_configured(&mut self, panes: usize, inherit_group: bool, placement: Option<workspace_groups::Placement>, directory_override: Option<std::path::PathBuf>, focus: bool, mut prepared: Option<(Session, Option<String>)>, window: &mut Window, cx: &mut Context<Self>) {
+        if cx.global::<Shutdowns>().quitting {
+            return;
+        }
+        if focus { self.remember_focus(window, cx); }
+        let parent_group = self.entries.get(self.active).filter(|_| inherit_group).and_then(|entry| {
+            let member = entry.workspace.entity_id();
+            self.groups.containing(member).map(|group| (group.id, member))
+        });
+        let directory_entry = parent_group
+            .and_then(|(_, member)| self.groups.containing(member))
+            .and_then(|group| group.members.first())
+            .and_then(|anchor| self.entries.iter().find(|entry| entry.workspace.entity_id() == *anchor))
+            .or_else(|| self.entries.get(self.active));
+        let directory = directory_override.or_else(|| directory_entry.and_then(|entry| {
+            let workspace = entry.workspace.read(cx);
+            workspace.panes.iter().find(|pane| Some(pane.entity_id()) == entry.last_pane)
+                .or_else(|| workspace.panes.first())
+                .and_then(|pane| pane.read(cx).cached_directory(cx))
+        }));
+        self.rename = None;
+        let workspace = cx.new(|cx| {
+            let mut workspace = Workspace {
+                pane_subscriptions: Default::default(),
+                zoomed: None,
+                split_drag: None,
+                panes: Vec::new(),
+                layout: None,
+                error: None,
+                benchmark: self.benchmark,
+            };
+            for _ in 0..panes {
+                workspace.add_prepared(SplitAxis::Columns, directory.clone(), focus, prepared.take(), window, cx);
+            }
+            workspace
+        });
+        let closed = Self::observe_workspace(&workspace, window, cx);
+        let metadata = Self::observe_metadata(&workspace, window, cx);
+        let last_pane = workspace.read(cx).panes.last().map(Entity::entity_id);
+        self.entries.push(Entry {
+            workspace,
+            name: format!("Workspace {}", self.next_number),
+            description: String::new(),
+            color: None,
+            icon: None,
+            pinned: false,
+            last_pane,
+            _closed: closed,
+            _metadata: metadata,
+        });
+        self.next_number += 1;
+        if let Some((group, after)) = parent_group {
+            let member = self.entries.last().unwrap().workspace.entity_id();
+            if let Err(error) = self.groups.add_new(group, member, Some(after), placement.unwrap_or(cx.global::<Preferences>().group_new_workspace_placement)) {
+                self.notice = Some(format!("Add workspace to group: {error}"));
+            }
+            if let Some(group) = self.groups.get_mut(group) { group.collapsed = false; }
+        }
+        if focus {
+        self.remember_workspace_switch(self.entries.len() - 1);
+        self.active = self.entries.len() - 1;
+        self.scroll_to_workspace(self.active);
+        window.set_window_title(&format!("{} — rmux", self.entries[self.active].name));
+        }
+        cx.notify();
+    }
+
+    fn observe_workspace(
+        workspace: &Entity<Workspace>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Subscription {
+        cx.subscribe_in(
+            &workspace,
+            window,
+            |this, workspace, _: &WorkspaceEmpty, window, cx| {
+                if let Some(index) = this
+                    .entries
+                    .iter()
+                    .position(|entry| &entry.workspace == workspace)
+                {
+                    this.close_workspace(index, window, cx);
+                }
+            },
+        )
+    }
+
+    fn edit_metadata(&mut self, field: MetadataField, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(entry) = self.entries.get(self.active) else {
+            return;
+        };
+        if let Some((_, input, _)) = &self.rename {
+            input.read(cx).focus.focus(window);
+            return;
+        }
+        let id = entry.workspace.entity_id();
+        let name = match field {
+            MetadataField::GroupColor => {
+                let Some(group) = self.groups.containing(id) else { return; };
+                group.color.map(|color| format!("#{color:06X}")).unwrap_or_default()
+            }
+            MetadataField::GroupIcon => {
+                let Some(group) = self.groups.containing(id) else { return; };
+                group.icon.clone().unwrap_or_default()
+            }
+            MetadataField::GroupName => {
+                let Some(group) = self.groups.containing(id) else { return; };
+                group.name.clone()
+            }
+            MetadataField::Name => entry.name.clone(),
+            MetadataField::Description => entry.description.clone(),
+            MetadataField::Icon => entry.icon.clone().unwrap_or_default(),
+            MetadataField::Color => entry
+                .color
+                .map(|color| format!("#{color:06X}"))
+                .unwrap_or_default(),
+        };
+        self.remember_focus(window, cx);
+        let input = cx.new(|cx| text_field::TextField::new(&name, cx));
+        cx.subscribe_in(
+            &input,
+            window,
+            move |this, _, event: &text_field::EditEvent, window, cx| {
+                match event {
+                    text_field::EditEvent::Submitted { text, .. } => {
+                        let text = text.trim();
+                        if matches!(field, MetadataField::Icon | MetadataField::GroupIcon) && !text.is_empty() && !snapshot::valid_workspace_icon(text) {
+                            this.notice = Some("Use one symbol or emoji (up to 64 bytes), or leave it empty to clear.".into());
+                            cx.notify();
+                            return;
+                        }
+                        let color = if matches!(field, MetadataField::Color | MetadataField::GroupColor) {
+                            match parse_workspace_color(text) {
+                                Ok(color) => color,
+                                Err(error) => { this.notice = Some(error.into()); cx.notify(); return; }
+                            }
+                        } else { None };
+                        if matches!(field, MetadataField::GroupName | MetadataField::GroupColor | MetadataField::GroupIcon) {
+                            if let Some(group_id) = this.groups.containing(id).map(|group| group.id) {
+                                let group = this.groups.get_mut(group_id).unwrap();
+                                match field {
+                                    MetadataField::GroupName => if let Some(name) = normalized_workspace_name(text) { group.name = name; },
+                                    MetadataField::GroupColor => group.color = color,
+                                    MetadataField::GroupIcon => group.icon = (!text.is_empty()).then(|| text.to_owned()),
+                                    _ => unreachable!(),
+                                }
+                            }
+                        }
+                        if let Some(entry) = this.entries.iter_mut().find(|entry| entry.workspace.entity_id() == id) {
+                            match field {
+                                MetadataField::GroupName | MetadataField::GroupColor | MetadataField::GroupIcon => {}
+                                MetadataField::Icon => entry.icon = (!text.is_empty()).then(|| text.to_owned()),
+                                MetadataField::Color => entry.color = color,
+                                MetadataField::Description => entry.description = text.chars().filter(|c| !c.is_control()).take(256).collect(),
+                                MetadataField::Name => {
+                                    if let Some(name) = normalized_workspace_name(text) { entry.name = name; }
+                                }
+                            }
+                        }
+                        this.notice = None;
+                    }
+                    text_field::EditEvent::Cancelled => {}
+                    text_field::EditEvent::Changed(_) => { cx.notify(); return; },
+                }
+                this.rename = None;
+                this.select(this.active, window, cx);
+            },
+        )
+        .detach();
+        input.read(cx).focus.focus(window);
+        self.rename = Some((id, input, field));
+        self.sidebar = true;
+        cx.notify();
+    }
+
+    fn cycle(&mut self, delta: isize, window: &mut Window, cx: &mut Context<Self>) {
+        if self.entries.is_empty() {
+            return;
+        }
+        let order = self.workspace_order(true);
+        let position = order.iter().position(|index| *index == self.active).unwrap_or(0);
+        let next = (position as isize + delta).rem_euclid(order.len() as isize) as usize;
+        self.select(order[next], window, cx);
+    }
+
+    fn reorder(&mut self, delta: isize, cx: &mut Context<Self>) {
+        if let Some(entry) = self.entries.get(self.active) {
+            let id = entry.workspace.entity_id();
+            if self.groups.containing(id).is_some_and(|group| group.members.first() != Some(&id)) {
+                if self.groups.reorder_member(id, delta) {
+                    self.scroll_to_workspace(self.active);
+                    cx.notify();
+                }
+                return;
+            }
+        }
+        let top: Vec<_> = self.sidebar_order().into_iter().filter(|index| {
+            let id = self.entries[*index].workspace.entity_id();
+            self.groups.containing(id).is_none_or(|group| group.members.first() == Some(&id))
+        }).collect();
+        let Some(position) = top.iter().position(|index| *index == self.active) else { return; };
+        let next = position as isize + delta;
+        if next < 0 || next >= top.len() as isize { return; }
+        let next = top[next as usize];
+        if self.top_level_pinned(next) != self.top_level_pinned(self.active) { return; }
+        self.entries.swap(self.active, next);
+        self.active = next;
+        self.scroll_to_workspace(next);
+        cx.notify();
+    }
+
+    fn accepts_tab_drop(&self, item: &drag_item::DragItem, target: EntityId, cx: &App) -> bool {
+        item.scope != target
+            && self.entries.iter().any(|entry| {
+                entry.workspace.entity_id() == item.scope
+                    && entry.workspace.read(cx).panes.iter().any(|pane| {
+                        pane.entity_id() == item.container
+                            && pane
+                                .read(cx)
+                                .terminals
+                                .iter()
+                                .any(|terminal| terminal.entity_id() == item.item)
+                    })
+            })
+    }
+    fn drop_workspace(
+        &mut self,
+        item: &drag_item::DragItem,
+        target: EntityId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if item.container != cx.entity_id() {
+            if self.accepts_tab_drop(item, target, cx) {
+                self.transfer_tab(item.scope, item.container, item.item, target, window, cx);
+            }
+            return;
+        }
+        let Some(from) = self
+            .entries
+            .iter()
+            .position(|entry| entry.workspace.entity_id() == item.item)
+        else {
+            return;
+        };
+        let Some(to) = self
+            .entries
+            .iter()
+            .position(|entry| entry.workspace.entity_id() == target)
+        else {
+            return;
+        };
+        let source_is_anchor = self.groups.containing(item.item).is_some_and(|group| group.members.first() == Some(&item.item));
+        if self.groups.containing(target).is_some() && !source_is_anchor {
+            match self.groups.place_member_after(item.item, target) {
+                Ok(()) => self.select(from, window, cx),
+                Err(error) => { self.notice = Some(format!("Move group member: {error}")); cx.notify(); }
+            }
+            return;
+        }
+        // A child dropped onto a standalone workspace leaves its group. Header
+        // drags keep their group intact and continue through top-level ordering.
+        if self.groups.containing(item.item).is_some_and(|group| group.members.first() != Some(&item.item)) {
+            if self.entries[from].pinned != self.top_level_pinned(to) { return; }
+            self.groups.remove(item.item);
+        }
+        let to = self.groups.containing(target).and_then(|group| group.members.first())
+            .and_then(|anchor| self.entries.iter().position(|entry| entry.workspace.entity_id() == *anchor))
+            .unwrap_or(to);
+        if self.top_level_pinned(from) != self.top_level_pinned(to) {
+            cx.notify();
+            return;
+        }
+        self.remember_focus(window, cx);
+        // Preserve the old active index until select() records/restores focus.
+        let active = self.entries[self.active].workspace.entity_id();
+        if from != to {
+            let entry = self.entries.remove(from);
+            self.entries.insert(to, entry);
+        }
+        self.active = self
+            .entries
+            .iter()
+            .position(|entry| entry.workspace.entity_id() == active)
+            .unwrap_or(to);
+        self.select(to, window, cx);
+    }
+}
+
+impl Render for WorkspaceWindow {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let navigation_order = self.workspace_order(true);
+        // Read cached notification state once per workspace, including hidden
+        // members. This neither touches terminal parser locks nor acknowledges it.
+        let unread_workspaces: std::collections::HashSet<_> = self.entries.iter()
+            .filter(|entry| entry.workspace.read(cx).needs_attention(cx))
+            .map(|entry| entry.workspace.entity_id()).collect();
+        let mut notification_previews = std::collections::HashMap::new();
+        if self.sidebar {
+            for entry in &self.entries {
+                let preview = entry.workspace.read(cx).panes.iter().find_map(|pane| {
+                    pane.read(cx).terminals.iter().find_map(|terminal| {
+                        let view = terminal.read(cx);
+                        view.notification.as_ref().filter(|message| view.attention.any() && view.dismissed_notification != Some(message.revision)).cloned()
+                    })
+                });
+                if let Some(preview) = preview { notification_previews.insert(entry.workspace.entity_id(), preview); }
+            }
+        }
+        let current = self
+            .entries
+            .get(self.active)
+            .map(|entry| entry.workspace.clone());
+        if let Some(previous) = self
+            .rendered_workspace
+            .take()
+            .and_then(|weak| weak.upgrade())
+        {
+            if current.as_ref().map(Entity::entity_id) != Some(previous.entity_id()) {
+                previous.update(cx, |workspace, cx| workspace.release_render_caches(cx));
+            }
+        }
+        self.rendered_workspace = current.as_ref().map(Entity::downgrade);
+        if !self.close_handler_installed {
+            let entity = cx.weak_entity();
+            window.on_window_should_close(cx, move |window, cx| {
+                entity
+                    .update(cx, |this, cx| {
+                        if cx.global::<Shutdowns>().quitting || !this.should_confirm_close(cx) {
+                            true
+                        } else {
+                            this.request_close_window(window, cx);
+                            false
+                        }
+                    })
+                    .unwrap_or(true)
+            });
+            self.close_handler_installed = true;
+        }
+
+        let sidebar_width = self
+            .sidebar_width
+            .min((f32::from(window.viewport_size().width) - 165.).max(0.));
+        let entity = cx.weak_entity();
+        div()
+            .size_full()
+            .relative()
+            .flex()
+            .bg(rgb(0x12141a))
+            .text_color(rgb(0xdcdfe6))
+            .child(canvas(|_, _, _| (), move |_, _, window, _| {
+                let moving = entity.clone();
+                window.on_mouse_event(move |event: &MouseMoveEvent, phase, window, cx| {
+                    if phase != DispatchPhase::Capture { return; }
+                    let _ = moving.update(cx, |this, cx| {
+                        let Some((origin, width)) = this.sidebar_drag else { return; };
+                        if !event.dragging() {
+                            this.sidebar_drag = None;
+                            return;
+                        }
+                        let maximum = (f32::from(window.viewport_size().width) - 165.).clamp(160., 480.);
+                        let next = (width + f32::from(event.position.x - origin)).clamp(160., maximum);
+                        if this.sidebar_width != next {
+                            this.sidebar_width = next;
+                            cx.notify();
+                        }
+                        cx.stop_propagation();
+                    });
+                });
+                let released = entity.clone();
+                window.on_mouse_event(move |event: &MouseUpEvent, phase, _, cx| {
+                    if phase == DispatchPhase::Capture && event.button == MouseButton::Left {
+                        let _ = released.update(cx, |this, cx| {
+                            if this.sidebar_drag.take().is_some() { cx.stop_propagation(); }
+                        });
+                    }
+                });
+            }).absolute().size_full())
+            .on_action(cx.listener(|this, _: &CloseWindow, window, cx| this.request_close_window(window, cx)))
+            .on_action(cx.listener(|this, _: &CloseWorkspace, window, cx| this.request_close_workspace(this.active, window, cx)))
+            .on_action(cx.listener(|this, _: &ShowCommandPalette, window, cx| this.show_palette(window, cx)))
+            .on_action(cx.listener(|this, _: &SaveLayout, window, cx| this.save_layout(window, cx)))
+            .on_action(cx.listener(|this, _: &SaveSession, window, cx| this.save_session(window, cx)))
+            .on_action(cx.listener(|this, _: &OpenLayout, _, cx| this.open_layout(cx)))
+            .on_action(cx.listener(|this, command: &RunCustomCommand, window, cx| this.run_custom_command(&command.name, window, cx)))
+            .on_action(cx.listener(|this, _: &ToggleSettings, window, cx| this.toggle_settings(window, cx)))
+            .on_action(cx.listener(|this, change: &AdjustSetting, window, cx| {
+                if let Some(state) = &mut this.settings_state {
+                    if let Some(index) = settings_view::KEYS.iter().position(|key| *key == change.key) { state.selected = index; }
+                    state.focus.focus(window);
+                }
+                let mut settings = cx.global::<Preferences>().clone();
+                settings_view::adjust(&mut settings, &change.key, change.delta);
+                cx.set_global(settings);
+                this.notice = None;
+                cx.notify();
+            }))
+            .on_action(cx.listener(|this, _: &SaveAppearanceSettings, _, cx| this.save_appearance_settings(cx)))
+            .on_action(cx.listener(|this, _: &ReloadSettings, _, cx| this.reload_settings(cx)))
+            .on_action(cx.listener(|this, _: &OpenSettingsFile, _, cx| this.open_settings_file(cx)))
+            .on_action(cx.listener(|this, _: &RenameWorkspace, window, cx| this.edit_metadata(MetadataField::Name, window, cx)))
+            .on_action(cx.listener(|this, _: &EditWorkspaceDescription, window, cx| this.edit_metadata(MetadataField::Description, window, cx)))
+            .on_action(cx.listener(|this, _: &EditWorkspaceIcon, window, cx| this.edit_metadata(MetadataField::Icon, window, cx)))
+            .on_action(cx.listener(|this, _: &EditWorkspaceColor, window, cx| this.edit_metadata(MetadataField::Color, window, cx)))
+            .on_action(cx.listener(|this, _: &NewWorkspace, window, cx| this.add(1, window, cx)))
+            .on_action(cx.listener(|this, _: &RefreshTerminalMemory, _, cx| this.refresh_memory(cx)))
+            .on_action(cx.listener(|this, _: &CycleTerminalMemorySort, _, cx| {
+                this.memory_sort = this.memory_sort.next();
+                cx.notify();
+            }))
+            .on_action(cx.listener(|this, _: &CopyTerminalMemory, _, cx| {
+                if let Some(rows) = &this.memory_rows { cx.write_to_clipboard(ClipboardItem::new_string(memory_view::report(rows, this.memory_application, this.memory_sort))); }
+            }))
+            .on_action(cx.listener(|this, _: &CloseTerminalMemory, _, cx| {
+                this.memory_rows = None;
+                this.memory_application = None;
+                this.memory_loading = false;
+                this.memory_generation = this.memory_generation.wrapping_add(1);
+                cx.notify();
+            }))
+            .on_action(cx.listener(|this, _: &NewWorkspaceGroup, window, cx| this.create_group(true, window, cx)))
+            .on_action(cx.listener(|this, _: &GroupCurrentWorkspace, window, cx| this.create_group(false, window, cx)))
+            .on_action(cx.listener(|this, _: &GroupSelectedWorkspaces, window, cx| this.group_selected(window, cx)))
+            .on_action(cx.listener(|this, _: &RenameWorkspaceGroup, window, cx| this.edit_metadata(MetadataField::GroupName, window, cx)))
+            .on_action(cx.listener(|this, _: &EditGroupColor, window, cx| this.edit_metadata(MetadataField::GroupColor, window, cx)))
+            .on_action(cx.listener(|this, _: &EditGroupIcon, window, cx| this.edit_metadata(MetadataField::GroupIcon, window, cx)))
+            .on_action(cx.listener(|this, _: &UngroupWorkspaces, _, cx| this.ungroup_active(cx)))
+            .on_action(cx.listener(|this, _: &CloseWorkspaceGroup, window, cx| this.request_close_group(window, cx)))
+            .on_action(cx.listener(|this, _: &ToggleGroupPin, _, cx| this.toggle_group_pin(cx)))
+            .on_action(cx.listener(|this, action: &MoveWorkspaceToGroup, _, cx| this.move_workspace_to_group(action.group, cx)))
+            .on_action(cx.listener(|this, _: &RemoveWorkspaceFromGroup, _, cx| this.remove_workspace_from_group(cx)))
+            .on_action(cx.listener(|this, _: &SetGroupAnchor, _, cx| this.set_group_anchor(cx)))
+            .on_action(cx.listener(|this, action: &SelectWorkspaceNumber, window, cx| {
+                let order = this.workspace_order(true);
+                let position = match action.number {
+                    1..=8 => action.number - 1,
+                    9 => order.len().saturating_sub(1),
+                    _ => return,
+                };
+                if let Some(index) = order.get(position) { this.select(*index, window, cx); }
+            }))
+            .on_action(cx.listener(|this, _: &NextWorkspace, window, cx| this.cycle(1, window, cx)))
+            .on_action(cx.listener(|this, _: &LastWorkspace, window, cx| this.last_workspace(window, cx)))
+            .on_action(cx.listener(|this, _: &LastTerminal, window, cx| this.last_terminal(window, cx)))
+            .on_action(cx.listener(|this, _: &DetachTab, window, cx| this.detach_tab(window, cx)))
+            .on_action(cx.listener(|this, _: &DetachWorkspace, window, cx| this.detach_workspace(window, cx)))
+            .on_action(cx.listener(|this, _: &MoveWorkspaceToNextWindow, window, cx| this.move_workspace_to_next_window(window, cx)))
+            .on_action(cx.listener(|this, _: &ToggleWorkspacePin, _, cx| this.toggle_workspace_pin(cx)))
+            .on_action(cx.listener(|this, action: &SetWorkspaceColor, _, cx| this.set_workspace_color(action.color, cx)))
+            .on_action(cx.listener(|this, action: &SetWorkspaceIcon, _, cx| this.set_workspace_icon(action.icon.clone(), cx)))
+            .on_action(cx.listener(|this, _: &MoveTabNextWorkspace, window, cx| this.move_tab_next_workspace(window, cx)))
+            .on_action(cx.listener(|this, _: &NextUnreadTerminal, window, cx| this.next_unread(window, cx)))
+            .on_action(cx.listener(|this, _: &ToggleNotifications, window, cx| this.toggle_notifications(window, cx)))
+            .on_action(cx.listener(|this, _: &DismissAllNotifications, _, cx| this.dismiss_all_notifications(cx)))
+            .on_action(cx.listener(|this, _: &MoveWorkspaceUp, _, cx| this.reorder(-1, cx)))
+            .on_action(cx.listener(|this, _: &MoveWorkspaceDown, _, cx| this.reorder(1, cx)))
+            .on_action(
+                cx.listener(|this, _: &PreviousWorkspace, window, cx| this.cycle(-1, window, cx)),
+            )
+            .on_action(cx.listener(|this, _: &ToggleSidebar, window, cx| {
+                if this.rename.is_some() {
+                    this.select(this.active, window, cx);
+                }
+                this.sidebar = !this.sidebar;
+                this.sidebar_drag = None;
+                cx.notify();
+            }))
+            .when(self.sidebar, |div| {
+                div.child(
+                    gpui::div()
+                        .w(px(sidebar_width))
+                        .overflow_hidden()
+                        .flex_shrink_0()
+                        .h_full()
+                        .flex()
+                        .flex_col()
+                        .bg(rgb(0x242424))
+                        .child(
+                            gpui::div()
+                                .h(px(36.))
+                                .flex_shrink_0()
+                                .px_3()
+                                .flex()
+                                .items_center()
+                                .border_b_1().border_color(rgb(0x383838))
+                                .text_sm()
+                                .id("workspace-list-header")
+                                .when(cfg!(target_os = "macos"), |header| header.pl(px(80.)))
+                                 .child(gpui::div().id("sidebar-title-drag").flex_1().min_w_0().truncate().text_xs().text_color(rgb(0xa0a0a0))
+                                    .on_mouse_down(MouseButton::Left, |event, window, _| { if cfg!(target_os = "macos") { if event.click_count == 2 { window.zoom_window(); } else { window_geometry::drag_titlebar(window); } } })
+                                    .child(if self.sidebar_selection.len() > 1 { format!("{} selected", self.sidebar_selection.len()) } else { "Workspaces".into() }))
+                                .child(pane_view::pane_control("sidebar-new-workspace", if cfg!(target_os = "macos") { "New Workspace · ⌘N" } else { "New Workspace · Ctrl+Shift+N" })
+                                    .on_click(cx.listener(|this, event: &ClickEvent, window, cx| { if event.standard_click() { this.add(1, window, cx); } })).child(icons::icon("plus")))
+                                .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint(
+                                    if cfg!(target_os = "macos") { "⌘-click to select · Shift-click for range · ⌘⇧G to group" }
+                                    else { "Ctrl-click to select · Shift-click for range · Ctrl+Alt+Shift+G to group" }.into()
+                                )).into()),
+                        )
+                        .child(
+                            gpui::div()
+                                .id("workspace-list")
+                                .flex_1()
+                                .min_h_0()
+                                .overflow_y_scroll()
+                                .track_scroll(&self.workspace_scroll)
+                                .children(self.sidebar_order().into_iter().map(|index| {
+                                    let position = navigation_order.iter().position(|candidate| *candidate == index).unwrap_or(index);
+                                    let entry = &self.entries[index];
+                                    let group = self.groups.containing(entry.workspace.entity_id());
+                                    let header = group.filter(|group| group.members.first() == Some(&entry.workspace.entity_id()));
+                                    let unread_count = header.map(|group| group.members.iter().filter(|id| unread_workspaces.contains(id)).count())
+                                        .unwrap_or_else(|| usize::from(unread_workspaces.contains(&entry.workspace.entity_id())));
+                                    let group_summary = header.map(|group| {
+                                        let count = group.members.len();
+                                        let label = if count == 1 { "workspace" } else { "workspaces" };
+                                        if unread_count == 0 { format!("{count} {label}") }
+                                        else { format!("{count} {label} · {unread_count} unread") }
+                                    });
+                                    let display_name = header.map(|group| group.name.clone()).unwrap_or_else(|| entry.name.clone());
+                                    let preview = header.and_then(|group| group.members.iter().find_map(|member| notification_previews.get(member)))
+                                        .or_else(|| notification_previews.get(&entry.workspace.entity_id()));
+                                    let container = cx.entity_id();
+                                    let target = entry.workspace.entity_id();
+                                    let selected = self.sidebar_selection.contains(&target) || index == self.active || header.is_some_and(|group| group.collapsed && self.entries.get(self.active).is_some_and(|entry| group.members.contains(&entry.workspace.entity_id())));
+                                    let title_hint: SharedString = display_name.clone().into();
+                                    let drop_owner = cx.weak_entity();
+                                    let hover_owner = drop_owner.clone();
+                                    gpui::div()
+                                        .id(("workspace", entry.workspace.entity_id()))
+                                        .mx_1()
+                                        .mb(px(2.))
+                                        .px_3()
+                                        .when(group.is_some() && header.is_none(), |row| row.ml(px(20.)))
+                                        .py_2()
+                                        .rounded(px(5.))
+                                        .text_size(px(13.))
+                                        .cursor_pointer()
+                                        .when(selected, |div| div.bg(rgb(0x007aff)).text_color(rgb(0xffffff)))
+                                        .hover(move |style| style.bg(rgb(if selected { 0x1685ff } else { 0x303030 })))
+                                        .when(self.rename.is_none(), |row| row
+                                            .on_drag(drag_item::DragItem { scope: container, container, item: target, label: entry.name.clone().into() }, |item, _, _, cx| cx.new(|_| item.clone()))
+                                            .can_drop(move |item, _, cx| item.downcast_ref::<drag_item::DragItem>().is_some_and(|item| item.container == container || drop_owner.upgrade().is_some_and(|owner| owner.read(cx).accepts_tab_drop(item, target, cx))))
+                                            .drag_over(move |style, item: &drag_item::DragItem, _, cx| {
+                                                if item.container == container || hover_owner.upgrade().is_some_and(|owner| owner.read(cx).accepts_tab_drop(item, target, cx)) { style.bg(rgb(0x435a7b)) } else { style }
+                                            })
+                                            .on_drop(cx.listener(move |this, item: &drag_item::DragItem, window, cx| this.drop_workspace(item, target, window, cx))))
+                                        .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+                                            if !event.standard_click() { return; }
+                                            let Some(index) = this.entries.iter().position(|entry| entry.workspace.entity_id() == target) else { return; };
+                                            if this.rename.is_none() {
+                                                if let ClickEvent::Mouse(mouse) = event {
+                                                    let modifiers = mouse.down.modifiers;
+                                                    let toggle = if cfg!(target_os = "macos") { modifiers.platform } else { modifiers.control };
+                                                    if toggle || modifiers.shift {
+                                                        this.extend_sidebar_selection(target, modifiers.shift, cx);
+                                                        return;
+                                                    }
+                                                }
+                                                this.sidebar_selection.clear();
+                                                this.sidebar_selection_anchor = Some(target);
+                                            }
+                                            if let Some((id, input, _)) = &this.rename
+                                                && this.entries.get(index).is_some_and(|entry| {
+                                                    entry.workspace.entity_id() == *id
+                                                })
+                                            {
+                                                input.read(cx).focus.focus(window);
+                                            } else {
+                                                this.select(index, window, cx);
+                                                if matches!(event, ClickEvent::Mouse(mouse) if mouse.down.click_count == 2) {
+                                                    let field = if this.groups.containing(target).is_some_and(|group| group.members.first() == Some(&target)) { MetadataField::GroupName } else { MetadataField::Name };
+                                                    this.edit_metadata(field, window, cx);
+                                                }
+                                            }
+                                        }))
+                                        .child(
+                                            if let Some((_, input, field)) =
+                                                self.rename.as_ref().filter(|(id, _, _)| {
+                                                    *id == entry.workspace.entity_id()
+                                                })
+                                            {
+                                                gpui::div()
+                                                    .w_full()
+                                                    .min_w_0()
+                                                    .child(gpui::div().text_xs().child(field.label()))
+                                                    .child(input.clone())
+                                                    .when(matches!(field, MetadataField::Color | MetadataField::Icon | MetadataField::GroupColor | MetadataField::GroupIcon), |editor| editor.child(Self::metadata_presets(input, *field, cx)))
+                                                    .child(
+                                                        gpui::div()
+                                                            .text_xs()
+                                                            .child("Enter to save · Esc to cancel"),
+                                                    )
+                                                    .into_any_element()
+                                            } else {
+                                                gpui::div().flex().items_center().gap_2()
+                                                    .when_some(header, |row, group| {
+                                                        let id = group.id;
+                                                        row.child(gpui::div().id(("group-collapse", target))
+                                                            .w(px(24.)).h(px(24.)).flex_shrink_0().flex().items_center().justify_center().rounded_sm()
+                                                            .hover(|style| style.bg(rgb(0x43516a)))
+                                                            .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("Expand / Collapse Group".into())).into())
+                                                            .child(icons::icon(if group.collapsed { "chevron-right" } else { "chevron-down" }))
+                                                            .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
+                                                                if !event.standard_click() { return; }
+                                                                cx.stop_propagation();
+                                                                if let Some(group) = this.groups.get_mut(id) { group.collapsed = !group.collapsed; }
+                                                                cx.notify();
+                                                            })))
+                                                    })
+                                                    .when(unread_count > 0, |row| row.child(
+                                                        gpui::div().min_w(px(16.)).h(px(16.)).px_1().flex_shrink_0().rounded_full()
+                                                            .flex().items_center().justify_center().text_size(px(10.)).font_weight(FontWeight::SEMIBOLD)
+                                                            .bg(rgb(if selected { 0xffffff } else { 0x007aff })).text_color(rgb(if selected { 0x007aff } else { 0xffffff }))
+                                                            .child(unread_count.to_string())
+                                                    ))
+                                                    .child(gpui::div().flex_1().min_w_0().flex().flex_col().gap_1()
+                                                        .child(gpui::div().flex().items_center().gap_2()
+                                                            .when_some(header.map(|group| group.color).unwrap_or(entry.color), |row, color| row.child(gpui::div().w(px(8.)).h(px(8.)).flex_shrink_0().rounded_sm().bg(rgb(color))))
+                                                            .when_some(header.map(|group| group.icon.clone().or_else(|| Some("▰".into()))).unwrap_or_else(|| entry.icon.clone()), |row, icon| row.child(gpui::div().w(px(16.)).flex_shrink_0().text_center().text_color(rgb(0xaaaaaa)).child(icon)))
+                                                            .child(gpui::div().id(("workspace-name", target)).min_w_0().truncate()
+                                                                .tooltip(move |_, cx| cx.new(|_| pane_view::ControlHint(title_hint.clone())).into())
+                                                                .font_weight(FontWeight::SEMIBOLD).child(display_name))
+                                                            .when(header.map(|group| group.pinned).unwrap_or(entry.pinned), |row| row.child(
+                                                                gpui::div().id(("workspace-pin", target)).flex_shrink_0().text_color(rgb(if selected { 0xdcecff } else { 0x969696 }))
+                                                                    .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("Pinned workspace".into())).into()).child(icons::icon("pin")))))
+                                                        .when_some(group_summary, |column, summary| column.child(gpui::div().text_xs().text_color(rgb(if selected { 0xdcecff } else if unread_count > 0 { 0xd6d6d6 } else { 0xa0a0a0 })).truncate().child(summary)))
+                                                        .when(!entry.description.is_empty(), |column| column.child(gpui::div().text_xs().text_color(rgb(if selected { 0xdcecff } else { 0xa0a0a0 })).truncate().child(entry.description.clone())))
+                                                        .when_some(preview, |column, message| {
+                                                            let text: SharedString = if message.title.is_empty() { message.body.clone() } else if message.body.is_empty() { message.title.clone() } else { format!("{} — {}", message.title, message.body) }.into();
+                                                            let hint = text.clone();
+                                                            column.child(gpui::div().id(("workspace-message", target)).text_size(px(12.)).line_clamp(2)
+                                                                .text_color(rgb(if selected { 0xe8f2ff } else { 0xb5b5b5 }))
+                                                                .tooltip(move |_, cx| cx.new(|_| pane_view::ControlHint(hint.clone())).into()).child(text))
+                                                        })
+
+                                                        .when_some(Self::entry_directory(entry, window, cx), |column, (branch, directory)| {
+                                                            let hint: SharedString = [branch.as_deref(), directory.as_deref()].into_iter().flatten().collect::<Vec<_>>().join("\n").into();
+                                                            column.child(gpui::div().id(("workspace-context", target)).flex().items_center().gap_1().min_w_0().text_size(px(11.))
+                                                                .text_color(rgb(if selected { 0xdcecff } else { 0x969696 }))
+                                                                .tooltip(move |_, cx| cx.new(|_| pane_view::ControlHint(hint.clone())).into())
+                                                                .when_some(branch, |row, branch| row
+                                                                    .child(icons::icon("branch"))
+                                                                    .child(gpui::div().max_w(relative(0.45)).truncate().child(branch)))
+                                                                .when_some(directory, |row, directory| row.child(gpui::div().flex_1().min_w_0().truncate().child(directory))))
+                                                        }))
+                                                    .when_some(header, |row, _| row.child(
+                                                        gpui::div().id(("group-add", target)).w(px(24.)).h(px(24.)).flex_shrink_0()
+                                                            .flex().items_center().justify_center().rounded_sm().child(icons::icon("plus"))
+                                                            .hover(|style| style.bg(rgb(0x43516a)))
+                                                            .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("New Workspace in Group".into())).into())
+                                                            .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+                                                                if !event.standard_click() || this.automation_available(cx).is_err() { return; }
+                                                                cx.stop_propagation();
+                                                                if let Some(index) = this.entries.iter().position(|entry| entry.workspace.entity_id() == target) {
+                                                                    this.select(index, window, cx);
+                                                                    this.add(1, window, cx);
+                                                                }
+                                                            }))
+                                                    ))
+                                                    .when(position < 8 || position + 1 == self.entries.len(), |row| {
+                                                        let number = if position < 8 { position + 1 } else { 9 };
+                                                        let modifier = if cfg!(target_os = "macos") { "⌘" } else { "Ctrl+Alt+" };
+                                                        row.child(gpui::div().flex_shrink_0().text_xs().text_color(rgb(if selected { 0xdcecff } else { 0x969696 })).child(format!("{modifier}{number}")))
+                                                    })
+                                                    .into_any_element()
+                                            },
+                                        )
+                                })),
+                        ),
+                ).child(gpui::div().id("sidebar-divider").w(px(5.)).h_full().flex_shrink_0()
+                    .bg(rgb(0x242424)).border_l_1().border_color(rgb(0x383838)).cursor(CursorStyle::ResizeLeftRight)
+                    .hover(|style| style.bg(rgb(0x7795c8)))
+                    .on_mouse_down(MouseButton::Left, cx.listener(move |this, event: &MouseDownEvent, _, cx| {
+                        if event.click_count == 2 {
+                            this.sidebar_width = 200.;
+                            this.sidebar_drag = None;
+                            cx.notify();
+                        } else {
+                            this.sidebar_drag = Some((event.position.x, sidebar_width));
+                        }
+                        cx.stop_propagation();
+                    })))
+            })
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .h_full()
+                    .flex().flex_col()
+                    .when_some(self.entries.get(self.active), |div, entry| {
+                        div.child(
+                            gpui::div().h(px(36.)).flex_shrink_0().px_3()
+                                .when(cfg!(target_os = "macos") && !self.sidebar, |header| header.pl(px(80.)))
+                                .flex().items_center().bg(rgb(0x242424))
+                                .border_b_1().border_color(rgb(0x383838))
+                                .gap_2()
+                                .child(pane_view::pane_control("toolbar-sidebar", "Toggle Sidebar")
+                                    .on_click(|event, window, cx| { if event.standard_click() { window.dispatch_action(Box::new(ToggleSidebar), cx); } })
+                                    .child(icons::icon("sidebar")))
+                                .child(gpui::div().id("workspace-title-drag").flex_1().min_w_0().truncate().text_size(px(13.)).font_weight(FontWeight::SEMIBOLD)
+                                    .on_mouse_down(MouseButton::Left, |event, window, _| { if cfg!(target_os = "macos") { if event.click_count == 2 { window.zoom_window(); } else { window_geometry::drag_titlebar(window); } } })
+                                    .child(entry.name.clone()))
+                                .child(pane_view::pane_control("toolbar-notifications", "Toggle Notifications")
+                                    .on_click(|event, window, cx| { if event.standard_click() { window.dispatch_action(Box::new(ToggleNotifications), cx); } })
+                                    .child(icons::icon("bell")))
+                        ).child(gpui::div().flex_1().min_h_0().child(entry.workspace.clone()))
+                    })
+                    .when_some(self.memory_rows.as_ref(), |div, rows| div.child(memory_view::panel(rows, self.memory_application, self.memory_sort, self.memory_loading, cx)))
+                    .when_some(self.notice.clone(), |div, notice| div.child(gpui::div().flex().items_start().flex_shrink_0().min_w_0()
+                        .gap_2().px_3().py_2().text_xs().bg(rgb(0x292929)).border_t_1().border_color(rgb(0x3b4557))
+                        .child(gpui::div().id("window-notice-text").flex_1().min_w_0().max_h(px(96.)).overflow_scroll().whitespace_normal()
+                            .text_color(rgb(0xd7deeb)).child(notice.clone()))
+                        .child(pane_view::pane_control("copy-notice", "Copy message")
+                            .on_click(move |event, _, cx| {
+                                if event.standard_click() { cx.write_to_clipboard(ClipboardItem::new_string(notice.clone())); }
+                            }).child(icons::icon("copy")))
+                        .when(self.restore_job.is_none(), |row| row.child(pane_view::pane_control("dismiss-notice", "Dismiss message")
+                            .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
+                                if event.standard_click() { this.notice = None; cx.notify(); }
+                            })).child(icons::icon("close"))))
+                        .when(self.restore_job.is_some(), |row| row.child(gpui::div().id("cancel-restore").flex_shrink_0().px_2().py_1().rounded_sm().cursor_pointer()
+                            .hover(|style| style.bg(rgb(0x353535)))
+                            .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
+                                if !event.standard_click() { return; }
+                                if let Some(job) = &this.restore_job { job.cancel(); }
+                                this.notice = Some("Cancelling layout restore…".into());
+                                cx.notify();
+                            })).child("Cancel"))))),
+            )
+            .when_some(self.settings_state.clone(), |root, state| root.child(settings_view::panel(state, cx)))
+            .when(self.notification_navigation.is_some(), |root| root.child(self.notification_panel(cx)))
+            .when_some(self.palette.as_ref(), |root, (palette, _)| root.child(
+                div().id("command-palette-overlay").occlude().absolute().inset_0().flex().justify_center().items_start()
+                    .pt(px(command_palette::top_inset(f32::from(window.viewport_size().height))))
+                    .bg(rgba(0x00000066))
+                    .on_mouse_down(MouseButton::Left, cx.listener(|this, _, window, cx| {
+                        this.close_palette(window, cx);
+                        cx.stop_propagation();
+                    }))
+                    .child(palette.clone())
+            ))
+    }
+}

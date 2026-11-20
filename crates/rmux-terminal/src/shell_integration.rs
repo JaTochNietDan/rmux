@@ -1,0 +1,242 @@
+//! Private startup files, never modifications to the user's shell configuration.
+use anyhow::Result;
+use portable_pty::CommandBuilder;
+use std::ffi::OsStr;
+
+const RESTORE: &str = r#"
+if [[ $RMUX_ZSH_ORIGINAL_SET == 1 ]]; then
+    export ZDOTDIR=$RMUX_ZSH_ORIGINAL
+else
+    unset ZDOTDIR
+fi
+"#;
+
+const REDIRECT: &str = r#"
+if [[ -o rcs ]]; then
+    export RMUX_ZSH_ORIGINAL_SET=${+ZDOTDIR}
+    export RMUX_ZSH_ORIGINAL=${ZDOTDIR-}
+    export ZDOTDIR=$RMUX_ZSH_WRAPPER
+else
+    unset RMUX_ZSH_ORIGINAL_SET RMUX_ZSH_ORIGINAL RMUX_ZSH_WRAPPER
+fi
+"#;
+
+pub(crate) fn prepare_bash(command: &mut CommandBuilder) -> Result<tempfile::TempDir> {
+    let directory = tempfile::Builder::new().prefix("rmux-bash-").tempdir()?;
+    std::fs::write(directory.path().join("bashrc"), r#"
+[[ ! -r $HOME/.bashrc ]] || source "$HOME/.bashrc"
+source "$RMUX_BASH_WRAPPER/rmux.bash"
+unset RMUX_BASH_WRAPPER
+"#)?;
+    std::fs::write(directory.path().join("rmux.bash"), include_str!("../../../shell-integration/bash/rmux.bash"))?;
+    command.arg("--rcfile");
+    command.arg(directory.path().join("bashrc"));
+    command.env("RMUX_BASH_WRAPPER", directory.path());
+    Ok(directory)
+}
+
+pub(crate) fn prepare_zsh(
+    command: &mut CommandBuilder,
+    original: Option<&OsStr>,
+) -> Result<tempfile::TempDir> {
+    let directory = tempfile::Builder::new().prefix("rmux-zsh-").tempdir()?;
+    for file in [".zshenv", ".zprofile"] {
+        let script = format!(
+            "{RESTORE}\n[[ ! -r ${{ZDOTDIR-$HOME}}/{file} ]] || source \"${{ZDOTDIR-$HOME}}/{file}\"\n{REDIRECT}"
+        );
+        std::fs::write(directory.path().join(file), script)?;
+    }
+    std::fs::write(
+        directory.path().join(".zshrc"),
+        format!(
+            r#"{RESTORE}
+[[ ! -r ${{ZDOTDIR-$HOME}}/.zshrc ]] || source "${{ZDOTDIR-$HOME}}/.zshrc"
+source "$RMUX_ZSH_WRAPPER/rmux.zsh"
+unset RMUX_ZSH_ORIGINAL_SET RMUX_ZSH_ORIGINAL RMUX_ZSH_WRAPPER
+"#
+        ),
+    )?;
+    std::fs::write(
+        directory.path().join("rmux.zsh"),
+        include_str!("../../../shell-integration/zsh/rmux.zsh"),
+    )?;
+    command.env(
+        "RMUX_ZSH_ORIGINAL_SET",
+        if original.is_some() { "1" } else { "0" },
+    );
+    command.env(
+        "RMUX_ZSH_ORIGINAL",
+        original.unwrap_or_else(|| OsStr::new("")),
+    );
+    command.env("RMUX_ZSH_WRAPPER", directory.path());
+    command.env("ZDOTDIR", directory.path());
+    Ok(directory)
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod tests {
+    use super::*;
+    #[test]
+    fn automatic_nonlogin_bash_preserves_user_rc_and_cleans_wrapper() -> Result<()> {
+        let home = tempfile::tempdir()?;
+        std::fs::write(home.path().join(".bashrc"), "export RMUX_TEST_USER_RC=loaded\nPROMPT_COMMAND='printf user-hook'\n")?;
+        let mut builder = CommandBuilder::new("/bin/bash");
+        let wrapper = prepare_bash(&mut builder)?;
+        let output = std::process::Command::new("/bin/bash")
+            .arg("--noprofile").arg("--rcfile").arg(wrapper.path().join("bashrc"))
+            .args(["-i", "-c", "printf '%s|%s|%s|%s' \"$RMUX_TEST_USER_RC\" \"$_rmux_bash_loaded\" \"${RMUX_BASH_WRAPPER-unset}\" \"$PROMPT_COMMAND\""])
+            .env("HOME", home.path()).env("TERM_PROGRAM", "rmux")
+            .env("RMUX_SHELL_INTEGRATION", "1")
+            .env("RMUX_BASH_WRAPPER", builder.get_env("RMUX_BASH_WRAPPER").unwrap()).output()?;
+        assert!(output.status.success());
+        assert_eq!(String::from_utf8(output.stdout)?, "loaded|1|unset|printf user-hook\n_rmux_bash_precmd");
+        let path = wrapper.path().to_owned();
+        drop(wrapper);
+        assert!(!path.exists());
+        Ok(())
+    }
+    #[test]
+    fn automatic_zsh_reports_directory_and_navigable_prompts_through_pty() -> Result<()> {
+        check_prompt_navigation("zsh")
+    }
+    #[test]
+    fn automatic_nonlogin_bash_reports_directory_and_navigable_prompts_through_pty() -> Result<()> {
+        check_prompt_navigation("bash")
+    }
+    fn check_prompt_navigation(shell: &str) -> Result<()> {
+        let home = tempfile::tempdir()?;
+        let home_path = home.path().canonicalize()?;
+        let destination = home_path.join("project 世界 % space");
+        std::fs::create_dir(&destination)?;
+        std::fs::write(home.path().join(format!(".{shell}rc")), "PS1='fixture> '\n")?;
+        let mut command = CommandBuilder::new(format!("/bin/{shell}"));
+        let _wrapper = if shell == "zsh" {
+            command.args(["-d", "-i", "-l"]);
+            prepare_zsh(&mut command, None)?
+        } else {
+            let wrapper = prepare_bash(&mut command)?;
+            command.arg("-i");
+            wrapper
+        };
+        command.env("HOME", home.path());
+        command.env("TERM", "xterm-256color");
+        command.env("TERM_PROGRAM", "rmux");
+        command.env("RMUX_SHELL_INTEGRATION", "1");
+        command.env("RMUX_TEST_DESTINATION", &destination);
+        command.cwd(home.path());
+        let session = crate::session::Session::spawn(command, 80, 4)?;
+        let wait = |condition: &dyn Fn() -> Result<bool>| -> Result<()> {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+            while !condition()? {
+                anyhow::ensure!(
+                    std::time::Instant::now() < deadline,
+                    "{shell} PTY fixture timed out: directory={:?}, frame={:?}, exit={:?}",
+                    session.current_directory()?,
+                    session.frame()?.text(),
+                    session.exit_status()
+                );
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            Ok(())
+        };
+        wait(&|| Ok(session.current_directory()?.as_deref() == Some(home_path.as_path())))?;
+        session
+            .input(b"cd -- \"$RMUX_TEST_DESTINATION\"; printf '%s%s\\n' changed-okay -done\r")?;
+        wait(&|| {
+            Ok(
+                session.current_directory()?.as_deref() == Some(destination.as_path())
+                    && session.frame()?.text().contains("changed-okay-done"),
+            )
+        })?;
+        session.input(b"printf 'line-%s\\n' {1..12}\r")?;
+        wait(&|| {
+            let frame = session.frame()?;
+            Ok(frame.text().contains("line-12") && frame.text().contains("fixture>"))
+        })?;
+        session.scroll(crate::Scroll::Top)?;
+        let first = session.frame()?.scrollback_offset;
+        session.scroll(crate::Scroll::Prompts(1))?;
+        let second = session.frame()?.scrollback_offset;
+        assert!(second < first, "shell markers must provide a later prompt");
+        session.input(b"exit 0\r")?;
+        wait(&|| Ok(session.exit_status().is_some()))?;
+        Ok(())
+    }
+    #[test]
+    fn zsh_startup_preserves_order_redirects_and_rcs_opt_out() -> Result<()> {
+        for (explicit, redirect, disable) in [
+            (false, false, false),
+            (true, true, false),
+            (true, false, true),
+        ] {
+            let home = tempfile::tempdir()?;
+            let original = tempfile::tempdir()?;
+            let redirected = tempfile::tempdir()?;
+            let initial = if explicit {
+                original.path()
+            } else {
+                home.path()
+            };
+            let final_directory = if redirect { redirected.path() } else { initial };
+            let mut env_script = "typeset -g startup_order=env\n".to_owned();
+            if redirect {
+                env_script.push_str("export ZDOTDIR=$RMUX_TEST_REDIRECT\n");
+            }
+            if disable {
+                env_script.push_str("unsetopt rcs\n");
+            }
+            std::fs::write(initial.join(".zshenv"), env_script)?;
+            for (file, label) in [
+                (".zprofile", "profile"),
+                (".zshrc", "rc"),
+                (".zlogin", "login"),
+            ] {
+                std::fs::write(
+                    final_directory.join(file),
+                    format!("startup_order+=:{label}\n"),
+                )?;
+            }
+            let mut builder = CommandBuilder::new("/bin/zsh");
+            let wrapper = prepare_zsh(
+                &mut builder,
+                explicit.then_some(original.path().as_os_str()),
+            )?;
+            let mut shell = std::process::Command::new("/bin/zsh");
+            shell.args(["-d", "-i", "-l", "-c", "printf '%s|%s|%s|%s' $startup_order ${_rmux_integration_loaded-0} ${ZDOTDIR-unset} ${RMUX_ZSH_WRAPPER-unset}"]);
+            shell
+                .env("HOME", home.path())
+                .env("TERM_PROGRAM", "rmux")
+                .env("RMUX_SHELL_INTEGRATION", "1")
+                .env("RMUX_TEST_REDIRECT", redirected.path());
+            for key in [
+                "ZDOTDIR",
+                "RMUX_ZSH_ORIGINAL",
+                "RMUX_ZSH_ORIGINAL_SET",
+                "RMUX_ZSH_WRAPPER",
+            ] {
+                shell.env(key, builder.get_env(key).unwrap());
+            }
+            let output = shell.output()?;
+            assert!(output.status.success(), "{:?}", output.stderr);
+            let directory = if explicit || redirect {
+                final_directory.display().to_string()
+            } else {
+                "unset".into()
+            };
+            let expected = format!(
+                "{}|{}|{directory}|unset",
+                if disable {
+                    "env"
+                } else {
+                    "env:profile:rc:login"
+                },
+                if disable { 0 } else { 1 }
+            );
+            assert_eq!(String::from_utf8(output.stdout)?, expected);
+            let path = wrapper.path().to_owned();
+            drop(wrapper);
+            assert!(!path.exists());
+        }
+        Ok(())
+    }
+}
