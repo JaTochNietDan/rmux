@@ -67,7 +67,7 @@ pub fn entered_directory(text: &str) -> Result<PathBuf, &'static str> {
 }
 pub struct Entry { pub path: PathBuf, pub directory: bool, pub symlink: bool }
 pub struct Listing { pub path: PathBuf, pub entries: Vec<Entry>, pub truncated: bool }
-pub struct Preview { pub path: PathBuf, pub lines: Vec<String>, pub truncated: bool, pub partial_line: Option<usize> }
+pub struct Preview { pub path: PathBuf, pub lines: Vec<String>, pub contents: String, pub truncated: bool, pub partial_line: Option<usize> }
 #[cfg(test)]
 fn preview(path: PathBuf) -> anyhow::Result<Preview> { preview_cancellable(path, &AtomicBool::new(false)) }
 pub fn preview_cancellable(path: PathBuf, canceled: &AtomicBool) -> anyhow::Result<Preview> {
@@ -111,7 +111,10 @@ pub fn preview_cancellable(path: PathBuf, canceled: &AtomicBool) -> anyhow::Resu
     let partial_line = (truncated && !more_lines && !text.ends_with('\n'))
         .then(|| lines.len().checked_sub(1)).flatten();
     truncated |= more_lines;
-    Ok(Preview { path, lines, truncated, partial_line })
+    // Retain original separators, including CRLF and a trailing newline, while
+    // applying exactly the same line cap as the displayed preview.
+    let contents = text.split_inclusive('\n').take(512).collect();
+    Ok(Preview { path, lines, contents, truncated, partial_line })
 }
 #[cfg(test)]
 fn list(path: PathBuf) -> anyhow::Result<Listing> { list_cancellable(path, &AtomicBool::new(false)) }
@@ -157,7 +160,7 @@ mod tests {
             preview_times.push(start.elapsed().as_secs_f64() * 1000.);
             assert_eq!(preview.lines.len(), 512);
             assert!(preview.truncated);
-            retained_text = preview.lines.iter().map(String::len).sum::<usize>();
+            retained_text = preview.lines.iter().map(String::len).sum::<usize>() + preview.contents.len();
         }
         directory_times.sort_by(f64::total_cmp);
         preview_times.sort_by(f64::total_cmp);
@@ -212,16 +215,19 @@ mod tests {
         std::fs::write(&path, "echo do-not-run\r\n世界\n")?;
         let preview = super::preview(path.clone())?;
         assert_eq!(preview.lines, ["echo do-not-run", "世界"]);
+        assert_eq!(preview.contents, "echo do-not-run\r\n世界\n");
         assert!(!preview.truncated);
         assert_eq!(preview.partial_line, None);
         std::fs::write(&path, format!("{}界", "x".repeat(65535)))?;
         let preview = super::preview(path.clone())?;
         assert!(preview.truncated);
         assert_eq!(preview.lines[0].len(), 65535);
+        assert_eq!(preview.contents, "x".repeat(65535));
         assert_eq!(preview.partial_line, Some(0));
         std::fs::write(&path, "line\n".repeat(513))?;
         let preview = super::preview(path.clone())?;
         assert_eq!(preview.lines.len(), 512);
+        assert_eq!(preview.contents, "line\n".repeat(512));
         assert!(preview.truncated);
         assert_eq!(preview.partial_line, None);
         std::fs::write(&path, format!("{}\nmore", "x".repeat(65535)))?;

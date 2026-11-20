@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Added Copy Preview Text, preserving captured CRLF/LF separators and the trailing
+newline without closing the preview or rereading the file. Incomplete previews
+explicitly identify the copy as captured text only. It copies the complete
+captured prefix regardless of filtering. The original prefix adds at most 64 KiB
+of retained text; the loader benchmark now counts it. The focused preview test
+passed with exact CRLF, Unicode byte-cut and 512-line prefix assertions. Native
+clipboard interaction acceptance remains pending.
+
 Text-preview search now indexes full retained lines instead of just their
 1,024-character display prefixes. Visible rows show bounded excerpts near an
 exact query-word match, with Unicode lowercase expansion mapped back to original

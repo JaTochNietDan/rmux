@@ -117,6 +117,10 @@ struct CopyPreviewLine { text: String }
 
 #[derive(Clone, Debug, Default, PartialEq, Action)]
 #[action(namespace = rmux, no_json)]
+struct CopyPreviewText { text: String }
+
+#[derive(Clone, Debug, Default, PartialEq, Action)]
+#[action(namespace = rmux, no_json)]
 struct CheckForUpdates;
 
 #[derive(Clone, Debug, Default, PartialEq, Action)]

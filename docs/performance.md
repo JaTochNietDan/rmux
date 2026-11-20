@@ -23,6 +23,9 @@ Run `mise run bench-file-loaders` to repeat. This is a local, mostly warm-cache
 baseline, excludes fixture creation, UI construction/rendering, allocator
 overhead and clipboard writes, and is not a release-build or slow-filesystem
 acceptance result. Retained text bytes are not total memory usage.
+This historical baseline predates Copy Preview Text: the loader now also retains
+the original newline-preserving prefix (at most 64 KiB), and the benchmark's
+retained-text counter includes that string alongside the per-line strings.
 
 New-tab PTY creation runs in a background task, with one pending launch per
 pane and cached directory inheritance. PTY creation plus initial frame/color preparation run off the

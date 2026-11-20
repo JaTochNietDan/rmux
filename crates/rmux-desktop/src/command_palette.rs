@@ -477,6 +477,9 @@ impl CommandPalette {
         commands.push(Command { title: "Copy file path".into(), subtitle: Some(preview.path.display().to_string()), shortcut: None,
             target: PaletteEvent::Run(Box::new(CopyLocalPath { path: preview.path.clone() })) });
         commands.push(reveal_local_path(&preview.path));
+        commands.push(Command { title: "Copy Preview Text".into(),
+            subtitle: Some(if preview.truncated { "Copies captured text only · Preview is incomplete" } else { "Preserves original line endings" }.into()), shortcut: None,
+            target: PaletteEvent::Run(Box::new(CopyPreviewText { text: preview.contents })) });
         commands.push(Command { title: "Refresh preview".into(), subtitle: empty.then(|| "Empty file · No text to preview".into()), shortcut: None,
             target: PaletteEvent::Run(Box::new(PreviewLocalFile { path: preview.path })) });
         commands.extend(preview.lines.into_iter().enumerate().map(|(index, text)| {
@@ -656,6 +659,12 @@ impl CommandPalette {
             if let Some(line) = action.as_any().downcast_ref::<CopyPreviewLine>() {
                 clipboard::write(ClipboardItem::new_string(line.text.clone()), cx);
                 self.feedback = Some("Copied preview line");
+                cx.notify();
+                return;
+            }
+            if let Some(preview) = action.as_any().downcast_ref::<CopyPreviewText>() {
+                clipboard::write(ClipboardItem::new_string(preview.text.clone()), cx);
+                self.feedback = Some("Copied preview text");
                 cx.notify();
                 return;
             }

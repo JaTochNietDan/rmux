@@ -229,6 +229,11 @@ or interprets escape sequences. Binary and non-UTF-8 files are rejected. Editing
 remote files, rich document rendering and a persistent explorer panel remain
 unimplemented.
 
+**Copy Preview Text** copies all captured text, regardless of the search filter,
+preserving original CRLF/LF separators and any trailing newline. The preview
+stays open. If either preview cap was reached, the action explicitly says it
+copies captured text only; it does not reread the rest of the file.
+
 If a directory or file cannot be read, the browser shows Back, Copy Path and
 Retry actions. The Retry row includes the error; hover it for the full message.
 Escape closes the browser and returns to its prior focus.
