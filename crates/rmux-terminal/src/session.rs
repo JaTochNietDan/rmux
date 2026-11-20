@@ -702,10 +702,13 @@ impl Session {
         terminal.frame().map(Some)
     }
     pub fn history_export(&self, max_bytes: usize) -> HistoryExport {
-        self.text_export(max_bytes, false, true)
+        self.text_export(max_bytes, false, true, None)
+    }
+    pub fn history_tail_export(&self, lines: usize, max_bytes: usize) -> HistoryExport {
+        self.text_export(max_bytes, false, true, Some(lines))
     }
     pub fn selection_export(&self, max_bytes: usize, unwrap: bool) -> HistoryExport {
-        self.text_export(max_bytes, true, unwrap)
+        self.text_export(max_bytes, true, unwrap, None)
     }
     /// Bounded clipboard formatting for a background executor. Construction never
     /// acquires the parser lock or keeps a closed terminal alive.
@@ -750,7 +753,7 @@ impl Session {
             engine.current_directory()
         })
     }
-    fn text_export(&self, max_bytes: usize, selected: bool, unwrap: bool) -> HistoryExport {
+    fn text_export(&self, max_bytes: usize, selected: bool, unwrap: bool, lines: Option<usize>) -> HistoryExport {
         let terminal = Arc::downgrade(&self.terminal);
         Box::new(move || {
             let terminal = terminal.upgrade().context("terminal closed before history export")?;
@@ -760,6 +763,7 @@ impl Session {
                 Err(std::sync::TryLockError::WouldBlock) => return Ok(None),
             };
             if selected { engine.selection_text_prefix_with_wraps(max_bytes, unwrap).map(|text| Some(text.unwrap_or_default())) }
+            else if let Some(lines) = lines { engine.history_tail_limited(lines, max_bytes).map(Some) }
             else { engine.history_text_limited(max_bytes).map(Some) }
         })
     }
@@ -1089,6 +1093,7 @@ mod tests {
         assert!(session.hyperlink_at(0, 0, before.revision).unwrap_err().to_string().contains("click the link again"));
         assert!(session.try_metadata_since(0, 0, 0, 0, true).is_none(), "busy parser must not block metadata");
         assert!(session.try_render_delay().is_none(), "busy parser must not block render delay");
+        assert!(session.history_tail_export(2, 4096)()?.is_none(), "busy parser must return no tail export");
         assert!(session.history_export(4096)()?.is_none(), "busy parser must return no history export");
         assert!(session.selection_export(4096, true)()?.is_none(), "busy parser must return no selection export");
         assert!(session.memory_sample()()?.is_none(), "busy parser must return no memory sample");

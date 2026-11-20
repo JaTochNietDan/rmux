@@ -24,6 +24,7 @@ pub const HELP: &str = "Commands (JSON output except pipe-pane; explicit opaque 
   set-pane-zoom --pane ID --zoomed true|false
   send-key --surface ID KEY  (Enter, Up, Ctrl-c, Alt-Left, Shift-Tab)
   send --surface ID [--paste] TEXT
+  capture-pane --surface ID [--scrollback] [--lines N]
   read-screen --surface ID [--scrollback | --selection [--preserve-wraps]]
   pipe-pane --surface ID [--command SHELL_COMMAND | SHELL_COMMAND]
 Use -- before positional text beginning with a dash. List commands list the
@@ -52,6 +53,7 @@ pub fn help(command: &str) -> Result<String, String> {
         "focus-panel" => ("--panel ID [--activate]", "Focus an existing terminal surface; --activate also activates its window."),
         "send-key" => ("--surface ID KEY", "Send one key tap, such as Enter, Up, Ctrl-c, Alt-Left or Shift-Tab."),
         "send" => ("--surface ID [--paste] TEXT", "Send literal text. --paste applies terminal paste encoding. Use -- before text starting with a dash."),
+        "capture-pane" => ("--surface ID [--scrollback] [--lines N]", "Capture visible text, or retained history with --scrollback. --lines N implies history and requests the last 1–65536 logical screen lines, including blank trailing rows; soft wraps are joined. Returns JSON with text and truncation status, bounded to 1 MiB."),
         "read-screen" => ("--surface ID [--scrollback | --selection [--preserve-wraps]]", "Read visible text by default, retained history with --scrollback, or selected text with --selection; add --preserve-wraps to keep soft-wrap line breaks."),
         "move-panel" => ("--panel ID --workspace ID [--activate]", "Move a live terminal to another workspace, preserving its process. Destination selection changes; window activation requires --activate."),
         "move-workspace" => ("--workspace ID --window ID [--activate]", "Move a workspace and its live terminals to another window. Window activation requires --activate."),
@@ -122,7 +124,7 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
             Some(("--surface", "surface_id")),
             Some("text"),
         ),
-        "read-screen" => ("surface.read_text", Some(("--surface", "surface_id")), None),
+        "capture-pane" | "read-screen" => ("surface.read_text", Some(("--surface", "surface_id")), None),
         _ => {
             if args.len() > 1 {
                 return Err("quote the JSON object as one argument".into());
@@ -150,6 +152,13 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
             continue;
         }
         if !literal && arg.starts_with('-') && !(command == "set-buffer" && arg == "-") {
+            if command == "capture-pane" && arg == "--lines" {
+                let raw = args.next().ok_or("--lines requires a count")?.into_string().map_err(|_| "count must be UTF-8")?;
+                let lines: usize = raw.parse().map_err(|_| "--lines requires an integer from 1 to 65536")?;
+                if !raw.bytes().all(|byte| byte.is_ascii_digit()) || !(1..=65536).contains(&lines) { return Err("--lines requires an integer from 1 to 65536".into()); }
+                if params.insert("lines".into(), Value::from(lines)).is_some() { return Err("duplicate --lines".into()); }
+                continue;
+            }
             if command == "pipe-pane" && arg == "--command" {
                 let text = args.next().ok_or("--command requires shell command text")?.into_string().map_err(|_| "shell command must be UTF-8")?;
                 if params.insert("command".into(), Value::String(text)).is_some() { return Err("duplicate pipe command".into()); }
@@ -276,7 +285,7 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
                     "select-workspace" | "focus-panel" | "new-window" | "new-workspace" | "move-panel" | "move-workspace" | "split-pane",
                     "--activate",
                 ) => ("activate", Value::Bool(true)),
-                ("read-screen", "--scrollback") => ("scope", Value::String("history".into())),
+                ("read-screen" | "capture-pane", "--scrollback") => ("scope", Value::String("history".into())),
                 ("read-screen", "--selection") => ("scope", Value::String("selection".into())),
                 ("read-screen", "--preserve-wraps") => ("preserve_wraps", Value::Bool(true)),
                 _ => return Err(format!("unsupported option for {command}: {arg}")),
@@ -295,6 +304,10 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
         if !params.contains_key(key) {
             return Err(format!("{command} requires {flag} ID"));
         }
+    }
+    if command == "capture-pane" {
+        params.insert("max_bytes".into(), Value::from(1024 * 1024));
+        if params.contains_key("lines") { params.insert("scope".into(), Value::String("history".into())); }
     }
     if command == "read-screen" && params.contains_key("preserve_wraps")
         && params.get("scope").and_then(Value::as_str) != Some("selection") {
@@ -359,6 +372,26 @@ mod tests {
     fn args(v: &[&str]) -> Vec<OsString> {
         v.iter().map(OsString::from).collect()
     }
+    #[test]
+    fn capture_pane_routes_bounded_tail_and_rejects_invalid_counts() {
+        for flags in [
+            vec!["--surface", "7", "--lines", "20"],
+            vec!["--lines", "20", "--scrollback", "--surface", "7"],
+            vec!["--scrollback", "--surface", "7", "--lines", "20"],
+        ] {
+            let (method, params) = expand("capture-pane", args(&flags)).unwrap();
+            assert_eq!(method, "surface.read_text");
+            assert_eq!(params, serde_json::json!({"surface_id":"7","scope":"history","lines":20,"max_bytes":1048576}));
+        }
+        let (_, params) = expand("capture-pane", args(&["--surface", "7"])).unwrap();
+        assert!(params.get("scope").is_none());
+        for count in ["0", "-1", "+1", "65537", "1.5", "abc", "999999999999999999999999"] {
+            assert!(expand("capture-pane", args(&["--surface", "7", "--lines", count])).is_err());
+        }
+        assert!(expand("capture-pane", args(&["--lines", "2"])).is_err());
+        assert!(expand("capture-pane", args(&["--surface", "7", "--lines", "2", "--lines", "3"])).is_err());
+    }
+
     #[test]
     fn buffer_stdin_preserves_text_and_is_bounded_without_reading_for_literals() {
         for flags in [vec![], args(&["--name", "notes", "-"])] {

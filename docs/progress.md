@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Connected the logical tail exporter through Session, background surface.read_text
+RPC and capture-pane --lines N. CLI help/completion include capture-pane, explicit
+surface targeting, --scrollback and --lines; the CLI cap is 1 MiB. Counts are
+validated as 1–65536 and require history scope in RPC. The session closure keeps
+only a weak terminal reference and uses try_lock, preserving the existing busy
+error instead of waiting on the parser. Desktop/CLI compilation and focused CLI
+routing/count checks passed. The real-PTY busy-parser test also passed with a
+tail-export assertion, confirming no wait for the held parser lock. Trailing blank screen rows currently count toward
+the requested range; upstream trailing-blank equivalence, implicit target aliases
+and live socket/native acceptance remain pending. No full capture parity claimed.
+
 Added a terminal-engine tail-range exporter for capture-pane work. It walks
 backwards through Ghostty row metadata to locate logical line boundaries before
 formatting, without copying preceding history or replacing the user's selection.

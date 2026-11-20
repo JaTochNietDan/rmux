@@ -1,5 +1,16 @@
 # rmux
 
+`rmuxctl capture-pane --surface SURFACE_ID` returns visible text in a JSON
+response. Add `--scrollback` for retained history, or `--lines 20` for the last
+20 logical screen lines (which implies scrollback). Counts must be 1–65536.
+Soft-wrapped rows are joined; blank trailing screen rows count toward the range,
+though the formatter trims their text. Output is capped at 1 MiB: check
+`result.truncated` before treating it as complete. For an oversized tail, returned
+text is the prefix of that requested tail range. Capture preserves selection,
+focus and scroll position; a busy parser returns a retryable error. Explicit
+surface IDs are required; implicit targets and workspace/window aliases remain
+pending. Raw `surface.read_text` also accepts `lines` with `scope: "history"`.
+
 `rmuxctl pipe-pane --surface SURFACE_ID --command 'wc -l'` captures retained
 terminal history once and sends it to a local `/bin/sh` command as stdin. Quote
 the command as one argument; a trailing quoted command is also accepted. The
