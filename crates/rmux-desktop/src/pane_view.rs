@@ -288,9 +288,10 @@ impl PaneView {
         let hints: Vec<_> = actions.iter().map(|action| focus.as_ref().and_then(|focus| shortcuts::hint(action.as_ref(), focus, window))).collect();
         deferred(anchored().position(menu.position).snap_to_window().child(
             div().id("tab-context-menu").track_focus(&menu.focus).key_context("TabMenu")
-                .w(px(340.).min((window.viewport_size().width - px(16.)).max(px(1.)))).py_1().bg(rgb(0x292929)).border_1().border_color(rgb(0x465063)).rounded_md().shadow_md()
+                .w(px(340.).min((window.viewport_size().width - px(16.)).max(px(1.)))).py_1().bg(rgb(0x292929)).border_1().border_color(rgb(0x465063)).rounded_md().shadow_md().occlude()
                 .on_mouse_down_out(cx.listener(|this, _, window, cx| this.dismiss_tab_menu(window, cx)))
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .on_mouse_down(MouseButton::Middle, |_, _, cx| cx.stop_propagation())
                 .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
                 .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
                 .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {

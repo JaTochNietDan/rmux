@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Workspace and workspace-group context menus now reuse the shared type-to-select
+behavior, including their current Pin/Unpin labels. Tab and sidebar menus also
+use GPUI occlusion and consume middle-button presses, matching the terminal
+context menu's input isolation. Existing selection/activation paths remain in
+use. Desktop cargo check passed; native typeahead and pointer-isolation acceptance
+remain pending. No background timers or additional persistent menu resources were
+introduced.
+
 Added explicit two-pane swap via pane.swap RPC and rmuxctl swap-panes, with
 capability discovery, notification support, CLI help/completion and required-ID
 validation. It reuses the UI swap operation, preserves split geometry and terminal

@@ -1704,7 +1704,7 @@ The tab context menu also offers this command with an eligible-tab count. It
 retains the tab you opened the menu on and disables the command when no other
 finished tabs are available.
 
-Terminal and tab context menus support type-to-select: type a label prefix, or
+Terminal, tab, workspace and group context menus support type-to-select: type a label prefix, or
 repeat its first letter to cycle enabled matches. After a one-second pause,
 typing starts a new prefix. Press Enter or Space to activate, or Escape to close.
 

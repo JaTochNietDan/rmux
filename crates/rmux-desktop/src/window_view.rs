@@ -111,6 +111,7 @@ struct WorkspaceMenu {
     return_focus: Option<FocusHandle>,
     selected: usize,
     scroll: ScrollHandle,
+    typeahead: menu_navigation::Typeahead,
 }
 
 pub(super) struct WorkspaceWindow {
@@ -188,7 +189,7 @@ impl WorkspaceWindow {
             }
         }));
         focus.focus(window);
-        self.workspace_menu = Some(WorkspaceMenu { target, group, position, focus, return_focus, selected: 0, scroll: ScrollHandle::new() });
+        self.workspace_menu = Some(WorkspaceMenu { target, group, position, focus, return_focus, selected: 0, scroll: ScrollHandle::new(), typeahead: Default::default() });
         cx.notify();
     }
 
@@ -240,13 +241,18 @@ impl WorkspaceWindow {
         let hints: Vec<_> = actions.iter().map(|action| menu.return_focus.as_ref().and_then(|focus| shortcuts::hint(action.as_ref(), focus, window))).collect();
         deferred(anchored().position(menu.position).snap_to_window().child(
             div().id("workspace-context-menu").track_focus(&menu.focus).key_context("WorkspaceMenu")
-                .w(px(340.).min((window.viewport_size().width - px(16.)).max(px(1.)))).py_1().bg(rgb(0x292929)).border_1().border_color(rgb(0x465063)).rounded_md().shadow_md()
+                .w(px(340.).min((window.viewport_size().width - px(16.)).max(px(1.)))).py_1().bg(rgb(0x292929)).border_1().border_color(rgb(0x465063)).rounded_md().shadow_md().occlude()
                 .on_mouse_down_out(cx.listener(|this, _, window, cx| this.dismiss_workspace_menu(window, cx)))
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .on_mouse_down(MouseButton::Middle, |_, _, cx| cx.stop_propagation())
                 .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
                 .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
-                .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                .on_key_down(cx.listener(move |this, event: &KeyDownEvent, window, cx| {
                     let Some(menu) = &mut this.workspace_menu else { return; };
+                    let modifiers = event.keystroke.modifiers;
+                    let typed = if !modifiers.control && !modifiers.alt && !modifiers.platform && !modifiers.function {
+                        menu.typeahead.select(&event.keystroke.key, &labels, &[true; 6], menu.selected, std::time::Instant::now())
+                    } else { None };
                     match event.keystroke.key.as_str() {
                         "up" => menu.selected = (menu.selected + 5) % 6,
                         "down" => menu.selected = (menu.selected + 1) % 6,
@@ -254,7 +260,7 @@ impl WorkspaceWindow {
                         "end" => menu.selected = 5,
                         "enter" | "space" => { let selected = menu.selected; this.activate_workspace_menu(selected, window, cx); },
                         "escape" => this.dismiss_workspace_menu(window, cx),
-                        _ => {},
+                        _ => { if let Some(selected) = typed { menu.selected = selected; } },
                     }
                     if let Some(menu) = &this.workspace_menu { menu.scroll.scroll_to_item(menu.selected); }
                     cx.stop_propagation();
