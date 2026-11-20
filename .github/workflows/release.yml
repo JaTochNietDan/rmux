@@ -23,7 +23,8 @@ jobs:
       - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db
         with:
           version: 2026.11.8
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      - id: build-cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
           path: |
             ~/.cargo/registry
@@ -36,6 +37,16 @@ jobs:
         run: mise run bootstrap
       - name: Build release on GitHub runner
         run: mise exec -- cargo build --locked --release -p rmux-desktop -p rmux-cli
+      - name: Save compiled dependencies before signing
+        if: steps.build-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/release
+            .deps
+          key: macos-arm64-release-${{ hashFiles('Cargo.lock', 'mise.toml') }}
       - name: Sign, notarize and prepare Sparkle update
         env:
           MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}

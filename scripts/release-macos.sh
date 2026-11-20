@@ -23,7 +23,11 @@ xcrun stapler staple "$app"
 xcrun stapler validate "$app"
 spctl --assess --type execute --verbose=2 "$app"
 ditto -c -k --sequesterRsrc --keepParent "$app" "$archive"
-generate_appcast --account rmux --maximum-deltas 0 \
+set -- --account rmux
+if [ -n "${RMUX_SPARKLE_KEY_FILE:-}" ]; then
+    set -- --ed-key-file "$RMUX_SPARKLE_KEY_FILE"
+fi
+generate_appcast "$@" --maximum-deltas 0 \
     --download-url-prefix "https://github.com/JaTochNietDan/rmux/releases/download/v$version/" \
     --link "https://github.com/JaTochNietDan/rmux" "$output"
 (cd "$output" && shasum -a 256 "rmux-$version-macos-arm64.zip" > SHA256SUMS)

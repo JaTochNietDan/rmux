@@ -51,7 +51,7 @@ with tempfile.TemporaryDirectory(prefix='rmux-signing-') as temporary:
         run('security', 'default-keychain', '-d', 'user', '-s', keychain, sensitive=True)
         run('security', 'import', str(p12), '-k', keychain, '-P', password, '-T', '/usr/bin/codesign', sensitive=True)
         run('security', 'set-key-partition-list', '-S', 'apple-tool:,apple:,codesign:', '-s', '-k', keychain_password, keychain, sensitive=True)
-        run('generate_keys', '--account', 'rmux', '-f', str(ed), sensitive=True)
+        os.environ['RMUX_SPARKLE_KEY_FILE'] = str(ed)
         args = ['xcrun', 'notarytool', 'store-credentials', 'rmux-ci', '--key', str(p8), '--key-id', key_id, '--keychain', keychain]
         if issuer:
             args += ['--issuer', issuer]
