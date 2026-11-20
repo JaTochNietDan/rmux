@@ -119,13 +119,10 @@ impl<T: Clone + PartialEq> PaneTree<T> {
         if *axis != requested || children.len() < 2 { return None; }
         let left = if positive { index.min(children.len() - 2) } else { index.saturating_sub(1) };
         let total = weights[left] + weights[left + 1];
-        // Restores and pointer drags can legitimately begin below the keyboard
-        // floor. Never snap such a divider backwards while trying to shrink it.
-        let minimum = (total * 0.1).min(weights[left]).min(weights[left + 1]);
-        let next = (weights[left] + total * if positive { 0.05 } else { -0.05 }).clamp(minimum, total - minimum);
-        if next == weights[left] || next <= 0. || total - next <= 0. { return Some(false); }
-        weights[left] = next;
-        weights[left + 1] = total - next;
+        let pair = resized_pair(weights[left], weights[left + 1], total * if positive { 0.05 } else { -0.05 }, total * 0.1);
+        if pair == (weights[left], weights[left + 1]) { return Some(false); }
+        weights[left] = pair.0;
+        weights[left + 1] = pair.1;
         Some(true)
     }
 
@@ -245,13 +242,30 @@ impl<T: Clone + PartialEq> PaneTree<T> {
 /// units, converted by the UI from the split's content size at drag start.
 pub fn resized_pair(left: f32, right: f32, delta: f32, minimum: f32) -> (f32, f32) {
     let total = left + right;
-    let minimum = minimum.max(0.001).min(total / 2.);
-    let left = (left + delta).clamp(minimum, total - minimum);
-    (left, total - left)
+    // Preserve narrower existing shares instead of jumping against the gesture.
+    // The minimum is in relative weight units, so no absolute floor is valid.
+    let minimum = minimum.max(0.).min(total / 2.).min(left).min(right);
+    let next = (left + delta).clamp(minimum, total - minimum);
+    if next == left || !next.is_finite() || next <= 0. || total - next <= 0. {
+        return (left, right);
+    }
+    (next, total - next)
 }
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn pointer_resize_preserves_narrow_origin_and_weight_scale() {
+        assert_eq!(resized_pair(0.01, 0.99, 0., 0.1), (0.01, 0.99));
+        assert_eq!(resized_pair(0.01, 0.99, -0.2, 0.1), (0.01, 0.99));
+        assert_eq!(resized_pair(0.99, 0.01, 0.2, 0.1), (0.99, 0.01));
+        let normal = resized_pair(0.01, 0.99, 0.03, 0.1);
+        let scaled = resized_pair(0.00001, 0.00099, 0.00003, 0.0001);
+        assert!((normal.0 - 0.04).abs() < 1e-6);
+        assert!((scaled.0 * 1000. - normal.0).abs() < 1e-6);
+        assert!((scaled.1 * 1000. - normal.1).abs() < 1e-6);
+    }
+
     #[test]
     fn keyboard_resize_does_not_reverse_narrow_restored_dividers() {
         let mut tree = PaneTree::Split { axis: Axis::Columns, weights: vec![0.01, 0.99], children: vec![PaneTree::Pane(1), PaneTree::Pane(2)] };

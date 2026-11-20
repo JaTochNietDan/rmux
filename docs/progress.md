@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Unified pointer/keyboard divider clamping so a narrow restored pane does not jump
+backward on drag start or when pushed against its minimum. The shared helper uses
+relative weight units, preserves the smaller starting share, avoids zero neighbors
+from rounding and returns unchanged pairs without arithmetic churn. Keyboard
+resize now reuses it. Five resize/focus layout tests passed, including zero-delta,
+both narrow sides, proportional weight scaling and prior keyboard regressions.
+Native drag acceptance remains pending.
+
 Split divider hover hints now describe dragging, pair-only double-click equalizing
 and palette resize commands. Drag updates compare the computed pair with current
 weights before notifying, avoiding redundant layout/render notifications while the
