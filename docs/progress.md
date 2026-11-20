@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+New-tab startup now also prepares engine colors/palette and the initial frame
+in its background task. The UI attaches a prepared session instead of immediately
+reacquiring the parser for those operations. A color/palette change during
+startup triggers background re-preparation, and frame-preparation failures use
+the existing tab launch error path. Desktop compilation and the live socket
+smoke passed after extracting shared initialization; that smoke exercises normal
+window/split startup, not the new-tab action itself. Native asynchronous tab
+focus/cancellation acceptance and latency measurement remain pending.
+
 New Terminal Tab now launches its PTY in a background task using the cached
 working directory, inherited font settings and configured scrollback budget.
 Each pane permits one pending launch and shows Starting…; existing terminals

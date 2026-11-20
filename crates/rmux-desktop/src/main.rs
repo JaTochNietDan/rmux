@@ -411,6 +411,15 @@ struct TerminalView {
     input_focused: bool,
     _focus_subscriptions: Vec<Subscription>,
 }
+struct PreparedTerminal {
+    session: Session,
+    frame: Frame,
+    colors: [Option<Color>; 3],
+    palette: Option<[Color; 16]>,
+    applied_colors: Option<[Option<Color>; 3]>,
+    applied_palette: Option<[Color; 16]>,
+    color_error: Option<String>,
+}
 struct TabMetadataChanged;
 impl EventEmitter<TabMetadataChanged> for TerminalView {}
 impl TerminalView {
@@ -562,20 +571,27 @@ impl TerminalView {
         self.cursor_cache = row_cache::CursorCache::default();
         cx.notify();
     }
-    fn new(session: Session, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let snapshot_directory = session.initial_directory().map(std::path::Path::to_path_buf);
-        register_shutdown(session.shutdown_handle(), cx);
-        let colors = cx.global::<Preferences>().terminal_colors();
-        let color_error = session.set_default_colors(colors)
-            .err().map(|error| error.to_string());
+    fn prepare(session: Session, colors: [Option<Color>; 3], palette: Option<[Color; 16]>) -> Result<PreparedTerminal> {
+        let color_error = session.set_default_colors(colors).err().map(|error| error.to_string());
         let applied_colors = color_error.is_none().then_some(colors);
-        let palette = cx.global::<Preferences>().terminal_palette();
-        let palette_error = palette.and_then(|colors| session.set_ansi_palette(Some(colors)).err());
+        let palette_error = session.set_ansi_palette(palette).err();
         let applied_palette = if palette_error.is_none() { palette } else { None };
         let color_error = color_error.or_else(|| palette_error.map(|error| error.to_string()));
+        let frame = session.frame()?;
+        Ok(PreparedTerminal { session, frame, colors, palette, applied_colors, applied_palette, color_error })
+    }
+    fn new(session: Session, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let settings = cx.global::<Preferences>();
+        let prepared = Self::prepare(session, settings.terminal_colors(), settings.terminal_palette())
+            .expect("initial terminal frame");
+        Self::from_prepared(prepared, window, cx)
+    }
+    fn from_prepared(prepared: PreparedTerminal, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let PreparedTerminal { session, frame, applied_colors, applied_palette, color_error, .. } = prepared;
+        let snapshot_directory = session.initial_directory().map(std::path::Path::to_path_buf);
+        register_shutdown(session.shutdown_handle(), cx);
         let (focus, subscriptions) = Self::window_focus(window, cx);
         let updates = session.updates.clone();
-        let frame = session.frame().expect("initial terminal frame");
         let task = cx.spawn(async move |entity, cx| {
             let mut retry = false;
             loop {

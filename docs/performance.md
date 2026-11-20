@@ -1,9 +1,10 @@
 # rmux performance acceptance plan
 
 New-tab PTY creation runs in a background task, with one pending launch per
-pane and cached directory inheritance. This removes synchronous process startup
-from the tab action, but initial terminal frame/color setup still runs on the
-UI thread. Splits/workspace startup paths remain separate work; native startup
+pane and cached directory inheritance. PTY creation plus initial frame/color preparation run off the
+UI thread for new tabs. Settings changes during launch trigger background
+re-preparation before the view is attached. Subsequent focus/layout work may
+still access the parser. Splits/workspace startup paths remain separate work; native startup
 latency and rapid create/close acceptance are still pending.
 
 Find selection seeding uses a nonblocking parser-lock attempt and a streaming

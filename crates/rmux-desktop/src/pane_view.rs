@@ -488,20 +488,36 @@ impl PaneView {
         let cells = self.active_cell_metrics(cx);
         let family = self.active_font_family(cx);
         let scrollback = cx.global::<Preferences>().scrollback_bytes();
+        let colors = cx.global::<Preferences>().terminal_colors();
+        let palette = cx.global::<Preferences>().terminal_palette();
         let origin = window.focused(cx);
         let executor = cx.background_executor().clone();
         self.error = None;
         self.spawning_tab = Some(cx.spawn_in(window, async move |entity, cx| {
-            let result = executor.spawn(async move {
-                Session::shell_in_with_scrollback(80, 24, directory.as_deref(), scrollback)
+            let mut result = executor.spawn(async move {
+                let session = Session::shell_in_with_scrollback(80, 24, directory.as_deref(), scrollback)?;
+                TerminalView::prepare(session, colors, palette)
             }).await;
+            loop {
+                // Settings can change during startup. Re-prepare off-thread before
+                // installing the view, rather than showing stale colors indefinitely.
+                let refresh = cx.update(|_, cx| {
+                    let prepared = result.as_ref().ok()?;
+                    let settings = cx.global::<Preferences>();
+                    let current = (settings.terminal_colors(), settings.terminal_palette());
+                    ((prepared.colors, prepared.palette) != current).then_some(current)
+                }).ok().flatten();
+                let Some((colors, palette)) = refresh else { break; };
+                let session = result.expect("successful preparation checked above").session;
+                result = executor.spawn(async move { TerminalView::prepare(session, colors, palette) }).await;
+            }
             let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
                 this.spawning_tab = None;
                 if cx.global::<Shutdowns>().quitting { return; }
                 match result {
-                    Ok(session) => {
+                    Ok(prepared) => {
                         let terminal = cx.new(|cx| {
-                            let mut terminal = TerminalView::new(session, window, cx);
+                            let mut terminal = TerminalView::from_prepared(prepared, window, cx);
                             terminal.cells = cells;
                             terminal.font_family = family;
                             terminal
