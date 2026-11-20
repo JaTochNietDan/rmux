@@ -171,7 +171,11 @@ does not consume the saved buffer. **Delete Named Buffer…** in the palette/men
 the chosen buffer and releases its storage. If buffers changed while the picker
 was open, reopen it before deleting.
 
-Rename a buffer with `rmuxctl rename-buffer --name OLD NEW_NAME` (source defaults
+Use **Rename Named Buffer…** in the palette/menu (custom action `rename_buffer`)
+to choose a buffer, edit its preselected name, and press Enter to save. Escape
+cancels. Invalid names and collisions leave the editor open for correction;
+concurrent buffer changes require reopening the picker.
+You can also rename with `rmuxctl rename-buffer --name OLD NEW_NAME` (source defaults
 to `default`), or RPC `buffer.rename` with `name` and required `new_name`.
 Renaming moves the retained text without cloning it and preserves its byte count.
 An existing destination is rejected; renaming to the same name is a no-op.

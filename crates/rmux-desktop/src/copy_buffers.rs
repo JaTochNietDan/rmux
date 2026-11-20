@@ -52,6 +52,10 @@ pub fn validate_name(name: &str) -> Result<(), &'static str> {
 pub struct Store { entries: BTreeMap<String, String>, bytes: usize, revision: u64 }
 impl gpui::Global for Store {}
 impl Store {
+    pub fn rename_if_unchanged(&mut self, name: &str, next: String, revision: u64) -> Result<Value, &'static str> {
+        if self.revision != revision { return Err("Buffers changed; reopen the picker before renaming"); }
+        self.execute(&Command::Rename(name.into(), next))
+    }
     pub fn metadata(&self) -> Vec<(String, usize, String)> {
         self.entries.iter().map(|(name, text)| (name.clone(), text.len(), preview(text))).collect()
     }
@@ -115,6 +119,19 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn rename_editor_rejects_stale_content_and_allows_corrected_names() {
+        let mut store = Store::default();
+        store.execute(&Command::Set("notes".into(), "original".into())).unwrap();
+        let revision = store.revision();
+        assert!(store.rename_if_unchanged("notes", "\n".into(), revision).is_err());
+        store.rename_if_unchanged("notes", "renamed".into(), revision).unwrap();
+        let revision = store.revision();
+        store.execute(&Command::Set("renamed".into(), "replacement".into())).unwrap();
+        assert!(store.rename_if_unchanged("renamed", "stale".into(), revision).is_err());
+        assert_eq!(store.entries["renamed"], "replacement");
+        assert!(!store.entries.contains_key("stale"));
+    }
     #[test]
     fn rename_preserves_storage_and_rejects_collisions_atomically() {
         let mut store = Store::default();

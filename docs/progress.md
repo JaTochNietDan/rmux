@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Added graphical Rename Named Buffer through the native menu, command palette
+and `rename_buffer` custom action. The searchable buffer picker transitions into
+a prefilled, selected-name editor within the same palette overlay, preserving
+its existing cancellation/focus lifecycle. Enter validates and renames; failures
+stay visible for correction, while Escape cancels. Revision-checked submission
+prevents stale editors from renaming replaced contents. A focused test passed
+invalid-name correction and concurrent-change rejection; desktop check/test
+compilation passed. Native visual, keyboard and focus-return acceptance remain
+pending.
+
 Added `buffer.rename` RPC and `rmuxctl rename-buffer [--name NAME] NEW_NAME`,
 including capability discovery, notification routing, CLI help and completions.
 Rename moves the stored String allocation without duplicating buffer contents;

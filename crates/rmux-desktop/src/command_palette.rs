@@ -101,7 +101,11 @@ pub enum PaletteEvent {
     MergeWorkspaces(EntityId, EntityId, AnyWindowHandle),
     Close,
 }
+#[derive(Clone, Copy, PartialEq)]
+pub enum BufferMode { Paste, Delete, Rename }
+
 pub struct CommandPalette {
+    buffer_rename: Option<(String, u64)>,
     input: Entity<text_field::TextField>,
     heading: &'static str,
     empty_message: &'static str,
@@ -237,6 +241,7 @@ impl CommandPalette {
         command!("Enter Copy Mode", EnterCopyMode);
         command!("Paste Named Buffer…", ShowBufferPicker);
         command!("Delete Named Buffer…", ShowDeleteBufferPicker);
+        command!("Rename Named Buffer…", ShowRenameBufferPicker);
         command!("Choose Terminal Font…", ShowFontPicker);
         command!("Choose Default Font…", ShowDefaultFontPicker);
         command!("Use Configured Font", UseConfiguredFont);
@@ -361,13 +366,14 @@ impl CommandPalette {
         }
         Self::with_commands(commands, "Search commands and workspaces", "No matching commands or workspaces", window, cx)
     }
-    pub fn buffers(entries: Vec<(String, usize, String)>, revision: u64, surface_id: String, deleting: bool, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn buffers(entries: Vec<(String, usize, String)>, revision: u64, surface_id: String, mode: BufferMode, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let commands = entries.into_iter().map(|(name, bytes, preview)| Command {
             title: name.clone(), subtitle: Some(format!("{bytes} bytes · {preview}")), shortcut: None,
-            target: PaletteEvent::Run(if deleting { Box::new(DeleteNamedBuffer { name, revision }) }
+            target: PaletteEvent::Run(if mode == BufferMode::Rename { Box::new(RenameNamedBuffer { name, revision }) }
+                else if mode == BufferMode::Delete { Box::new(DeleteNamedBuffer { name, revision }) }
                 else { Box::new(PasteNamedBuffer { name, revision, surface_id: surface_id.clone() }) }),
         }).collect();
-        Self::with_commands(commands, if deleting { "Delete named buffer" } else { "Paste named buffer" }, "No matching buffers · Save a selection in Copy Mode first", window, cx)
+        Self::with_commands(commands, match mode { BufferMode::Paste => "Paste named buffer", BufferMode::Delete => "Delete named buffer", BufferMode::Rename => "Rename named buffer" }, "No matching buffers · Save a selection in Copy Mode first", window, cx)
     }
     pub fn custom_commands(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let mut commands: Vec<_> = cx.global::<Preferences>().commands.iter().map(custom_command).collect();
@@ -429,6 +435,11 @@ impl CommandPalette {
             &input,
             |this, _, event: &text_field::EditEvent, cx| match event {
                 text_field::EditEvent::Changed(query) => {
+                    if this.buffer_rename.is_some() {
+                        this.empty_message = "Enter a unique buffer name (up to 128 bytes)";
+                        cx.notify();
+                        return;
+                    }
                     this.search.update(query);
                     this.selected = 0;
                     this.scroll.reset(this.search.matches.len());
@@ -440,7 +451,7 @@ impl CommandPalette {
         )
         .detach();
         Self {
-            input, heading, empty_message,
+            input, heading, empty_message, buffer_rename: None,
             search: palette_match::RankedSearch::new(commands
                 .iter()
                 .map(|command| format!("{} {} {}", command.title, command.subtitle.as_deref().unwrap_or_default(),
@@ -497,7 +508,34 @@ impl CommandPalette {
                 )
             }).into_any_element()
     }
-    fn run(&self, cx: &mut Context<Self>) {
+    fn run(&mut self, cx: &mut Context<Self>) {
+        if let Some((name, revision)) = &self.buffer_rename {
+            let next = self.input.read(cx).value().to_owned();
+            match cx.global_mut::<copy_buffers::Store>().rename_if_unchanged(name, next, *revision) {
+                Ok(_) => cx.emit(PaletteEvent::Close),
+                Err(error) => { self.empty_message = error; cx.notify(); }
+            }
+            return;
+        }
+        let rename = self.search.matches.get(self.selected)
+            .and_then(|index| match &self.commands[*index].target {
+                PaletteEvent::Run(action) => action.as_any().downcast_ref::<RenameNamedBuffer>().cloned(),
+                _ => None,
+            });
+        if let Some(rename) = rename {
+            self.heading = "Rename buffer · Enter to save · Escape to cancel";
+            self.empty_message = "Enter a unique buffer name (up to 128 bytes)";
+            self.buffer_rename = Some((rename.name.clone(), rename.revision));
+            self.commands.clear();
+            self.search = palette_match::RankedSearch::new(Vec::new());
+            self.scroll.reset(0);
+            self.input.update(cx, |input, cx| {
+                input.replace_draft(&rename.name, cx);
+                input.select_all_text(cx);
+            });
+            cx.notify();
+            return;
+        }
         if let Some(index) = self.search.matches.get(self.selected) {
             cx.emit(match &self.commands[*index].target {
                 PaletteEvent::Run(action) => PaletteEvent::Run(action.boxed_clone()),

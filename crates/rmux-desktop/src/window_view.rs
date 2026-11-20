@@ -2431,19 +2431,19 @@ impl WorkspaceWindow {
         let palette = cx.new(|cx| command_palette::CommandPalette::workspace_windows(entries, source, window, cx));
         self.install_palette(palette, focus, window, cx);
     }
-    fn show_buffer_picker(&mut self, deleting: bool, window: &mut Window, cx: &mut Context<Self>) {
+    fn show_buffer_picker(&mut self, mode: command_palette::BufferMode, window: &mut Window, cx: &mut Context<Self>) {
         if self.automation_available(cx).is_err() { return; }
         let surface = self.entries.get(self.active).and_then(|entry| {
             let workspace = entry.workspace.read(cx);
             let index = workspace.focused_index(window, cx)?;
             workspace.panes[index].read(cx).active_terminal_id()
         });
-        if surface.is_none() && !deleting { self.notice = Some("Focus a terminal before choosing a buffer".into()); cx.notify(); return; }
+        if surface.is_none() && mode == command_palette::BufferMode::Paste { self.notice = Some("Focus a terminal before choosing a buffer".into()); cx.notify(); return; }
         let surface = surface.map(|id| id.to_string()).unwrap_or_default();
         let focus = window.focused(cx);
         let store = cx.global::<copy_buffers::Store>();
         let (entries, revision) = (store.metadata(), store.revision());
-        let palette = cx.new(|cx| command_palette::CommandPalette::buffers(entries, revision, surface, deleting, window, cx));
+        let palette = cx.new(|cx| command_palette::CommandPalette::buffers(entries, revision, surface, mode, window, cx));
         self.install_palette(palette, focus, window, cx);
     }
     fn show_font_picker(&mut self, default: bool, window: &mut Window, cx: &mut Context<Self>) {
@@ -3546,8 +3546,9 @@ impl Render for WorkspaceWindow {
             }).absolute().size_full())
             .on_action(cx.listener(|this, _: &CloseWindow, window, cx| this.request_close_window(window, cx)))
             .on_action(cx.listener(|this, _: &CloseWorkspace, window, cx| this.request_close_workspace(this.active, window, cx)))
-            .on_action(cx.listener(|this, _: &ShowBufferPicker, window, cx| this.show_buffer_picker(false, window, cx)))
-            .on_action(cx.listener(|this, _: &ShowDeleteBufferPicker, window, cx| this.show_buffer_picker(true, window, cx)))
+            .on_action(cx.listener(|this, _: &ShowBufferPicker, window, cx| this.show_buffer_picker(command_palette::BufferMode::Paste, window, cx)))
+            .on_action(cx.listener(|this, _: &ShowDeleteBufferPicker, window, cx| this.show_buffer_picker(command_palette::BufferMode::Delete, window, cx)))
+            .on_action(cx.listener(|this, _: &ShowRenameBufferPicker, window, cx| this.show_buffer_picker(command_palette::BufferMode::Rename, window, cx)))
             .on_action(cx.listener(|this, action: &DeleteNamedBuffer, _, cx| {
                 this.notice = Some(match cx.global_mut::<copy_buffers::Store>().delete_if_unchanged(&action.name, action.revision) {
                     Ok(_) => format!("Deleted buffer {}", action.name),

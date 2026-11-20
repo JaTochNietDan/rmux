@@ -124,6 +124,7 @@ fn action(name: &str) -> Option<Box<dyn Action>> {
         "copy_mode" => Box::new(EnterCopyMode),
         "paste_buffer" => Box::new(ShowBufferPicker),
         "delete_buffer" => Box::new(ShowDeleteBufferPicker),
+        "rename_buffer" => Box::new(ShowRenameBufferPicker),
         "choose_font" => Box::new(ShowFontPicker),
         "choose_default_font" => Box::new(ShowDefaultFontPicker),
         "use_configured_font" => Box::new(UseConfiguredFont),
