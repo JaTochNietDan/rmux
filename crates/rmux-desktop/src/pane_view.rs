@@ -142,6 +142,19 @@ impl PaneView {
         matches.into_iter().map(|(_, index)| index).collect()
     }
 
+    fn reconcile_tab_picker(&mut self, cx: &App) {
+        let Some((_, selected, _)) = &self.tab_picker else { return; };
+        let selected = *selected;
+        let matches = self.matching_tabs(cx);
+        if matches.iter().any(|index| Some(self.terminals[*index].entity_id()) == selected) { return; }
+        let first = matches.first().map(|index| self.terminals[*index].entity_id());
+        if selected == first { return; }
+        if let Some((_, selected, scroll)) = &mut self.tab_picker {
+            *selected = first;
+            scroll.scroll_to_item(0);
+        }
+    }
+
     pub(super) fn automation_busy(&self) -> bool {
         self.rename.is_some() || self.close_prompt.is_some() || self.tab_picker.is_some()
     }
@@ -279,7 +292,8 @@ impl PaneView {
         }
         let selected = self.terminals.len() + active.min(tabs.len() - 1);
         for tab in tabs {
-            let title = cx.subscribe(&tab.terminal, |_, _, _: &TabMetadataChanged, cx| {
+            let title = cx.subscribe(&tab.terminal, |this, _, _: &TabMetadataChanged, cx| {
+                this.reconcile_tab_picker(cx);
                 cx.emit(PaneMetadataChanged);
                 cx.notify();
             });
@@ -340,7 +354,8 @@ impl PaneView {
                     terminal.entity_id(),
                     cx.subscribe(
                         terminal,
-                        |_, _, _: &TabMetadataChanged, cx| {
+                        |this, _, _: &TabMetadataChanged, cx| {
+                            this.reconcile_tab_picker(cx);
                             cx.emit(PaneMetadataChanged);
                             cx.notify();
                         },
@@ -392,7 +407,8 @@ impl PaneView {
     ) -> Self {
         let title = cx.subscribe(
             &terminal,
-            |_, _, _: &TabMetadataChanged, cx| {
+            |this, _, _: &TabMetadataChanged, cx| {
+                this.reconcile_tab_picker(cx);
                 cx.emit(PaneMetadataChanged);
                 cx.notify();
             },
@@ -494,7 +510,8 @@ impl PaneView {
                     terminal.font_family = family;
                     terminal
                 });
-                let title = cx.subscribe(&terminal, |_, _, _: &TabMetadataChanged, cx| {
+                let title = cx.subscribe(&terminal, |this, _, _: &TabMetadataChanged, cx| {
+                    this.reconcile_tab_picker(cx);
                     cx.emit(PaneMetadataChanged);
                     cx.notify();
                 });
@@ -594,7 +611,8 @@ impl PaneView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let title = cx.subscribe(&tab.terminal, |_, _, _: &TabMetadataChanged, cx| {
+        let title = cx.subscribe(&tab.terminal, |this, _, _: &TabMetadataChanged, cx| {
+            this.reconcile_tab_picker(cx);
             cx.emit(PaneMetadataChanged);
             cx.notify();
         });

@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Tab-picker selection now reconciles against title/directory metadata changes.
+If the chosen tab stops matching, the first remaining result becomes the stored
+selection and is revealed; the former tab cannot reclaim selection merely by
+matching again. Empty results clear the stored identity. Metadata updates leave
+scroll position unchanged when the selected tab still matches. All five terminal
+metadata subscription paths use the reconciliation. Desktop compilation passed;
+native live-update interaction remains pending.
+
 The tab picker now pages by its measured viewport and row heights, accounting
 for directory subtitles instead of jumping eight results. Empty/whitespace-only
 queries return original tab order directly, avoiding per-tab lowercase title/path

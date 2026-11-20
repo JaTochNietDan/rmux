@@ -872,7 +872,8 @@ available, with the full title and path in its tooltip. This uses the last
 shell-reported directory or initial directory, without filesystem polling.
 Keyboard selection follows the terminal identity when live title/directory updates
 change result order. If that terminal no longer matches, the first result becomes
-the fallback; changing the query starts at the first result.
+the stored fallback and is revealed, so an old match cannot silently reclaim
+selection later; changing the query starts at the first result.
 Moving focus elsewhere dismisses the picker.
 The picker displays original tab numbers, a matching count and navigation hints.
 A displayed tab number matches an exact query word: `3` prioritizes tab 3, and
