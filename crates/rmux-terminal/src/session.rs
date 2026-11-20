@@ -847,6 +847,17 @@ impl Session {
     }
     pub fn program_status_records(&self) -> Vec<crate::program_status::Record> {
         let terminal = self.terminal.lock().unwrap_or_else(|e| e.into_inner());
+        Self::snapshot_program_status(&terminal)
+    }
+    pub fn try_program_status_records(&self) -> Option<Vec<crate::program_status::Record>> {
+        let terminal = match self.terminal.try_lock() {
+            Ok(terminal) => terminal,
+            Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) => return None,
+        };
+        Some(Self::snapshot_program_status(&terminal))
+    }
+    fn snapshot_program_status(terminal: &Terminal) -> Vec<crate::program_status::Record> {
         let records = terminal.program_status();
         let mut snapshot: Vec<_> = records
             .iter()
@@ -1106,6 +1117,7 @@ mod tests {
         assert!(session.hyperlink_at(0, 0, before.revision).unwrap_err().to_string().contains("click the link again"));
         assert!(session.try_metadata_since(0, 0, 0, 0, true).is_none(), "busy parser must not block metadata");
         assert!(session.try_render_delay().is_none(), "busy parser must not block render delay");
+        assert!(session.try_program_status_records().is_none(), "busy parser must not block status details");
         assert!(session.history_tail_export(2, 4096)()?.is_none(), "busy parser must return no tail export");
         assert!(session.history_export(4096)()?.is_none(), "busy parser must return no history export");
         assert!(session.selection_export(4096, true)()?.is_none(), "busy parser must return no selection export");

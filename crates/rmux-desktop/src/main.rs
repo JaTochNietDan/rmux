@@ -475,6 +475,7 @@ struct TerminalView {
     program_status: Option<rmux_terminal::program_status::Summary>,
     program_status_revision: u64,
     status_details: Option<Vec<rmux_terminal::program_status::Record>>,
+    status_load: Option<Task<()>>,
     ports: ports_view::State,
     copy_mode: Option<Entity<copy_mode::CopyMode>>,
     hidden_line_input: bool,
@@ -744,7 +745,7 @@ impl TerminalView {
                             }
                             view.program_status = status;
                             view.program_status_revision = revision;
-                            if let Some(records) = metadata.program_status_records { view.status_details = Some(records); }
+                            if let Some(records) = metadata.program_status_records { view.status_details = Some(records); view.status_load = None; }
                             metadata_changed = true;
                         }
                         if view.progress != metadata.progress {
@@ -850,6 +851,7 @@ impl TerminalView {
             program_status: None,
             program_status_revision: 0,
             status_details: None,
+            status_load: None,
             ports: Default::default(),
             copy_mode: None,
             hidden_line_input: false,
@@ -1013,6 +1015,30 @@ impl TerminalView {
                 self.status_details = Some(self.session.program_status_records());
             }
             cx.emit(TabMetadataChanged);
+        }
+        cx.notify();
+    }
+    fn toggle_status_details(&mut self, cx: &mut Context<Self>) {
+        if self.status_details.take().is_some() {
+            self.status_load = None;
+        } else if let Some(records) = self.session.try_program_status_records() {
+            self.status_details = Some(records);
+        } else {
+            self.status_details = Some(Vec::new());
+            self.status_load = Some(cx.spawn(async move |entity, cx| {
+                loop {
+                    cx.background_executor().timer(std::time::Duration::from_millis(8)).await;
+                    let done = entity.update(cx, |view, cx| {
+                        if view.status_details.is_none() { return true; }
+                        let Some(records) = view.session.try_program_status_records() else { return false; };
+                        view.status_details = Some(records);
+                        view.status_load = None;
+                        cx.notify();
+                        true
+                    });
+                    if !matches!(done, Ok(false)) { break; }
+                }
+            }));
         }
         cx.notify();
     }
@@ -1764,12 +1790,7 @@ impl Render for TerminalView {
                 this.navigate_find(rmux_terminal::search::Direction::Newer, window, cx)
             }))
             .on_action(cx.listener(|view, _: &ToggleProgramStatus, _, cx| {
-                view.status_details = if view.status_details.is_some() {
-                    None
-                } else {
-                    Some(view.session.program_status_records())
-                };
-                cx.notify();
+                view.toggle_status_details(cx);
             }))
             .on_action(cx.listener(|view, _: &IncreaseFontSize, _, cx| {
                 view.set_font_size(view.cells.font_size + 1., cx)
@@ -1844,7 +1865,7 @@ impl Render for TerminalView {
             )
             .when_some(self.find.clone(), |root, find| root.child(find))
             .when_some(self.status_details.as_ref(), |root, records| {
-                root.child(status_view::panel(records, cx))
+                root.child(status_view::panel(records, self.status_load.is_some(), cx))
             })
             .when(self.ports.visible, |root| root.child(ports_view::panel(&self.ports, window, cx)))
             .child(TerminalElement { view: cx.entity() })

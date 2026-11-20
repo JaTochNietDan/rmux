@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Program Status opening no longer waits for the terminal parser mutex. An
+opportunistic records snapshot populates immediately when available; otherwise
+the panel shows Loading and a single cancellable task retries every 8ms only
+until the initial snapshot arrives. Closing or normal metadata delivery cancels
+the pending load. Records still use inherited app names and sorted IDs. The real
+PTY parser-contention fixture now checks the records API returns without waiting;
+it passed, as did desktop cargo check. Native loading/cancel interaction remains
+pending. This change addresses opening the panel, not every remaining blocking
+engine operation such as terminal focus encoding.
+
 Palette search now indexes each displayed, resolved shortcut alongside the action
 title/subtitle. macOS modifier/key symbols receive searchable names (cmd/command,
 ctrl/control, alt/option, shift and navigation keys); textual cross-platform

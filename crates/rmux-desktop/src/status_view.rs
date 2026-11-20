@@ -1,7 +1,7 @@
 use super::*;
 use rmux_terminal::program_status::{Kind, Record, State};
 
-pub fn panel(records: &[Record], cx: &mut Context<TerminalView>) -> AnyElement {
+pub fn panel(records: &[Record], loading: bool, cx: &mut Context<TerminalView>) -> AnyElement {
     div()
         .h(px(220.))
         .max_h(relative(0.45))
@@ -28,7 +28,7 @@ pub fn panel(records: &[Record], cx: &mut Context<TerminalView>) -> AnyElement {
                 .items_center()
                 .justify_between()
                 .text_sm()
-                .child(format!("Program status · {} records", records.len()))
+                .child(if loading { "Program status · Loading…".to_owned() } else { format!("Program status · {} records", records.len()) })
                 .child(
                     div()
                         .id("close-program-status")
@@ -37,6 +37,7 @@ pub fn panel(records: &[Record], cx: &mut Context<TerminalView>) -> AnyElement {
                         .hover(|style| style.bg(rgb(0x353b46)))
                         .on_click(cx.listener(|view, _, _, cx| {
                             view.status_details = None;
+                            view.status_load = None;
                             cx.notify();
                         }))
                         .child("×"),
@@ -50,7 +51,7 @@ pub fn panel(records: &[Record], cx: &mut Context<TerminalView>) -> AnyElement {
                 .overflow_y_scroll()
                 .p_2()
                 .when(records.is_empty(), |list| {
-                    list.child(div().p_2().text_sm().child("No reported tasks"))
+                    list.child(div().p_2().text_sm().child(if loading { "Loading reported tasks…" } else { "No reported tasks" }))
                 })
                 .children(records.iter().map(|record| {
                     let tint = match record.state {

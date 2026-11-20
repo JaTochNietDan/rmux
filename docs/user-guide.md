@@ -1398,6 +1398,8 @@ indicates additional records. Up to 64 records are kept per terminal. Shell prom
 exit, reset and focus events clean up records according to their state.
 View → Toggle Program Status (also in the palette) shows all records for the
 focused terminal, including hierarchical IDs, inherited app names and messages.
+If terminal output is busy, the panel opens with a Loading state and fills in
+automatically; closing it cancels the pending load.
 View → Toggle Notifications (also in the palette) opens a panel with up to 32 recent
 messages per live terminal, with separate read state for each message. All and Unread
 filters show live counts; press U while the panel is focused to switch filters.
