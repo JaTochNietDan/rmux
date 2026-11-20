@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Notification dismissal now repairs selection through one shared path for mouse,
+keyboard and RPC/CLI requests. Removing the selected message selects the next
+surviving row (or previous at the end), reveals it, and clears selection when the
+list becomes empty. Dismissing an unselected row leaves the current selection and
+scroll intent alone. The first-row fallback also handles a stale selection after
+history eviction. Desktop compilation passed; native interaction remains pending.
+Native UI access was retried this cycle: the Mac is still locked, so no screenshot
+or visual acceptance was claimed.
+
 Command palette Page Up/Down now uses the virtual list's actual viewport height
 and each result's title/subtitle row height instead of a fixed eight-result jump.
 The destination stays within a page including the starting row, with a minimum

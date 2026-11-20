@@ -623,18 +623,18 @@ impl WorkspaceWindow {
         let terminal = self.entries.iter().find_map(|entry| entry.workspace.read(cx).panes.iter().find_map(|pane| {
             pane.read(cx).terminals.iter().find(|terminal| terminal.entity_id() == target).cloned()
         })).ok_or(automation::Failure { code: -32004, message: "Surface not found" })?;
-        terminal.update(cx, |terminal, cx| {
-            if let Some(revision) = change.revision {
-                let matches = terminal.notifications.contains(revision);
-                if matches { terminal.dismiss_notification(revision, cx); }
-                Ok(serde_json::json!({"surface_id":change.surface_id,"revision":revision,"dismissed":matches}))
-            } else {
+        if let Some(revision) = change.revision {
+            let matches = terminal.read(cx).notifications.contains(revision);
+            if matches { self.dismiss_notification(target, revision, cx); }
+            Ok(serde_json::json!({"surface_id":change.surface_id,"revision":revision,"dismissed":matches}))
+        } else {
+            terminal.update(cx, |terminal, cx| {
                 let revision = terminal.store_notification(change.title.clone().unwrap_or_default(), change.body.clone().unwrap_or_default());
                 cx.emit(TabMetadataChanged);
                 cx.notify();
                 Ok(serde_json::json!({"surface_id":change.surface_id,"revision":revision}))
-            }
-        })
+            })
+        }
     }
     pub(super) fn automation_send_key(&self, input: &automation::SurfaceKey, target: EntityId, cx: &App) -> Result<serde_json::Value, automation::Failure> {
         self.automation_available(cx)?;
@@ -1336,6 +1336,13 @@ impl WorkspaceWindow {
         cx.notify();
     }
     fn dismiss_notification(&mut self, id: EntityId, revision: u64, cx: &mut Context<Self>) {
+        // Resolve the effective selection, including the first-row fallback used
+        // when a previously selected message has expired from the bounded history.
+        let removed_selection = self.notification_navigation.as_ref().and_then(|state| {
+            let targets = self.notification_targets(cx);
+            let index = targets.iter().position(|row| Some((row.1, row.2)) == state.selected).unwrap_or(0);
+            targets.get(index).filter(|row| (row.1, row.2) == (id, revision)).map(|_| index)
+        });
         let target = self.entries.iter().find_map(|entry| {
             entry.workspace.read(cx).panes.iter().find_map(|pane| {
                 pane.read(cx)
@@ -1349,6 +1356,16 @@ impl WorkspaceWindow {
             target.update(cx, |terminal, cx| {
                 terminal.dismiss_notification(revision, cx)
             });
+            if let Some(index) = removed_selection {
+                let targets = self.notification_targets(cx);
+                if let Some(state) = &mut self.notification_navigation {
+                    let index = index.min(targets.len().saturating_sub(1));
+                    state.selected = targets.get(index).map(|row| (row.1, row.2));
+                    // The first scroll child is the navigation hint.
+                    state.scroll.scroll_to_item(if targets.is_empty() { 0 } else { index + 1 });
+                    cx.notify();
+                }
+            }
         }
     }
     fn focus_terminal(
@@ -1496,7 +1513,6 @@ impl WorkspaceWindow {
                 self.notification_navigation = None;
                 self.focus_terminal(workspace, terminal, window, cx);
             } else if matches!(key, "backspace" | "delete") {
-                state.selected = targets.get(selected + 1).or_else(|| selected.checked_sub(1).and_then(|i| targets.get(i))).map(|row| (row.1, row.2));
                 self.dismiss_notification(terminal, revision, cx);
             }
         }
