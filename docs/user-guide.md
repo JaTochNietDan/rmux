@@ -1030,12 +1030,14 @@ and allows only 100 ms to await completion; the normal Quit action retains its
 confirmation policy and three-second cleanup deadline.
 
 Cmd+T creates a tab in the focused pane; Cmd+Shift+[ / ] switches tabs.
-Right-click a tab to select it and open a menu with Rename, Close, Close Other
-Tabs and Close Tabs to the Right. Arrow keys navigate, Enter/Space activates,
+Right-click a tab to select it and open a menu with Rename, Move Tab Left/Right,
+Close, Close Other Tabs and Close Tabs to the Right. Arrow keys navigate, Enter/Space activates,
 and Escape returns to the terminal. Clicking outside or moving focus dismisses
 the menu. Shift+F10 or Show Tab Actions in the palette opens the menu without
-a mouse; the configurable action is `tab_menu`. Unavailable batch actions are
-dimmed and skipped by keyboard navigation.
+a mouse; the configurable action is `tab_menu`. Unavailable actions are
+dimmed and skipped by keyboard navigation. Moving the pointer over an enabled
+action selects it for keyboard activation too. Moving a tab preserves its running
+terminal; left/right actions are unavailable at the respective ends of the strip.
 Close Other Tabs in the menu/palette keeps the chosen terminal and closes the
 other tabs in that pane, using one confirmation when the close policy requires
 it. The `close_other_tabs` shortcut action has no default binding. The prompt

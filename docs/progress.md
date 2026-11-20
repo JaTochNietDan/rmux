@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+The tab context menu now exposes Move Tab Left/Right using the existing
+entity-preserving reorder path, with disabled end-of-strip actions. Pointer
+movement selects an enabled row for subsequent keyboard activation, avoiding
+separate hover and keyboard highlights. Desktop compilation passed. Native
+interaction/screenshot acceptance remains pending: a fresh computer-use check
+reported that the Mac is locked and automatic unlock failed.
+
 Tab actions can now be opened with Shift+F10, Show Tab Actions in the palette,
 or a `tab_menu` custom binding. Keyboard opening anchors below the tab strip.
 The context menu dims batch actions without targets or while a tab launch is

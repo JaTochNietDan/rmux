@@ -108,7 +108,7 @@ struct TabMenu {
     focus: FocusHandle,
     selected: usize,
 }
-const TAB_MENU_LABELS: &[&str] = &["Rename Tab", "Close Tab", "Close Other Tabs…", "Close Tabs to the Right…"];
+const TAB_MENU_LABELS: &[&str] = &["Rename Tab", "Move Tab Left", "Move Tab Right", "Close Tab", "Close Other Tabs…", "Close Tabs to the Right…"];
 
 pub(super) struct PaneView {
     // Metadata repaints preserve this offset; selection and structural edits
@@ -179,10 +179,10 @@ impl PaneView {
         cx.notify();
     }
 
-    fn tab_menu_enabled(&self, target: EntityId) -> [bool; 4] {
-        let Some(index) = self.terminals.iter().position(|terminal| terminal.entity_id() == target) else { return [false; 4]; };
+    fn tab_menu_enabled(&self, target: EntityId) -> [bool; 6] {
+        let Some(index) = self.terminals.iter().position(|terminal| terminal.entity_id() == target) else { return [false; 6]; };
         let batch_available = self.spawning_tab.is_none();
-        [true, true, batch_available && self.terminals.len() > 1, batch_available && index + 1 < self.terminals.len()]
+        [true, index > 0, index + 1 < self.terminals.len(), true, batch_available && self.terminals.len() > 1, batch_available && index + 1 < self.terminals.len()]
     }
 
     fn show_active_tab_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -199,9 +199,11 @@ impl PaneView {
         self.select(index, window, cx);
         match item {
             0 => self.rename_tab(window, cx),
-            1 => self.close(index, window, cx),
-            2 => self.close_tabs(TabCloseScope::Others, window, cx),
-            3 => self.close_tabs(TabCloseScope::Right, window, cx),
+            1 => self.reorder(-1, cx),
+            2 => self.reorder(1, cx),
+            3 => self.close(index, window, cx),
+            4 => self.close_tabs(TabCloseScope::Others, window, cx),
+            5 => self.close_tabs(TabCloseScope::Right, window, cx),
             _ => {},
         }
     }
@@ -240,7 +242,14 @@ impl PaneView {
                     div().id(("tab-menu-item", index)).mx_1().px_3().py_2().rounded_sm().text_size(px(13.))
                         .when(enabled[index], |row| row.cursor_pointer()
                             .when(index == menu.selected, |row| row.bg(rgb(0x354969)))
-                            .hover(|row| row.bg(rgb(0x40516c))))
+                            .on_mouse_move(cx.listener(move |this, _, _, cx| {
+                                if let Some(menu) = &mut this.tab_menu {
+                                    if menu.selected != index {
+                                        menu.selected = index;
+                                        cx.notify();
+                                    }
+                                }
+                            })))
                         .when(!enabled[index], |row| row.text_color(rgb(0x777777)))
                         .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
                             if event.standard_click() { this.activate_tab_menu(index, window, cx); }
