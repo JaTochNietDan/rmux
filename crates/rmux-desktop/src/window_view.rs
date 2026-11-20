@@ -2803,7 +2803,7 @@ impl Render for WorkspaceWindow {
                 let preview = entry.workspace.read(cx).panes.iter().find_map(|pane| {
                     pane.read(cx).terminals.iter().find_map(|terminal| {
                         let view = terminal.read(cx);
-                        view.notifications.iter().rev().find(|record| record.unread).map(|record| record.message.clone())
+                        view.notifications.latest_unread().cloned()
                     })
                 });
                 if let Some(preview) = preview { notification_previews.insert(entry.workspace.entity_id(), preview); }

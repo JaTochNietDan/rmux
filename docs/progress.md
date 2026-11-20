@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Notification history now maintains a shared pointer to its latest unread message.
+Sidebar preview retrieval and unread checks no longer scan the 32-record ring on
+each render; only removal of the cached message searches for its predecessor.
+Mark-read skips already-read histories, and clear/eviction release the cache.
+Message text is not duplicated. Two focused history tests passed, comparing the
+cached result against the ring through mixed arrival/dismiss/read/eviction cycles.
+No native frame-time improvement is claimed without measurement.
+
 Added a standalone optimized palette-search benchmark using the real matcher.
 On Apple M4 Max, the synthetic edit sequence measured median 2.152 vs 4.190 µs
 at 128 candidates, 14.417 vs 25.758 µs at 1,024, and 106.073 vs 190.640 µs at
