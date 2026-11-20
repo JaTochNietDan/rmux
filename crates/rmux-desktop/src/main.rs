@@ -327,6 +327,7 @@ actions!(
         CancelNewTab,
         NextTab,
         ShowTabPicker,
+        ShowTabMenu,
         PreviousTab,
         MoveTabLeft,
         MoveTabRight,
@@ -2992,6 +2993,7 @@ fn main() {
         }));
         cx.bind_keys([KeyBinding::new(if cfg!(target_os = "macos") { "cmd-," } else { "ctrl-," }, ToggleSettings, None)]);
         cx.bind_keys([
+            KeyBinding::new("shift-f10", ShowTabMenu, Some("Terminal")),
             KeyBinding::new("ctrl-shift-pageup", MoveTabLeft, Some("Terminal")),
             KeyBinding::new("ctrl-shift-pagedown", MoveTabRight, Some("Terminal")),
             KeyBinding::new("ctrl-tab", NextPane, Some("Terminal")),

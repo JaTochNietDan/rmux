@@ -205,6 +205,7 @@ impl CommandPalette {
         command!("Rename Tab…", RenameTab);
         command!("Next Tab", NextTab);
         command!("Choose Terminal Tab", ShowTabPicker);
+        command!("Show Tab Actions", ShowTabMenu);
         command!("Previous Tab", PreviousTab);
         command!("Pin / Unpin Workspace", ToggleWorkspacePin);
         command!("Previous Workspace", PreviousWorkspace);

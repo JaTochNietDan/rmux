@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Tab actions can now be opened with Shift+F10, Show Tab Actions in the palette,
+or a `tab_menu` custom binding. Keyboard opening anchors below the tab strip.
+The context menu dims batch actions without targets or while a tab launch is
+pending; arrow/Home/End navigation skips unavailable choices and activation
+rechecks availability. Desktop compilation passed. Native anchoring, disabled
+contrast and keyboard/focus behavior remain pending visual acceptance.
+
 The tab strip now has a right-click menu for Rename, Close, Close Other Tabs
 and Close Tabs to the Right. Opening selects the target tab, then gives the
 menu keyboard focus; arrows/Home/End navigate, Enter/Space activates and Escape

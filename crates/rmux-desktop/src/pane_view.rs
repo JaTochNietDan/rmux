@@ -179,8 +179,21 @@ impl PaneView {
         cx.notify();
     }
 
+    fn tab_menu_enabled(&self, target: EntityId) -> [bool; 4] {
+        let Some(index) = self.terminals.iter().position(|terminal| terminal.entity_id() == target) else { return [false; 4]; };
+        let batch_available = self.spawning_tab.is_none();
+        [true, true, batch_available && self.terminals.len() > 1, batch_available && index + 1 < self.terminals.len()]
+    }
+
+    fn show_active_tab_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(target) = self.active_terminal_id() else { return; };
+        let bounds = self.tab_scroll.bounds();
+        self.show_tab_menu(target, point(bounds.left(), bounds.bottom()), window, cx);
+    }
+
     fn activate_tab_menu(&mut self, item: usize, window: &mut Window, cx: &mut Context<Self>) {
         let Some(menu) = self.tab_menu.clone() else { return; };
+        if !self.tab_menu_enabled(menu.target).get(item).copied().unwrap_or(false) { return; }
         self.dismiss_tab_menu(window, cx);
         let Some(index) = self.terminals.iter().position(|terminal| terminal.entity_id() == menu.target) else { return; };
         self.select(index, window, cx);
@@ -194,6 +207,7 @@ impl PaneView {
     }
 
     fn tab_menu_element(&self, menu: TabMenu, cx: &mut Context<Self>) -> AnyElement {
+        let enabled = self.tab_menu_enabled(menu.target);
         deferred(anchored().position(menu.position).snap_to_window().child(
             div().id("tab-context-menu").track_focus(&menu.focus).key_context("TabMenu")
                 .w(px(220.)).py_1().bg(rgb(0x292929)).border_1().border_color(rgb(0x465063)).rounded_md().shadow_md()
@@ -202,12 +216,19 @@ impl PaneView {
                 .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
                 .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
                 .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                    let Some(menu) = &mut this.tab_menu else { return; };
+                    let Some(target) = this.tab_menu.as_ref().map(|menu| menu.target) else { return; };
+                    let enabled = this.tab_menu_enabled(target);
+                    let menu = this.tab_menu.as_mut().expect("open tab menu");
                     match event.keystroke.key.as_str() {
-                        "up" => menu.selected = (menu.selected + TAB_MENU_LABELS.len() - 1) % TAB_MENU_LABELS.len(),
-                        "down" => menu.selected = (menu.selected + 1) % TAB_MENU_LABELS.len(),
-                        "home" => menu.selected = 0,
-                        "end" => menu.selected = TAB_MENU_LABELS.len() - 1,
+                        "up" | "down" => {
+                            let backwards = event.keystroke.key == "up";
+                            for step in 1..=enabled.len() {
+                                let candidate = (menu.selected + if backwards { enabled.len() - step } else { step }) % enabled.len();
+                                if enabled[candidate] { menu.selected = candidate; break; }
+                            }
+                        }
+                        "home" => menu.selected = enabled.iter().position(|enabled| *enabled).unwrap_or(0),
+                        "end" => menu.selected = enabled.iter().rposition(|enabled| *enabled).unwrap_or(0),
                         "enter" | "space" => { let selected = menu.selected; this.activate_tab_menu(selected, window, cx); },
                         "escape" => this.dismiss_tab_menu(window, cx),
                         _ => {},
@@ -217,8 +238,10 @@ impl PaneView {
                 }))
                 .children(TAB_MENU_LABELS.iter().enumerate().map(|(index, label)| {
                     div().id(("tab-menu-item", index)).mx_1().px_3().py_2().rounded_sm().text_size(px(13.))
-                        .cursor_pointer().when(index == menu.selected, |row| row.bg(rgb(0x354969)))
-                        .hover(|row| row.bg(rgb(0x40516c)))
+                        .when(enabled[index], |row| row.cursor_pointer()
+                            .when(index == menu.selected, |row| row.bg(rgb(0x354969)))
+                            .hover(|row| row.bg(rgb(0x40516c))))
+                        .when(!enabled[index], |row| row.text_color(rgb(0x777777)))
                         .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
                             if event.standard_click() { this.activate_tab_menu(index, window, cx); }
                             cx.stop_propagation();
@@ -968,6 +991,7 @@ impl Render for PaneView {
             .on_action(cx.listener(|this, _: &RenameTab, window, cx| this.rename_tab(window, cx)))
             .on_action(cx.listener(|this, _: &NextTab, window, cx| this.cycle(1, window, cx)))
             .on_action(cx.listener(|this, _: &ShowTabPicker, window, cx| this.show_tab_picker(window, cx)))
+            .on_action(cx.listener(|this, _: &ShowTabMenu, window, cx| this.show_active_tab_menu(window, cx)))
             .on_action(cx.listener(|this, action: &SelectTabNumber, window, cx| {
                 if let Some(index) = action.number.checked_sub(1) {
                     this.select(index, window, cx);
