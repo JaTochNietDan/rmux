@@ -2790,6 +2790,13 @@ impl WorkspaceWindow {
         else {
             return;
         };
+        let ready = source_workspace.update(cx, |workspace, cx| workspace.tab_transfer_ready(&source, None, cx))
+            && destination_workspace.update(cx, |workspace, cx| workspace.tab_transfer_ready(&target, None, cx));
+        if !ready {
+            self.notice = Some("Finish pending splits, tab creation and pane editing before moving tabs between workspaces.".into());
+            cx.notify();
+            return;
+        }
         self.entries[origin].last_pane = Some(source.entity_id());
         let Some(tab) = source.update(cx, |pane, cx| pane.take_tab(terminal, cx)) else {
             return;

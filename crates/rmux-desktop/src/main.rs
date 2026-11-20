@@ -2658,6 +2658,7 @@ impl Workspace {
             return;
         };
         let source = self.panes[index].clone();
+        if !self.tab_transfer_ready(&source, None, cx) { return; }
         let Some((id, tab)) = source.read(cx).active_tab_for_split() else {
             return;
         };
@@ -2734,6 +2735,17 @@ impl Workspace {
             },
         }
     }
+    fn tab_transfer_ready(&mut self, source: &Entity<PaneView>, target: Option<&Entity<PaneView>>, cx: &mut Context<Self>) -> bool {
+        if self.spawning_split.is_some() || self.split_drag.is_some() {
+            self.error = Some("Finish the pending split or divider resize before moving tabs.".into());
+        } else if source.read(cx).automation_busy(cx) || target.is_some_and(|target| target.read(cx).automation_busy(cx)) {
+            self.error = Some("Finish pending tab creation and close pane editors or overlays before moving tabs.".into());
+        } else {
+            return true;
+        }
+        cx.notify();
+        false
+    }
     fn move_tab(
         &mut self,
         target: &Entity<PaneView>,
@@ -2755,6 +2767,7 @@ impl Workspace {
         else {
             return;
         };
+        if !self.tab_transfer_ready(&source, Some(target), cx) { return; }
         // Resolve before detaching anything: a stale explicit target is not an
         // append request. There is no await between validation and insertion.
         let destination = target.read(cx);
@@ -2774,6 +2787,7 @@ impl Workspace {
         target.update(cx, |pane, cx| {
             pane.insert_tab_at(tab, insertion, window, cx)
         });
+        self.error = None;
         cx.notify();
     }
     fn dump_metrics(&mut self, window: &Window, cx: &mut Context<Self>) {

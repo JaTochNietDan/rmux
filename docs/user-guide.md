@@ -1460,6 +1460,10 @@ View → Move Tab to Split Left / Right / Above / Below (also in the command pal
 active tab into a new adjacent pane without starting a new shell. It requires at
 least two tabs in the source pane and focuses the moved tab. A single-tab pane
 is unchanged.
+Tab-to-split moves, tab drags between panes and transfers between workspaces in
+the same window require pending splits/resizes and tab creation to finish.
+Close editors or overlays in the participating panes before retrying a refused
+move. Refusal leaves the tab and its process in place.
 View → Swap Pane with Next (also in the command palette) exchanges the focused
 pane with the next pane in layout order, wrapping at the end. Tabs and sessions
 stay attached to their pane, focus follows the moved pane, and split proportions

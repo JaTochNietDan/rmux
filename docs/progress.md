@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Added shared readiness checks for tab drags between panes, tab-to-split moves
+and same-window workspace transfers. Pending split launches/divider drags or
+busy participating panes now leave the tab in place and explain why. In
+particular, moving a pane's last tab cannot drop that pane while its new-tab
+launch is still pending. Successful same-workspace moves clear the prior move
+error. Desktop compilation passed; native drag/launch race acceptance is pending.
+
 Unified join-pane preflight across next-pane and directional actions. Joins now
 reject zoom, pending splits, divider drags and busy source/destination panes
 before taking tabs. Pending tab launches, close/edit prompts and terminal
