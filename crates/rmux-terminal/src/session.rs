@@ -694,9 +694,13 @@ impl Session {
         self.terminal
             .try_lock()
             .ok()?
-            .selected_text_limited(4096)
+            // Streaming stops at the limit; a size-probing formatter would
+            // still walk the entire selection while holding the parser lock.
+            .selection_text_prefix(4096)
             .ok()
             .flatten()
+            .filter(|(_, truncated)| !truncated)
+            .map(|(text, _)| text)
             .filter(|text| !text.is_empty() && !text.chars().any(char::is_control))
     }
     pub fn hyperlink_at(

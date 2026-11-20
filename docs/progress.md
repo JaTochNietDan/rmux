@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Find selection seeding now uses the bounded streaming selection exporter. The
+previous size-limited API still formatted the whole selection once to measure
+it before rejecting oversized content. The new path stops output at 4 KB and
+rejects truncated seeds, retaining the existing remembered-query fallback,
+nonblocking lock attempt and single-line filtering. Four focused text-export
+tests passed, covering early writer termination, UTF-8 boundaries, selection
+and viewport preservation. No end-to-end latency improvement is claimed yet.
+
 Notification Page Up/Down now uses the visible scroll viewport and measured card
 strides (including gaps), sharing the palette's bounded paging algorithm instead
 of jumping eight messages. Expanded cards participate at their actual height;

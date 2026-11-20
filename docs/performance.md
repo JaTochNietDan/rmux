@@ -1,5 +1,11 @@
 # rmux performance acceptance plan
 
+Find selection seeding uses a nonblocking parser-lock attempt and a streaming
+4 KB export. Oversized/truncated or multiline selections fall back to the
+remembered query. Streaming avoids the previous full-selection size probe
+before enforcing the limit; this bounds emitted text rather than guaranteeing
+a particular formatting latency.
+
 Prepaint now uses opportunistic snapshot access: a busy parser keeps the cached
 frame and schedules a display-frame retry. `snapshot_busy` counts these misses
 when diagnostics are enabled. No retry is scheduled after a successful snapshot.
