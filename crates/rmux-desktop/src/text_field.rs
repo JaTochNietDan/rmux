@@ -93,7 +93,9 @@ impl TextField {
                 reverse: key.modifiers.shift,
             }),
             "backspace" | "delete" => {
-                let range = if word {
+                let range = if cfg!(target_os = "macos") && key.modifiers.platform {
+                    self.text.edge_deletion_range(key.key == "backspace")
+                } else if word {
                     self.text.word_deletion_range(key.key == "backspace")
                 } else {
                     self.text.deletion_range(key.key == "backspace")

@@ -124,6 +124,19 @@ impl Composition {
                 .unwrap_or(self.text.len())
         }
     }
+    /// Single-line editor deletion to an edge. A selection takes precedence,
+    /// and partial IME offsets are expanded to whole graphemes.
+    pub fn edge_deletion_range(&self, backwards: bool) -> Range<usize> {
+        if !self.selected.is_empty() {
+            return self.deletion_range(backwards);
+        }
+        let byte = self.byte_range(self.selected.clone()).start;
+        if backwards {
+            0..self.utf16_offset(self.ceil_grapheme(byte))
+        } else {
+            self.utf16_offset(self.floor_grapheme(byte))..self.text.encode_utf16().count()
+        }
+    }
     pub fn word_deletion_range(&self, backwards: bool) -> Range<usize> {
         if !self.selected.is_empty() {
             return self.deletion_range(backwards);
@@ -233,6 +246,26 @@ impl Composition {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn edge_deletion_preserves_unicode_and_selected_text_semantics() {
+        let mut c = Composition::default();
+        c.insert(None, "a👩🏽‍💻z");
+        let end = c.text.encode_utf16().count();
+        c.selected = 1..1;
+        assert_eq!(c.edge_deletion_range(true), 0..1);
+        assert_eq!(c.edge_deletion_range(false), 1..end);
+        c.selected = 3..3; // Inside the emoji sequence.
+        assert_eq!(c.edge_deletion_range(true), 0..end - 1);
+        assert_eq!(c.edge_deletion_range(false), 1..end);
+        c.selected = 1..end - 1;
+        assert_eq!(c.edge_deletion_range(true), 1..end - 1);
+        assert_eq!(c.edge_deletion_range(false), 1..end - 1);
+        c.selected = 0..0;
+        assert_eq!(c.edge_deletion_range(true), 0..0);
+        c.selected = end..end;
+        assert_eq!(c.edge_deletion_range(false), end..end);
+    }
 
     #[test]
     fn word_movement_and_deletion_keep_unicode_and_selection_anchors() {

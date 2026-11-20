@@ -1123,3 +1123,11 @@ bind `mark_all_read`. Clear all dismisses messages instead.
 Terminal, tab and split-operation errors appear in dismissible banners. Use the
 copy icon to copy the full message or the close icon to dismiss it. Long messages
 scroll inside the banner; dismissal does not retry the failed operation.
+
+### Editing text fields
+
+In search, rename and settings text fields on macOS, Command-Backspace deletes
+to the start and Command-Forward Delete deletes to the end. With text selected,
+these keys delete the selection. Command-Z undoes the edit. Option-Backspace
+continues to delete by word; on Linux and Windows, use Control-Backspace for
+word deletion.

@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Single-line text fields on macOS now support Command-Backspace to delete to the
+start and Command-Forward Delete to delete to the end. Selected text takes
+precedence, Unicode grapheme boundaries remain intact, and edits use the existing
+undo/event path. Ten composition tests passed, including edge deletion within an
+emoji sequence, selected spans and field boundaries. Native shortcut delivery
+and IME interaction remain pending.
+
 Copy/Reveal Working Directory now resolve the terminal's reported path on a
 background executor instead of taking the parser mutex on the UI thread. One
 lookup per terminal is allowed in flight; queued lookups hold only a weak engine
