@@ -13,6 +13,9 @@ pub const HELP: &str = "Commands (JSON output; explicit opaque IDs required):
   select-workspace --workspace ID [--activate]
   rename-workspace --workspace ID NAME
   focus-panel --panel ID [--activate]
+  move-panel --panel ID --workspace ID [--activate]
+  move-workspace --workspace ID --window ID [--activate]
+  set-pane-zoom --pane ID --zoomed true|false
   send-key --surface ID KEY  (Enter, Up, Ctrl-c, Alt-Left, Shift-Tab)
   send --surface ID [--paste] TEXT
   read-screen --surface ID [--scrollback | --selection]
@@ -37,6 +40,9 @@ pub fn help(command: &str) -> Result<String, String> {
         "send-key" => ("--surface ID KEY", "Send one key tap, such as Enter, Up, Ctrl-c, Alt-Left or Shift-Tab."),
         "send" => ("--surface ID [--paste] TEXT", "Send literal text. --paste applies terminal paste encoding. Use -- before text starting with a dash."),
         "read-screen" => ("--surface ID [--scrollback | --selection]", "Read visible text by default, retained history with --scrollback, or selected text with --selection."),
+        "move-panel" => ("--panel ID --workspace ID [--activate]", "Move a live terminal to another workspace, preserving its process. Destination selection changes; window activation requires --activate."),
+        "move-workspace" => ("--workspace ID --window ID [--activate]", "Move a workspace and its live terminals to another window. Window activation requires --activate."),
+        "set-pane-zoom" => ("--pane ID --zoomed true|false", "Set pane zoom explicitly without toggling. Zooming selects its terminal within the window, without OS window activation."),
         "completions" => ("bash|zsh|fish", "Print an offline shell completion script. No app connection is made."),
         _ => return Err(format!("no local help for {command}; use --help for supported commands or system.capabilities to discover RPC methods")),
     };
@@ -46,6 +52,9 @@ pub fn help(command: &str) -> Result<String, String> {
 
 pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), String> {
     let (method, target, positional) = match command {
+        "move-panel" => ("surface.move_to_workspace", Some(("--panel", "surface_id")), None),
+        "move-workspace" => ("workspace.move_to_window", Some(("--workspace", "workspace_id")), None),
+        "set-pane-zoom" => ("pane.zoom.set", Some(("--pane", "pane_id")), None),
         "list-notifications" => ("notification.list", None, None),
         "notify" => ("notification.send", Some(("--surface", "surface_id")), None),
         "close-workspace" => (
@@ -108,6 +117,26 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
             continue;
         }
         if !literal && arg.starts_with('-') {
+            let destination = match (command, arg.as_str()) {
+                ("move-panel", "--workspace") => Some("workspace_id"),
+                ("move-workspace", "--window") => Some("window_id"),
+                _ => None,
+            };
+            if let Some(key) = destination {
+                let value = args.next().ok_or("destination requires an ID")?.into_string().map_err(|_| "ID must be UTF-8")?;
+                if value.is_empty() || value.len() > 128 || value.starts_with('-') { return Err("invalid destination ID".into()); }
+                if params.insert(key.into(), Value::String(value)).is_some() { return Err("duplicate destination".into()); }
+                continue;
+            }
+            if command == "set-pane-zoom" && arg == "--zoomed" {
+                let value = match args.next().as_deref().and_then(|value| value.to_str()) {
+                    Some("true") => true,
+                    Some("false") => false,
+                    _ => return Err("--zoomed expects true or false".into()),
+                };
+                if params.insert("zoomed".into(), Value::Bool(value)).is_some() { return Err("duplicate --zoomed".into()); }
+                continue;
+            }
             if command == "notify" && matches!(arg.as_str(), "--title" | "--body") {
                 let value = args
                     .next()
@@ -190,7 +219,7 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
             let (key, value) = match (command, arg.as_str()) {
                 ("send", "--paste") => ("paste", Value::Bool(true)),
                 (
-                    "select-workspace" | "focus-panel" | "new-window" | "new-workspace",
+                    "select-workspace" | "focus-panel" | "new-window" | "new-workspace" | "move-panel" | "move-workspace",
                     "--activate",
                 ) => ("activate", Value::Bool(true)),
                 ("read-screen", "--scrollback") => ("scope", Value::String("history".into())),
@@ -211,6 +240,15 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
         if !params.contains_key(key) {
             return Err(format!("{command} requires {flag} ID"));
         }
+    }
+    let required = match command {
+        "move-panel" => Some(("workspace_id", "--workspace")),
+        "move-workspace" => Some(("window_id", "--window")),
+        "set-pane-zoom" => Some(("zoomed", "--zoomed")),
+        _ => None,
+    };
+    if let Some((key, flag)) = required {
+        if !params.contains_key(key) { return Err(format!("{command} requires {flag}")); }
     }
     if let Some(key) = positional {
         if !params.contains_key(key) {
@@ -307,6 +345,24 @@ mod tests {
         );
         assert!(expand("send-key", args(&["--surface", "42", "Ctrl-Ctrl-c"])).is_err());
     }
+    #[test]
+    fn layout_commands_require_destinations_and_preserve_boolean_types() {
+        assert_eq!(expand("move-panel", args(&["--panel", "42", "--workspace", "7"])).unwrap(),
+            ("surface.move_to_workspace".into(), serde_json::json!({"surface_id":"42","workspace_id":"7"})));
+        assert_eq!(expand("move-workspace", args(&["--workspace", "7", "--window", "9", "--activate"])).unwrap(),
+            ("workspace.move_to_window".into(), serde_json::json!({"workspace_id":"7","window_id":"9","activate":true})));
+        assert_eq!(expand("set-pane-zoom", args(&["--pane", "12", "--zoomed", "false"])).unwrap(),
+            ("pane.zoom.set".into(), serde_json::json!({"pane_id":"12","zoomed":false})));
+        for (command, input) in [
+            ("move-panel", vec!["--panel", "42"]),
+            ("move-workspace", vec!["--workspace", "7", "--window", ""]),
+            ("move-panel", vec!["--panel", "42", "--workspace", "7", "--workspace", "8"]),
+            ("set-pane-zoom", vec!["--pane", "12", "--zoomed", "yes"]),
+            ("set-pane-zoom", vec!["--pane", "12"]),
+            ("set-pane-zoom", vec!["--pane", "12", "--zoomed", "true", "--activate"]),
+        ] { assert!(expand(command, args(&input)).is_err()); }
+    }
+
     #[test]
     fn creation_keeps_selection_opt_in() {
         let (method, params) = expand(

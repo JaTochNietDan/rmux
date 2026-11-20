@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Added friendly CLI forms for live layout operations: `move-panel`,
+`move-workspace`, and explicit `set-pane-zoom`. They map to existing RPC transfer
+and zoom handlers, require source/destination IDs, reject missing/duplicate
+arguments, preserve boolean JSON types, and keep OS activation opt-in. Offline
+help and shell completions include all three. Nine CLI tests passed, including
+exact request mappings and malformed destination/zoom cases. Shared transfer
+paths have prior live checks; this iteration did not rerun native acceptance.
+
 Added offline per-command help via `rmuxctl help COMMAND` and `COMMAND --help/-h`,
 including a leading socket option without opening it. `--version` reports the
 client build version. Help describes supported arguments, explicit target IDs,

@@ -359,7 +359,7 @@ rmuxctl completions fish | source
 ```
 
 The scripts complete supported friendly command names, command-specific flags,
-and `--focus` boolean values. They do not contact rmux, enumerate live IDs, or
+and `--focus`/`--zoomed` boolean values. They do not contact rmux, enumerate live IDs, or
 complete raw RPC JSON. Save the generated script in your shell's startup setup
 if you want it enabled in later sessions. Bash and Zsh wrapper handling has been
 checked locally; Fish runtime verification remains pending.
@@ -390,6 +390,21 @@ Malformed IDs and unsupported filters are errors. Filtering does not focus or
 create anything. Ref/index resolution, implicit caller targets and the rest of
 the cmux CLI remain pending. Unsupported flags
 are rejected rather than ignored.
+
+Live layout commands use explicit IDs from the list commands:
+
+```sh
+rmuxctl move-panel --panel SURFACE_ID --workspace DESTINATION_WORKSPACE_ID
+rmuxctl move-workspace --workspace WORKSPACE_ID --window DESTINATION_WINDOW_ID
+rmuxctl set-pane-zoom --pane PANE_ID --zoomed true
+```
+
+Moves reuse the existing transfer operations and preserve running terminal
+processes. They select the destination; pass `--activate` to additionally request
+OS window activation. Zoom accepts an explicit `true` or `false`; enabling it
+selects that pane's terminal within its window without requesting OS activation.
+Busy, missing and invalid destinations retain the RPC error behavior. These are
+rmux command forms, not a claim of complete cmux CLI compatibility.
 
 `send-key --surface ID KEY` sends one symbolic press/release tap, for example
 `Enter`, `Escape`, `Up`, `F5`, `Ctrl-c`, `Alt-Left` or `Shift-Tab`. The CLI also
