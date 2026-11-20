@@ -21,7 +21,7 @@ with tempfile.TemporaryDirectory(prefix="rmux-socket-") as tmp:
     config.write_text('{"confirm_close":"never"}')
     env = {k: v for k, v in os.environ.items() if not k.startswith("RMUX_")}
     shell = root / "fixture-shell"
-    shell.write_text('#!/bin/sh\ntrap "exit 0" HUP TERM\nwhile IFS= read -r line; do\n  case "$line" in\n    notify) printf "\\033]777;notify;Shell;After\\007" ;;\n    burst) printf "\\033]9;First burst\\007\\033]99;;Second burst\\007" ;;\n    ping) printf "ordinary output\\n" ;;\n  esac\ndone\n')
+    shell.write_text('#!/bin/sh\nprintf "fixture-dir:%s\\n" "${PWD##*/}"\ntrap "exit 0" HUP TERM\nwhile IFS= read -r line; do\n  case "$line" in\n    notify) printf "\\033]777;notify;Shell;After\\007" ;;\n    burst) printf "\\033]9;First burst\\007\\033]99;;Second burst\\007" ;;\n    ping) printf "ordinary output\\n" ;;\n  esac\ndone\n')
     shell.chmod(0o700)
     env.update(RMUX_SOCKET_DIR=str(endpoint), RMUX_CONFIG=str(config), RMUX_SHELL=str(shell))
     with tempfile.TemporaryFile() as log:
@@ -70,6 +70,32 @@ with tempfile.TemporaryDirectory(prefix="rmux-socket-") as tmp:
             surfaces = json.loads(panels.stdout)["result"]["surfaces"]
             assert surfaces and all(row["workspace_id"] == original["id"] for row in surfaces)
             surface = surfaces[0]["id"]
+            pane_id = surfaces[0]["pane_id"]
+            original_pid = surfaces[0]["process_id"]
+            before_selection = [(row["id"], row["selected"]) for row in call(first, "workspace.list")["workspaces"]]
+            split = call(first, "pane.split", {"pane_id":pane_id,"direction":"right","cwd":str(root)})
+            nested = call(first, "pane.split", {"pane_id":split["pane_id"],"direction":"down"})
+            assert split["workspace_id"] == nested["workspace_id"] == original["id"]
+            panes = call(first, "pane.list", {"workspace_id":original["id"]})["panes"]
+            assert [pane["id"] for pane in panes] == [pane_id, split["pane_id"], nested["pane_id"]], panes
+            after = call(first, "surface.list", {"workspace_id":original["id"]})["surfaces"]
+            assert next(row for row in after if row["id"] == surface)["process_id"] == original_pid
+            deadline = time.monotonic() + 3
+            while True:
+                text = call(first, "surface.read_text", {"surface_id":nested["surface_id"]})["text"]
+                if "fixture-dir:" + root.name in text: break
+                assert time.monotonic() < deadline, text
+                time.sleep(.01)
+            workspaces = call(first, "workspace.list")["workspaces"]
+            assert [(row["id"], row["selected"]) for row in workspaces] == before_selection
+            tree = next(row for row in workspaces if row["id"] == original["id"])["layout"]
+            assert tree["axis"] == "columns" and tree["children"][1]["axis"] == "rows", tree
+            call(first, "pane.zoom.set", {"pane_id":pane_id,"zoomed":True})
+            before_failure = call(first, "pane.list", {"workspace_id":original["id"]})
+            failed_split = subprocess.run([cli, "pane.split", json.dumps({"pane_id":pane_id,"direction":"down","cwd":str(root / "missing")})], env=env, capture_output=True, text=True, timeout=8)
+            assert failed_split.returncode == 1, (failed_split.stdout, failed_split.stderr)
+            assert call(first, "pane.list", {"workspace_id":original["id"]}) == before_failure
+            call(first, "pane.zoom.set", {"pane_id":pane_id,"zoomed":False})
             notification = subprocess.run([cli, "notify", "--surface", surface, "--title", "Build 世界", "--body", "Complete"], env=env, capture_output=True, text=True, timeout=8)
             assert notification.returncode == 0, (notification.stdout, notification.stderr)
             old_revision = json.loads(notification.stdout)["result"]["revision"]
@@ -159,7 +185,7 @@ with tempfile.TemporaryDirectory(prefix="rmux-socket-") as tmp:
             assert not endpoint.exists(), "normal quit left socket directory behind"
             second.close()
             third.close()
-            print("Socket RPC passed: bundled/client discovery and error exits, private endpoint, two clients, shared UI mutation, cross-window filters, notification/OSC coexistence, workspace creation/close and shell cleanup, reconnect, normal-quit cleanup.")
+            print("Socket RPC passed: bundled/client discovery and error exits, private endpoint, two clients, shared UI mutation, cross-window filters, targeted nested splits and failure atomicity, notification/OSC coexistence, workspace creation/close and shell cleanup, reconnect, normal-quit cleanup.")
         finally:
             for client in clients: client.close()
             if app.poll() is None:

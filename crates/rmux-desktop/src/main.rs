@@ -2315,18 +2315,20 @@ impl Workspace {
         self.add_prepared(axis, directory, focus, None, window, cx);
     }
     fn add_prepared(&mut self, axis: SplitAxis, directory: Option<std::path::PathBuf>, focus: bool, prepared: Option<(Session, Option<String>)>, window: &mut Window, cx: &mut Context<Self>) {
-        if cx.global::<Shutdowns>().quitting {
-            return;
-        }
-        self.split_drag = None;
-        self.zoomed = None;
-        let directory = directory.or_else(|| self
-            .focused_index(window, cx)
-            .and_then(|index| self.panes[index].read(cx).current_directory(cx)));
+        self.add_prepared_at(None, axis, directory, focus, prepared, window, cx);
+    }
+    fn add_prepared_at(&mut self, target: Option<EntityId>, axis: SplitAxis, directory: Option<std::path::PathBuf>, focus: bool, prepared: Option<(Session, Option<String>)>, window: &mut Window, cx: &mut Context<Self>) -> Option<EntityId> {
+        if cx.global::<Shutdowns>().quitting { return None; }
+        let anchor = if let Some(target) = target {
+            Some(self.panes.iter().position(|pane| pane.entity_id() == target)?)
+        } else { self.focused_index(window, cx) };
+        let mut created = None;
+        let directory = directory.or_else(|| anchor
+            .and_then(|index| self.panes[index].read(cx).cached_directory(cx)));
         let cells = if self.benchmark {
             CellMetrics::new(14.)
         } else {
-            self.focused_index(window, cx)
+            anchor
                 .map(|index| self.panes[index].read(cx).active_cell_metrics(cx))
                 .unwrap_or_else(|| CellMetrics::new(cx.global::<Preferences>().font_size))
         };
@@ -2337,7 +2339,7 @@ impl Workspace {
         let family = if self.benchmark {
             FONT_FAMILY.into()
         } else {
-            self.focused_index(window, cx)
+            anchor
                 .map(|index| self.panes[index].read(cx).active_font_family(cx))
                 .unwrap_or_else(|| cx.global::<Preferences>().font_family.clone().into())
         };
@@ -2357,9 +2359,9 @@ impl Workspace {
         };
         match session {
             Ok(session) => {
-                let focused = self
-                    .focused_index(window, cx)
-                    .unwrap_or(self.panes.len().saturating_sub(1));
+                let focused = anchor.unwrap_or(self.panes.len().saturating_sub(1));
+                self.split_drag = None;
+                self.zoomed = None;
                 let terminal = cx.new(|cx| {
                     let mut terminal = TerminalView::new(session, window, cx);
                     terminal.cells = cells;
@@ -2386,11 +2388,13 @@ impl Workspace {
                     self.layout = Some(PaneTree::Pane(view.clone()));
                     self.panes.push(view.clone());
                 }
+                created = Some(view.entity_id());
                 if focus { view.read(cx).focus(window, cx); }
             }
             Err(error) => self.error = Some(error.to_string()),
         }
         cx.notify();
+        created
     }
 }
 impl Render for Workspace {

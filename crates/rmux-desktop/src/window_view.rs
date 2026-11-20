@@ -679,6 +679,23 @@ impl WorkspaceWindow {
         self.entries.iter().find_map(|entry| entry.workspace.read(cx).panes.iter()
             .find(|pane| pane.entity_id() == id).map(|pane| (entry.workspace.clone(), pane.clone())))
     }
+    pub(super) fn automation_split_pane(&mut self, split: &automation::PaneSplit, target: EntityId, window: &mut Window, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
+        self.automation_available(cx)?;
+        let Some((workspace, _)) = self.automation_pane_target(target, cx) else {
+            return Err(automation::Failure { code: -32004, message: "Pane not found" });
+        };
+        if workspace.read(cx).panes.len() >= 64 { return Err(automation::Failure { code: -32005, message: "Workspace pane limit reached" }); }
+        let axis = match split.direction { automation::SplitDirection::Right => SplitAxis::Columns, automation::SplitDirection::Down => SplitAxis::Rows };
+        let pane_id = workspace.update(cx, |workspace, cx| workspace.add_prepared_at(Some(target), axis, split.cwd.clone(), false, None, window, cx))
+            .ok_or(automation::Failure { code: -32005, message: "Could not start pane shell" })?;
+        let pane = workspace.read(cx).panes.iter().find(|pane| pane.entity_id() == pane_id).unwrap();
+        let surface = pane.read(cx).active_terminal_id().unwrap();
+        if split.focus || split.activate { self.focus_terminal(workspace.entity_id(), surface, window, cx); }
+        if split.activate { window.activate_window(); }
+        cx.notify();
+        Ok(serde_json::json!({"pane_id":pane_id.to_string(),"surface_id":surface.to_string(),"workspace_id":workspace.entity_id().to_string()}))
+    }
+
     pub(super) fn automation_zoom_pane(&mut self, zoom: &automation::PaneZoom, target: EntityId, window: &mut Window, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
         self.automation_available(cx)?;
         let Some((workspace, pane)) = self.automation_pane_target(target, cx) else {

@@ -391,6 +391,21 @@ create anything. Ref/index resolution, implicit caller targets and the rest of
 the cmux CLI remain pending. Unsupported flags
 are rejected rather than ignored.
 
+The raw `pane.split` method creates a new terminal beside an explicit pane:
+
+```sh
+rmuxctl pane.split '{"pane_id":"PANE_ID","direction":"right","focus":false}'
+```
+
+Use `right` for a side-by-side split or `down` for a stacked split. Optional `cwd`
+must be absolute; otherwise the new terminal inherits the target pane's cached
+working directory. Its font settings follow that pane too. The reply contains
+`pane_id`, `surface_id`, and `workspace_id` for subsequent layout operations.
+Focus stays unchanged by default; `focus:true` selects the new terminal and
+`activate:true` additionally activates its window. Successful splitting exits
+pane zoom. A failed shell start preserves the existing split tree and zoom.
+RPC creation is limited to 64 panes per workspace and respects busy-window guards.
+
 Live layout commands use explicit IDs from the list commands:
 
 ```sh

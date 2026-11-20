@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Added `pane.split` RPC with explicit pane identity, right/down direction, optional
+absolute cwd and opt-in focus/activation. Split construction now accepts a target
+independent of keyboard focus, inherits its cached directory/font settings, and
+changes zoom/drag state only after shell startup succeeds. RPC has a 64-pane limit
+and existing busy-window guards. Native socket smoke passed with nested targeted
+splits, original shell PID continuity, unchanged workspace selection, actual shell
+cwd inheritance, and failed-start preservation of zoom/pane count. This path still
+starts PTYs synchronously like existing workspace creation; background startup and
+native visual/keyboard split acceptance remain open.
+
 Added friendly CLI forms for live layout operations: `move-panel`,
 `move-workspace`, and explicit `set-pane-zoom`. They map to existing RPC transfer
 and zoom handlers, require source/destination IDs, reject missing/duplicate

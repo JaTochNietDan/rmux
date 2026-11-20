@@ -20,6 +20,7 @@ const LIVE_METHODS: &[&str] = &[
     "workspace.close",
     "pane.list",
     "pane.zoom.set",
+    "pane.split",
     "surface.list",
     "notification.list",
     "notification.send",
@@ -151,6 +152,19 @@ pub(super) struct SurfaceRead {
 pub(super) struct PaneZoom {
     pub pane_id: String,
     pub zoomed: bool,
+}
+
+#[derive(serde::Deserialize, Debug)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum SplitDirection { Right, Down }
+#[derive(serde::Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
+pub(super) struct PaneSplit {
+    pub pane_id: String,
+    pub direction: SplitDirection,
+    pub cwd: Option<std::path::PathBuf>,
+    #[serde(default)] pub focus: bool,
+    #[serde(default)] pub activate: bool,
 }
 
 #[derive(serde::Deserialize, Debug, Default)]
@@ -297,6 +311,7 @@ struct LiveRequest {
     surface_memory: Option<SurfaceMemory>,
     surface_move: Option<SurfaceMove>,
     pane_zoom: Option<PaneZoom>,
+    pane_split: Option<PaneSplit>,
     window_create: Option<WindowCreate>,
     workspace_create: Option<WorkspaceCreate>,
     workspace_rename: Option<WorkspaceRename>,
@@ -652,6 +667,17 @@ pub fn attach_live(cx: &mut gpui::App, stdio: bool, socket_directory: Option<std
                         message: "Surface not found",
                     });
                 }
+                if let Some(split) = &request.pane_split {
+                    let target = target_id(&split.pane_id)?;
+                    for handle in cx.windows() {
+                        let Some(handle) = handle.downcast::<super::window_view::WorkspaceWindow>() else { continue; };
+                        if handle.read(cx).is_ok_and(|view| view.automation_pane_target(target, cx).is_some()) {
+                            return handle.update(cx, |view, window, cx| view.automation_split_pane(split, target, window, cx))
+                                .map_err(|_| Failure { code: -32004, message: "Pane window closed" })?;
+                        }
+                    }
+                    return Err(Failure { code: -32004, message: "Pane not found" });
+                }
                 if let Some(zoom) = &request.pane_zoom {
                     let target = target_id(&zoom.pane_id)?;
                     for handle in cx.windows() {
@@ -865,6 +891,13 @@ fn dispatch_inner(
     } else {
         None
     };
+    let pane_split = if method == "pane.split" {
+        match request.get("params").cloned().and_then(|params| serde_json::from_value::<PaneSplit>(params).ok()) {
+            Some(split) if target_id(&split.pane_id).is_ok()
+                && split.cwd.as_ref().is_none_or(|path| path.is_absolute() && path.as_os_str().len() <= 8192) => Some(split),
+            _ => return respond(error(id, -32602, "Expected pane_id, direction right|down, optional absolute cwd, focus and activate booleans")),
+        }
+    } else { None };
     let pane_zoom = if method == "pane.zoom.set" {
         match request
             .get("params")
@@ -1106,6 +1139,7 @@ fn dispatch_inner(
         && window_create.is_none()
         && workspace_create.is_none()
         && pane_zoom.is_none()
+        && pane_split.is_none()
         && surface_focus.is_none()
         && !is_filtered_list
         && request.get("params").is_some_and(|params| {
@@ -1141,6 +1175,7 @@ fn dispatch_inner(
                     surface_memory,
                     surface_move,
                     pane_zoom,
+                    pane_split,
                     window_create,
                     workspace_create,
                     workspace_rename,
@@ -1447,6 +1482,7 @@ mod tests {
                 surface_memory: None,
                 surface_move: None,
                 pane_zoom: None,
+                pane_split: None,
                 window_create: None,
                 workspace_create: None,
                 workspace_rename: None,

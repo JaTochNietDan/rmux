@@ -100,7 +100,7 @@
       ],
       "acceptance": "Split recursively, resize dividers, and preserve running sessions.",
       "rmux_status": "in_progress",
-      "implementation": "Nested weighted splits, divider resizing and collapse.",
+      "implementation": "Nested weighted splits, divider resizing and collapse. Explicit-target pane.split RPC supports right/down, inherited directory/font settings and optional focus/activation. Native socket checks verify nested splits, PID continuity and failed-start preservation of zoom/layout.",
       "remaining": "Cross-platform native interaction and performance gates.",
       "implementation_sources": [
         "crates/rmux-desktop/src/layout.rs"
