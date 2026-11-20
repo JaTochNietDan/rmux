@@ -2265,7 +2265,7 @@ impl WorkspaceWindow {
                             entry.name,
                             pane_index + 1,
                             tab + 1,
-                            pane.tab_title(tab, cx)
+                            pane.terminal_search_title(tab, cx)
                         ),
                         terminal.read(cx).snapshot_directory.as_ref().map(|path| path.to_string_lossy().into_owned()),
                     ));
@@ -2284,7 +2284,7 @@ impl WorkspaceWindow {
                     let pane = pane.read(cx);
                     for (tab, terminal) in pane.terminals.iter().enumerate() {
                         terminals.push((Some(handle), entry.workspace.entity_id(), terminal.entity_id(),
-                            format!("Window {} / {} / Pane {} / Tab {} — {}", index + 1, entry.name, pane_index + 1, tab + 1, pane.tab_title(tab, cx)),
+                            format!("Window {} / {} / Pane {} / Tab {} — {}", index + 1, entry.name, pane_index + 1, tab + 1, pane.terminal_search_title(tab, cx)),
                             terminal.read(cx).snapshot_directory.as_ref().map(|path| path.to_string_lossy().into_owned())));
                     }
                 }

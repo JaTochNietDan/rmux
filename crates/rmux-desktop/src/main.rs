@@ -703,6 +703,7 @@ impl TerminalView {
                         if view.process_exit.is_none() {
                             if let Some(status) = view.session.exit_status() {
                                 view.process_exit = Some(status);
+                                cx.emit(TabMetadataChanged);
                                 cx.notify();
                             }
                         }

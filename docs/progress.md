@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Finished terminals now show a neutral Finished label in active and inactive tab
+strips, with the complete exit message in the title hover hint. Terminal palette
+entries across windows include the finished state and exit message for searching,
+without changing custom titles or persisted names. Capturing process exit emits
+the existing metadata event so parent tabs repaint immediately. Desktop cargo
+check passed; native visual and hover acceptance remain pending.
+
 Separated process exit state from terminal operational errors. Finished terminals
 now retain their output with a neutral status strip, complete-message hover hint,
 New shell button and Close finished terminal control. New shell routes through

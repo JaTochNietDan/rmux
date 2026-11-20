@@ -411,6 +411,13 @@ impl PaneView {
             }
         })
     }
+    pub fn terminal_search_title(&self, index: usize, cx: &App) -> String {
+        let title = self.tab_title(index, cx);
+        match &self.terminals[index].read(cx).process_exit {
+            Some(status) => format!("{title} · Finished · {status}"),
+            None => title,
+        }
+    }
     fn rename_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(input) = &self.rename {
             input.read(cx).focus.focus(window);
@@ -1082,7 +1089,7 @@ impl Render for PaneView {
                                         let scope = self.workspace;
                                         let target = terminal.entity_id();
                                         let label: SharedString = self.tab_title(index, cx).into();
-                                        let title_hint = label.clone();
+                                        let title_hint: SharedString = self.terminal_search_title(index, cx).into();
                                         let display_title = label.clone();
                                         div()
                                             .id(("tab", terminal.entity_id()))
@@ -1161,6 +1168,9 @@ impl Render for PaneView {
                                                     _ => label.to_owned(),
                                                 };
                                                 tab.child(div().text_xs().flex_shrink_0().text_color(rgb(tint)).child(text))
+                                            })
+                                            .when(terminal.read(cx).process_exit.is_some(), |tab| {
+                                                tab.child(div().text_xs().flex_shrink_0().text_color(rgb(0xa0a0a0)).child("Finished"))
                                             })
                                             .child({
                                                 div().id(("tab-title", target)).min_w(px(48.)).max_w(px(220.)).truncate()

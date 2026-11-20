@@ -1682,3 +1682,7 @@ using its directory/font inheritance; it does not replay the exited command.
 The adjacent close button closes the finished terminal through the normal close
 policy. Input, rendering and other operational errors retain their separate error
 messages.
+
+Finished terminals carry a **Finished** label in the tab strip. Hover the title
+for the exit message, or search terminals in the palette to see and search their
+finished status across windows. Custom tab names remain intact.
