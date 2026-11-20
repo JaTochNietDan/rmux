@@ -235,6 +235,7 @@ impl CommandPalette {
         command!("Save Layout…", SaveLayout);
         command!("Save Session…", SaveSession);
         command!("Open Session in New Windows…", OpenSession);
+        command!("Cancel Layout / Session Restore", CancelRestore);
         command!("Settings", ToggleSettings);
         command!("Save Appearance Settings", SaveAppearanceSettings);
         command!("Reload Settings", ReloadSettings);

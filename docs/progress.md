@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Added preparation counts to interactive layout/session imports. The worker emits
+bounded progress events (one pending update, no timer); UI updates require the
+same uncanceled job token, preventing late status overwrites. Added Cancel Layout
+/ Session Restore to the palette and cancel_restore custom shortcuts, sharing
+the existing status-button cancellation path and generic cancellation wording.
+Desktop compilation and a focused layout/multi-window progress-total plus
+pre-spawn cancellation test passed. Native status/keyboard/cancel acceptance and
+interrupting an in-progress OS spawn are not claimed.
+
 Added Open Session in New Windows… to the File menu, command palette and
 open_session custom shortcut. The shared layout/session picker prepares shells
 on the background executor using existing schema/directory validation and

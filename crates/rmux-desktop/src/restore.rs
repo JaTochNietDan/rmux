@@ -126,6 +126,30 @@ pub struct PreparedSession {
     pub windows: Vec<Prepared>,
 }
 impl PreparedSession {
+    /// GUI import with bounded, caller-coalesced progress notifications.
+    pub fn read_import(path: &std::path::Path, session: bool, token: &AtomicBool, scrollback_bytes: usize,
+        mut progress: impl FnMut(usize, usize)) -> anyhow::Result<Self> {
+        check_cancelled(token)?;
+        let snapshot = if session { snapshot::SessionSnapshot::load(path)? } else {
+            snapshot::SessionSnapshot { version: 1, active_window: Some(0), windows: vec![snapshot::WindowSnapshot::load(path)?] }
+        };
+        anyhow::ensure!(!snapshot.windows.is_empty(), "session contains no windows");
+        fn count(node: &snapshot::Node) -> usize {
+            match node {
+                snapshot::Node::Pane { tabs, .. } => tabs.len(),
+                snapshot::Node::Split { children, .. } => children.iter().map(count).sum(),
+            }
+        }
+        let total = snapshot.windows.iter().flat_map(|window| &window.workspaces).map(|workspace| count(&workspace.layout)).sum();
+        let mut completed = 0;
+        progress(completed, total);
+        Self::prepare_with(snapshot, token, &mut |tab| {
+            let session = Session::shell_in_with_scrollback(80, 24, tab.directory.as_deref(), scrollback_bytes)?;
+            completed += 1;
+            progress(completed, total);
+            Ok(session)
+        })
+    }
     pub fn read(path: &std::path::Path, token: &AtomicBool, scrollback_bytes: usize) -> anyhow::Result<Self> {
         check_cancelled(token)?;
         let snapshot = snapshot::SessionSnapshot::load(path)?;
@@ -205,6 +229,28 @@ impl Workspace {
 #[cfg(test)]
 mod tests {
     use super::{Job, Prepared, cancelled};
+
+    #[test]
+    fn import_progress_counts_terminals_and_allows_cancellation_before_spawn() -> anyhow::Result<()> {
+        let directory = tempfile::tempdir()?;
+        let path = directory.path().join("import.json");
+        let window = serde_json::json!({"version":1,"sidebar":true,"active_workspace":0,
+            "workspaces":[{"name":"progress","active_pane":0,"layout":{"kind":"pane","active_tab":0,
+                "tabs":[{"label":"first","directory":null},{"label":"second","directory":null}]}}]});
+        for session in [false, true] {
+            let document = if session { serde_json::json!({"version":1,"active_window":0,"windows":[window.clone(),window.clone()]}) } else { window.clone() };
+            std::fs::write(&path, serde_json::to_vec(&document)?)?;
+            let token = std::sync::atomic::AtomicBool::new(false);
+            let mut progress = Vec::new();
+            let result = super::PreparedSession::read_import(&path, session, &token, 4096, |completed, total| {
+                progress.push((completed, total));
+                token.store(true, std::sync::atomic::Ordering::Release);
+            });
+            assert!(result.err().expect("cancel before spawning").to_string().contains("cancelled"));
+            assert_eq!(progress, vec![(0, if session { 4 } else { 2 })]);
+        }
+        Ok(())
+    }
 
     #[cfg(unix)]
     #[test]

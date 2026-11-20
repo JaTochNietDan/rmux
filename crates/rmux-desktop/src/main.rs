@@ -346,6 +346,7 @@ actions!(
         SaveLayout,
         SaveSession,
         OpenSession,
+        CancelRestore,
         OpenLayout,
         ReloadSettings,
         ToggleSettings,

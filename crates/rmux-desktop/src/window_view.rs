@@ -2770,6 +2770,13 @@ impl WorkspaceWindow {
         this
     }
 
+    fn cancel_restore(&mut self, cx: &mut Context<Self>) {
+        if let Some(job) = &self.restore_job {
+            job.cancel();
+            self.notice = Some("Cancelling restore…".into());
+            cx.notify();
+        }
+    }
     fn open_layout(&mut self, cx: &mut Context<Self>) { self.open_snapshot(false, cx); }
     fn open_snapshot(&mut self, session: bool, cx: &mut Context<Self>) {
         let kind = if session { "session" } else { "layout" };
@@ -2788,6 +2795,18 @@ impl WorkspaceWindow {
         });
         let scrollback_bytes = cx.global::<Preferences>().scrollback_bytes();
         let executor = cx.background_executor().clone();
+        let (progress_sender, progress_receiver) = async_channel::bounded(1);
+        let progress_token = token.clone();
+        cx.spawn(async move |entity, cx| {
+            while let Ok((completed, total)) = progress_receiver.recv().await {
+                let _ = entity.update(cx, |this, cx| {
+                    if !restore::cancelled(&progress_token) && this.restore_job.as_ref().is_some_and(|job| Arc::ptr_eq(&job.0, &progress_token)) {
+                        this.notice = Some(format!("Opening {kind} · Preparing terminals {completed}/{total}…"));
+                        cx.notify();
+                    }
+                });
+            }
+        }).detach();
         cx.spawn(async move |entity, cx| {
             let result = async {
                 let Some(paths) = picker.await?? else {
@@ -2803,14 +2822,8 @@ impl WorkspaceWindow {
                 let worker_token = token.clone();
                 let prepared = executor
                     .spawn(async move {
-                        if session {
-                            let prepared = restore::PreparedSession::read(&path, &worker_token, scrollback_bytes)?;
-                            anyhow::ensure!(!prepared.windows.is_empty(), "session contains no windows");
-                            Ok(prepared)
-                        } else {
-                            restore::Prepared::read(&path, &worker_token, scrollback_bytes)
-                                .map(|window| restore::PreparedSession { active_window: Some(0), windows: vec![window] })
-                        }
+                        restore::PreparedSession::read_import(&path, session, &worker_token, scrollback_bytes,
+                            |completed, total| { let _ = progress_sender.try_send((completed, total)); })
                     })
                     .await?;
                 cx.update(|cx| -> anyhow::Result<()> {
@@ -3480,6 +3493,7 @@ impl Render for WorkspaceWindow {
             .on_action(cx.listener(|this, _: &SaveSession, window, cx| this.save_session(window, cx)))
             .on_action(cx.listener(|this, _: &OpenLayout, _, cx| this.open_layout(cx)))
             .on_action(cx.listener(|this, _: &OpenSession, _, cx| this.open_snapshot(true, cx)))
+            .on_action(cx.listener(|this, _: &CancelRestore, _, cx| this.cancel_restore(cx)))
             .on_action(cx.listener(|this, command: &RunCustomCommand, window, cx| this.run_custom_command(&command.name, window, cx)))
             .on_action(cx.listener(|this, _: &ToggleSettings, window, cx| this.toggle_settings(window, cx)))
             .on_action(cx.listener(|this, action: &SetTerminalTheme, window, cx| {
@@ -3851,9 +3865,7 @@ impl Render for WorkspaceWindow {
                             .hover(|style| style.bg(rgb(0x353535)))
                             .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
                                 if !event.standard_click() { return; }
-                                if let Some(job) = &this.restore_job { job.cancel(); }
-                                this.notice = Some("Cancelling layout restore…".into());
-                                cx.notify();
+                                this.cancel_restore(cx);
                             })).child("Cancel"))))),
             )
             .when_some(window.pending_input_keystrokes().filter(|keys| !keys.is_empty()), |root, keys| root.child(

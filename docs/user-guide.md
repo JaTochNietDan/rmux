@@ -1074,6 +1074,10 @@ empty session files are rejected by this command. Closing the initiating window
 cancels pending preparation. If native window creation fails partway through,
 windows opened by this import are removed; existing windows remain. The command
 is also available in the palette and as the `open_session` custom shortcut action.
+Layout and session imports show the terminal preparation count. Cancel using the
+status button, Cancel Layout / Session Restore in the palette, or a `cancel_restore`
+custom shortcut. Cancellation stops at the next preparation boundary and cleans
+up shells already prepared; it cannot interrupt a shell-spawn system call.
 
 
 Use `rmux --session PATH` to restore a version-1 multi-window recovery file with
