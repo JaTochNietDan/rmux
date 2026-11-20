@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Palette filtering now keeps an immutable search snapshot and reusable ranking
+buffer for the palette's lifetime. Appending to the normalized query rescans only
+previous matches; deletion/replacement rescans all candidates, and an empty query
+restores source order without sorting. Five focused matcher tests passed, including
+a differential full-ranking comparison across typing, backspace, whitespace,
+Unicode and empty-result transitions. Buffers are released with the palette.
+Native typing latency and allocation measurements remain pending; no quantified
+performance gain is claimed from the structural reduction alone.
+
 Palette virtual-list sizing now uses explicit 36px title rows and 56px subtitle
 rows with 20px/16px line heights. The results area sums only enough rows to reach
 its 320px cap, avoiding first-frame height inference from a partially measured

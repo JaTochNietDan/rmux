@@ -49,9 +49,59 @@ pub fn tab_score(number: usize, title: &str, directory: &str, words: &[&str]) ->
     Some(total)
 }
 
+/// Search over an immutable palette snapshot. Appended normalized queries can
+/// only remove matches; arbitrary edits must consider every title again.
+pub struct RankedSearch {
+    titles: Vec<String>,
+    query: String,
+    ranked: Vec<((usize, usize, usize), usize)>,
+    pub matches: Vec<usize>,
+}
+impl RankedSearch {
+    pub fn new(titles: Vec<String>) -> Self {
+        Self { matches: (0..titles.len()).collect(), titles, query: String::new(), ranked: Vec::new() }
+    }
+    pub fn update(&mut self, query: &str) {
+        let normalized = query.to_lowercase();
+        let words: Vec<_> = normalized.split_whitespace().collect();
+        if words.is_empty() {
+            self.matches.clear();
+            self.matches.extend(0..self.titles.len());
+        } else {
+            self.ranked.clear();
+            if !self.query.is_empty() && normalized.starts_with(&self.query) {
+                self.ranked.extend(self.matches.iter().filter_map(|index|
+                    score(&self.titles[*index], &words).map(|score| (score, *index))));
+            } else {
+                self.ranked.extend(self.titles.iter().enumerate().filter_map(|(index, title)|
+                    score(title, &words).map(|score| (score, index))));
+            }
+            self.ranked.sort_unstable();
+            self.matches.clear();
+            self.matches.extend(self.ranked.iter().map(|(_, index)| *index));
+        }
+        self.query = normalized;
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{score, tab_score};
+    use super::{score, tab_score, RankedSearch};
+
+    #[test]
+    fn incremental_search_matches_full_ranking_through_edits() {
+        let titles: Vec<String> = ["split below", "split right", "switch workspace 東京", "café build", "c a f é", "σ shell", "ς shell"]
+            .into_iter().map(str::to_owned).collect();
+        let mut search = RankedSearch::new(titles.clone());
+        for query in ["s", "sp", "spl", "splt", "splt b", "splt blw", "splt", "", "CAF", "CAFÉ", "café b", "c", "東", "東京", "東京 z", "東京", " ", "  s", "  sh", "Σ", "Σ ", "", "unmatched", "unmatched more", "split"] {
+            search.update(query);
+            let normalized = query.to_lowercase();
+            let words: Vec<_> = normalized.split_whitespace().collect();
+            let mut full: Vec<_> = titles.iter().enumerate().filter_map(|(index, title)| score(title, &words).map(|score| (score, index))).collect();
+            full.sort_unstable();
+            assert_eq!(search.matches, full.into_iter().map(|(_, index)| index).collect::<Vec<_>>(), "query: {query}");
+        }
+    }
 
     #[test]
     fn tab_numbers_are_exact_tokens_and_combine_with_metadata() {

@@ -73,8 +73,7 @@ pub enum PaletteEvent {
 pub struct CommandPalette {
     input: Entity<text_field::TextField>,
     commands: Vec<Command>,
-    search_titles: Vec<String>,
-    matches: Vec<usize>,
+    search: palette_match::RankedSearch,
     selected: usize,
     scroll: ListState,
 }
@@ -97,20 +96,9 @@ impl CommandPalette {
             &input,
             |this, _, event: &text_field::EditEvent, cx| match event {
                 text_field::EditEvent::Changed(query) => {
-                    let normalized = query.to_lowercase();
-                    let words: Vec<_> = normalized.split_whitespace().collect();
-                    let mut ranked: Vec<_> = this
-                        .search_titles
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(index, title)| {
-                            palette_match::score(title, &words).map(|score| (score, index))
-                        })
-                        .collect();
-                    ranked.sort_unstable();
-                    this.matches = ranked.into_iter().map(|(_, index)| index).collect();
+                    this.search.update(query);
                     this.selected = 0;
-                    this.scroll.reset(this.matches.len());
+                    this.scroll.reset(this.search.matches.len());
                     cx.notify();
                 }
                 text_field::EditEvent::Submitted { .. } => this.run(cx),
@@ -324,18 +312,17 @@ impl CommandPalette {
         }
         Self {
             input,
-            matches: (0..commands.len()).collect(),
-            search_titles: commands
+            search: palette_match::RankedSearch::new(commands
                 .iter()
                 .map(|command| format!("{} {}", command.title, command.subtitle.as_deref().unwrap_or_default()).to_lowercase())
-                .collect(),
+                .collect()),
             scroll: ListState::new(commands.len(), ListAlignment::Top, px(96.)),
             commands,
             selected: 0,
         }
     }
     fn render_result(&mut self, row: usize, cx: &mut Context<Self>) -> AnyElement {
-        let Some(&command) = self.matches.get(row) else { return div().into_any_element(); };
+        let Some(&command) = self.search.matches.get(row) else { return div().into_any_element(); };
         let selected = row == self.selected;
         let title_hint: SharedString = match &self.commands[command].subtitle {
             Some(subtitle) => format!("{}\n{subtitle}", self.commands[command].title).into(),
@@ -354,7 +341,7 @@ impl CommandPalette {
             .hover(move |row| row.bg(rgb(if selected { 0x40577b } else { 0x303b50 })))
             .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
                 if !event.standard_click() { return; }
-                let Some(row) = this.matches.iter().position(|index| *index == command) else { return; };
+                let Some(row) = this.search.matches.iter().position(|index| *index == command) else { return; };
                 this.selected = row;
                 this.run(cx);
             }))
@@ -380,7 +367,7 @@ impl CommandPalette {
             }).into_any_element()
     }
     fn run(&self, cx: &mut Context<Self>) {
-        if let Some(index) = self.matches.get(self.selected) {
+        if let Some(index) = self.search.matches.get(self.selected) {
             cx.emit(match &self.commands[*index].target {
                 PaletteEvent::Run(action) => PaletteEvent::Run(action.boxed_clone()),
                 PaletteEvent::SelectWorkspace(id) => PaletteEvent::SelectWorkspace(*id),
@@ -422,7 +409,7 @@ impl Render for CommandPalette {
                 if this.input.read(cx).is_composing() {
                     return;
                 }
-                if let Some(selected) = navigated_result(this.selected, this.matches.len(), event.keystroke.key.as_str()) {
+                if let Some(selected) = navigated_result(this.selected, this.search.matches.len(), event.keystroke.key.as_str()) {
                     this.selected = selected;
                     this.scroll.scroll_to_reveal_item(this.selected);
                     cx.notify();
@@ -439,7 +426,7 @@ impl Render for CommandPalette {
                     .child("Search commands and workspaces"),
             ))
             .child(div().flex_shrink_0().p_3().child(self.input.clone()))
-            .child(if self.matches.is_empty() {
+            .child(if self.search.matches.is_empty() {
                 div().p_3().text_sm().child("No matching commands or workspaces").into_any_element()
             } else {
                 let entity = cx.entity();
@@ -448,7 +435,7 @@ impl Render for CommandPalette {
                 })
                 .with_sizing_behavior(ListSizingBehavior::Auto)
                 .w_full().min_h_0()
-                .h(px(result_area_height(self.matches.iter().map(|index| self.commands[*index].subtitle.is_some()))))
+                .h(px(result_area_height(self.search.matches.iter().map(|index| self.commands[*index].subtitle.is_some()))))
                 .into_any_element()
             })
             .when(!compact, |palette| palette.child(
