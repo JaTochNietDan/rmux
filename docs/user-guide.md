@@ -208,7 +208,8 @@ Directory reads run in the background and retain at most 2,048 entries per
 snapshot, sorted directories-first within that subset. A limit notice identifies
 partial listings. Switching focus during loading prevents the result from taking
 focus. Text previews retain up to 64 KiB and 512 lines, with explicit truncation
-labels. Search numbered lines, press Enter to copy a preview line without closing
+labels. A final line cut by the byte limit is labeled partial; copying it includes
+only the captured text. Search numbered lines, press Enter to copy a preview line without closing
 the preview (a confirmation appears in its footer), or choose
 Back, Refresh, or Copy File Path. Display/search text is capped at 1,024 characters
 per line; copying includes the whole retained line. Preview never executes files

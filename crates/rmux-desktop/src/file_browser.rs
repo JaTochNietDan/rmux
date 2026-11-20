@@ -40,7 +40,7 @@ pub fn entered_directory(text: &str) -> Result<PathBuf, &'static str> {
 }
 pub struct Entry { pub path: PathBuf, pub directory: bool, pub symlink: bool }
 pub struct Listing { pub path: PathBuf, pub entries: Vec<Entry>, pub truncated: bool }
-pub struct Preview { pub path: PathBuf, pub lines: Vec<String>, pub truncated: bool }
+pub struct Preview { pub path: PathBuf, pub lines: Vec<String>, pub truncated: bool, pub partial_line: Option<usize> }
 #[cfg(test)]
 fn preview(path: PathBuf) -> anyhow::Result<Preview> { preview_cancellable(path, &AtomicBool::new(false)) }
 pub fn preview_cancellable(path: PathBuf, canceled: &AtomicBool) -> anyhow::Result<Preview> {
@@ -79,9 +79,12 @@ pub fn preview_cancellable(path: PathBuf, canceled: &AtomicBool) -> anyhow::Resu
     };
     anyhow::ensure!(!text.contains('\0'), "Binary files cannot be previewed as text");
     let mut source = text.lines();
-    let lines = source.by_ref().take(512).map(str::to_owned).collect();
-    truncated |= source.next().is_some();
-    Ok(Preview { path, lines, truncated })
+    let lines: Vec<String> = source.by_ref().take(512).map(str::to_owned).collect();
+    let more_lines = source.next().is_some();
+    let partial_line = (truncated && !more_lines && !text.ends_with('\n'))
+        .then(|| lines.len().checked_sub(1)).flatten();
+    truncated |= more_lines;
+    Ok(Preview { path, lines, truncated, partial_line })
 }
 #[cfg(test)]
 fn list(path: PathBuf) -> anyhow::Result<Listing> { list_cancellable(path, &AtomicBool::new(false)) }
@@ -183,14 +186,21 @@ mod tests {
         let preview = super::preview(path.clone())?;
         assert_eq!(preview.lines, ["echo do-not-run", "世界"]);
         assert!(!preview.truncated);
+        assert_eq!(preview.partial_line, None);
         std::fs::write(&path, format!("{}界", "x".repeat(65535)))?;
         let preview = super::preview(path.clone())?;
         assert!(preview.truncated);
         assert_eq!(preview.lines[0].len(), 65535);
+        assert_eq!(preview.partial_line, Some(0));
         std::fs::write(&path, "line\n".repeat(513))?;
         let preview = super::preview(path.clone())?;
         assert_eq!(preview.lines.len(), 512);
         assert!(preview.truncated);
+        assert_eq!(preview.partial_line, None);
+        std::fs::write(&path, format!("{}\nmore", "x".repeat(65535)))?;
+        assert_eq!(super::preview(path.clone())?.partial_line, None);
+        std::fs::write(&path, format!("{}{}", "line\n".repeat(512), "x".repeat(65536)))?;
+        assert_eq!(super::preview(path.clone())?.partial_line, None);
         for bytes in [vec![0xff], vec![b'a', 0, b'b']] {
             std::fs::write(&path, bytes)?;
             assert!(super::preview(path.clone()).is_err());

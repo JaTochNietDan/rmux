@@ -443,7 +443,8 @@ impl CommandPalette {
             let mut title: String = chars.by_ref().take(1024).map(|ch| if ch.is_control() { ' ' } else { ch }).collect();
             if chars.next().is_some() { title.push('…'); }
             if title.is_empty() { title.push_str("(empty line)"); }
-            Command { title, subtitle: Some(format!("Line {} · Enter copies this preview line", index + 1)), shortcut: None,
+            let copy_hint = if preview.partial_line == Some(index) { "Partial line · Enter copies only the captured text" } else { "Enter copies this preview line" };
+            Command { title, subtitle: Some(format!("Line {} · {copy_hint}", index + 1)), shortcut: None,
                 target: PaletteEvent::Run(Box::new(CopyPreviewLine { text })) }
         }));
         let mut palette = Self::with_commands(commands, if preview.truncated { "Text preview · Limited to 64 KiB / 512 lines" } else if empty { "Text preview · Empty file" } else { "Text preview · Search lines · Read only" }, "No matching preview lines", window, cx);

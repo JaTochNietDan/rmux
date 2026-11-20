@@ -2,6 +2,12 @@
 
 ## Current implementation focus
 
+Text preview now labels a final line cut by the byte limit as partial, with a
+copy hint explaining that only captured text is copied. Complete newline-ended
+lines and lines hidden beyond the 512-line cap are not mislabeled. The focused
+preview regression passed, including a cut Unicode character and both caps.
+Native visual acceptance remains pending.
+
 Recorded a focused file-loader baseline and added `mise run bench-file-loaders`.
 On this macOS arm64 debug build, 40 samples measured 2.608 ms p95 for a
 2,048-entry directory and 0.095 ms p95 for a bounded preview of a 128 KiB Unicode
