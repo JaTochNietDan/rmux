@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Polished the named-buffer rename editor with explicit Save/Cancel controls and
+an editor-specific keyboard hint, replacing the unrelated picker-navigation
+footer. The controls remain available in compact windows and wrap in narrow
+layouts. Palette submission now waits until IME composition has ended, including
+mouse-triggered submission. Desktop cargo check passed; native appearance,
+mouse and IME acceptance remain pending.
+
 Added Copy Named Buffer through the native menu, command palette and
 `copy_buffer` custom action. It reuses bounded searchable previews and verifies
 the captured store revision before copying full contents through rmux's ordered

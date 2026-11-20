@@ -511,6 +511,7 @@ impl CommandPalette {
             }).into_any_element()
     }
     fn run(&mut self, cx: &mut Context<Self>) {
+        if self.input.read(cx).is_composing() { return; }
         if let Some((name, revision)) = &self.buffer_rename {
             let next = self.input.read(cx).value().to_owned();
             match cx.global_mut::<copy_buffers::Store>().rename_if_unchanged(name, next, *revision) {
@@ -618,7 +619,22 @@ impl Render for CommandPalette {
                 .h(px(result_area_height(self.search.matches.iter().map(|index| self.commands[*index].subtitle.is_some()))))
                 .into_any_element()
             })
-            .when(!compact, |palette| palette.child(
+            .when(self.buffer_rename.is_some(), |palette| palette.child(
+                div().flex_shrink_0().px_3().py_2().flex().flex_wrap().items_center().gap_2()
+                    .child(div().flex_1().min_w_0().text_xs().text_color(rgb(0xa0a0a0))
+                        .child("Enter saves · Escape cancels"))
+                    .child(div().id("buffer-rename-cancel").px_3().py_1().rounded_sm()
+                        .text_sm().cursor_pointer().bg(rgb(0x353535)).hover(|style| style.bg(rgb(0x454545)))
+                        .on_click(cx.listener(|_, event: &ClickEvent, _, cx| {
+                            if event.standard_click() { cx.emit(PaletteEvent::Close); }
+                        })).child("Cancel"))
+                    .child(div().id("buffer-rename-save").px_3().py_1().rounded_sm()
+                        .text_sm().cursor_pointer().bg(rgb(0x007aff)).hover(|style| style.bg(rgb(0x1685ff)))
+                        .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
+                            if event.standard_click() { this.run(cx); }
+                        })).child("Save"))
+            ))
+            .when(!compact && self.buffer_rename.is_none(), |palette| palette.child(
                 div()
                     .flex_shrink_0()
                     .px_3()

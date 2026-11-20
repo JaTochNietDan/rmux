@@ -177,8 +177,8 @@ It retains the buffer and sends no terminal input. If buffers change while the
 picker is open, copying is refused and the clipboard stays unchanged.
 
 Use **Rename Named Buffer…** in the palette/menu (custom action `rename_buffer`)
-to choose a buffer, edit its preselected name, and press Enter to save. Escape
-cancels. Invalid names and collisions leave the editor open for correction;
+to choose a buffer, edit its preselected name, and press Enter or click Save.
+Escape or Cancel closes without changing the name. Invalid names and collisions leave the editor open for correction;
 concurrent buffer changes require reopening the picker.
 You can also rename with `rmuxctl rename-buffer --name OLD NEW_NAME` (source defaults
 to `default`), or RPC `buffer.rename` with `name` and required `new_name`.
