@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Individual acknowledgement is now available through `notification.mark_read`
+and `rmuxctl read-notification --surface ID --revision NUMBER`, including local
+help and shell completion. It reuses the panel's read-state/selection update path,
+retains history and does not focus the terminal. Missing/already-read revisions
+return marked_read:false; unknown surfaces remain errors. All eleven CLI tests
+passed and the desktop compiled. Live RPC acknowledgement and native panel
+synchronization still need acceptance.
+
 Notifications now support per-message Mark read through a card button or R.
 History is retained, other unread messages remain unread, and bell/status attention
 is independent. In Unread mode the shared selection-repair path chooses the next

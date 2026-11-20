@@ -6,6 +6,7 @@ pub const HELP: &str = "Commands (JSON output; explicit opaque IDs required):
   notify --surface ID [--title TITLE] [--body BODY]
   list-notifications [--window ID] [--workspace ID]
   dismiss-notification --surface ID --revision NUMBER
+  read-notification --surface ID --revision NUMBER
   close-workspace --workspace ID
   new-window [--activate]
   new-workspace --window ID [--name NAME] [--description TEXT] [--cwd PATH]
@@ -28,6 +29,7 @@ whole process unless narrowed with --window (workspaces/panes/panels) or
 
 pub fn help(command: &str) -> Result<String, String> {
     let (arguments, description) = match command {
+        "read-notification" => ("--surface ID --revision NUMBER", "Mark one message read without dismissing it or focusing its terminal. Missing or already read messages return marked_read:false."),
         "dismiss-notification" => ("--surface ID --revision NUMBER", "Dismiss one retained message using its surface ID and revision from list-notifications. A missing or already dismissed message returns dismissed:false."),
         "notify" => ("--surface ID [--title TITLE] [--body BODY]", "Add a notification to a live terminal's history."),
         "list-notifications" => ("[--window ID] [--workspace ID]", "List retained notifications, newest first within each terminal."),
@@ -62,6 +64,7 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
         "set-pane-zoom" => ("pane.zoom.set", Some(("--pane", "pane_id")), None),
         "list-notifications" => ("notification.list", None, None),
         "dismiss-notification" => ("notification.dismiss", Some(("--surface", "surface_id")), None),
+        "read-notification" => ("notification.mark_read", Some(("--surface", "surface_id")), None),
         "notify" => ("notification.send", Some(("--surface", "surface_id")), None),
         "close-workspace" => (
             "workspace.close",
@@ -123,7 +126,7 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
             continue;
         }
         if !literal && arg.starts_with('-') {
-            if command == "dismiss-notification" && arg == "--revision" {
+            if matches!(command, "dismiss-notification" | "read-notification") && arg == "--revision" {
                 let raw = args.next().ok_or("--revision requires an unsigned integer")?.into_string().map_err(|_| "revision must be UTF-8")?;
                 if raw.is_empty() || !raw.bytes().all(|byte| byte.is_ascii_digit()) { return Err("--revision expects an unsigned integer".into()); }
                 let revision: u64 = raw.parse().map_err(|_| "revision exceeds unsigned 64-bit range")?;
@@ -258,7 +261,7 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
         }
     }
     let required = match command {
-        "dismiss-notification" => Some(("revision", "--revision")),
+        "dismiss-notification" | "read-notification" => Some(("revision", "--revision")),
         "split-pane" => Some(("direction", "--direction")),
         "move-panel" => Some(("workspace_id", "--workspace")),
         "move-workspace" => Some(("window_id", "--window")),
@@ -365,6 +368,9 @@ mod tests {
     }
     #[test]
     fn dismissal_preserves_full_revision_precision() {
+        assert_eq!(expand("read-notification", args(&["--surface", "42", "--revision", "9"])).unwrap(),
+            ("notification.mark_read".into(), serde_json::json!({"surface_id":"42","revision":9})));
+        assert!(expand("read-notification", args(&["--surface", "42"])).is_err());
         assert_eq!(expand("dismiss-notification", args(&["--surface", "42", "--revision", "18446744073709551615"])).unwrap(),
             ("notification.dismiss".into(), serde_json::json!({"surface_id":"42","revision":u64::MAX})));
         for value in ["-1", "+1", "1.0", "1e3", "", "18446744073709551616"] {

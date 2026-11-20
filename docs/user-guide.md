@@ -1147,3 +1147,11 @@ to the start and Command-Forward Delete deletes to the end. With text selected,
 these keys delete the selection. Command-Z undoes the edit. Option-Backspace
 continues to delete by word; on Linux and Windows, use Control-Backspace for
 word deletion.
+
+### Marking a notification read from scripts
+
+Use `rmuxctl read-notification --surface ID --revision NUMBER` with the identifiers
+returned by `list-notifications`. It calls `notification.mark_read`, retains the
+message in history and does not focus the source terminal. The response includes
+`marked_read: true` when an unread message changed; missing or already-read
+messages return `false`. An unknown surface remains an RPC error.

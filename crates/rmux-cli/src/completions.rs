@@ -3,6 +3,7 @@ use std::ffi::OsString;
 
 const COMMANDS: &[(&str, &[&str])] = &[
     ("dismiss-notification", &["--surface", "--revision"]),
+    ("read-notification", &["--surface", "--revision"]),
     ("notify", &["--surface", "--title", "--body"]),
     ("list-notifications", &["--window", "--workspace"]),
     ("close-workspace", &["--workspace"]),

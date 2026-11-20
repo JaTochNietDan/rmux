@@ -625,6 +625,11 @@ impl WorkspaceWindow {
             pane.read(cx).terminals.iter().find(|terminal| terminal.entity_id() == target).cloned()
         })).ok_or(automation::Failure { code: -32004, message: "Surface not found" })?;
         if let Some(revision) = change.revision {
+            if change.mark_read {
+                let unread = terminal.read(cx).notifications.iter().any(|record| record.message.revision == revision && record.unread);
+                if unread { self.change_notification(target, revision, true, cx); }
+                return Ok(serde_json::json!({"surface_id":change.surface_id,"revision":revision,"marked_read":unread}));
+            }
             let matches = terminal.read(cx).notifications.contains(revision);
             if matches { self.dismiss_notification(target, revision, cx); }
             Ok(serde_json::json!({"surface_id":change.surface_id,"revision":revision,"dismissed":matches}))

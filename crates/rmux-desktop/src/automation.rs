@@ -25,6 +25,7 @@ const LIVE_METHODS: &[&str] = &[
     "notification.list",
     "notification.send",
     "notification.dismiss",
+    "notification.mark_read",
     "surface.focus",
     "surface.send_text",
     "surface.send_key",
@@ -278,6 +279,8 @@ struct ListFilter {
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct NotificationChange {
+    #[serde(skip)]
+    pub mark_read: bool,
     pub surface_id: String,
     pub title: Option<String>,
     pub body: Option<String>,
@@ -808,6 +811,7 @@ fn dispatch_inner(
                 | "surface.send_key"
                 | "notification.send"
                 | "notification.dismiss"
+                | "notification.mark_read"
                 | "pane.zoom.set"
                 | "window.create"
                 | "workspace.create"
@@ -940,10 +944,11 @@ fn dispatch_inner(
             _ => return respond(error(id, -32602, "Expected surface_id, supported key and optional control/alt/shift booleans")),
         }
     } else { None };
-    let notification_change = if matches!(method, "notification.send" | "notification.dismiss") {
+    let notification_change = if matches!(method, "notification.send" | "notification.dismiss" | "notification.mark_read") {
         match serde_json::from_value::<NotificationChange>(request.get("params").cloned().unwrap_or_else(|| json!({}))) {
             Ok(mut change) if target_id(&change.surface_id).is_ok() => {
-                if method == "notification.dismiss" {
+                change.mark_read = method == "notification.mark_read";
+                if matches!(method, "notification.dismiss" | "notification.mark_read") {
                     if change.revision.is_none() || change.title.is_some() || change.body.is_some() { return respond(error(id, -32602, "Expected surface_id and revision")); }
                 } else {
                     if change.revision.is_some() || change.title.as_ref().is_some_and(|s| s.len() > 1024) || change.body.as_ref().is_some_and(|s| s.len() > 4096) { return respond(error(id, -32602, "Notification title/body exceeds limits or unexpected revision")); }
