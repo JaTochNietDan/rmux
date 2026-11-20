@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Added modifier-hover link feedback: supported HTTP(S) targets show a pointer
+cursor and target tooltip; unsupported OSC 8 targets show an explanatory tooltip.
+Hover and click share the same URL allow rules. Lookups occur only while holding
+the platform link modifier, cache the displayed revision/cell, and use the existing
+nonblocking terminal lookup. Parser contention clears feedback without an error
+banner and permits retry on motion. Pointer exit/modifier release, click, window
+transfer and changed terminal frames clear stale targets. Desktop compilation
+passed; native cursor/tooltip/modifier and output-pressure acceptance remain.
+Local/remote file path routing is still unfinished.
+
 Filled custom-shortcut action coverage for clipboard and lifecycle commands
 (copy/paste/select-all/clear-scrollback/close-tab/close-window/quit), layout/session
 save/open, settings-file/appearance save, and memory/git/program-status/notification

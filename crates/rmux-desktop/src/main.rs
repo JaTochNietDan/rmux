@@ -455,6 +455,8 @@ struct TerminalView {
     ports: ports_view::State,
     copy_mode: Option<Entity<copy_mode::CopyMode>>,
     hidden_line_input: bool,
+    link_hover: Option<(u64, String)>,
+    link_hover_cell: Option<(u64, u16, u32)>,
     attention: attention::Attention,
     session: Session,
     applied_colors: Option<[Option<Color>; 3]>,
@@ -627,6 +629,7 @@ impl TerminalView {
         )
     }
     fn rebind_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.clear_link_hover(cx);
         self.set_input_focus(false, cx);
         self.terminal_menu = None;
         self.terminal_menu_blur = None;
@@ -821,6 +824,8 @@ impl TerminalView {
             ports: Default::default(),
             copy_mode: None,
             hidden_line_input: false,
+            link_hover: None,
+            link_hover_cell: None,
             attention: attention::Attention::default(),
             input_focused: false,
             _focus_subscriptions: subscriptions,
@@ -1055,6 +1060,7 @@ impl TerminalView {
         }
     }
     fn mouse_down(&mut self, event: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        self.clear_link_hover(cx);
         self.focus.focus(window);
         if !self.last_bounds.contains(&event.position) {
             cx.stop_propagation();
@@ -1074,13 +1080,7 @@ impl TerminalView {
             let row = (f32::from(position.y) / self.cells.height) as u32;
             match self.session.hyperlink_at(column, row, self.frame.revision) {
                 Ok(Some(uri)) => {
-                    let allowed = uri.split_once("://").is_some_and(|(scheme, rest)| {
-                        (scheme.eq_ignore_ascii_case("http")
-                            || scheme.eq_ignore_ascii_case("https"))
-                            && !rest.is_empty()
-                            && !rest.starts_with('/')
-                    }) && !uri.chars().any(|c| c.is_control() || c.is_whitespace());
-                    if allowed {
+                    if openable_uri(&uri) {
                         cx.open_url(&uri);
                     } else {
                         self.error = Some("Only HTTP(S) hyperlinks can be opened here.".into());
@@ -1161,7 +1161,31 @@ impl TerminalView {
         );
         cx.stop_propagation();
     }
+    fn clear_link_hover(&mut self, cx: &mut Context<Self>) {
+        self.link_hover_cell = None;
+        if self.link_hover.take().is_some() { cx.notify(); }
+    }
+    fn update_link_hover(&mut self, position: Point<Pixels>, modifiers: Modifiers, cx: &mut Context<Self>) {
+        let modifier = if cfg!(target_os = "macos") { modifiers.platform } else { modifiers.control };
+        if !modifier || self.selecting || self.mouse_button.is_some() || self.copy_mode.is_some()
+            || self.find.is_some() || self.ports.visible || self.terminal_menu.is_some()
+            || cx.global::<PromptGate>().is_active() || !self.last_bounds.contains(&position) {
+            self.clear_link_hover(cx);
+            return;
+        }
+        let point = position - self.last_bounds.origin;
+        let cell = (self.frame.revision, (f32::from(point.x) / self.cells.width) as u16, (f32::from(point.y) / self.cells.height) as u32);
+        if self.link_hover_cell == Some(cell) { return; }
+        // A busy parser leaves the cell uncached so the next motion can retry.
+        let uri = match self.session.hyperlink_at(cell.1, cell.2, cell.0) {
+            Ok(uri) => { self.link_hover_cell = Some(cell); uri },
+            Err(_) => { self.clear_link_hover(cx); return; },
+        };
+        let next = uri.map(|uri| (cell.0, uri));
+        if next != self.link_hover { self.link_hover = next; cx.notify(); }
+    }
     fn mouse_move(&mut self, event: &MouseMoveEvent, window: &mut Window, cx: &mut Context<Self>) {
+        self.update_link_hover(event.position, event.modifiers, cx);
         if self.selecting {
             if event.dragging() {
                 self.select(
@@ -1642,7 +1666,7 @@ impl Render for TerminalView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let entity = cx.weak_entity();
         self.rendered_paste_pending = self.session.paste_pending();
-        div()
+        div().id("terminal-interaction")
             .relative()
             .size_full()
             .flex()
@@ -1745,6 +1769,17 @@ impl Render for TerminalView {
             .on_mouse_up_out(MouseButton::Middle, cx.listener(Self::mouse_up))
             .on_mouse_up_out(MouseButton::Right, cx.listener(Self::mouse_up))
             .on_mouse_move(cx.listener(Self::mouse_move))
+            .on_modifiers_changed(cx.listener(|this, _, window, cx| this.update_link_hover(window.mouse_position(), window.modifiers(), cx)))
+            .on_hover(cx.listener(|this, hovered, window, cx| {
+                if *hovered { this.update_link_hover(window.mouse_position(), window.modifiers(), cx); }
+                else { this.clear_link_hover(cx); }
+            }))
+            .when_some(self.link_hover.as_ref().filter(|(revision, _)| *revision == self.frame.revision).map(|(_, uri)| uri.clone()), |root, uri| {
+                let allowed = openable_uri(&uri);
+                let label: SharedString = if allowed { uri } else { format!("Unsupported link: {uri}") }.into();
+                root.when(allowed, |root| root.cursor_pointer())
+                    .tooltip(move |_, cx| cx.new(|_| pane_view::ControlHint(label.clone())).into())
+            })
             .child(
                 canvas(
                     |_, _, _| (),
@@ -2069,7 +2104,10 @@ impl Element for TerminalElement {
             };
             if ready {
                 match view.session.try_frame() {
-                    Ok(Some(frame)) => view.frame = frame,
+                    Ok(Some(frame)) => {
+                        if frame.revision != view.frame.revision { view.clear_link_hover(cx); }
+                        view.frame = frame;
+                    },
                     Ok(None) => {
                         // Keep the last coherent frame instead of waiting behind output
                         // parsing/history work on the UI thread. Retry only while busy.
@@ -2276,6 +2314,12 @@ impl Element for TerminalElement {
             });
         }
     }
+}
+fn openable_uri(uri: &str) -> bool {
+    uri.split_once("://").is_some_and(|(scheme, rest)| {
+        (scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https"))
+            && !rest.is_empty() && !rest.starts_with('/')
+    }) && !uri.chars().any(|c| c.is_control() || c.is_whitespace())
 }
 fn color(c: Color) -> Hsla {
     rgb((u32::from(c.0) << 16) | (u32::from(c.1) << 8) | u32::from(c.2)).into()

@@ -216,6 +216,10 @@ beside each bound action, including custom key sequences. In short windows,
 menus scroll and keyboard navigation brings the selected action into view.
 
 Command-click (Control-click on Linux/Windows) opens terminal HTTP(S) links.
+Hold that modifier while hovering to see the link target in a tooltip and a pointer
+cursor for supported HTTP(S) links. Unsupported OSC 8 targets are labeled and do
+not gain the pointer cursor. Hover lookup is cached per cell/revision and skips a
+busy parser; move the pointer again to retry. Output changes clear old targets.
 If output parsing is busy, rmux reports a retry message instead of waiting; click
 again after output pressure eases.
 
@@ -1476,7 +1480,7 @@ selection through scrollback; scrolling stops on release or at the history edge.
 
 Cmd-click an OSC 8 hyperlink or plain-text HTTP(S) URL to open it in the default
 browser (Ctrl-click on Linux/Windows). The lookup follows the displayed scrollback
-viewport and runs only on modifier-click; ordinary rendering does not copy link
+viewport and runs only on modifier-click or modifier-hover; ordinary rendering does not copy link
 URLs. Plain URLs can span soft-wrapped rows, but must be fully visible and fit
 within an 8 KiB logical line. Surrounding quotes and trailing prose punctuation
 are excluded. Explicit OSC 8 targets take precedence. Link hover feedback and

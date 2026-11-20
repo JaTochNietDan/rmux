@@ -503,7 +503,7 @@
       ],
       "acceptance": "Route URLs and paths correctly; remote paths never open an unrelated same-named local file.",
       "rmux_status": "in_progress",
-      "implementation": "Modifier-click opens OSC 8 and plain-text HTTP(S) links through the platform browser. On-demand detection supports wide Unicode cells and fully visible soft-wrapped logical lines up to 8 KiB; clipped plain URLs are rejected. Explicit OSC 8 targets take precedence. Hover feedback, local/remote path routing and native interaction acceptance remain pending."
+      "implementation": "Modifier-click opens OSC 8 and plain-text HTTP(S) links through the platform browser. On-demand detection supports wide Unicode cells and fully visible soft-wrapped logical lines up to 8 KiB; clipped plain URLs are rejected. Explicit OSC 8 targets take precedence. Modifier-hover now shows target tooltips and an HTTP(S) pointer cursor, caching per displayed cell/revision and skipping parser contention. Click and hover share URL allow rules; pointer exit/modifier release/click/window transfer/frame changes clear stale targets. Desktop compilation passed. Local/remote path routing and native interaction/performance acceptance remain pending."
     },
     {
       "id": "T11",
