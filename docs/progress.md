@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Background configuration reload now compares its starting settings-panel values
+with the current session before applying the file. If the user edited controls
+while the read ran, it discards that reload result and explains that the newer
+edits were preserved; a later explicit reload can replace them. This covers both
+keyboard and mouse changes across windows, since preferences are global. Desktop
+compilation passed; native concurrent reload/edit acceptance remains pending.
+
 Settings save completion now compares the saved snapshot with the current
 session controls. If changes were made during the background write, the notice
 explains that the earlier values were saved and asks the user to Save again for

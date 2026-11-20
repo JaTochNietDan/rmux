@@ -936,10 +936,14 @@ impl WorkspaceWindow {
         self.notice = Some("Reloading settings…".into());
         cx.notify();
         cx.spawn(async move |entity, cx| {
-            let result = executor.spawn(async move { current.reload() }).await;
+            let snapshot = current.clone();
+            let result = executor.spawn(async move { snapshot.reload() }).await;
             let _ = cx.update(|cx| {
                 cx.global_mut::<preferences::ReloadState>().0 = false;
                 let notice = match result {
+                    Ok(_) if !current.same_saved_appearance(cx.global::<Preferences>()) => {
+                        "Settings changed while reloading. Your newer edits were kept; reload again to replace them with the file settings.".into()
+                    }
                     Ok(next) => {
                         cx.set_global(next.confirm_close);
                         cx.set_global(next);
