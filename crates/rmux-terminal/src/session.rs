@@ -21,6 +21,7 @@ pub struct Session {
     master: Box<dyn MasterPty + Send>,
     writer: mpsc::SyncSender<InputMessage>,
     paste_pending: Arc<AtomicBool>,
+    follow_output_pending: AtomicBool,
     shutdown: ShutdownHandle,
     pub updates: async_channel::Receiver<()>,
     size: (u16, u16),
@@ -207,6 +208,7 @@ impl Session {
             master: pair.master,
             writer,
             paste_pending: Arc::new(AtomicBool::new(false)),
+            follow_output_pending: AtomicBool::new(false),
             shutdown: ShutdownHandle {
                 exit: exit.clone(),
                 completed,
@@ -438,7 +440,7 @@ impl Session {
             .try_send(bytes.to_vec().into())
             .map_err(|_| anyhow::anyhow!("terminal input queue is full or closed"))?;
         if follow_output && !bytes.is_empty() {
-            self.scroll(crate::Scroll::Bottom)?;
+            self.follow_output()?;
         }
         Ok(())
     }
@@ -457,11 +459,28 @@ impl Session {
             Ok(false)
         }
     }
+    /// Input delivery must not wait behind output parsing just to move the viewport.
+    /// A busy parser defers this coalesced request until the next frame acquisition.
+    fn follow_output(&self) -> Result<()> {
+        self.follow_output_pending.store(true, Ordering::Release);
+        let mut terminal = match self.terminal.try_lock() {
+            Ok(terminal) => terminal,
+            Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) => return Ok(()),
+        };
+        self.apply_pending_follow(&mut terminal)
+    }
+    fn apply_pending_follow(&self, terminal: &mut Terminal) -> Result<()> {
+        if self.follow_output_pending.swap(false, Ordering::AcqRel) {
+            terminal.scroll(crate::Scroll::Bottom)?;
+        }
+        Ok(())
+    }
     pub fn scroll(&self, scroll: crate::Scroll) -> Result<()> {
-        self.terminal
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .scroll(scroll)
+        let mut terminal = self.terminal.lock().unwrap_or_else(|e| e.into_inner());
+        // Explicit navigation after input supersedes a deferred follow request.
+        self.follow_output_pending.store(false, Ordering::Release);
+        terminal.scroll(scroll)
     }
     pub fn focus(&self, focused: bool) -> Result<()> {
         let bytes = {
@@ -518,7 +537,7 @@ impl Session {
         self.writer
             .try_send(InputMessage { bytes, _paste: Some(permit) })
             .map_err(|_| anyhow::anyhow!("terminal input queue is full or closed"))?;
-        self.scroll(crate::Scroll::Bottom)
+        self.follow_output()
     }
     /// Bounded automation paste. Never waits for parser access or changes viewport.
     /// False means the parser is busy and no input was queued.
@@ -568,10 +587,9 @@ impl Session {
         Ok(())
     }
     pub fn frame(&self) -> Result<Frame> {
-        self.terminal
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .frame()
+        let mut terminal = self.terminal.lock().unwrap_or_else(|e| e.into_inner());
+        self.apply_pending_follow(&mut terminal)?;
+        terminal.frame()
     }
     pub fn try_frame(&self) -> Result<Option<Frame>> {
         let mut terminal = match self.terminal.try_lock() {
@@ -579,6 +597,7 @@ impl Session {
             Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),
             Err(std::sync::TryLockError::WouldBlock) => return Ok(None),
         };
+        self.apply_pending_follow(&mut terminal)?;
         terminal.frame().map(Some)
     }
     pub fn history_export(&self, max_bytes: usize) -> HistoryExport {
@@ -1027,6 +1046,46 @@ mod tests {
             thread::sleep(std::time::Duration::from_millis(5));
         }
         assert_eq!(std::fs::read(destination)?, expected.as_bytes());
+        Ok(())
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn input_defers_follow_while_parser_busy_and_navigation_supersedes_it() -> Result<()> {
+        let mut command = CommandBuilder::new("/bin/sh");
+        command.args(["-c", "stty -echo; printf '1\\n2\\n3\\n4\\n5\\nREADY'; read -r line"]);
+        let session = Session::spawn(command, 40, 3)?;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while !session.frame()?.text().contains("READY") {
+            anyhow::ensure!(std::time::Instant::now() < deadline, "shell not ready");
+            thread::sleep(std::time::Duration::from_millis(5));
+        }
+        for explicit_navigation in [false, true] {
+            session.scroll(crate::Scroll::Top)?;
+            assert!(session.frame()?.scrollback_offset > 0);
+            let terminal = session.terminal.clone();
+            let (ready, waiting) = mpsc::channel();
+            let (release, released) = mpsc::channel();
+            let parser = thread::spawn(move || {
+                let _guard = terminal.lock().unwrap();
+                ready.send(()).unwrap();
+                // Bounded even if input regresses to a blocking parser lock.
+                let _ = released.recv_timeout(std::time::Duration::from_secs(2));
+            });
+            waiting.recv()?;
+            let start = std::time::Instant::now();
+            session.input(b"x")?;
+            let elapsed = start.elapsed();
+            let pending = session.follow_output_pending.load(Ordering::Acquire);
+            let _ = release.send(());
+            parser.join().unwrap();
+            assert!(elapsed < std::time::Duration::from_millis(500), "input waited for parser: {elapsed:?}");
+            assert!(pending);
+            if explicit_navigation { session.scroll(crate::Scroll::Top)?; }
+            let frame = session.try_frame()?.expect("parser released");
+            assert_eq!(frame.scrollback_offset > 0, explicit_navigation);
+            assert!(!session.follow_output_pending.load(Ordering::Acquire));
+        }
         Ok(())
     }
 

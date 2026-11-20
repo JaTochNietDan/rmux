@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Removed the blocking parser acquisition after queued text input. Follow-output
+scrolling now tries once and otherwise coalesces into one atomic flag, consumed
+under the next frame lock. Explicit viewport navigation cancels the deferred
+follow; automation input continues preserving scrollback. No thread, timer or
+unbounded queue was added. A real-shell regression deliberately holds the parser
+lock and verifies input returns promptly, deferred follow reaches bottom, and
+later explicit navigation wins. The automation bracketed-paste/viewport test also
+passes. Key encoding, mouse handling, focus and other synchronous engine operations
+remain performance work; this is not a claim of complete input-latency acceptance.
+
 Settings now exposes new group workspace placement (After current / First / Last)
 with keyboard cycling and saved preferences. Group directory capture/reset actions
 also appear in the File menu; group creation, selection, rename and directory
