@@ -328,6 +328,7 @@ actions!(
         NextTab,
         ShowTabPicker,
         ShowTabMenu,
+        ShowWorkspaceMenu,
         PreviousTab,
         MoveTabLeft,
         MoveTabRight,

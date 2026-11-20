@@ -79,7 +79,18 @@ struct Entry {
     _metadata: Subscription,
 }
 
+#[derive(Clone)]
+struct WorkspaceMenu {
+    target: EntityId,
+    position: Point<Pixels>,
+    focus: FocusHandle,
+    return_focus: Option<FocusHandle>,
+    selected: usize,
+}
+
 pub(super) struct WorkspaceWindow {
+    workspace_menu: Option<WorkspaceMenu>,
+    workspace_menu_blur: Option<Subscription>,
     palette: Option<(Entity<command_palette::CommandPalette>, Option<FocusHandle>)>,
     restore_job: Option<restore::Job>,
     workspace_scroll: ScrollHandle,
@@ -112,6 +123,93 @@ pub(super) struct WorkspaceWindow {
     benchmark: bool,
 }
 impl WorkspaceWindow {
+    fn dismiss_workspace_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(menu) = self.workspace_menu.take() {
+            if menu.focus.is_focused(window) {
+                if let Some(focus) = menu.return_focus { focus.focus(window); }
+            }
+        }
+        self.workspace_menu_blur = None;
+        cx.notify();
+    }
+
+    fn show_workspace_menu(&mut self, target: EntityId, position: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
+        if self.automation_available(cx).is_err() { return; }
+        let Some(index) = self.entries.iter().position(|entry| entry.workspace.entity_id() == target) else { return; };
+        self.sidebar_selection.clear();
+        self.sidebar_selection_anchor = Some(target);
+        self.select(index, window, cx);
+        let return_focus = window.focused(cx);
+        let focus = cx.focus_handle();
+        let token = focus.clone();
+        self.workspace_menu_blur = Some(cx.on_blur(&focus, window, move |this, _, cx| {
+            if this.workspace_menu.as_ref().is_some_and(|menu| menu.focus == token) {
+                this.workspace_menu = None;
+                this.workspace_menu_blur = None;
+                cx.notify();
+            }
+        }));
+        focus.focus(window);
+        self.workspace_menu = Some(WorkspaceMenu { target, position, focus, return_focus, selected: 0 });
+        cx.notify();
+    }
+
+    fn activate_workspace_menu(&mut self, item: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(target) = self.workspace_menu.as_ref().map(|menu| menu.target) else { return; };
+        self.dismiss_workspace_menu(window, cx);
+        let Some(index) = self.entries.iter().position(|entry| entry.workspace.entity_id() == target) else { return; };
+        self.select(index, window, cx);
+        match item {
+            0 => self.edit_metadata(MetadataField::Name, window, cx),
+            1 => self.edit_metadata(MetadataField::Description, window, cx),
+            2 => self.edit_metadata(MetadataField::Color, window, cx),
+            3 => self.edit_metadata(MetadataField::Icon, window, cx),
+            4 => self.toggle_workspace_pin(cx),
+            5 => self.request_close_workspace(index, window, cx),
+            _ => {},
+        }
+    }
+
+    fn workspace_menu_element(&self, menu: WorkspaceMenu, cx: &mut Context<Self>) -> AnyElement {
+        let pinned = self.entries.iter().find(|entry| entry.workspace.entity_id() == menu.target).is_some_and(|entry| entry.pinned);
+        let labels = ["Rename Workspace", "Edit Description", "Change Color", "Change Icon", if pinned { "Unpin Workspace" } else { "Pin Workspace" }, "Close Workspace…"];
+        deferred(anchored().position(menu.position).snap_to_window().child(
+            div().id("workspace-context-menu").track_focus(&menu.focus).key_context("WorkspaceMenu")
+                .w(px(230.)).py_1().bg(rgb(0x292929)).border_1().border_color(rgb(0x465063)).rounded_md().shadow_md()
+                .on_mouse_down_out(cx.listener(|this, _, window, cx| this.dismiss_workspace_menu(window, cx)))
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
+                .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
+                .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                    let Some(menu) = &mut this.workspace_menu else { return; };
+                    match event.keystroke.key.as_str() {
+                        "up" => menu.selected = (menu.selected + 5) % 6,
+                        "down" => menu.selected = (menu.selected + 1) % 6,
+                        "home" => menu.selected = 0,
+                        "end" => menu.selected = 5,
+                        "enter" | "space" => { let selected = menu.selected; this.activate_workspace_menu(selected, window, cx); },
+                        "escape" => this.dismiss_workspace_menu(window, cx),
+                        _ => {},
+                    }
+                    cx.stop_propagation();
+                    cx.notify();
+                }))
+                .children(labels.into_iter().enumerate().map(|(index, label)| {
+                    div().id(("workspace-menu-item", index)).mx_1().px_3().py_2().rounded_sm().text_size(px(13.)).cursor_pointer()
+                        .when(index == menu.selected, |row| row.bg(rgb(0x354969)))
+                        .on_mouse_move(cx.listener(move |this, _, _, cx| {
+                            if let Some(menu) = &mut this.workspace_menu {
+                                if menu.selected != index { menu.selected = index; cx.notify(); }
+                            }
+                        }))
+                        .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+                            if event.standard_click() { this.activate_workspace_menu(index, window, cx); }
+                            cx.stop_propagation();
+                        })).child(label)
+                }))
+        )).with_priority(2).into_any_element()
+    }
+
     pub(super) fn focus_memory_terminal(&mut self, workspace: EntityId, surface: EntityId, window: &mut Window, cx: &mut Context<Self>) {
         if self.automation_available(cx).is_ok() { self.focus_terminal(workspace, surface, window, cx); }
     }
@@ -768,7 +866,7 @@ impl WorkspaceWindow {
     }
     fn automation_available(&self, cx: &App) -> Result<(), automation::Failure> {
         if self.benchmark || self.restore_job.is_some() || self.window_close_prompt
-            || self.close_prompt.is_some() || self.rename.is_some() || self.palette.is_some()
+            || self.close_prompt.is_some() || self.rename.is_some() || self.palette.is_some() || self.workspace_menu.is_some()
             || cx.global::<Shutdowns>().quitting || cx.global::<Shutdowns>().quit_prompt
             || cx.global::<PromptGate>().is_active()
             || self.entries.iter().any(|entry| entry.workspace.read(cx).panes.iter().any(|pane| pane.read(cx).automation_busy())) {
@@ -2268,6 +2366,8 @@ impl WorkspaceWindow {
             memory_loading: false,
             memory_generation: 0,
             process_sampler: Default::default(),
+            workspace_menu: None,
+            workspace_menu_blur: None,
             rename: None,
             entries: Vec::new(),
             active: snapshot.active_workspace,
@@ -2431,6 +2531,8 @@ impl WorkspaceWindow {
             memory_loading: false,
             memory_generation: 0,
             process_sampler: Default::default(),
+            workspace_menu: None,
+            workspace_menu_blur: None,
             rename: None,
             entries: Vec::new(),
             active: 0,
@@ -3024,6 +3126,13 @@ impl Render for WorkspaceWindow {
             .on_action(cx.listener(|this, _: &ReloadSettings, _, cx| this.reload_settings(cx)))
             .on_action(cx.listener(|this, _: &OpenSettingsFile, _, cx| this.open_settings_file(cx)))
             .on_action(cx.listener(|this, _: &RenameWorkspace, window, cx| this.edit_metadata(MetadataField::Name, window, cx)))
+            .on_action(cx.listener(|this, _: &ShowWorkspaceMenu, window, cx| {
+                if let Some(entry) = this.entries.get(this.active) {
+                    let target = entry.workspace.entity_id();
+                    let bounds = this.workspace_scroll.bounds();
+                    this.show_workspace_menu(target, point(bounds.left(), bounds.top()), window, cx);
+                }
+            }))
             .on_action(cx.listener(|this, _: &EditWorkspaceDescription, window, cx| this.edit_metadata(MetadataField::Description, window, cx)))
             .on_action(cx.listener(|this, _: &EditWorkspaceIcon, window, cx| this.edit_metadata(MetadataField::Icon, window, cx)))
             .on_action(cx.listener(|this, _: &EditWorkspaceColor, window, cx| this.edit_metadata(MetadataField::Color, window, cx)))
@@ -3175,6 +3284,10 @@ impl Render for WorkspaceWindow {
                                                 if item.container == container || hover_owner.upgrade().is_some_and(|owner| owner.read(cx).accepts_tab_drop(item, target, cx)) { style.bg(rgb(0x435a7b)) } else { style }
                                             })
                                             .on_drop(cx.listener(move |this, item: &drag_item::DragItem, window, cx| this.drop_workspace(item, target, window, cx))))
+                                        .on_mouse_down(MouseButton::Right, cx.listener(move |this, event: &MouseDownEvent, window, cx| {
+                                            this.show_workspace_menu(target, event.position, window, cx);
+                                            cx.stop_propagation();
+                                        }))
                                         .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
                                             if !event.standard_click() { return; }
                                             let Some(index) = this.entries.iter().position(|entry| entry.workspace.entity_id() == target) else { return; };
@@ -3358,6 +3471,7 @@ impl Render for WorkspaceWindow {
                                 cx.notify();
                             })).child("Cancel"))))),
             )
+            .when_some(self.workspace_menu.clone(), |root, menu| root.child(self.workspace_menu_element(menu, cx)))
             .when_some(self.settings_state.clone(), |root, state| root.child(settings_view::panel(state, cx)))
             .when(self.notification_navigation.is_some(), |root| root.child(self.notification_panel(cx)))
             .when_some(self.palette.as_ref(), |root, (palette, _)| root.child(

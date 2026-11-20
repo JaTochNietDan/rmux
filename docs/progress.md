@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Workspace sidebar rows now offer a context menu for name, description, color,
+icon, pin/unpin and policy-aware close. Opening selects the captured workspace
+identity and clears multi-selection. Pointer and keyboard navigation share one
+highlight; Escape restores prior terminal focus, and outside click/focus loss
+dismisses. Show Workspace Actions in the palette and `workspace_menu` custom
+bindings provide keyboard access. Automation mutations report busy while the
+menu is open. Desktop compilation passed; native placement, focus, grouped-row
+interaction and screenshots remain pending acceptance.
+
 The tab context menu now exposes Move Tab Left/Right using the existing
 entity-preserving reorder path, with disabled end-of-strip actions. Pointer
 movement selects an enabled row for subsequent keyboard activation, avoiding

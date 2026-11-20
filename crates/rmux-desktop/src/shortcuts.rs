@@ -40,6 +40,7 @@ fn action(name: &str) -> Option<Box<dyn Action>> {
         "reset_font_size" => Box::new(ResetFontSize),
         "use_configured_font" => Box::new(UseConfiguredFont),
         "tab_menu" => Box::new(ShowTabMenu),
+        "workspace_menu" => Box::new(ShowWorkspaceMenu),
         "tab_picker" => Box::new(ShowTabPicker), "palette" => Box::new(ShowCommandPalette),
         "toggle_zoom" => Box::new(TogglePaneZoom), "toggle_sidebar" => Box::new(ToggleSidebar),
         "equalize_panes" => Box::new(EqualizePanes), "swap_pane_next" => Box::new(SwapPaneNext),

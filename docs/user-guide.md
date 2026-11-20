@@ -967,6 +967,12 @@ the terminal’s lifetime; native OS notifications are not yet implemented. OSC 
 action/close reports, replacement IDs after delivery,
 expiry, icons and buttons remain unsupported.
 Cmd+N creates a workspace; click sidebar rows or use Cmd+Alt+Up/Down to switch.
+Right-click a workspace for Rename, Description, Color, Icon, Pin/Unpin and
+Close actions. This selects that workspace and clears sidebar multi-selection;
+Close uses the normal confirmation policy. Arrows/Home/End navigate the menu,
+Enter/Space activates, and Escape restores terminal focus. Outside click or
+focus loss dismisses it. Show Workspace Actions in the palette also opens this
+menu; `workspace_menu` is available for custom shortcut bindings.
 View → Workspace Icon offers Terminal, Code, Build, Cloud, Notes and None.
 The same choices are available in the palette. Icons persist in saved layouts
 and follow a workspace when it moves into a new window.
