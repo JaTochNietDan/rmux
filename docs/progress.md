@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Closing or moving out the active workspace now chooses its successor using
+pinned/grouped navigation order, falling back to the previous row at the end.
+The chosen identity survives storage removal and group-slot adjustment. Closing
+a group anchor still prefers its promoted member, and closing an inactive
+workspace retains the active identity. Thirteen group tests passed, including
+logical successor selection and existing anchor/order tests. Native close/move
+focus behavior remains pending.
+
 Saving settings now inspects configuration symlinks without following them
 first. A dangling link produces a resolution error and remains intact instead of
 being replaced by a regular file; valid relative links still update their target.

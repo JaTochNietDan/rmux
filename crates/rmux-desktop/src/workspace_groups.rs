@@ -12,6 +12,13 @@ pub enum Placement {
     End,
 }
 
+/// Pick the next logical row, falling back to the previous row at the end.
+/// Storage indices need not match the pinned/grouped navigation order.
+pub fn neighbor_after_removal<T: Copy + Eq>(order: &[T], removed: T) -> Option<T> {
+    let index = order.iter().position(|item| *item == removed)?;
+    order.get(index + 1).or_else(|| index.checked_sub(1).and_then(|index| order.get(index))).copied()
+}
+
 /// Keep a group's row in place when its anchor changes. Live old anchors trade
 /// storage slots; a closed anchor's replacement takes the vacated position.
 pub fn preserve_anchor_slot<T, W: Copy + Eq>(items: &mut Vec<T>, key: impl Fn(&T) -> W, previous: W, previous_index: usize, anchor: W) {
@@ -231,6 +238,17 @@ impl<W: Copy + Eq> Groups<W> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn close_neighbor_follows_logical_order_without_wrapping() {
+        let order = [4, 1, 7, 2];
+        assert_eq!(neighbor_after_removal(&order, 4), Some(1));
+        assert_eq!(neighbor_after_removal(&order, 1), Some(7));
+        assert_eq!(neighbor_after_removal(&order, 2), Some(7));
+        assert_eq!(neighbor_after_removal(&order, 99), None);
+        assert_eq!(neighbor_after_removal(&[1], 1), None);
+        assert_eq!(neighbor_after_removal(&[], 1), None);
+    }
+
     #[test]
     fn directory_override_survives_member_mapping_and_restore() {
         let mut groups = super::Groups::default();

@@ -1789,6 +1789,10 @@ impl WorkspaceWindow {
         }
         self.rename = None;
         let selected = self.entries.get(self.active).map(|entry| entry.workspace.entity_id());
+        let successor = (self.active == index)
+            .then(|| workspace_groups::neighbor_after_removal(&self.workspace_order(true), index))
+            .flatten()
+            .map(|next| self.entries[next].workspace.entity_id());
         let slot = self.group_anchor_slot(self.entries[index].workspace.entity_id());
         let removed = self.entries.remove(index);
         let removed_active = selected == Some(removed.workspace.entity_id());
@@ -1809,7 +1813,7 @@ impl WorkspaceWindow {
         let selected = if selected == Some(removed.workspace.entity_id()) {
             slot.filter(|(_, anchor, _)| *anchor == removed.workspace.entity_id())
                 .and_then(|(id, _, _)| self.groups.entries().iter().find(|group| group.id == id))
-                .and_then(|group| group.members.first()).copied()
+                .and_then(|group| group.members.first()).copied().or(successor)
         } else { selected };
         self.preserve_group_slot(slot, selected);
         if removed_active {
