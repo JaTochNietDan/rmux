@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Directory and preview loading now have cancellation ownership tied to the
+window. Dropping the owner on cancel, completion or window teardown signals the
+background worker. The loading notice replaces ordinary dismissal with Cancel;
+cancel also drops the delivery task, preventing late UI replacement. Directory
+enumeration checks per entry; preview reads use 8 KiB chunks with cancellation
+checks and interrupted-read retry. In-progress OS calls cannot be preempted.
+All four focused file-browser tests passed, including owner-drop cancellation
+before filesystem access; desktop check/test compilation passed. Native cancel
+interaction and slow-filesystem behavior remain unverified.
+
 Local browsing/preview failures now keep a recovery picker with Back to directory,
 Copy Path and Retry instead of dropping directly to the terminal with a notice.
 The retry row exposes the error and its full hover text; retries use the same

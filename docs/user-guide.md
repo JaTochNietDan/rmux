@@ -206,6 +206,10 @@ unimplemented.
 If a directory or file cannot be read, the browser shows Back, Copy Path and
 Retry actions. The Retry row includes the error; hover it for the full message.
 Escape closes the browser and returns to its prior focus.
+While a directory or preview is loading, its notice's close control cancels
+remaining work. Closing the window also cancels it. Cancellation is checked
+between directory entries and preview read chunks; an OS call already in
+progress may finish first.
 
 **Choose Terminal Font…** searches installed font families for the current
 terminal. Type to filter, use arrows and Enter to choose, or Escape to cancel.

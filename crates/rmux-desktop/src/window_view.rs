@@ -120,6 +120,7 @@ pub(super) struct WorkspaceWindow {
     palette: Option<(Entity<command_palette::CommandPalette>, Option<FocusHandle>)>,
     font_picker_job: Option<Task<()>>,
     file_browser_job: Option<Task<()>>,
+    file_browser_cancel: Option<file_browser::Cancellation>,
     restore_job: Option<restore::Job>,
     workspace_scroll: ScrollHandle,
     notice: Option<String>,
@@ -2452,11 +2453,15 @@ impl WorkspaceWindow {
         let Some(focus) = window.focused(cx) else { return; };
         self.notice = Some("Loading local directory…".into());
         let executor = cx.background_executor().clone();
+        let cancellation = file_browser::Cancellation::default();
+        let canceled = cancellation.0.clone();
+        self.file_browser_cancel = Some(cancellation);
         self.file_browser_job = Some(cx.spawn_in(window, async move |entity, cx| {
             let target = path.clone();
-            let result = executor.spawn(async move { file_browser::list(path) }).await;
+            let result = executor.spawn(async move { file_browser::list_cancellable(path, &canceled) }).await;
             let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
                 this.file_browser_job = None;
+                this.file_browser_cancel = None;
                 if this.notice.as_deref() == Some("Loading local directory…") { this.notice = None; }
                 if focus.is_focused(window) && this.automation_available(cx).is_ok() {
                     match result {
@@ -2480,11 +2485,15 @@ impl WorkspaceWindow {
         let Some(focus) = window.focused(cx) else { return; };
         let executor = cx.background_executor().clone();
         self.notice = Some("Loading text preview…".into());
+        let cancellation = file_browser::Cancellation::default();
+        let canceled = cancellation.0.clone();
+        self.file_browser_cancel = Some(cancellation);
         self.file_browser_job = Some(cx.spawn_in(window, async move |entity, cx| {
             let target = path.clone();
-            let result = executor.spawn(async move { file_browser::preview(path) }).await;
+            let result = executor.spawn(async move { file_browser::preview_cancellable(path, &canceled) }).await;
             let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
                 this.file_browser_job = None;
+                this.file_browser_cancel = None;
                 if this.notice.as_deref() == Some("Loading text preview…") { this.notice = None; }
                 if focus.is_focused(window) && this.automation_available(cx).is_ok() {
                     match result {
@@ -2786,6 +2795,7 @@ impl WorkspaceWindow {
             palette: None,
             font_picker_job: None,
             file_browser_job: None,
+            file_browser_cancel: None,
             restore_job: None,
             workspace_scroll: ScrollHandle::new(),
             notice: None,
@@ -2991,6 +3001,7 @@ impl WorkspaceWindow {
             palette: None,
             font_picker_job: None,
             file_browser_job: None,
+            file_browser_cancel: None,
             restore_job: None,
             workspace_scroll: ScrollHandle::new(),
             notice: None,
@@ -4058,9 +4069,17 @@ impl Render for WorkspaceWindow {
                             .on_click(move |event, _, cx| {
                                 if event.standard_click() { clipboard::write(ClipboardItem::new_string(notice.clone()), cx); }
                             }).child(icons::icon("copy")))
-                        .when(self.restore_job.is_none(), |row| row.child(pane_view::pane_control("dismiss-notice", "Dismiss message")
+                        .when(self.restore_job.is_none() && self.file_browser_job.is_none(), |row| row.child(pane_view::pane_control("dismiss-notice", "Dismiss message")
                             .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
                                 if event.standard_click() { this.notice = None; cx.notify(); }
+                            })).child(icons::icon("close"))))
+                        .when(self.file_browser_job.is_some(), |row| row.child(pane_view::pane_control("cancel-file-load", "Cancel file loading")
+                            .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
+                                if !event.standard_click() { return; }
+                                this.file_browser_cancel = None;
+                                this.file_browser_job = None;
+                                this.notice = None;
+                                cx.notify();
                             })).child(icons::icon("close"))))
                         .when(self.restore_job.is_some(), |row| row.child(gpui::div().id("cancel-restore").flex_shrink_0().px_2().py_1().rounded_sm().cursor_pointer()
                             .hover(|style| style.bg(rgb(0x353535)))
