@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Tab-picker search now uses ranked fuzzy words across titles and cached directories,
+sharing the palette matcher. Each word stays within one field; contiguous matches
+beat subsequences, title matches win equal-quality directory matches, and empty
+queries preserve tab order. Three focused matching tests passed, including mixed
+fields, Unicode and forbidden cross-field matches. Moving a pane between windows
+also clears the picker and its old-window blur subscription through the existing
+editor reset path. Native search and cross-window popup acceptance remain pending.
+
 Custom shortcuts now expose the existing Last Terminal/Workspace, pane cycling,
 tab/workspace reorder, previous/next/last prompt, top/bottom scroll and find-match
 navigation actions. They dispatch the same typed actions as menus/palette and

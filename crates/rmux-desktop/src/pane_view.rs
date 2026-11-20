@@ -98,13 +98,16 @@ impl PaneView {
     fn matching_tabs(&self, cx: &App) -> Vec<usize> {
         let query = self.tab_picker.as_ref().map(|(input, _, _)| input.read(cx).value().to_lowercase()).unwrap_or_default();
         let words: Vec<_> = query.split_whitespace().collect();
-        (0..self.terminals.len()).filter(|index| {
-            let title = self.tab_title(*index, cx).to_lowercase();
-            let directory = self.terminals[*index].read(cx).snapshot_directory.as_ref()
+        let mut matches: Vec<_> = (0..self.terminals.len()).filter_map(|index| {
+            let title = self.tab_title(index, cx).to_lowercase();
+            let directory = self.terminals[index].read(cx).snapshot_directory.as_ref()
                 .map(|path| path.to_string_lossy().to_lowercase()).unwrap_or_default();
-            words.iter().all(|word| title.contains(word) || directory.contains(word))
-        }).collect()
+            palette_match::tab_score(&title, &directory, &words).map(|score| (score, index))
+        }).collect();
+        matches.sort_by_key(|(score, index)| (*score, *index));
+        matches.into_iter().map(|(_, index)| index).collect()
     }
+
     pub(super) fn automation_busy(&self) -> bool {
         self.rename.is_some() || self.close_prompt.is_some() || self.tab_picker.is_some()
     }
@@ -131,6 +134,8 @@ impl PaneView {
     pub fn reset_window_editors(&mut self) {
         self.close_prompt = None;
         self.rename = None;
+        self.tab_picker = None;
+        self.tab_picker_blur = None;
     }
     pub fn tab_title(&self, index: usize, cx: &App) -> String {
         let view = self.terminals[index].read(cx);

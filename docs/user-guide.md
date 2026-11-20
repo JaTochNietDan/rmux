@@ -747,7 +747,10 @@ returns to the terminal without switching tabs.
 Open it directly with ⌘⇧T on macOS or Ctrl+Alt+Shift+T elsewhere, or choose
 “Choose Terminal Tab” in the command palette. Type to filter titles and working
 directories: all whitespace-separated query words must match either field,
-ignoring case. Each row shows its cached working directory below the title when
+ignoring case. Abbreviations work as in the command palette: `bld rmx` can match
+“Build server” in `/work/rmux`. Contiguous matches rank ahead of subsequences;
+equally strong title matches rank ahead of directory matches. With an empty query,
+tabs retain their original order. Each row shows its cached working directory below the title when
 available, with the full title and path in its tooltip. This uses the last
 shell-reported directory or initial directory, without filesystem polling.
 Moving focus elsewhere dismisses the picker.
