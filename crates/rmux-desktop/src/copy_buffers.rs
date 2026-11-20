@@ -43,6 +43,10 @@ impl Store {
         if self.revision != revision { return Err("Buffers changed; reopen the picker before pasting"); }
         self.entries.get(name).map(String::as_str).ok_or("Buffer not found")
     }
+    pub fn delete_if_unchanged(&mut self, name: &str, revision: u64) -> Result<Value, &'static str> {
+        if self.revision != revision { return Err("Buffers changed; reopen the picker before deleting"); }
+        self.execute(&Command::Delete(name.into()))
+    }
     pub fn revision(&self) -> u64 { self.revision }
     pub fn save_if_unchanged(&mut self, name: String, text: String, revision: u64) -> Result<Value, &'static str> {
         if self.revision != revision { return Err("Buffers changed while saving; retry to apply this selection"); }
@@ -83,6 +87,18 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn stale_picker_cannot_delete_replaced_buffer() {
+        let mut store = Store::default();
+        store.execute(&Command::Set("notes".into(), "old".into())).unwrap();
+        let picked = store.revision();
+        store.execute(&Command::Set("notes".into(), "new".into())).unwrap();
+        assert!(store.delete_if_unchanged("notes", picked).is_err());
+        assert_eq!(store.execute(&Command::Get("notes".into())).unwrap()["text"], "new");
+        store.delete_if_unchanged("notes", store.revision()).unwrap();
+        assert_eq!(store.bytes, 0);
+        assert!(store.metadata().is_empty());
+    }
     #[test]
     fn delayed_save_cannot_overwrite_newer_changes_and_invalid_names() {
         let mut store = Store::default();

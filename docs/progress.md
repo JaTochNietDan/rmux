@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Named-buffer lifecycle now includes Delete Named Buffer… in the command palette,
+native menu and delete_buffer custom shortcut action. The searchable picker
+lists names/sizes without cloning stored text and works without a focused terminal.
+Deletion checks the captured store revision, so a replaced buffer cannot be
+removed through stale picker state, and releases the stored text and byte quota.
+Five focused buffer tests passed, including stale-delete rejection and storage
+release, with desktop test compilation. Native picker/input acceptance remains
+pending; full T14 parity is not claimed.
+
 Added Paste Named Buffer… to the palette/menu and paste_buffer custom binding.
 The searchable picker lists bounded name/size metadata, captures its originating
 surface, and checks store revision before terminal-aware paste. Changed buffers,

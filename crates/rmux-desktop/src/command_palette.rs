@@ -225,6 +225,7 @@ impl CommandPalette {
         command!("Reset Font Size", ResetFontSize);
         command!("Enter Copy Mode", EnterCopyMode);
         command!("Paste Named Buffer…", ShowBufferPicker);
+        command!("Delete Named Buffer…", ShowDeleteBufferPicker);
         command!("Choose Terminal Font…", ShowFontPicker);
         command!("Choose Default Font…", ShowDefaultFontPicker);
         command!("Use Configured Font", UseConfiguredFont);
@@ -350,12 +351,13 @@ impl CommandPalette {
         }
         Self::with_commands(commands, "Search commands and workspaces", "No matching commands or workspaces", window, cx)
     }
-    pub fn buffers(entries: Vec<(String, usize)>, revision: u64, surface_id: String, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn buffers(entries: Vec<(String, usize)>, revision: u64, surface_id: String, deleting: bool, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let commands = entries.into_iter().map(|(name, bytes)| Command {
-            title: name.clone(), subtitle: Some(format!("{bytes} bytes · Paste into the originating terminal")), shortcut: None,
-            target: PaletteEvent::Run(Box::new(PasteNamedBuffer { name, revision, surface_id: surface_id.clone() })),
+            title: name.clone(), subtitle: Some(format!("{bytes} bytes · {}", if deleting { "Delete this saved buffer" } else { "Paste into the originating terminal" })), shortcut: None,
+            target: PaletteEvent::Run(if deleting { Box::new(DeleteNamedBuffer { name, revision }) }
+                else { Box::new(PasteNamedBuffer { name, revision, surface_id: surface_id.clone() }) }),
         }).collect();
-        Self::with_commands(commands, "Paste named buffer", "No matching buffers · Save a selection in Copy Mode first", window, cx)
+        Self::with_commands(commands, if deleting { "Delete named buffer" } else { "Paste named buffer" }, "No matching buffers · Save a selection in Copy Mode first", window, cx)
     }
     pub fn fonts(mut families: Vec<String>, default: bool, window: &mut Window, cx: &mut Context<Self>) -> Self {
         families.retain(|name| !name.trim().is_empty() && name.len() <= 128 && !name.chars().any(char::is_control) && !name.starts_with('.'));
