@@ -5,7 +5,7 @@ fn small_text(path: &Path) -> Option<String> {
     File::open(path).ok()?.take(4097).read_to_string(&mut text).ok()?;
     (text.len() <= 4096).then_some(text)
 }
-pub fn branch(directory: &Path) -> Option<String> {
+pub fn git_directory(directory: &Path) -> Option<std::path::PathBuf> {
     for ancestor in directory.ancestors().take(64) {
         let marker = ancestor.join(".git");
         let git_dir = if marker.is_dir() { marker } else if marker.is_file() {
@@ -13,18 +13,24 @@ pub fn branch(directory: &Path) -> Option<String> {
             let target = text.trim().strip_prefix("gitdir: ")?;
             ancestor.join(target)
         } else { continue; };
-        let head = small_text(&git_dir.join("HEAD"))?;
-        let head = head.trim();
-        if let Some(name) = head.strip_prefix("ref: refs/heads/") {
-            return (!name.is_empty() && name.len() <= 1024 && !name.chars().any(char::is_control)).then(|| name.to_owned());
-        }
-        if matches!(head.len(), 40 | 64) && head.bytes().all(|c| c.is_ascii_hexdigit()) {
-            return Some(format!("detached {}", &head[..8]));
-        }
-        return None;
+        return git_dir.canonicalize().ok();
     }
     None
 }
+pub fn branch_at(git_dir: &Path) -> Option<String> {
+    let head = small_text(&git_dir.join("HEAD"))?;
+    let head = head.trim();
+    if let Some(name) = head.strip_prefix("ref: refs/heads/") {
+        return (!name.is_empty() && name.len() <= 1024 && !name.chars().any(char::is_control)).then(|| name.to_owned());
+    }
+    if matches!(head.len(), 40 | 64) && head.bytes().all(|c| c.is_ascii_hexdigit()) {
+        return Some(format!("detached {}", &head[..8]));
+    }
+    None
+}
+#[cfg(test)]
+fn branch(directory: &Path) -> Option<String> { branch_at(&git_directory(directory)?) }
+
 #[cfg(test)]
 mod tests {
     use super::*;

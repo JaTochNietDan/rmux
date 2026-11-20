@@ -1,9 +1,11 @@
 # rmux
 
 Workspace directory subtitles include the Git branch or detached HEAD when
-available. Discovery runs in the background on shell directory reports; it does
-not run Git or poll while idle. Branch changes without a new directory report
-may remain stale. PR and listening-port metadata are not yet implemented.
+available. Discovery runs in the background on shell directory reports. A shared
+native filesystem watcher refreshes branch badges on HEAD changes, including
+external checkouts, without running Git or polling while idle. Filesystems that
+do not deliver native events still rely on shell reports or manual refresh.
+PR and listening-port metadata are not yet implemented.
 The palette's Refresh Git Branch for Current Terminal action refreshes explicitly.
 Repeated shell directory reports refresh Git even when the path stays unchanged;
 the included zsh integration reports its directory at each prompt. `surface.list`

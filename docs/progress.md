@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Git branch badges now subscribe to native HEAD changes, including atomic checkout
+replacement. One watcher serves the application with shared repository watches,
+capacity-one event channels and background discovery; idle terminals add no polling
+or Git subprocesses. Dropping a terminal queues unsubscription without blocking the
+UI. Shell reports and manual refresh remain available when native events are
+unavailable. Three focused tests passed, including real native event delivery to
+multiple subscribers and continued delivery after one unsubscribes. Native sidebar
+visual acceptance remains pending; these changes are for the next release.
+
 Added Mark All Read in This Window in the notification panel, View menu, palette,
 and custom shortcut actions. It acknowledges all alert sources across hidden
 and visible tabs in this window without focusing terminals, removing messages,

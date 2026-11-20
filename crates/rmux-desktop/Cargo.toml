@@ -10,6 +10,7 @@ name = "rmux"
 path = "src/main.rs"
 
 [dependencies]
+notify = "=8.2.2"
 rmux-terminal = { path = "../rmux-terminal" }
 anyhow.workspace = true
 async-channel.workspace = true

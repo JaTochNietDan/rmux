@@ -8,6 +8,7 @@ mod attention;
 mod cell_metrics;
 mod icons;
 mod git_context;
+mod git_watch;
 mod automation;
 #[cfg(unix)]
 mod socket_transport;
@@ -363,6 +364,8 @@ struct TerminalView {
     snapshot_directory: Option<std::path::PathBuf>,
     git_branch: Option<String>,
     git_loading: bool,
+    git_watch_path: Option<std::path::PathBuf>,
+    git_watch_task: Option<Task<()>>,
     git_refresh_pending: bool,
     bell_revision: u64,
     notification: Option<Arc<rmux_terminal::DesktopNotification>>,
@@ -401,12 +404,30 @@ impl TerminalView {
         if self.git_loading { self.git_refresh_pending = true; return; }
         let directory = self.snapshot_directory.clone();
         self.git_loading = true;
+        let watched = self.git_watch_path.clone();
         let executor = cx.background_executor().clone();
         cx.spawn(async move |entity, cx| {
             let path = directory.clone();
-            let branch = executor.spawn(async move { path.as_deref().and_then(git_context::branch) }).await;
+            let (branch, watch_path, subscription) = executor.spawn(async move {
+                let git_dir = path.as_deref().and_then(git_context::git_directory);
+                let subscription = if git_dir != watched { git_dir.as_deref().and_then(git_watch::subscribe) } else { None };
+                // Subscribe before reading, so a checkout during discovery cannot be missed.
+                let branch = git_dir.as_deref().and_then(git_context::branch_at);
+                (branch, git_dir, subscription)
+            }).await;
             let _ = entity.update(cx, |this, cx| {
                 this.git_loading = false;
+                if this.snapshot_directory == directory && this.git_watch_path != watch_path {
+                    this.git_watch_task = None;
+                    this.git_watch_path = subscription.as_ref().and(watch_path);
+                    if let Some(subscription) = subscription {
+                        this.git_watch_task = Some(cx.spawn(async move |entity, cx| {
+                            while subscription.changed().await.is_ok() {
+                                if entity.update(cx, |this, cx| this.refresh_git_context(cx)).is_err() { break; }
+                            }
+                        }));
+                    }
+                }
                 if this.snapshot_directory == directory && this.git_branch != branch {
                     this.git_branch = branch;
                     cx.emit(TabMetadataChanged); cx.notify();
@@ -658,6 +679,8 @@ impl TerminalView {
             snapshot_directory,
             git_branch: None,
             git_loading: false,
+            git_watch_path: None,
+            git_watch_task: None,
             git_refresh_pending: false,
             bell_revision: 0,
             notification: None,
