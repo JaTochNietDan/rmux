@@ -220,6 +220,12 @@ Hold that modifier while hovering to see the link target in a tooltip and a poin
 cursor for supported HTTP(S) links. Unsupported OSC 8 targets are labeled and do
 not gain the pointer cursor. Hover lookup is cached per cell/revision and skips a
 busy parser; move the pointer again to retry. Output changes clear old targets.
+Link previews fit the window width and truncate long addresses with an ellipsis.
+The terminal context menu also offers Copy Link Address and Open Link for the
+link under the menu's opening position. It captures that target when opened, so
+later terminal output cannot change the chosen address. Open Link is enabled
+only for supported HTTP(S) targets; copying preserves the original address.
+If a terminal program owns right-click, use Shift-right-click for the local menu.
 If output parsing is busy, rmux reports a retry message instead of waiting; click
 again after output pressure eases.
 

@@ -7,18 +7,25 @@ pub(super) struct Menu {
     focus: FocusHandle,
     selected: usize,
     scroll: ScrollHandle,
+    link: Option<String>,
 }
-const LABELS: &[&str] = &["Copy", "Copy with Line Breaks", "Paste", "Select All", "Find…", "Copy Working Directory", "Reveal Working Directory", "Clear Scrollback"];
+const LABELS: &[&str] = &["Copy", "Copy with Line Breaks", "Paste", "Select All", "Find…", "Copy Working Directory", "Reveal Working Directory", "Clear Scrollback", "Copy Link Address", "Open Link"];
 
 impl TerminalView {
-    fn menu_enabled(&self) -> [bool; 8] {
+    fn menu_enabled(&self) -> [bool; 10] {
         let selection = self.frame.selections.iter().any(Option::is_some);
-        [selection, selection, !self.session.paste_pending(), true, true, true, true, true]
+        let link = self.terminal_menu.as_ref().and_then(|menu| menu.link.as_deref());
+        [selection, selection, !self.session.paste_pending(), true, true, true, true, true, link.is_some(), link.is_some_and(openable_uri)]
     }
     pub(super) fn show_terminal_menu(&mut self, position: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
         self.selecting = false;
         self.selection_scroll = None;
         self.selection_pointer = None;
+        let link = if self.last_bounds.contains(&position) {
+            let point = position - self.last_bounds.origin;
+            self.session.hyperlink_at((f32::from(point.x) / self.cells.width) as u16,
+                (f32::from(point.y) / self.cells.height) as u32, self.frame.revision).ok().flatten()
+        } else { None };
         let focus = cx.focus_handle();
         let token = focus.clone();
         self.terminal_menu_blur = Some(cx.on_blur(&focus, window, move |this, _, cx| {
@@ -32,7 +39,7 @@ impl TerminalView {
         focus.focus(window);
         let scroll = ScrollHandle::new();
         scroll.scroll_to_item(selected);
-        self.terminal_menu = Some(Menu { position, focus, selected, scroll });
+        self.terminal_menu = Some(Menu { position, focus, selected, scroll, link });
         cx.notify();
     }
     fn dismiss_terminal_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -44,6 +51,8 @@ impl TerminalView {
     }
     fn activate_terminal_menu(&mut self, item: usize, window: &mut Window, cx: &mut Context<Self>) {
         if self.terminal_menu.is_none() || !self.menu_enabled().get(item).copied().unwrap_or(false) { return; }
+        // Freeze the clicked target, rather than looking up potentially changed output.
+        let link = self.terminal_menu.as_ref().and_then(|menu| menu.link.clone());
         self.dismiss_terminal_menu(window, cx);
         match item {
             0 => self.copy(&CopySelection, window, cx),
@@ -54,13 +63,16 @@ impl TerminalView {
             5 => self.lookup_working_directory(true, cx),
             6 => self.lookup_working_directory(false, cx),
             7 => self.clear_scrollback(&ClearScrollback, window, cx),
+            8 => { if let Some(link) = link { clipboard::write(ClipboardItem::new_string(link), cx); } },
+            9 => { if let Some(link) = link.filter(|uri| openable_uri(uri)) { cx.open_url(&link); } },
             _ => {},
         }
     }
     pub(super) fn terminal_menu_element(&self, menu: Menu, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let enabled = self.menu_enabled();
         let actions: [Box<dyn Action>; 8] = [Box::new(CopySelection), Box::new(CopySelectionWithLineBreaks), Box::new(Paste), Box::new(EditorSelectAll), Box::new(Find), Box::new(CopyWorkingDirectory), Box::new(RevealWorkingDirectory), Box::new(ClearScrollback)];
-        let hints: Vec<_> = actions.iter().map(|action| shortcuts::hint(action.as_ref(), &self.focus, window)).collect();
+        let mut hints: Vec<_> = actions.iter().map(|action| shortcuts::hint(action.as_ref(), &self.focus, window)).collect();
+        hints.extend([None, None]);
         deferred(anchored().position(menu.position).snap_to_window().child(
             div().id("terminal-context-menu").track_focus(&menu.focus).key_context("TerminalMenu")
                 .w(px(340.).min((window.viewport_size().width - px(16.)).max(px(1.)))).py_1().bg(rgb(0x292929)).text_color(rgb(0xd6d6d6))

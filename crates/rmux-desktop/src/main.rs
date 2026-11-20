@@ -1776,9 +1776,9 @@ impl Render for TerminalView {
             }))
             .when_some(self.link_hover.as_ref().filter(|(revision, _)| *revision == self.frame.revision).map(|(_, uri)| uri.clone()), |root, uri| {
                 let allowed = openable_uri(&uri);
-                let label: SharedString = if allowed { uri } else { format!("Unsupported link: {uri}") }.into();
+                let target: SharedString = uri.into();
                 root.when(allowed, |root| root.cursor_pointer())
-                    .tooltip(move |_, cx| cx.new(|_| pane_view::ControlHint(label.clone())).into())
+                    .tooltip(move |_, cx| cx.new(|_| LinkHint { target: target.clone(), allowed }).into())
             })
             .child(
                 canvas(
@@ -2315,6 +2315,19 @@ impl Element for TerminalElement {
         }
     }
 }
+struct LinkHint { target: SharedString, allowed: bool }
+impl Render for LinkHint {
+    fn render(&mut self, window: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div().w(px(520.).min((window.viewport_size().width - px(24.)).max(px(1.))))
+            .px_2().py_1().rounded_md().bg(rgb(0x383838)).text_color(rgb(0xe5e5e5))
+            .child(div().text_xs().text_color(rgb(0xa0a0a0)).truncate().child(
+                if !self.allowed { "Unsupported link target" }
+                else if cfg!(target_os = "macos") { "Cmd-click to open link" }
+                else { "Ctrl-click to open link" }))
+            .child(div().text_sm().truncate().child(self.target.clone()))
+    }
+}
+
 fn openable_uri(uri: &str) -> bool {
     uri.split_once("://").is_some_and(|(scheme, rest)| {
         (scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https"))

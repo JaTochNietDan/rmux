@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Replaced generic link tooltips with a dedicated window-bounded preview: a compact
+modifier/action label and an ellipsized target line prevent long unbroken URLs
+from overflowing narrow windows. Added Copy Link Address and Open Link terminal
+context-menu rows. They capture the address under the menu's opening coordinates,
+keep it stable if output changes, disable missing targets and apply the same
+HTTP(S) opening rules as modifier-click; copy retains the original target. Link
+lookup is nonblocking and a busy parser leaves the rows disabled. Existing menu
+keyboard navigation includes the new rows. Desktop compilation passed; native
+hover/menu/clipboard/narrow-window acceptance remains pending.
+
 Added modifier-hover link feedback: supported HTTP(S) targets show a pointer
 cursor and target tooltip; unsupported OSC 8 targets show an explanatory tooltip.
 Hover and click share the same URL allow rules. Lookups occur only while holding
