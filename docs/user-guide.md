@@ -2,7 +2,9 @@
 
 **Desktop notifications** in Settings enables optional OS banners for unfocused
 terminals. Save settings to keep the choice (`"native_notifications": true` in
-JSON); the default is off. On macOS, use the bundled app and allow Notification
+JSON); the default is off. **Show desktop banners** chooses between an unfocused
+terminal and the entire app being in the background (`"notification_focus":
+"unfocused_terminal"` or `"background_app"`). On macOS, use the bundled app and allow Notification
 Center permission when prompted. Delivery failures appear in the terminal.
 Banners are limited to one per second and a bounded queue; the in-app notification
 history remains available independently. Turning the setting off skips queued

@@ -4,6 +4,7 @@ use super::*;
 #[derive(Default)]
 pub(super) struct Dispatcher {
     sender: Option<async_channel::Sender<Request>>,
+    active_windows: std::collections::HashSet<AnyWindowHandle>,
 }
 impl Global for Dispatcher {}
 struct Request {
@@ -11,8 +12,25 @@ struct Request {
     revision: u64,
 }
 
+// Use activation events: GPUI's macOS active_window() returns mainWindow, which
+// may remain set when another app owns foreground focus.
+pub(super) fn record_activation(window: &Window, cx: &mut App) {
+    let live = cx.windows();
+    let active = &mut cx.global_mut::<Dispatcher>().active_windows;
+    active.retain(|handle| live.contains(handle));
+    let handle = window.window_handle();
+    if window.is_window_active() { active.insert(handle); } else { active.remove(&handle); }
+}
+fn allowed(terminal_focused: bool, cx: &App) -> bool {
+    let settings = cx.global::<Preferences>();
+    if !settings.native_notifications { return false; }
+    let active = &cx.global::<Dispatcher>().active_windows;
+    let app_active = cx.windows().iter().any(|handle| active.contains(handle));
+    settings.notification_focus.allows(terminal_focused, app_active)
+}
+
 pub(super) fn enqueue(revision: u64, cx: &mut Context<TerminalView>) {
-    if !cx.global::<Preferences>().native_notifications { return; }
+    if !allowed(false, cx) { return; }
     if cx.global::<Dispatcher>().sender.is_none() {
         let (sender, receiver) = async_channel::bounded::<Request>(8);
         cx.global_mut::<Dispatcher>().sender = Some(sender);
@@ -22,7 +40,7 @@ pub(super) fn enqueue(revision: u64, cx: &mut Context<TerminalView>) {
                 // Recheck settings/focus/read state after queueing. Requests hold no
                 // terminal or message allocation alive after its pane is closed.
                 let message = request.terminal.update(cx, |terminal, cx| {
-                    if !cx.global::<Preferences>().native_notifications || terminal.input_focused { return None; }
+                    if !allowed(terminal.input_focused, cx) { return None; }
                     terminal.notifications.iter().find(|record| record.unread && record.message.revision == request.revision)
                         .map(|record| record.message.clone())
                 }).ok().flatten();
@@ -88,6 +106,18 @@ fn bounded_text(text: &str, limit: usize) -> String {
 mod tests {
     use super::{bounded_text, RateLimit};
     use crate::preferences::Preferences;
+    #[test]
+    fn focus_policy_distinguishes_terminal_and_application_focus() {
+        use crate::preferences::NotificationFocus::{BackgroundApp, UnfocusedTerminal};
+        for app_active in [false, true] {
+            assert!(!UnfocusedTerminal.allows(true, app_active));
+            assert!(!BackgroundApp.allows(true, app_active));
+            assert!(UnfocusedTerminal.allows(false, app_active));
+            assert_eq!(BackgroundApp.allows(false, app_active), !app_active);
+        }
+        assert_eq!(serde_json::to_string(&BackgroundApp).unwrap(), "\"background_app\"");
+        assert_eq!(BackgroundApp.toggle(), UnfocusedTerminal);
+    }
     #[test]
     fn floods_do_not_schedule_delayed_native_deliveries() {
         let mut rate = RateLimit::default();

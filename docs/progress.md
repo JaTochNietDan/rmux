@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Native notification Settings now distinguish Terminal unfocused from App in
+background. The persisted notification_focus policy is checked both before
+queue admission and before OS dispatch; focused terminals remain suppressed in
+either mode. Window activation events track app focus across live windows, with
+closed windows excluded, rather than relying on GPUI macOS mainWindow lookup.
+No polling or additional OS backend initialization is introduced. Three focused
+notification tests and the file-backed settings merge/persistence test passed.
+Native multi-window activation ordering, permission and banner delivery still
+need platform verification; already-submitted OS requests are not recalled.
+
 N03 now has an opt-in native notification dispatcher and persisted Settings
 control. The default remains off and does not initialize an OS backend. Delivery
 uses one lazy consumer, at most eight queued weak terminal references and a

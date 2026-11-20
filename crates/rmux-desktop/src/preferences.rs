@@ -99,6 +99,25 @@ impl UnfocusedCursor {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum NotificationFocus {
+    #[default]
+    UnfocusedTerminal,
+    BackgroundApp,
+}
+impl NotificationFocus {
+    pub fn allows(self, terminal_focused: bool, app_active: bool) -> bool {
+        !terminal_focused && (self == Self::UnfocusedTerminal || !app_active)
+    }
+    pub fn label(self) -> &'static str {
+        match self { Self::UnfocusedTerminal => "Terminal unfocused", Self::BackgroundApp => "App in background" }
+    }
+    pub fn toggle(self) -> Self {
+        match self { Self::UnfocusedTerminal => Self::BackgroundApp, Self::BackgroundApp => Self::UnfocusedTerminal }
+    }
+}
+
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CustomCommand {
@@ -122,6 +141,7 @@ pub struct Preferences {
     pub scrollback_mib: u16,
     pub copy_on_select: bool,
     pub native_notifications: bool,
+    pub notification_focus: NotificationFocus,
     pub macos_option_as_alt: bool,
     pub unfocused_cursor: UnfocusedCursor,
     pub focused_cursor: FocusedCursor,
@@ -151,6 +171,7 @@ impl Default for Preferences {
             scrollback_mib: 4,
             copy_on_select: false,
             native_notifications: false,
+            notification_focus: NotificationFocus::default(),
             macos_option_as_alt: true,
             unfocused_cursor: UnfocusedCursor::default(),
             focused_cursor: FocusedCursor::default(),
@@ -251,6 +272,7 @@ impl Preferences {
             && self.focused_cursor == other.focused_cursor
             && self.copy_on_select == other.copy_on_select
             && self.native_notifications == other.native_notifications
+            && self.notification_focus == other.notification_focus
             && self.group_new_workspace_placement == other.group_new_workspace_placement
             && (self.close_policy_overridden() || self.confirm_close == other.confirm_close)
     }
@@ -274,6 +296,7 @@ impl Preferences {
         latest.focused_cursor = self.focused_cursor;
         latest.copy_on_select = self.copy_on_select;
         latest.native_notifications = self.native_notifications;
+        latest.notification_focus = self.notification_focus;
         latest.group_new_workspace_placement = self.group_new_workspace_placement;
         if !self.close_policy_overridden() { latest.confirm_close = self.confirm_close; }
         let bytes = serde_json::to_vec_pretty(&latest)?;
@@ -545,6 +568,8 @@ mod tests {
         preferences.terminal_padding = 12;
         preferences.scrollback_mib = 8;
         preferences.copy_on_select = true;
+        preferences.native_notifications = true;
+        preferences.notification_focus = NotificationFocus::BackgroundApp;
         preferences.group_new_workspace_placement = crate::workspace_groups::Placement::End;
         preferences.confirm_close = ClosePolicy::Never;
         std::fs::write(&path, br##"{"font_family":"Custom Mono","scrollback_mib":16,"background_color":"#112233","confirm_close":"always"}"##)?;
@@ -553,6 +578,8 @@ mod tests {
         assert_eq!(saved.font_size, 19.);
         assert_eq!(saved.terminal_padding, 12);
         assert!(saved.copy_on_select);
+        assert!(saved.native_notifications);
+        assert_eq!(saved.notification_focus, NotificationFocus::BackgroundApp);
         assert_eq!(saved.group_new_workspace_placement, crate::workspace_groups::Placement::End);
         assert_eq!(saved.font_family, "Custom Mono");
         assert_eq!(saved.scrollback_mib, 8);

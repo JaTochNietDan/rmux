@@ -3109,6 +3109,8 @@ impl Render for WorkspaceWindow {
         }
         self.rendered_workspace = current.as_ref().map(Entity::downgrade);
         if !self.close_handler_installed {
+            native_notifications::record_activation(window, cx);
+            cx.observe_window_activation(window, |_, window, cx| native_notifications::record_activation(window, cx)).detach();
             cx.observe_pending_input(window, |_, _, cx| cx.notify()).detach();
             let entity = cx.weak_entity();
             window.on_window_should_close(cx, move |window, cx| {
