@@ -1,5 +1,19 @@
 # rmux performance acceptance plan
 
+Manual process-tree sampling baseline (`22dc885` plus harness/shared-index change,
+macOS arm64, debug profile): at 1/8/32 shells, warm medians were
+29.025/27.865/29.464 ms after sharing parent-child indexes across terminal roots,
+versus 37.818/36.553/44.938 ms before. Each variant has one cold sample and five
+warm samples per size; [raw summaries](benchmarks/process-trees-debug.jsonl).
+Run `mise run bench-process-trees` to repeat. This includes two host process-table
+snapshots, ownership checks and RSS/CPU sampling, but excludes UI frames and
+fixture creation. Fixtures are idle shells with no children, exercising the
+multi-root lookup cost, not deep/wide trees or the 4,096-process cap. Host activity
+can affect these sequential runs; the one-shell change also shows timing variance.
+This is not release-build, memory-allocation or cross-platform acceptance evidence.
+Each parent-child index is now built once per refresh instead of once per root;
+aggregation also streams samples without a temporary vector per tree.
+
 Local file-loader baseline (`1794455` plus the benchmark harness, macOS arm64,
 debug profile): 40 reads of a freshly generated 2,048-entry directory measured
 2.486 ms p50 / 2.608 ms p95. A 128 KiB Unicode fixture, capped to a 64 KiB read

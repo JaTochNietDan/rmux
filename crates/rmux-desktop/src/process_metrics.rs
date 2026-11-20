@@ -33,16 +33,17 @@ impl Sampler {
     }
 
     pub fn sample_with_trees(&mut self, pids: impl IntoIterator<Item = u32>, roots: impl IntoIterator<Item = u32>, canceled: &std::sync::atomic::AtomicBool) -> (HashMap<u32, Sample>, HashMap<u32, TreeSample>) {
-        use crate::process_tree::{process_snapshot, descendants, stable_owned};
+        use crate::process_tree::{process_snapshot, TreeIndex, stable_index, ensure_stable_root};
         use std::collections::BTreeSet;
         let stopped = || canceled.load(std::sync::atomic::Ordering::Relaxed);
         if stopped() { return Default::default(); }
         let before = process_snapshot();
         let mut selected: BTreeSet<_> = pids.into_iter().take(513).collect();
         let mut trees = HashMap::new();
+        let index = TreeIndex::new(before.iter().map(|(pid, identity)| (*pid, identity.parent)));
         for root in roots.into_iter().take(256) {
             if stopped() { return Default::default(); }
-            let Ok(owned) = descendants(root, before.iter().map(|(pid, identity)| (*pid, identity.parent))) else { continue; };
+            let Ok(owned) = index.descendants(root) else { continue; };
             let ordered: BTreeSet<_> = owned.iter().copied().collect();
             for pid in ordered { if selected.len() == 4096 { break; } selected.insert(pid); }
             trees.insert(root, owned);
@@ -51,14 +52,16 @@ impl Sampler {
         let samples = self.sample_bounded(selected, 4096);
         if stopped() { return Default::default(); }
         let after = process_snapshot();
+        let stable_trees = stable_index(&before, &after);
         let mut totals = HashMap::new();
         for (root, owned) in trees {
             if stopped() { return Default::default(); }
-            let Ok(stable) = stable_owned(root, &before, &after) else { continue; };
-            let valid: Vec<_> = owned.iter().filter(|pid| stable.contains(pid)).filter_map(|pid| {
+            if ensure_stable_root(root, &before, &after).is_err() { continue; }
+            let Ok(stable) = stable_trees.descendants(root) else { continue; };
+            let valid = owned.iter().filter(|pid| stable.contains(pid)).filter_map(|pid| {
                 samples.get(pid).filter(|sample| before.get(pid).is_some_and(|identity| identity.started == sample.start_time_seconds))
-            }).collect();
-            totals.insert(root, aggregate_tree(owned.len(), valid.into_iter()));
+            });
+            totals.insert(root, aggregate_tree(owned.len(), valid));
         }
         (samples, totals)
     }
@@ -197,7 +200,15 @@ mod tests {
     #[cfg(unix)]
     #[test]
     #[ignore = "manual process sampling benchmark"]
-    fn sampling_scaling() {
+    fn sampling_scaling() { sampling_baseline(false); }
+
+    #[cfg(unix)]
+    #[test]
+    #[ignore = "manual process tree sampling benchmark"]
+    fn tree_sampling_scaling() { sampling_baseline(true); }
+
+    #[cfg(unix)]
+    fn sampling_baseline(trees: bool) {
         struct Shells(Vec<std::process::Child>);
         impl Drop for Shells {
             fn drop(&mut self) {
@@ -221,7 +232,16 @@ mod tests {
                 .chain(shells.0.iter().map(|child| child.id())).collect();
             let mut sampler = Sampler::default();
             let started = Instant::now();
-            let first = sampler.sample(pids.iter().copied());
+            let canceled = std::sync::atomic::AtomicBool::new(false);
+            let sample = |sampler: &mut Sampler| {
+                if trees {
+                    let (samples, totals) = sampler.sample_with_trees(pids.iter().copied(), pids.iter().copied().skip(1), &canceled);
+                    assert_eq!(totals.len(), count);
+                    assert!(totals.values().all(|tree| tree.complete && tree.sampled_processes == 1));
+                    samples
+                } else { sampler.sample(pids.iter().copied()) }
+            };
+            let first = sample(&mut sampler);
             let cold_us = started.elapsed().as_micros();
             assert_eq!(first.len(), count + 1);
             assert!(first.values().all(|sample| sample.cpu_percent.is_none()));
@@ -229,13 +249,13 @@ mod tests {
             for _ in 0..5 {
                 std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL + std::time::Duration::from_millis(5));
                 let started = Instant::now();
-                let samples = sampler.sample(pids.iter().copied());
+                let samples = sample(&mut sampler);
                 times.push(started.elapsed().as_micros());
                 assert_eq!(samples.len(), count + 1);
                 assert!(samples.values().all(|sample| sample.cpu_percent.is_some_and(|cpu| cpu.is_finite() && cpu >= 0.)));
             }
             times.sort_unstable();
-            println!("{{\"shells\":{count},\"application_processes\":1,\"cold_us\":{cold_us},\"warm_samples\":5,\"warm_p50_us\":{},\"warm_max_us\":{}}}", times[2], times[4]);
+            println!("{{\"trees\":{trees},\"shells\":{count},\"application_processes\":1,\"cold_us\":{cold_us},\"warm_samples\":5,\"warm_p50_us\":{},\"warm_max_us\":{}}}", times[2], times[4]);
         }
     }
 

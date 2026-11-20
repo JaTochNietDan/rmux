@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Measured and reduced process-tree sampling overhead. Parent-child indexes are
+built once per refresh snapshot rather than repeatedly for each terminal root;
+aggregation no longer allocates a temporary sample vector per tree. Added
+`mise run bench-process-trees` and recorded before/after debug summaries. The
+32-shell warm median was 44.938 ms before and 29.464 ms after in five samples;
+fixture and timing limitations are in docs/performance.md. Eight focused process,
+ownership, live-child and port regressions passed. Native UI timing is pending.
+
 Added shell-tree memory/CPU totals to the manual memory panel, sort modes and
 JSON export. Shared process-tree ownership checks with the port scanner;
 parent/start-time snapshots before/after sampling reject changed ancestors.

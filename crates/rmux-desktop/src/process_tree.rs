@@ -12,27 +12,42 @@ pub fn process_snapshot() -> HashMap<u32, Identity> {
         parent: process.parent().map(|parent| parent.as_u32()), started: process.start_time(),
     })).collect()
 }
-pub fn stable_owned(root: u32, before: &HashMap<u32, Identity>, after: &HashMap<u32, Identity>) -> Result<HashSet<u32>> {
+pub fn ensure_stable_root(root: u32, before: &HashMap<u32, Identity>, after: &HashMap<u32, Identity>) -> Result<()> {
     let original = before.get(&root).ok_or_else(|| anyhow::anyhow!("Terminal process is no longer running"))?;
     ensure!(original.started != 0 && after.get(&root) == Some(original), "Terminal process changed during sampling");
-    // A stable child is insufficient if one of its ancestors exited, was
-    // reparented or reused. Only traverse the unchanged portion of the tree.
-    descendants(root, before.iter().filter(|(pid, identity)| identity.started != 0 && after.get(pid) == Some(identity))
+    Ok(())
+}
+pub fn stable_index(before: &HashMap<u32, Identity>, after: &HashMap<u32, Identity>) -> TreeIndex {
+    // Only traverse unchanged ancestry, not just unchanged leaf processes.
+    TreeIndex::new(before.iter().filter(|(pid, identity)| identity.started != 0 && after.get(pid) == Some(identity))
         .map(|(pid, identity)| (*pid, identity.parent)))
 }
+pub fn stable_owned(root: u32, before: &HashMap<u32, Identity>, after: &HashMap<u32, Identity>) -> Result<HashSet<u32>> {
+    ensure_stable_root(root, before, after)?;
+    stable_index(before, after).descendants(root)
+}
 
-pub fn descendants(root: u32, processes: impl IntoIterator<Item = (u32, Option<u32>)>) -> Result<HashSet<u32>> {
-    let mut children: HashMap<u32, Vec<u32>> = HashMap::new();
-    for (pid, parent) in processes { if let Some(parent) = parent { children.entry(parent).or_default().push(pid); } }
-    let mut owned = HashSet::new();
-    let mut pending = vec![root];
-    while let Some(pid) = pending.pop() {
-        if owned.insert(pid) {
-            ensure!(owned.len() <= 4096, "Terminal process tree exceeds 4096 processes");
-            if let Some(children) = children.get(&pid) { pending.extend(children); }
-        }
+pub struct TreeIndex { children: HashMap<u32, Vec<u32>> }
+impl TreeIndex {
+    pub fn new(processes: impl IntoIterator<Item = (u32, Option<u32>)>) -> Self {
+        let mut children: HashMap<u32, Vec<u32>> = HashMap::new();
+        for (pid, parent) in processes { if let Some(parent) = parent { children.entry(parent).or_default().push(pid); } }
+        Self { children }
     }
-    Ok(owned)
+    pub fn descendants(&self, root: u32) -> Result<HashSet<u32>> {
+        let mut owned = HashSet::new();
+        let mut pending = vec![root];
+        while let Some(pid) = pending.pop() {
+            if owned.insert(pid) {
+                ensure!(owned.len() <= 4096, "Terminal process tree exceeds 4096 processes");
+                if let Some(children) = self.children.get(&pid) { pending.extend(children); }
+            }
+        }
+        Ok(owned)
+    }
+}
+pub fn descendants(root: u32, processes: impl IntoIterator<Item = (u32, Option<u32>)>) -> Result<HashSet<u32>> {
+    TreeIndex::new(processes).descendants(root)
 }
 
 #[cfg(test)]
