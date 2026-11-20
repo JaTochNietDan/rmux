@@ -2530,6 +2530,7 @@ impl WorkspaceWindow {
                     if jobs.len() == terminal_search::MAX_TERMINALS { *extra += 1; continue; }
                     jobs.push(terminal_search::Job { window: target, workspace: entry.workspace.entity_id(), terminal: terminal.entity_id(),
                         name: format!("{label} · {} / {}", entry.name, pane.read(cx).tab_title(tab, cx)),
+                        probe: terminal.read(cx).session.history_probe(),
                         read: terminal.read(cx).session.history_export(terminal_search::MAX_BYTES) });
                 }
             }

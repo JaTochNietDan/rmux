@@ -33,6 +33,7 @@ pub struct Session {
 
 /// A one-shot background read; creating it does not lock or retain the session.
 pub type HistoryExport = Box<dyn FnOnce() -> Result<Option<(String, bool)>> + Send>;
+pub type HistoryProbe = Box<dyn FnOnce(&str, &std::sync::atomic::AtomicBool, std::time::Instant) -> Result<Option<bool>> + Send>;
 pub type MemorySample = Box<dyn FnOnce() -> Result<Option<crate::MemoryUsage>> + Send>;
 
 struct PastePermit {
@@ -698,6 +699,13 @@ impl Session {
     }
     pub fn history_export(&self, max_bytes: usize) -> HistoryExport {
         self.text_export(max_bytes, false, true, None)
+    }
+    pub fn history_probe(&self) -> HistoryProbe {
+        let terminal = Arc::downgrade(&self.terminal);
+        Box::new(move |query, canceled, deadline| {
+            let terminal = terminal.upgrade().context("terminal closed before history search")?;
+            crate::search::Search::probe(terminal, query, canceled, deadline)
+        })
     }
     pub fn history_tail_export(&self, lines: usize, max_bytes: usize) -> HistoryExport {
         self.text_export(max_bytes, false, true, Some(lines))

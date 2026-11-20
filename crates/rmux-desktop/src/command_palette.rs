@@ -496,12 +496,12 @@ impl CommandPalette {
         palette
     }
     pub fn terminal_search(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let mut palette = Self::with_commands(Vec::new(), "Search terminal output · All windows", "Enter submits a literal search · Up to 256 terminals / 64 KiB each", window, cx);
+        let mut palette = Self::with_commands(Vec::new(), "Search terminal output · All windows", "Enter submits a literal search · Retained history · Up to 256 terminals", window, cx);
         palette.terminal_search_input = true;
         palette
     }
     pub fn terminal_search_results(report: terminal_search::Report, query: String, extra: usize, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let summary = format!("{} matching terminals · {} scanned · {} unavailable · {} capped · {extra} beyond terminal limit", report.hits.len(), report.scanned, report.unavailable, report.limited);
+        let summary = format!("{} matching terminals · {} scanned · {} unavailable · {} incomplete · {extra} beyond terminal limit", report.hits.len(), report.scanned, report.unavailable, report.limited);
         let mut commands = vec![Command { title: "Search again".into(), subtitle: Some(query.clone()), shortcut: None,
             target: PaletteEvent::Run(Box::new(SearchTerminalOutput { query: query.clone() })) },
             Command { title: "New search…".into(), subtitle: None, shortcut: None, target: PaletteEvent::Run(Box::new(ShowTerminalSearch)) }];
@@ -574,7 +574,7 @@ impl CommandPalette {
                 text_field::EditEvent::Changed(query) => {
                     this.feedback = None;
                     if this.buffer_rename.is_some() || this.directory_input || this.terminal_search_input {
-                        this.empty_message = if this.terminal_search_input { "Enter submits a literal search · Up to 256 terminals / 64 KiB each" } else if this.directory_input { "Enter an absolute directory path; no shell expansion" } else { "Enter a unique buffer name (up to 128 bytes)" };
+                        this.empty_message = if this.terminal_search_input { "Enter submits a literal search · Retained history · Up to 256 terminals" } else if this.directory_input { "Enter an absolute directory path; no shell expansion" } else { "Enter a unique buffer name (up to 128 bytes)" };
                         cx.notify();
                         return;
                     }

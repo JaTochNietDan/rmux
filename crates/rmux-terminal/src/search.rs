@@ -26,6 +26,36 @@ pub struct Search {
 unsafe impl Send for Search {}
 
 impl Search {
+    /// Read-only existence probe over retained history. Work is incremental and
+    /// yields to parser contention; cleanup still serializes tracked references.
+    pub(crate) fn probe(terminal: Arc<Mutex<Terminal>>, query: &str, canceled: &std::sync::atomic::AtomicBool, deadline: std::time::Instant) -> Result<Option<bool>> {
+        use std::sync::{TryLockError, atomic::Ordering};
+        ensure!(!query.is_empty() && query.len() <= 4096, "search query must contain 1–4096 bytes");
+        let stopped = || canceled.load(Ordering::Acquire) || std::time::Instant::now() >= deadline;
+        let handle = loop {
+            if stopped() { return Ok(None); }
+            match terminal.try_lock() {
+                Ok(guard) => break Self::register(&guard)?,
+                Err(TryLockError::Poisoned(error)) => break Self::register(&error.into_inner())?,
+                Err(TryLockError::WouldBlock) => std::thread::sleep(std::time::Duration::from_millis(1)),
+            }
+        };
+        let mut search = Self { handle, terminal };
+        loop {
+            if stopped() { return Ok(None); }
+            if search.try_set_query(query)? { break; }
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        loop {
+            if stopped() { return Ok(None); }
+            match search.try_step()? {
+                Some(progress) if progress.matches > 0 => return Ok(Some(true)),
+                Some(progress) if !progress.pending => return Ok(Some(false)),
+                Some(_) => std::thread::yield_now(),
+                None => std::thread::sleep(std::time::Duration::from_millis(1)),
+            }
+        }
+    }
     pub(crate) fn new(terminal: Arc<Mutex<Terminal>>) -> Result<Self> {
         let handle = {
             let guard = terminal.lock().unwrap_or_else(|e| e.into_inner());
@@ -267,6 +297,33 @@ impl Drop for Search {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn history_probe_finds_beyond_export_prefix_without_changing_selection() -> Result<()> {
+        use std::{sync::atomic::AtomicBool, time::{Duration, Instant}};
+        let terminal = Arc::new(Mutex::new(Terminal::new(80, 24)?));
+        {
+            let mut terminal = terminal.lock().unwrap();
+            terminal.set_scrollback_limit(8 * 1024 * 1024)?;
+            for _ in 0..2000 { terminal.write(b"ordinary output with enough characters to exceed the preview cap\r\n"); }
+            terminal.write("unique-needle-世界".as_bytes());
+            terminal.select_all()?;
+        }
+        let (prefix, truncated) = terminal.lock().unwrap().history_text_limited(65536)?;
+        assert!(truncated && !prefix.contains("unique-needle"));
+        let before = terminal.lock().unwrap().frame()?;
+        let selected = terminal.lock().unwrap().selected_text()?;
+        let canceled = AtomicBool::new(false);
+        assert_eq!(Search::probe(terminal.clone(), "unique-needle-世界", &canceled, Instant::now() + Duration::from_secs(2))?, Some(true));
+        assert_eq!(Search::probe(terminal.clone(), "not-in-this-fixture", &canceled, Instant::now() + Duration::from_secs(2))?, Some(false));
+        let after = terminal.lock().unwrap().frame()?;
+        assert_eq!((after.revision, after.scrollback_offset), (before.revision, before.scrollback_offset));
+        assert_eq!(terminal.lock().unwrap().selected_text()?, selected);
+        let guard = terminal.lock().unwrap();
+        assert_eq!(Search::probe(terminal.clone(), "needle", &AtomicBool::new(true), Instant::now() + Duration::from_secs(1))?, None);
+        assert_eq!(Search::probe(terminal.clone(), "needle", &canceled, Instant::now())?, None);
+        drop(guard);
+        Ok(())
+    }
     fn finish(search: &mut Search) -> Result<Progress> {
         for _ in 0..1000 {
             let progress = search.step()?;

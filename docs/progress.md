@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Global terminal search now falls back to incremental retained-history probes
+when a capped preview has no match or its parser was busy. Probes stop at the
+first match without selecting it or exporting full history, using opportunistic
+registration/query/feed steps, cancellation and 250 ms per-terminal / five-second
+batch work budgets. Incomplete scans are explicit; tracked-reference cleanup
+still serializes parser access. A >64 KiB engine fixture found its late Unicode
+match with unchanged selection/viewport; three desktop scanner tests passed,
+including fallback hits/misses, incomplete counts, cancellation and bounds.
+Native interaction and performance acceptance remain pending.
+
 Find match navigation now tries the parser lock and preserves queued movement
 on contention. A canceled or superseded query is rechecked after acquisition,
 before any selection/viewport mutation. Blocking direct engine callers retain
