@@ -1315,6 +1315,64 @@ mod tests {
         assert_eq!(std::fs::read(destination)?, expected.as_bytes());
         Ok(())
     }
+    #[cfg(unix)]
+    #[test]
+    fn large_paste_preserves_bytes_with_concurrent_output() -> Result<()> {
+        let root = tempfile::tempdir()?;
+        let destination = root.path().join("received");
+        let text = "界\nabc".repeat(131_072);
+        let expected = format!("\x1b[200~{text}\x1b[201~AFTER");
+        let mut command = CommandBuilder::new("/bin/sh");
+        command.args(["-c", r#"
+stty raw -echo
+printf '\033[?2004hREADY'
+dd bs=1 count=1 of=/dev/null 2>/dev/null
+(
+    i=0
+    while [ "$i" -lt 4096 ]; do
+        printf 'pressure-%s abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz\r\n' "$i"
+        i=$((i + 1))
+    done
+) &
+pressure=$!
+trap 'kill "$pressure" 2>/dev/null; wait "$pressure" 2>/dev/null' EXIT HUP TERM
+dd bs=1 count="$2" of="$1" 2>/dev/null
+wait "$pressure"
+trap - EXIT HUP TERM
+"#, "rmux-pressure-test"]);
+        command.arg(&destination);
+        command.arg(expected.len().to_string());
+        let session = Session::spawn(command, 80, 8)?;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while !session.frame()?.text().contains("READY") {
+            anyhow::ensure!(std::time::Instant::now() < deadline, "pressure receiver not ready");
+            thread::sleep(std::time::Duration::from_millis(5));
+        }
+        let before = session.output_bytes();
+        session.input(b"G")?;
+        // A busy parser rejects before enqueueing; retry only that documented
+        // condition, never a request which may already have been accepted.
+        loop {
+            match session.paste(&text) {
+                Ok(()) => break,
+                Err(error) if error.to_string().contains("No paste input was queued") => {
+                    anyhow::ensure!(std::time::Instant::now() < deadline, "parser never admitted paste");
+                    thread::sleep(std::time::Duration::from_millis(1));
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        session.input(b"AFTER")?;
+        while session.exit_status().is_none() || session.output_bytes() - before < 250_000 {
+            anyhow::ensure!(std::time::Instant::now() < deadline, "concurrent paste/output timed out");
+            thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert_eq!(std::fs::read(destination)?, expected.as_bytes());
+        assert!(!session.paste_pending());
+        assert!(session.take_input_error().is_none());
+        Ok(())
+    }
+
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     #[test]
     fn local_input_modes_distinguish_hidden_line_input_from_raw_tuis() -> Result<()> {

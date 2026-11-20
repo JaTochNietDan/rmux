@@ -451,7 +451,7 @@
       "acceptance": "Deliver large and multiline input in order without interleaving control bytes or losing input.",
       "rmux_status": "in_progress",
       "implementation": "Bounded input queue; up to 1 MiB UTF-8 paste in one writer message, with one queued/in-flight paste per session. Focused limit/permit tests and macOS PTY delivery of 140 KB Unicode/multiline text followed by ordinary input passed.",
-      "remaining": "Large-input delivery under output pressure, cancellation and native clipboard acceptance across platforms.",
+      "remaining": "Native clipboard/cancellation and delivery acceptance across platforms, sustained saturation and UI latency measurements. A focused macOS real-PTY test passes exact 896 KiB Unicode bracketed-paste delivery followed by ordered input with a concurrent output producer exceeding 250 KB; no writer error or retained paste permit.",
       "implementation_sources": [
         "crates/rmux-terminal/src/session.rs",
         "crates/rmux-terminal/src/keyboard.rs"

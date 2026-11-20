@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Added a real-PTY concurrent output/paste regression: a raw receiver records a
+896 KiB Unicode multiline paste and following input while a bounded background
+producer emits more than 250 KB of terminal output. The focused macOS run passed
+in 2.33 seconds, verifying exact bracketed-paste bytes, following-input ordering,
+released paste permit and no writer error. The fixture retries only explicit
+pre-enqueue parser-busy rejection, never an accepted request. Producer cleanup is
+owned by the fixture shell. This is delivery evidence, not native clipboard, UI
+latency, saturation throughput or other-platform acceptance; T07 stays in progress.
+
 Replaced generic link tooltips with a dedicated window-bounded preview: a compact
 modifier/action label and an ellipsized target line prevent long unbroken URLs
 from overflowing narrow windows. Added Copy Link Address and Open Link terminal
