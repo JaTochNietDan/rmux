@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Exposed macOS Option-key behavior in Settings: Terminal Alt or Native text,
+with guidance about accented/dead-key composition and Control+Option/navigation.
+The row participates in keyboard navigation and appears only on macOS. Added the
+existing preference to saved-settings comparison/persistence so changes apply
+immediately and survive Save Settings. Focused settings navigation/toggle and
+file-merge persistence tests passed. This reuses existing input routing; native
+Option/dead-key interaction and visual acceptance remain pending.
+
 Added a same-pane keyboard/output contention mode to the PTY benchmark and
 mise bench-keyboard task. It records press, release and native-text dispatch call
 timings into the output-flooding target at 1/4/8/16 panes, with per-size child

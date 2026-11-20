@@ -539,7 +539,9 @@ the system clipboard on release, including word/line and rectangular selections.
 Reload Settings applies it to existing terminals. Application mouse reporting
 keeps its normal behavior; hold Shift to select locally in those applications.
 
-On macOS, `macos_option_as_alt` defaults to `true`. Set it to `false` to leave
+On macOS, Settings → **Option key behavior** switches between **Terminal Alt**
+and **Native text** immediately; use Save these settings to keep your choice.
+In JSON, `macos_option_as_alt` defaults to `true`. Set it to `false` to leave
 Option-modified text and dead keys to native text composition, useful for
 accented characters. Control+Option and non-text navigation keys retain terminal
 encoding. Reload applies immediately. This setting has no effect on Linux or

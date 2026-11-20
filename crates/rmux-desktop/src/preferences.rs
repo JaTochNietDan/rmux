@@ -295,6 +295,7 @@ impl Preferences {
             && self.terminal_theme == other.terminal_theme
             && self.unfocused_cursor == other.unfocused_cursor
             && self.focused_cursor == other.focused_cursor
+            && self.macos_option_as_alt == other.macos_option_as_alt
             && self.copy_on_select == other.copy_on_select
             && self.native_notifications == other.native_notifications
             && self.notification_focus == other.notification_focus
@@ -322,6 +323,7 @@ impl Preferences {
         latest.terminal_theme = self.terminal_theme;
         latest.unfocused_cursor = self.unfocused_cursor;
         latest.focused_cursor = self.focused_cursor;
+        latest.macos_option_as_alt = self.macos_option_as_alt;
         latest.copy_on_select = self.copy_on_select;
         latest.native_notifications = self.native_notifications;
         latest.notification_focus = self.notification_focus;
@@ -658,6 +660,7 @@ mod tests {
         preferences.font_size = 19.;
         preferences.terminal_padding = 12;
         preferences.scrollback_mib = 8;
+        preferences.macos_option_as_alt = false;
         preferences.copy_on_select = true;
         preferences.native_notifications = true;
         preferences.notification_focus = NotificationFocus::BackgroundApp;
@@ -668,6 +671,7 @@ mod tests {
         let saved = Preferences::read(&path, true)?;
         assert_eq!(saved.font_size, 19.);
         assert_eq!(saved.terminal_padding, 12);
+        assert!(!saved.macos_option_as_alt);
         assert!(saved.copy_on_select);
         assert!(saved.native_notifications);
         assert_eq!(saved.notification_focus, NotificationFocus::BackgroundApp);
