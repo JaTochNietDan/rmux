@@ -125,6 +125,10 @@ run = ["cargo build -p rmux-desktop", "python3 scripts/smoke-live-rpc.py --live-
 description = "Check private Unix socket RPC clients and endpoint lifecycle"
 run = ["cargo build -p rmux-desktop -p rmux-cli", "python3 scripts/smoke-socket-rpc.py"]
 
+[tasks.smoke-group-directory]
+description = "Verify group directory overrides with isolated native shells"
+run = ["cargo build -p rmux-desktop", "python3 scripts/smoke-group-directory.py"]
+
 [tasks.smoke-bundle-socket]
 description = "Exercise both packaged macOS executables over the private socket"
 depends = ["bundle"]

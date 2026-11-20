@@ -8,7 +8,12 @@ to following the anchor. Group create/update RPC accepts an absolute cwd, update
 supports clear_cwd, and snapshots/layouts/sessions preserve the override. New group
 members prefer the override while existing terminals are untouched. Fifteen focused
 group tests passed, including mapping/restore and invalid/conflicting RPC input.
-Native palette interaction and live spawned-shell directory acceptance are pending.
+Native macOS spawned-shell acceptance now passes via `mise run smoke-group-directory`:
+actual shell startup directories remain fixed after anchor navigation, follow an
+updated override, then follow the anchor after reset. The anchor retains its PID
+and directory throughout. The isolated harness owns its app, shells and temporary
+files and checks startup paths independently of UI metadata. Native palette
+interaction and other-platform acceptance remain pending.
 
 Added close confirmation to Settings with Active tasks / Always / Never choices,
 forward/backward keyboard cycling and immediate application across close scopes.
