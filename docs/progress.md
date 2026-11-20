@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Open Settings panels now observe shared preferences and settings-file activity
+across windows, including restored and detached-window construction paths.
+Save/Open show a busy state during file work instead of appearing actionable
+while the existing operation guard ignores requests. Controls remain editable,
+and stale-save notices still protect newer edits. Unchanged bounded adjustments
+no longer republish global preferences and invalidate terminal views. Desktop
+compilation passed. A fresh native check still reports a locked Mac; cross-window
+visual updates, busy-state contrast and screenshots remain pending acceptance.
+
 Settings keyboard scrolling now keeps history help inside its control row,
 restoring the correct child positions for Save and Open all settings. Page
 Up/Down moves by the measured viewport and control strides, including wrapped

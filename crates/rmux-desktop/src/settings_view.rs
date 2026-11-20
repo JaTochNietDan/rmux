@@ -82,6 +82,7 @@ fn row(label: &'static str, key: &'static str, value: String, stepper: bool, sel
 }
 pub fn panel(state: State, cx: &mut Context<window_view::WorkspaceWindow>) -> AnyElement {
     let settings = cx.global::<Preferences>();
+    let busy = cx.global::<preferences::ReloadState>().0;
     div().track_focus(&state.focus).key_context("Settings")
         .on_mouse_down(MouseButton::Left, { let focus = state.focus.clone(); move |_, window, _| { focus.focus(window); } })
         .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| this.settings_key(event, window, cx)))
@@ -126,10 +127,13 @@ pub fn panel(state: State, cx: &mut Context<window_view::WorkspaceWindow>) -> An
                 .child(row("New terminal history", "scrollback", format!("{} MiB", settings.scrollback_mib), true, state.selected == 8, false))
                 .child(div().pt_2().text_xs().text_color(rgb(0xa0a0a0)).child("History budget per new terminal. 0 disables scrollback. Existing terminals keep their current history; total app memory also includes other resources.")))
             .child(div().py_3().text_xs().text_color(rgb(0xa0a0a0)).child("Tab / ↑↓ to navigate · ←→ to change · Enter to activate · Esc to close. Changes apply to this session. Text size updates terminals using the previous default. Per-terminal zoom stays unchanged; Reset Font Size rejoins the default. Custom colors in your config override the theme."))
-            .child(div().id("settings-save").border_1().border_color(if state.selected == KEYS.len() { rgb(0xffffff) } else { rgb(0x007aff) }).px_3().py_2().rounded_sm().bg(rgb(0x007aff)).hover(|s| s.bg(rgb(0x1685ff))).text_sm().cursor_pointer()
-                .on_click(|event, window, cx| { if event.standard_click() { window.dispatch_action(Box::new(SaveAppearanceSettings), cx); } }).child("Save these settings"))
-            .child(div().id("settings-json").when(state.selected == KEYS.len() + 1, |s| s.bg(rgb(0x303b4a))).py_3().text_sm().text_color(rgb(0x8ebfff)).cursor_pointer()
-                .on_click(|event, window, cx| { if event.standard_click() { window.dispatch_action(Box::new(OpenSettingsFile), cx); } }).child("Open all settings in editor")))
+            .child(div().id("settings-save").border_1().border_color(if state.selected == KEYS.len() { rgb(0xffffff) } else { rgb(0x007aff) }).px_3().py_2().rounded_sm().text_sm()
+                .bg(rgb(if busy { 0x353535 } else { 0x007aff }))
+                .when(!busy, |button| button.cursor_pointer().hover(|s| s.bg(rgb(0x1685ff))))
+                .on_click(move |event, window, cx| { if !busy && event.standard_click() { window.dispatch_action(Box::new(SaveAppearanceSettings), cx); } }).child(if busy { "Working with settings…" } else { "Save these settings" }))
+            .child(div().id("settings-json").when(state.selected == KEYS.len() + 1, |s| s.bg(rgb(0x303b4a))).py_3().text_sm().text_color(rgb(if busy { 0x777777 } else { 0x8ebfff }))
+                .when(!busy, |link| link.cursor_pointer())
+                .on_click(move |event, window, cx| { if !busy && event.standard_click() { window.dispatch_action(Box::new(OpenSettingsFile), cx); } }).child("Open all settings in editor")))
         .into_any_element()
 }
 

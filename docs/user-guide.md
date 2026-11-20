@@ -26,6 +26,10 @@ values. Reset Font Size returns the focused terminal to the size default. The ed
 the panel; left/right adjust, Enter/Space activate, and Escape closes it. Opening
 the panel moves keyboard focus out of the shell; closing restores its prior focus
 when the panel still owns focus.
+Open Settings panels follow shared changes across windows. While a save, reload,
+or settings-file open is running, Save shows “Working with settings…” and file
+actions are temporarily unavailable. Controls remain editable; saving an older
+snapshot reports when newer session changes still need saving.
 
 Custom palette commands can be configured in `config.json`:
 

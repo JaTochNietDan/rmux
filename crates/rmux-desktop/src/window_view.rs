@@ -124,6 +124,14 @@ pub(super) struct WorkspaceWindow {
     benchmark: bool,
 }
 impl WorkspaceWindow {
+    fn observe_settings(cx: &mut Context<Self>) {
+        cx.observe_global::<Preferences>(|this, cx| {
+            if this.settings_state.is_some() { cx.notify(); }
+        }).detach();
+        cx.observe_global::<preferences::ReloadState>(|this, cx| {
+            if this.settings_state.is_some() { cx.notify(); }
+        }).detach();
+    }
     fn dismiss_workspace_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(menu) = self.workspace_menu.take() {
             if menu.focus.is_focused(window) {
@@ -1034,8 +1042,10 @@ impl WorkspaceWindow {
                 }
                 let mut settings = cx.global::<Preferences>().clone();
                 settings_view::adjust(&mut settings, settings_view::KEYS[selected], if key == "left" { -1 } else { 1 });
-                cx.set_global(settings.confirm_close);
-                cx.set_global(settings);
+                if !settings.same_saved_appearance(cx.global::<Preferences>()) {
+                    cx.set_global(settings.confirm_close);
+                    cx.set_global(settings);
+                }
                 cx.notify();
             } else if matches!(key, "enter" | "space") {
                 if selected == settings_view::KEYS.len() { self.save_appearance_settings(cx); } else { self.open_settings_file(cx); }
@@ -1343,7 +1353,7 @@ impl WorkspaceWindow {
                     workspace.update(cx, |workspace, cx| workspace.rebind_window(window, cx));
                     let closed = Self::observe_workspace(&workspace, window, cx);
                     let metadata = Self::observe_metadata(&workspace, window, cx);
-                    let mut this = Self::empty(None);
+                    let mut this = Self::empty(None, cx);
                     this.sidebar_width = sidebar_width;
                     this.next_number = 2;
                     this.entries.push(Entry {
@@ -1423,7 +1433,7 @@ impl WorkspaceWindow {
     ) -> Self {
         tab.terminal
             .update(cx, |terminal, cx| terminal.rebind_window(window, cx));
-        let mut this = Self::empty(None);
+        let mut this = Self::empty(None, cx);
         let workspace = cx.new(|cx| {
             let id = cx.entity_id();
             let pane = cx.new(|cx| PaneView::from_transfer(tab, id, cx));
@@ -2389,6 +2399,7 @@ impl WorkspaceWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        Self::observe_settings(cx);
         let (snapshot, mut sessions) = prepared.into_parts();
         let mut this = Self {
             palette: None,
@@ -2552,11 +2563,12 @@ impl WorkspaceWindow {
     }
 
     pub fn new(panes: Option<usize>, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let mut this = Self::empty(panes);
+        let mut this = Self::empty(panes, cx);
         this.add(panes.unwrap_or(1), window, cx);
         this
     }
-    fn empty(panes: Option<usize>) -> Self {
+    fn empty(panes: Option<usize>, cx: &mut Context<Self>) -> Self {
+        Self::observe_settings(cx);
         Self {
             palette: None,
             restore_job: None,
@@ -3169,8 +3181,10 @@ impl Render for WorkspaceWindow {
                 }
                 let mut settings = cx.global::<Preferences>().clone();
                 settings_view::adjust(&mut settings, &change.key, change.delta);
-                cx.set_global(settings.confirm_close);
-                cx.set_global(settings);
+                if !settings.same_saved_appearance(cx.global::<Preferences>()) {
+                    cx.set_global(settings.confirm_close);
+                    cx.set_global(settings);
+                }
                 this.notice = None;
                 cx.notify();
             }))
