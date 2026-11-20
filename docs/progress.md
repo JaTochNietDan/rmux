@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Local listings, previews and error recovery now retain a visible path line above
+search, so filtering away the Copy Path/Back rows does not hide the current
+location. It truncates with a full-path hover hint and remains present in compact
+windows. Empty text previews have explicit heading and Refresh-row labels
+instead of appearing as an unexplained list of actions. Desktop cargo check
+passed; native narrow/short-window appearance remains pending.
+
 Local file browsing now offers Go to Directory from listings and read-error
 recovery. The existing picker transitions to a prefilled path editor with
 Open/Cancel controls, Enter/Escape handling and IME protection. It validates

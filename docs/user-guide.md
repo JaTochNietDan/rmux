@@ -191,6 +191,9 @@ opens an on-demand local directory picker from the current terminal's cached
 working directory. Search names, press Enter on a directory to browse it, or
 choose Parent/Refresh. Enter on a regular file opens a read-only UTF-8 text
 preview; a symbolic link copies its path. Hidden entries are included.
+The current path stays visible above the search field, including while filtering
+or viewing an error. Hover a truncated path to see it in full. Empty text files
+are labeled explicitly.
 Choose **Go to Directory…** to enter an absolute path directly. Enter or Open
 loads it; Escape or Cancel dismisses the editor. Paths are literal (no `~`,
 environment-variable or shell expansion), with a 4,096-byte input limit.

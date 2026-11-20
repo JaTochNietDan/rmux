@@ -105,6 +105,7 @@ pub enum PaletteEvent {
 pub enum BufferMode { Paste, Delete, Rename, Copy }
 
 pub struct CommandPalette {
+    location: Option<SharedString>,
     feedback: Option<&'static str>,
     buffer_rename: Option<(String, u64)>,
     directory_input: bool,
@@ -381,6 +382,7 @@ impl CommandPalette {
         Self::with_commands(commands, match mode { BufferMode::Paste => "Paste named buffer", BufferMode::Delete => "Delete named buffer", BufferMode::Rename => "Rename named buffer", BufferMode::Copy => "Copy buffer to clipboard" }, "No matching buffers · Save a selection in Copy Mode first", window, cx)
     }
     pub fn files(listing: file_browser::Listing, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let location: SharedString = listing.path.display().to_string().into();
         let mut commands = Vec::new();
         commands.push(Command { title: "Go to Directory…".into(), subtitle: Some(listing.path.display().to_string()), shortcut: None,
             target: PaletteEvent::Run(Box::new(EnterDirectory { path: listing.path.clone() })) });
@@ -399,10 +401,13 @@ impl CommandPalette {
                 else if entry.symlink { Box::new(CopyLocalPath { path: entry.path }) }
                 else { Box::new(PreviewLocalFile { path: entry.path }) }),
         }));
-        Self::with_commands(commands, if listing.truncated { "Local files · Limited to 2,048 entries; use a narrower directory" } else { "Local files · Browse directories or preview text" },
-            "No matching entries", window, cx)
+        let mut palette = Self::with_commands(commands, if listing.truncated { "Local files · Limited to 2,048 entries; use a narrower directory" } else { "Local files · Browse directories or preview text" },
+            "No matching entries", window, cx);
+        palette.location = Some(location);
+        palette
     }
     pub fn file_error(path: std::path::PathBuf, error: String, directory: bool, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let location: SharedString = path.display().to_string().into();
         let mut commands = Vec::new();
         commands.push(Command { title: "Go to Directory…".into(), subtitle: None, shortcut: None,
             target: PaletteEvent::Run(Box::new(EnterDirectory { path: path.parent().unwrap_or(&path).to_owned() })) });
@@ -414,9 +419,13 @@ impl CommandPalette {
             target: PaletteEvent::Run(Box::new(CopyLocalPath { path: path.clone() })) });
         commands.push(Command { title: "Retry".into(), subtitle: Some(error), shortcut: None,
             target: PaletteEvent::Run(if directory { Box::new(BrowseDirectory { path }) } else { Box::new(PreviewLocalFile { path }) }) });
-        Self::with_commands(commands, if directory { "Could not read directory" } else { "Could not preview file" }, "Clear the search to see recovery actions", window, cx)
+        let mut palette = Self::with_commands(commands, if directory { "Could not read directory" } else { "Could not preview file" }, "Clear the search to see recovery actions", window, cx);
+        palette.location = Some(location);
+        palette
     }
     pub fn file_preview(preview: file_browser::Preview, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let location: SharedString = preview.path.display().to_string().into();
+        let empty = preview.lines.is_empty();
         let mut commands = Vec::new();
         if let Some(parent) = preview.path.parent() {
             commands.push(Command { title: "Back to directory".into(), subtitle: Some(parent.display().to_string()), shortcut: None,
@@ -424,7 +433,7 @@ impl CommandPalette {
         }
         commands.push(Command { title: "Copy file path".into(), subtitle: Some(preview.path.display().to_string()), shortcut: None,
             target: PaletteEvent::Run(Box::new(CopyLocalPath { path: preview.path.clone() })) });
-        commands.push(Command { title: "Refresh preview".into(), subtitle: None, shortcut: None,
+        commands.push(Command { title: "Refresh preview".into(), subtitle: empty.then(|| "Empty file · No text to preview".into()), shortcut: None,
             target: PaletteEvent::Run(Box::new(PreviewLocalFile { path: preview.path })) });
         commands.extend(preview.lines.into_iter().enumerate().map(|(index, text)| {
             let mut chars = text.chars();
@@ -434,7 +443,9 @@ impl CommandPalette {
             Command { title, subtitle: Some(format!("Line {} · Enter copies this preview line", index + 1)), shortcut: None,
                 target: PaletteEvent::Run(Box::new(CopyPreviewLine { text })) }
         }));
-        Self::with_commands(commands, if preview.truncated { "Text preview · Limited to 64 KiB / 512 lines" } else { "Text preview · Search lines · Read only" }, "No matching preview lines", window, cx)
+        let mut palette = Self::with_commands(commands, if preview.truncated { "Text preview · Limited to 64 KiB / 512 lines" } else if empty { "Text preview · Empty file" } else { "Text preview · Search lines · Read only" }, "No matching preview lines", window, cx);
+        palette.location = Some(location);
+        palette
     }
     pub fn custom_commands(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let mut commands: Vec<_> = cx.global::<Preferences>().commands.iter().map(custom_command).collect();
@@ -513,7 +524,7 @@ impl CommandPalette {
         )
         .detach();
         Self {
-            input, heading, empty_message, buffer_rename: None, feedback: None, directory_input: false,
+            input, heading, empty_message, buffer_rename: None, feedback: None, directory_input: false, location: None,
             search: palette_match::RankedSearch::new(commands
                 .iter()
                 .map(|command| format!("{} {} {}", command.title, command.subtitle.as_deref().unwrap_or_default(),
@@ -699,6 +710,12 @@ impl Render for CommandPalette {
                     .text_xs()
                     .text_color(rgb(0xa0a0a0))
                     .child(self.heading),
+            ))
+            .when_some(self.location.clone(), |palette, location| palette.child(
+                div().id("file-browser-location").flex_shrink_0().min_w_0().px_3().pt_2()
+                    .text_xs().text_color(rgb(0xb8b8b8)).truncate()
+                    .tooltip({ let location = location.clone(); move |_, cx| cx.new(|_| pane_view::ControlHint(location.clone())).into() })
+                    .child(location)
             ))
             .child(div().flex_shrink_0().p_3().child(self.input.clone()))
             .child(if self.search.matches.is_empty() {
