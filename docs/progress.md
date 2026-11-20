@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Polished the zoomed-pane restore banner with a hidden-pane count, split icon,
+explicit Restore layout label and the current Toggle Pane Zoom binding resolved
+in the zoomed terminal context. Long status/shortcut text truncates and a tooltip
+retains the restore hint. Activation now requires a standard click. Desktop build
+and native preset/session restore smoke passed, including restored zoom state;
+this does not verify banner clicks, glyphs or narrow-window visual layout.
+
 Settings row labels now select their control and focus the panel without changing
 the value, so mouse-to-keyboard editing continues on the clicked setting. Theme
 row labels use the same selection path. Long setting button values truncate with
