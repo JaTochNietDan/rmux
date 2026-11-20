@@ -606,11 +606,14 @@ impl Session {
     }
     /// Bounded clipboard formatting for a background executor. Construction never
     /// acquires the parser lock or keeps a closed terminal alive.
-    pub fn clipboard_export(&self) -> Box<dyn FnOnce() -> Result<Option<String>> + Send> {
+    pub fn clipboard_export(&self, current: impl Fn() -> bool + Send + 'static) -> Box<dyn FnOnce() -> Result<Option<String>> + Send> {
         let terminal = Arc::downgrade(&self.terminal);
         Box::new(move || {
+            if !current() { return Ok(None); }
             let terminal = terminal.upgrade().context("terminal closed before copying")?;
             let engine = terminal.lock().unwrap_or_else(|error| error.into_inner());
+            // Another clipboard write may have superseded us while waiting.
+            if !current() { return Ok(None); }
             engine.selected_text()
         })
     }
@@ -986,9 +989,16 @@ mod tests {
         assert_eq!(selected, (expected.clone(), false));
         assert_eq!(session.selected_text()?, Some(expected));
         let expected = session.selected_text()?;
-        let clipboard = session.clipboard_export();
+        let clipboard = session.clipboard_export(|| true);
         assert_eq!(Arc::strong_count(&session.terminal), owners, "queued clipboard export retained the engine");
         assert_eq!(thread::spawn(clipboard).join().unwrap()?, expected);
+        assert!(session.clipboard_export(|| false)()?.is_none());
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let seen = calls.clone();
+        let superseded = session.clipboard_export(move || seen.fetch_add(1, Ordering::Relaxed) == 0);
+        assert!(thread::spawn(superseded).join().unwrap()?.is_none());
+        assert_eq!(calls.load(Ordering::Relaxed), 2);
+        assert_eq!(session.selected_text()?, expected, "cancellation changed selection");
         let directory = session.directory_lookup();
         assert_eq!(Arc::strong_count(&session.terminal), owners, "queued directory lookup retained the engine");
         assert_eq!(thread::spawn(directory).join().unwrap()?, session.current_directory()?);

@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Background clipboard exports now check their generation before engine access
+and again after acquiring the parser lock. A newer rmux clipboard operation
+therefore skips obsolete selection formatting, including work superseded while
+waiting for output parsing. The existing completion guard still prevents stale
+clipboard writes. A focused session test passed for valid copies, cancellation
+at both checks, and unchanged selection; desktop compilation passed. This does
+not interrupt an already-running formatter or an in-progress lock wait.
+
 An environment-controlled close policy now displays its effective value in
 Settings with a read-only Environment indicator instead of a no-op button. Its
 tooltip explains RMUX_CONFIRM_CLOSE; keyboard attempts show the same actionable

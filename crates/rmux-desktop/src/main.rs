@@ -1259,7 +1259,7 @@ impl TerminalView {
     fn copy(&mut self, _: &CopySelection, _: &mut Window, cx: &mut Context<Self>) {
         if self.clipboard_task.is_some() { return; }
         let ticket = clipboard::begin();
-        let export = self.session.clipboard_export();
+        let export = self.session.clipboard_export(move || clipboard::current(ticket));
         let executor = cx.background_executor().clone();
         self.clipboard_task = Some(cx.spawn(async move |entity, cx| {
             let result = executor.spawn(async move { export() }).await;
