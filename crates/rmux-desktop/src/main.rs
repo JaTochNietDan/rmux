@@ -3152,7 +3152,7 @@ fn main() {
         std::process::exit(2);
     });
     let live_rpc_stdio = match &command {
-        startup::Command::Launch { live_rpc_stdio, .. } | startup::Command::Layout { live_rpc_stdio, .. } | startup::Command::Session { live_rpc_stdio, .. } => *live_rpc_stdio,
+        startup::Command::Launch { live_rpc_stdio, .. } | startup::Command::Layout { live_rpc_stdio, .. } | startup::Command::Session { live_rpc_stdio, .. } | startup::Command::Preset { live_rpc_stdio, .. } => *live_rpc_stdio,
         _ => false,
     };
     let preferences = if matches!(
@@ -3211,6 +3211,21 @@ fn main() {
                 Err(error) => { eprintln!("rmux: session {}: {error:#}", path.display()); std::process::exit(2); }
             }
             return;
+        }
+        startup::Command::Preset { name, .. } => {
+            if std::env::var_os("RMUX_BENCH_PANES").is_some() {
+                eprintln!("rmux: --preset cannot be combined with RMUX_BENCH_PANES");
+                std::process::exit(2);
+            }
+            let Some(preset) = preferences.layout_presets.iter().find(|preset| preset.name == name) else {
+                eprintln!("rmux: layout preset is not configured: {name}");
+                std::process::exit(2);
+            };
+            let token = std::sync::atomic::AtomicBool::new(false);
+            match restore::PreparedSession::read_import(&preset.path, preset.session, preset.cwd.as_deref(), &token, preferences.scrollback_bytes(), |_, _| {}) {
+                Ok(prepared) => initial_session = Some(prepared),
+                Err(error) => { eprintln!("rmux: preset {name}: {error:#}"); std::process::exit(2); }
+            }
         }
         startup::Command::Session { path, .. } => {
             if std::env::var_os("RMUX_BENCH_PANES").is_some() {

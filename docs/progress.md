@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Added rmux --preset NAME startup, sharing configured layout/session decoding,
+default-cwd handling and fresh-shell preparation with GUI presets. Exact Unicode
+names and live stdio RPC are supported; conflicting launch/inspection options and
+benchmark mode are rejected. Explicit preset launch bypasses normal recovery-file
+ownership. CLI parsing test and desktop build passed. Extended the isolated native
+session harness with --preset; its run passed two-window/four-shell restoration,
+metadata/weighted splits/tab selection, actual fixture cwd (including a null saved
+path filled by preset cwd), unchanged source JSON and child cleanup. Corrected an
+outdated harness group expectation to include the existing cwd field. Native
+palette invocation, OS activation and visual focus remain unverified.
+
 Added optional absolute cwd defaults to named layout/session presets, allowing
 one reusable template to serve several projects. Background import fills only
 unset tab directories across every nested pane/window, preserving authored

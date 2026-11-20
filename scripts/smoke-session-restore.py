@@ -10,7 +10,7 @@ import time
 from urllib.parse import quote
 
 
-def main(automatic=False):
+def main(automatic=False, preset=False):
     binary = Path("target/debug/rmux").resolve()
     with tempfile.TemporaryDirectory(prefix="rmux-session-smoke-") as directory:
         root = Path(directory)
@@ -42,6 +42,12 @@ def main(automatic=False):
         session.write_text(json.dumps(data))
         if automatic:
             (root / "config.json").write_text(json.dumps({"session_file": str(session), "confirm_close": "never"}))
+        if preset:
+            (root / "config.json").write_text(json.dumps({"layout_presets":[
+                {"name":"Fixture 世界", "path":str(session), "session":True, "cwd":directory}
+            ]}))
+            data["windows"][0]["workspaces"][0]["layout"]["tabs"][0]["directory"] = None
+            session.write_text(json.dumps(data))
         env = {key: value for key, value in os.environ.items() if not key.startswith("RMUX_")}
         env.update(RMUX_CONFIG=str(root / "config.json"), RMUX_SHELL=str(shell), RMUX_TEST_DIR=directory)
         reported = root / "reported 世界"
@@ -64,6 +70,8 @@ def main(automatic=False):
         session.write_text(json.dumps(data))
         with tempfile.TemporaryFile() as stderr:
             launch = [str(binary), "--rpc-stdio-live"] if automatic else [str(binary), "--session", str(session), "--rpc-stdio-live"]
+            if preset:
+                launch = [str(binary), "--preset", "Fixture 世界", "--rpc-stdio-live"]
             process = subprocess.Popen(launch,
                                        env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                        stderr=stderr, bufsize=0)
@@ -105,7 +113,7 @@ def main(automatic=False):
                     groups = [group for win in windows for group in win["groups"]]
                     assert groups == [{"id": "workspace_group:17", "window_id": first["window_id"],
                                        "name": "Build 世界", "color": "#abcdef", "icon": "📂", "external_id": "fixture-build",
-                                       "pinned": True, "collapsed": True, "generated_anchor": False,
+                                       "pinned": True, "collapsed": True, "generated_anchor": False, "cwd": None,
                                        "anchor_workspace_id": first["id"], "workspace_ids": [first["id"]]}], groups
                 check_group_discovery(windows, workspaces, "First 世界")
                 repeated = call("workspace.group.create", {"window_id": named["First 世界"]["window_id"], "name": "Ignored retry", "external_id": "fixture-build"})
@@ -122,6 +130,16 @@ def main(automatic=False):
                 assert len(pids) == 4 and None not in pids
                 tracked_pids.update(pids)
                 for pid in pids: os.kill(pid, 0)
+                if preset:
+                    for pid in pids:
+                        cwd = root / f"{pid}.cwd"
+                        deadline = time.monotonic() + 3
+                        while not cwd.exists():
+                            assert time.monotonic() < deadline, "preset shell cwd not reported"
+                            time.sleep(0.01)
+                        assert Path(cwd.read_text().strip()).resolve() == root.resolve()
+                    assert json.loads(session.read_text()) == data, "preset import modified its source file"
+
                 assert not any(item["process_exited"] for item in surfaces)
                 group_target = {"window_id": named["First 世界"]["window_id"], "group_id": "workspace_group:17"}
                 call("workspace.group.ungroup", {**group_target, "remove_generated_anchor": True}, expected_error=-32005)
@@ -325,7 +343,7 @@ def main(automatic=False):
                         except ProcessLookupError: pids.remove(pid)
                     if pids: time.sleep(0.01)
                 assert not pids, f"fixture shells not reaped: {pids}"
-    print(f"Session restore passed (automatic={automatic}, forced_stop_relaunch={automatic}): headless validation, all-window directory preflight, two windows, metadata, weighted splits, tab selection, fresh shells and cleanup. OS window activation/visual focus unverified.")
+    print(f"Session restore passed (preset={preset}, automatic={automatic}, forced_stop_relaunch={automatic}): headless validation, all-window directory preflight, two windows, metadata, weighted splits, tab selection, fresh shells and cleanup. OS window activation/visual focus unverified.")
 
 
 def check_corrupt_fallback():
@@ -351,6 +369,12 @@ def check_corrupt_fallback():
 
 
 if __name__ == "__main__":
-    main()
-    main(automatic=True)
-    check_corrupt_fallback()
+    import sys
+    if sys.argv[1:] == ["--preset"]:
+        main(preset=True)
+    elif not sys.argv[1:]:
+        main()
+        main(automatic=True)
+        check_corrupt_fallback()
+    else:
+        raise SystemExit("Usage: smoke-session-restore.py [--preset]")

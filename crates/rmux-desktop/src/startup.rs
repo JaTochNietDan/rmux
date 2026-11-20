@@ -14,6 +14,7 @@ pub enum Command {
     CheckLayout(PathBuf),
     Session { path: PathBuf, live_rpc_stdio: bool },
     CheckSession(PathBuf),
+    Preset { name: String, live_rpc_stdio: bool },
     Launch {
         live_rpc_stdio: bool,
         directory: Option<PathBuf>,
@@ -24,6 +25,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, String
     let mut args = args.into_iter();
     let mut directory = None;
     let mut layout = None;
+    let mut preset = None;
     let mut check_layout = false;
     let mut session = false;
     let mut argv = Vec::new();
@@ -73,6 +75,12 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, String
                 }
                 layout = Some(PathBuf::from(path));
             }
+            Some("--preset") => {
+                if preset.is_some() { return Err("--preset specified more than once".into()); }
+                let name = args.next().ok_or("--preset requires a configured name")?.into_string().map_err(|_| "preset name must be UTF-8")?;
+                if name.trim().is_empty() || name.len() > 128 || name.chars().any(char::is_control) { return Err("preset name must be nonempty, at most 128 bytes and contain no controls".into()); }
+                preset = Some(name);
+            }
             Some("--working-directory" | "-d") => {
                 if directory.is_some() {
                     return Err("working directory specified more than once".into());
@@ -98,6 +106,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, String
         if check_config
             || dump_config
             || layout.is_some()
+            || preset.is_some()
             || directory.is_some()
             || !argv.is_empty()
         {
@@ -109,7 +118,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, String
         return Err("choose --check-config or --dump-config".into());
     }
     if check_config || dump_config {
-        if layout.is_some() || directory.is_some() || !argv.is_empty() {
+        if layout.is_some() || preset.is_some() || directory.is_some() || !argv.is_empty() {
             return Err("configuration inspection cannot be combined with launch options".into());
         }
         return Ok(if dump_config {
@@ -117,6 +126,12 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, String
         } else {
             Command::CheckConfig
         });
+    }
+    if let Some(name) = preset {
+        if layout.is_some() || directory.is_some() || !argv.is_empty() {
+            return Err("--preset cannot be combined with layout/session files, a working directory or a command; configure the preset cwd instead".into());
+        }
+        return Ok(Command::Preset { name, live_rpc_stdio });
     }
     if let Some(layout) = layout {
         if !argv.is_empty() {
@@ -152,6 +167,7 @@ Usage: rmux [OPTIONS] [-- PROGRAM [ARG...]]
   -d, --working-directory PATH  Set the initial shell directory
       --layout PATH             Restore a saved layout with fresh shells
       --session PATH            Restore a multi-window session with fresh shells
+      --preset NAME             Open a configured layout/session preset with fresh shells
       --check-session PATH      Validate session structure without starting shells
       --rpc-stdio               Standalone JSON-RPC discovery over stdin/stdout
       --rpc-stdio-live          Launch UI with JSON-RPC over stdin/stdout
@@ -167,6 +183,17 @@ Live automation is opt-in. Set RMUX_SOCKET_DIR to a new absolute directory for U
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn preset_launch_preserves_name_and_rejects_conflicting_modes() {
+        assert!(matches!(parse(["--preset","Build 世界","--rpc-stdio-live"].map(OsString::from)), Ok(Command::Preset { name, live_rpc_stdio: true }) if name == "Build 世界"));
+        for args in [
+            vec!["--preset"], vec!["--preset", ""], vec!["--preset", "x", "--preset", "y"],
+            vec!["--preset", "x", "--layout", "file"], vec!["--preset", "x", "--session", "file"],
+            vec!["--preset", "x", "--check-config"], vec!["--preset", "x", "--dump-config"],
+            vec!["--preset", "x", "--rpc-stdio"], vec!["--preset", "x", "-d", "/tmp"],
+            vec!["--preset", "x", "--", "echo"],
+        ] { assert!(parse(args.into_iter().map(OsString::from)).is_err()); }
+    }
     #[test]
     fn session_restore_and_inspection_reject_conflicting_launch_modes() {
         assert!(matches!(parse(["--session", "session.json", "--rpc-stdio-live"].map(OsString::from)), Ok(Command::Session { live_rpc_stdio: true, .. })));

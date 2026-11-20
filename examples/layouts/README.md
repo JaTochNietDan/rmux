@@ -34,7 +34,9 @@ replacing the example path with the absolute path of your copy:
 ```
 
 Use **Reload Settings**, then **Open Preset: Development** in the palette, or
-press the configured chord. On Windows, use an absolute Windows path with JSON
+press the configured chord. From a shell, use `rmux --preset "Development"`
+(or `mise exec -- target/debug/rmux --preset "Development"` from this checkout).
+On Windows, use an absolute Windows path with JSON
 backslash escaping, such as `C:\\Users\\you\\Layouts\\development.json`.
 The optional `cwd` fills only tabs whose `directory` is null; explicit saved tab
 directories remain unchanged. Define multiple presets with the same file and

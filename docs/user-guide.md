@@ -1097,7 +1097,11 @@ presets to your settings. Replace these example paths with your saved files:
 ```
 
 After Reload Settings, choose **Open Preset: Development** in the palette or use
-its shortcut. Each invocation opens fresh windows/shells in the directories saved
+its shortcut. You can also launch `rmux --preset "Development"` from a shell.
+The name must match configuration exactly. `--rpc-stdio-live` may be combined with
+`--preset`; explicit files, `-d`, commands and config inspection cannot. Set the
+preset's `cwd` in settings instead. Like other explicit restores, a preset launch
+neither loads nor overwrites the normal automatic recovery file. Each invocation opens fresh windows/shells in the directories saved
 in the file; it does not replay prior terminal commands or resume running jobs.
 The file is read when invoked, so edits apply to the next use. Layout presets
 (default `session:false`) contain one window; session presets contain multiple.
