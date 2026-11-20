@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Close Other Tabs now removes its captured targets as one pane update: selection
+is resolved once, scrolling/focus repair runs once, and one metadata event is
+emitted. A newer selection is retained if it survives; otherwise the kept
+terminal becomes active. Focus changes only when a removed terminal contained
+focus. The two focused tab-order tests passed and the desktop test target
+compiled. Native batch focus/process lifecycle and latency remain unverified.
+
 Close Other Tabs is now available in the menu, command palette and configurable
 shortcuts. It preserves the selected terminal, applies the shared active/always/
 never close policy once for the batch, and captures target identities before

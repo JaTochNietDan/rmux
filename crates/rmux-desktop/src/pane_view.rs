@@ -725,9 +725,26 @@ impl PaneView {
         // Resolve identities at confirmation time; new or moved-in tabs were not
         // part of the prompt. Abort if the terminal we promised to retain left.
         let current: Vec<_> = self.terminals.iter().map(Entity::entity_id).collect();
-        for index in other_tab_close_indices(&current, keep, targets) {
-            self.close_confirmed(index, window, cx);
+        let indices = other_tab_close_indices(&current, keep, targets);
+        if indices.is_empty() { return; }
+        let selected = self.active_terminal_id();
+        let replace_focus = indices.iter().any(|index| {
+            self.terminals[*index].read(cx).focus.contains_focused(window, cx)
+        });
+        for index in indices {
+            let removed = self.terminals.remove(index);
+            self.titles.remove(&removed.entity_id());
+            self.labels.remove(index);
         }
+        // The keeper guarantees a nonempty pane. Preserve a newer surviving
+        // selection, otherwise return to the terminal retained by the command.
+        self.active = self.terminals.iter().position(|terminal| Some(terminal.entity_id()) == selected)
+            .or_else(|| self.terminals.iter().position(|terminal| terminal.entity_id() == keep))
+            .expect("batch close preserves its keeper");
+        self.tab_scroll.scroll_to_item(self.active);
+        if replace_focus { self.focus(window, cx); }
+        cx.emit(PaneMetadataChanged);
+        cx.notify();
     }
 
     fn close(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
