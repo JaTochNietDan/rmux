@@ -396,6 +396,9 @@ impl CommandPalette {
             commands.push(Command { title: ".. · Parent directory".into(), subtitle: Some(parent.display().to_string()), shortcut: None,
                 target: PaletteEvent::Run(Box::new(BrowseDirectory { path: parent.to_owned() })) });
         }
+        commands.push(reveal_local_path(&listing.path));
+        commands.push(Command { title: "Copy directory path".into(), subtitle: Some(listing.path.display().to_string()), shortcut: None,
+            target: PaletteEvent::Run(Box::new(CopyLocalPath { path: listing.path.clone() })) });
         commands.push(Command { title: "Refresh this directory".into(), subtitle: Some(listing.path.display().to_string()), shortcut: None,
             target: PaletteEvent::Run(Box::new(BrowseDirectory { path: listing.path })) });
         commands.extend(listing.entries.into_iter().map(|entry| Command {
@@ -425,6 +428,7 @@ impl CommandPalette {
         }
         commands.push(Command { title: "Copy path".into(), subtitle: Some(path.display().to_string()), shortcut: None,
             target: PaletteEvent::Run(Box::new(CopyLocalPath { path: path.clone() })) });
+        commands.push(reveal_local_path(&path));
         commands.push(Command { title: "Retry".into(), subtitle: Some(error), shortcut: None,
             target: PaletteEvent::Run(if directory { Box::new(BrowseDirectory { path }) } else { Box::new(PreviewLocalFile { path }) }) });
         let mut palette = Self::with_commands(commands, if directory { "Could not read directory" } else { "Could not preview file" }, "Clear the search to see recovery actions", window, cx);
@@ -441,6 +445,7 @@ impl CommandPalette {
         }
         commands.push(Command { title: "Copy file path".into(), subtitle: Some(preview.path.display().to_string()), shortcut: None,
             target: PaletteEvent::Run(Box::new(CopyLocalPath { path: preview.path.clone() })) });
+        commands.push(reveal_local_path(&preview.path));
         commands.push(Command { title: "Refresh preview".into(), subtitle: empty.then(|| "Empty file · No text to preview".into()), shortcut: None,
             target: PaletteEvent::Run(Box::new(PreviewLocalFile { path: preview.path })) });
         commands.extend(preview.lines.into_iter().enumerate().map(|(index, text)| {
@@ -764,6 +769,14 @@ impl Render for CommandPalette {
                     .child(self.feedback.unwrap_or("↑↓ select · PgUp/PgDn jump · Enter run · Esc close")),
             ))
     }
+}
+
+fn reveal_local_path(path: &std::path::Path) -> Command {
+    let title = if cfg!(target_os = "macos") { "Reveal in Finder" }
+        else if cfg!(target_os = "windows") { "Reveal in File Explorer" }
+        else { "Reveal in File Manager" };
+    Command { title: title.into(), subtitle: Some(path.display().to_string()), shortcut: None,
+        target: PaletteEvent::Run(Box::new(RevealLocalPath { path: path.to_owned() })) }
 }
 
 fn custom_command(command: &preferences::CustomCommand) -> Command {

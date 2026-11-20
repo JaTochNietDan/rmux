@@ -3728,6 +3728,16 @@ impl Render for WorkspaceWindow {
             .on_action(cx.listener(|this, action: &PreviewLocalFile, window, cx| this.preview_local_file(action.path.clone(), window, cx)))
             .on_action(cx.listener(|this, _: &OpenTextPreview, window, cx| this.choose_local_path(false, window, cx)))
             .on_action(cx.listener(|this, _: &OpenFolderBrowser, window, cx| this.choose_local_path(true, window, cx)))
+            .on_action(cx.listener(|this, action: &RevealLocalPath, _, cx| {
+                if this.automation_available(cx).is_ok() && action.path.is_absolute() {
+                    if cfg!(target_os = "macos") && action.path.to_str().is_none() {
+                        this.notice = Some("This path cannot be represented by the Finder integration.".into());
+                        cx.notify();
+                        return;
+                    }
+                    cx.reveal_path(&action.path);
+                }
+            }))
             .on_action(cx.listener(|this, action: &CopyLocalPath, _, cx| {
                 this.notice = Some(match action.path.to_str() {
                     Some(path) => { clipboard::write(ClipboardItem::new_string(path.into()), cx); "Copied file path".into() }

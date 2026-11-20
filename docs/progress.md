@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Added system file-manager reveal actions to directory listings, text previews
+and file error recovery, plus Copy Directory Path. Labels follow the platform;
+the existing GPUI reveal API targets Finder/Explorer or Linux's directory portal
+with a folder fallback. It does not launch the file's associated application.
+macOS paths unsupported by the framework's UTF-8 bridge produce a notice instead
+of forwarding an empty path. Desktop compilation passed; native reveal behavior
+and other-platform acceptance remain pending.
+
 Added shared readiness checks for tab drags between panes, tab-to-split moves
 and same-window workspace transfers. Pending split launches/divider drags or
 busy participating panes now leave the tab in place and explain why. In

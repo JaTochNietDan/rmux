@@ -202,6 +202,12 @@ read-only preview loader.
 The current path stays visible above the search field, including while filtering
 or viewing an error. Hover a truncated path to see it in full. Empty text files
 are labeled explicitly.
+Choose **Reveal in Finder** (macOS), **Reveal in File Explorer** (Windows), or
+**Reveal in File Manager** (Linux) from a directory, preview or error view to
+hand the path to the system file manager. This does not open the file in its
+associated application. Linux may open the containing folder without selecting
+the file. Directory listings also offer **Copy directory path**. Missing or
+inaccessible paths may not be revealable by the system file manager.
 Choose **Go to Directory…** to enter an absolute path directly. Enter or Open
 loads it; Escape or Cancel dismisses the editor. Paths are literal (no `~`,
 environment-variable or shell expansion), with a 4,096-byte input limit.
