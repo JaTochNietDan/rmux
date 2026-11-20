@@ -625,6 +625,15 @@ impl Terminal {
             }
             if end {
                 if !self.osc_discard && matches!(stop.end, GHOSTTY_TERMINAL_STRING_END_ST_ESC | GHOSTTY_TERMINAL_STRING_END_BEL) {
+                    if let Some(response) = self.osc_capture.as_deref().and_then(kitty_notification::query_response) {
+                        let terminator: &[u8] = if stop.end == GHOSTTY_TERMINAL_STRING_END_BEL { b"\x07" } else { b"\x1b\\" };
+                        // Bound our query replies between PTY drains. Never append a
+                        // partial response; subsequent terminal replies remain ordered.
+                        if self.callbacks.replies.len() + response.len() + terminator.len() <= 64 * 1024 {
+                            self.callbacks.replies.extend_from_slice(response.as_bytes());
+                            self.callbacks.replies.extend_from_slice(terminator);
+                        }
+                    }
                     if let Some((title, body, visibility)) = self.osc_capture.as_deref().and_then(|bytes| self.callbacks.kitty_notifications.receive(bytes)) {
                         let revision = self.callbacks.notification.as_ref().map_or(1, |previous| previous.revision.wrapping_add(1));
                         self.callbacks.notification = Some(Arc::new(DesktopNotification { revision, title, body, visibility }));
@@ -1462,6 +1471,26 @@ mod tests {
                 assert_eq!(optimized.frame()?.text(), reference.frame()?.text());
             }
         }
+        Ok(())
+    }
+
+    #[test]
+    fn notification_capability_queries_are_ordered_bounded_and_not_notifications() -> Result<()> {
+        let mut terminal = Terminal::new(40, 4)?;
+        for byte in b"\x1b]99;i=probe-1:p=?;\x1b\\\x1b[c" { terminal.write(&[*byte]); }
+        let replies = String::from_utf8(terminal.take_replies())?;
+        let expected = "\x1b]99;i=probe-1:p=?;p=title,body,?:o=always,unfocused,invisible\x1b\\";
+        assert!(replies.starts_with(expected), "{replies:?}");
+        assert!(replies[expected.len()..].starts_with("\x1b[?"), "device attributes must follow query reply");
+        assert!(terminal.notification_since(0).is_none());
+        terminal.write(expected.as_bytes());
+        assert!(terminal.take_replies().is_empty(), "response must not cause a loop");
+        terminal.write(b"\x1b]99;i=bad[id:p=?;\x07");
+        assert!(terminal.take_replies().is_empty());
+        terminal.write(b"\x1b]99;p=?;\x07");
+        assert!(terminal.take_replies().ends_with(b"\x07"));
+        terminal.write(b"\x1b]99;p=?;\x07".repeat(2048).as_slice());
+        assert!(terminal.take_replies().len() <= 64 * 1024);
         Ok(())
     }
 

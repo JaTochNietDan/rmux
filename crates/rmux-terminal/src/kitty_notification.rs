@@ -2,6 +2,26 @@
 use base64::Engine;
 use crate::NotificationVisibility;
 use std::collections::VecDeque;
+
+fn valid_id(id: &str) -> bool {
+    id.len() <= 128 && id.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"_-+.".contains(&byte))
+}
+
+/// Empty query payloads only: never answer a capability response with another
+/// response. Restrict the echoed identifier to the protocol's safe alphabet.
+pub(super) fn query_response(content: &[u8]) -> Option<String> {
+    let content = std::str::from_utf8(content).ok()?.strip_prefix("99;")?;
+    let (metadata, payload) = content.split_once(';')?;
+    if !payload.is_empty() { return None; }
+    let (mut id, mut kind) = ("", "title");
+    for field in metadata.split(':').filter(|field| !field.is_empty()) {
+        let (key, value) = field.split_once('=')?;
+        match key { "i" => id = value, "p" => kind = value, _ => {} }
+    }
+    if kind != "?" || !valid_id(id) { return None; }
+    let identity = if id.is_empty() { String::new() } else { format!("i={id}:") };
+    Some(format!("\x1b]99;{identity}p=?;p=title,body,?:o=always,unfocused,invisible"))
+}
 #[derive(Default)]
 struct Message { id: String, title: String, body: String, visibility: NotificationVisibility }
 #[derive(Default)]
@@ -34,12 +54,13 @@ impl Assembler {
                 _ => {},
             }
         }
-        if id.len() > 128 || !id.bytes().all(|b| b.is_ascii_graphic()) { return None; }
+        if !valid_id(id) { return None; }
         if !matches!(kind, "title" | "body") { return None; }
         if payload.len() > if encoded { 4096 } else { 2048 } { return None; }
         let decoded;
         let text = if encoded {
-            decoded = base64::engine::general_purpose::STANDARD.decode(payload).ok()?;
+            decoded = base64::engine::general_purpose::STANDARD.decode(payload)
+                .or_else(|_| base64::engine::general_purpose::STANDARD_NO_PAD.decode(payload)).ok()?;
             if decoded.len() > 2048 { return None; }
             std::str::from_utf8(&decoded).ok()?
         } else { payload };
@@ -87,6 +108,7 @@ mod tests {
         assert!(assembler.receive(b"99;i=other:p=icon;ignored").is_none());
         assert_eq!(assembler.receive(b"99;i=other:p=body;details"), Some(("Other".into(), "details".into(), NotificationVisibility::Always)));
         assert!(assembler.receive(b"99;e=1;!invalid!").is_none());
+        assert_eq!(assembler.receive(b"99;e=1;SGk").unwrap().0, "Hi");
         for i in 0..100 { assembler.receive(format!("99;i={i}:d=0;pending").as_bytes()); }
         assert_eq!(assembler.pending.len(), 16);
         let text = "世".repeat(600);

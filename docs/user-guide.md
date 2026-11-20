@@ -791,7 +791,10 @@ OSC 9, OSC 777 and OSC 99 title/body notification requests mark unfocused
 terminals unread, like BEL. OSC 99 supports chunk assembly and Base64 text, with
 up to 16 pending message IDs, 256 title bytes and 1024 body bytes. OSC 99
 `o=always` (default), `o=unfocused` and `o=invisible` control whether a request
-is accepted. Hidden tabs/workspaces, zoom-hidden panes and inactive OS windows
+is accepted. Empty `p=?` queries return `p=title,body,?` and the supported `o`
+values, preserving the query identifier and BEL/ST terminator. Queries do not
+create notifications. Base64 text accepts padded or unpadded complete chunks.
+Hidden tabs/workspaces, zoom-hidden panes and inactive OS windows
 count as invisible. Suppressed requests are discarded, not replayed on blur.
 OSC 9;4 progress reports show a percentage or Working/Paused/Error label in the
 terminal tab. Remove reports and terminal reset clear it; no polling is used.
@@ -806,7 +809,7 @@ bounded message per live terminal. Click a message to focus its terminal, or Dis
 to acknowledge it without switching focus. Panes with unread tabs show an amber
 border. A new notification appears again after dismissal. Full
 notification history and native OS notifications are not yet implemented. OSC 99
-action/close reports, queries, replacement IDs after delivery,
+action/close reports, replacement IDs after delivery,
 expiry, icons and buttons remain unsupported; only text assembly is implemented.
 Cmd+N creates a workspace; click sidebar rows or use Cmd+Alt+Up/Down to switch.
 View → Workspace Icon offers Terminal, Code, Build, Cloud, Notes and None.

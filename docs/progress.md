@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+OSC 99 capability discovery now replies to empty `p=?` queries with supported
+text payloads and visibility policies, preserving safe identifiers and BEL/ST
+termination. Unsupported action/close/sound/expiry features are not advertised.
+Replies use the existing ordered PTY response path and are capped at 64 KiB per
+drain; complete responses are omitted when capacity is exhausted. Response payloads
+are never answered, preventing feedback loops. Identifier validation now follows
+the protocol alphabet, and complete unpadded Base64 text chunks are accepted.
+Focused query framing/order/bounds and text assembly tests passed. Cross-chunk
+Base64 encoding groups and remaining notification lifecycle features are pending.
+
 OSC 99 now retains `o=always|unfocused|invisible` across notification chunks and
 applies the policy before storing messages or marking unread. Invisible uses the
 active OS window, selected workspace/tab and pane zoom structure without acquiring
