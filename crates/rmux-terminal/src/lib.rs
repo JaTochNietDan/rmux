@@ -27,6 +27,7 @@ struct Callbacks {
     bell_revision: u64,
     directory_revision: u64,
     notification: Option<Arc<DesktopNotification>>,
+    kitty_notifications: kitty_notification::Assembler,
     progress: Option<Progress>,
     program_status: program_status::Records,
     program_finished: bool,
@@ -117,6 +118,7 @@ unsafe extern "C" fn desktop_notification(
 
 pub mod compression;
 mod directory;
+mod kitty_notification;
 mod hyperlink;
 pub mod keyboard;
 pub mod mouse;
@@ -257,6 +259,8 @@ pub struct FrameStorage {
 }
 
 pub struct Terminal {
+    osc_capture: Option<Vec<u8>>,
+    osc_discard: bool,
     selection: selection::Gesture,
     terminal: GhosttyTerminal,
     render: GhosttyRenderState,
@@ -338,6 +342,7 @@ unsafe extern "C" fn metadata_reset(terminal: GhosttyTerminal, userdata: *mut c_
         title_changed(terminal, userdata);
         directory_changed(terminal, userdata);
         (*userdata.cast::<Callbacks>()).progress = None;
+        (*userdata.cast::<Callbacks>()).kitty_notifications = Default::default();
     }
 }
 
@@ -437,6 +442,8 @@ impl Terminal {
             "terminal dimensions must be nonzero"
         );
         let mut this = Self {
+            osc_capture: None,
+            osc_discard: false,
             selection: selection::Gesture::new()?,
             mouse: mouse::Encoder::new()?,
             keyboard: keyboard::Encoder::new()?,
@@ -564,11 +571,43 @@ impl Terminal {
     pub fn write(&mut self, bytes: &[u8]) {
         self.revision = self.revision.wrapping_add(1);
         self.mouse.refresh = true;
-        // SAFETY: terminal is owned, and bytes remains valid through the call.
-        unsafe {
-            ghostty_terminal_vt_write(self.terminal, bytes.as_ptr(), bytes.len());
+        let mut remaining = bytes;
+        while !remaining.is_empty() {
+            let mut stop = GhosttyTerminalWriteStop { size: std::mem::size_of::<GhosttyTerminalWriteStop>(), ..Default::default() };
+            // SAFETY: owned terminal and borrowed input remain valid. Ghostty
+            // handles UTF-8, nested control strings, partial input and cancellation.
+            let result = unsafe { ghostty_terminal_vt_write_until(self.terminal, remaining.as_ptr(), remaining.len(),
+                (GHOSTTY_TERMINAL_BOUNDARY_OSC_START | GHOSTTY_TERMINAL_BOUNDARY_OSC_END) as u32, &mut stop) };
+            if !matches!(result, GHOSTTY_SUCCESS | GHOSTTY_NO_VALUE) || stop.consumed == 0 || stop.consumed > remaining.len() { break; }
+            let end = stop.reached & GHOSTTY_TERMINAL_BOUNDARY_OSC_END as u32 != 0;
+            if let Some(capture) = &mut self.osc_capture {
+                if !self.osc_discard {
+                    let data = &remaining[..stop.consumed - usize::from(end)];
+                    if capture.len() + data.len() > 8192 || !capture.iter().chain(data.iter()).zip(b"99;").all(|(a, b)| a == b) {
+                        self.osc_discard = true;
+                        capture.clear();
+                    } else {
+                        capture.extend_from_slice(data);
+                    }
+                }
+            }
+            if end {
+                if !self.osc_discard && matches!(stop.end, GHOSTTY_TERMINAL_STRING_END_ST_ESC | GHOSTTY_TERMINAL_STRING_END_BEL) {
+                    if let Some((title, body)) = self.osc_capture.as_deref().and_then(|bytes| self.callbacks.kitty_notifications.receive(bytes)) {
+                        let revision = self.callbacks.notification.as_ref().map_or(1, |previous| previous.revision.wrapping_add(1));
+                        self.callbacks.notification = Some(Arc::new(DesktopNotification { revision, title, body }));
+                    }
+                }
+                self.osc_capture = None;
+            }
+            if stop.reached & GHOSTTY_TERMINAL_BOUNDARY_OSC_START as u32 != 0 {
+                self.osc_capture = Some(Vec::new());
+                self.osc_discard = false;
+            }
+            remaining = &remaining[stop.consumed..];
         }
     }
+
     pub fn take_replies(&mut self) -> Vec<u8> {
         std::mem::take(&mut self.callbacks.replies)
     }
@@ -1328,6 +1367,27 @@ mod tests {
         assert_eq!(terminal.bell_revision(), 0);
         Ok(())
     }
+    #[test]
+    fn kitty_notifications_use_ghostty_framing_and_ignore_cancelled_sequences() -> Result<()> {
+        let mut terminal = Terminal::new(40, 4)?;
+        for byte in b"\x1b]99;i=job:d=0;Build\x1b\\\x1b]99;i=job:p=body;e=ignored" {
+            terminal.write(&[*byte]);
+        }
+        // Cancel the incomplete body, then complete the original title.
+        terminal.write(b"\x18\x1b]99;i=job:p=body;Passed\x07");
+        let first = terminal.notification_since(0).expect("OSC 99 text");
+        assert_eq!((&*first.title, &*first.body), ("Build", "Passed"));
+        terminal.write(b"\x1b]99;p=icon;ignored\x07");
+        assert!(terminal.notification_since(first.revision).is_none());
+        terminal.write(b"\x1b]9;Legacy\x07");
+        let second = terminal.notification_since(first.revision).expect("legacy notification still works");
+        terminal.write(b"\x1b]99;;Current\x1b\\");
+        let third = terminal.notification_since(second.revision).expect("shared notification revision");
+        assert_eq!(third.title, "Current");
+        assert_eq!(terminal.frame()?.text().trim(), "");
+        Ok(())
+    }
+
     #[test]
     fn osc_notifications_are_bounded_revisioned_and_distinct_from_bells() -> Result<()> {
         let mut terminal = Terminal::new(20, 4)?;

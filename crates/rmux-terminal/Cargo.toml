@@ -7,6 +7,7 @@ publish.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+base64 = "0.22.1"
 async-channel.workspace = true
 portable-pty.workspace = true
 tempfile = "3"

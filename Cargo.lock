@@ -4518,6 +4518,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-channel 2.5.0",
+ "base64",
  "bindgen 0.72.1",
  "libc",
  "portable-pty",

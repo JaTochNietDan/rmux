@@ -2,6 +2,18 @@
 
 ## Current implementation focus
 
+Added bounded OSC 99 text notifications (title/body, interleaved chunk IDs and
+Base64) using Ghostty's stream-boundary API. Ghostty still owns UTF-8/control-string
+framing and cancellation; non-99 OSC payloads are rejected before copying. Limits
+are 8 KiB per captured sequence, 16 pending IDs, 256 title bytes and 1024 body bytes;
+reset clears pending chunks. Completed messages use the existing notification
+revision/unread path alongside OSC 9/777. All 77 terminal tests passed after stream
+integration, including byte-split/cancelled strings and legacy coexistence. Desktop
+compilation passed. Native UI and throughput acceptance remain pending. Protocol
+queries, actions/close reports, post-delivery ID replacement, visibility filtering,
+expiry and graphical payloads remain incomplete. Protocol reference:
+https://sw.kovidgoyal.net/kitty/desktop-notifications/
+
 Terminal selection copying now formats on the background executor instead of
 blocking UI dispatch on the parser and formatter. The existing 16 MiB limit and
 no-selection behavior are preserved. One pending copy per terminal coalesces
