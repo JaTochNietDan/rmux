@@ -2,6 +2,18 @@
 
 ## Current implementation focus
 
+Added a terminal-engine tail-range exporter for capture-pane work. It walks
+backwards through Ghostty row metadata to locate logical line boundaries before
+formatting, without copying preceding history or replacing the user's selection.
+The existing bounded UTF-8 formatter limits output allocation to 16 MiB maximum;
+truncation returns a prefix of the requested range and is explicitly reported.
+Five focused text-export tests passed, covering wrapped Unicode, byte caps,
+selection/viewport preservation, oversized line counts and alternate-screen
+isolation. Blank trailing screen rows count toward this low-level range (the
+formatter trims their text). Session/RPC/CLI wiring and the capture command's
+trailing-blank semantics remain pending; no end-to-end capture parity or latency
+measurement is claimed.
+
 Confirmed [pinned pipe-pane behavior](https://github.com/manaflow-ai/cmux/blob/a76816e4f0788003758b9434ab702068a640fb5d/CLI/cmux.swift):
 one captured history snapshot feeds a client-side shell command. Implemented
 pipe-pane --surface ID with --command or quoted positional command using the

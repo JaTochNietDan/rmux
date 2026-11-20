@@ -49,6 +49,50 @@ impl Terminal {
         self.export_text_limited(max_bytes, false).map(|text| text.expect("history always has a screen"))
     }
 
+    /// Export the last `lines` logical rows of the active screen and history.
+    /// Blank trailing screen rows count as lines; soft wraps do not. Locates the
+    /// range backwards before formatting, avoiding a copy of preceding history.
+    /// The byte cap bounds the returned prefix of that range (not a byte tail).
+    /// Like history_text_limited, run this on a background executor.
+    pub fn history_tail_limited(&self, lines: usize, max_bytes: usize) -> Result<(String, bool)> {
+        ensure!(max_bytes <= 16 * 1024 * 1024, "history export limit exceeds 16 MiB");
+        if lines == 0 { return Ok((String::new(), false)); }
+        // All references remain within this immutable engine borrow, and are
+        // passed only to the formatter, never installed as the user's selection.
+        unsafe {
+            let mut total = 0usize;
+            let mut columns = 0u16;
+            check(ghostty_terminal_get(self.terminal, GHOSTTY_TERMINAL_DATA_TOTAL_ROWS, out(&mut total)))?;
+            check(ghostty_terminal_get(self.terminal, GHOSTTY_TERMINAL_DATA_COLS, out(&mut columns)))?;
+            if total == 0 || columns == 0 { return Ok((String::new(), false)); }
+            ensure!(total - 1 <= u32::MAX as usize, "history exceeds coordinate range");
+            let grid_at = |x, y| -> Result<GhosttyGridRef> {
+                let mut grid = GhosttyGridRef::default();
+                check(ghostty_terminal_grid_ref(self.terminal, GhosttyPoint {
+                    tag: GHOSTTY_POINT_TAG_SCREEN,
+                    value: GhosttyPointValue { coordinate: GhosttyPointCoordinate { x, y } },
+                }, &mut grid))?;
+                Ok(grid)
+            };
+            let end = grid_at(columns - 1, (total - 1) as u32)?;
+            let mut row = total - 1;
+            let mut remaining = lines;
+            let start = loop {
+                let grid = grid_at(0, row as u32)?;
+                let mut raw = 0;
+                let mut continuation = false;
+                check(ghostty_grid_ref_row(&grid, &mut raw))?;
+                check(ghostty_row_get(raw, GHOSTTY_ROW_DATA_WRAP_CONTINUATION, out(&mut continuation)))?;
+                if !continuation { remaining -= 1; }
+                if row == 0 || remaining == 0 { break grid; }
+                row -= 1;
+            };
+            let selection = GhosttySelection { start, end, rectangle: false };
+            self.export_text_range(max_bytes, false, true, Some(selection))
+                .map(|text| text.expect("explicit history range"))
+        }
+    }
+
     /// Stream only the current selection, preserving UTF-8 at the byte limit.
     pub fn selection_text_prefix(&self, max_bytes: usize) -> Result<Option<(String, bool)>> {
         self.selection_text_prefix_with_wraps(max_bytes, true)
@@ -65,6 +109,11 @@ impl Terminal {
     }
 
     pub(super) fn export_text_with_wraps(&self, max_bytes: usize, selected: bool, unwrap: bool) -> Result<Option<(String, bool)>> {
+        self.export_text_range(max_bytes, selected, unwrap, None)
+    }
+
+    fn export_text_range(&self, max_bytes: usize, selected: bool, unwrap: bool, range: Option<GhosttySelection>) -> Result<Option<(String, bool)>> {
+        let explicit_range = range.is_some();
         struct Formatter(GhosttyFormatter);
         impl Drop for Formatter {
             fn drop(&mut self) {
@@ -79,7 +128,7 @@ impl Terminal {
         };
         // The immutable engine borrow excludes writes throughout formatting.
         unsafe {
-            let mut selection = GhosttySelection::default();
+            let mut selection = range.unwrap_or_default();
             if selected {
                 let result = ghostty_terminal_get(self.terminal, GHOSTTY_TERMINAL_DATA_SELECTION, out(&mut selection));
                 if result == GHOSTTY_NO_VALUE { return Ok(None); }
@@ -91,7 +140,7 @@ impl Terminal {
                 &mut formatter.0,
                 self.terminal,
             ))?;
-            if selected {
+            if selected || explicit_range {
                 check(ghostty_formatter_set(formatter.0, GHOSTTY_FORMATTER_OPT_SELECTION, input(&selection)))?;
             }
             check(ghostty_formatter_set(
@@ -128,6 +177,27 @@ impl Terminal {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn history_tail_counts_logical_lines_without_mutating_viewport() -> Result<()> {
+        let mut terminal = Terminal::new(8, 2)?;
+        terminal.write("old\r\n世界abcdefgh\r\nlast".as_bytes());
+        terminal.select_all()?;
+        terminal.scroll(Scroll::Top)?;
+        let before = terminal.frame()?;
+        let selected = terminal.selected_text()?;
+        assert_eq!(terminal.history_tail_limited(1, 4096)?, ("last".into(), false));
+        assert_eq!(terminal.history_tail_limited(2, 4096)?, ("世界abcdefgh\nlast".into(), false));
+        assert_eq!(terminal.history_tail_limited(2, 5)?, ("世".into(), true));
+        assert_eq!(terminal.history_tail_limited(0, 4096)?, (String::new(), false));
+        assert_eq!(terminal.history_tail_limited(usize::MAX, 4096)?, terminal.history_text_limited(4096)?);
+        assert_eq!(terminal.selected_text()?, selected);
+        assert_eq!(terminal.frame()?.scrollback_offset, before.scrollback_offset);
+        terminal.write(b"\x1b[?1049h\x1b[HALT");
+        assert_eq!(terminal.history_tail_limited(2, 4096)?, ("ALT".into(), false));
+        assert_eq!(terminal.history_tail_limited(1, 4096)?, (String::new(), false));
+        Ok(())
+    }
+
     #[test]
     fn selection_prefix_is_bounded_and_preserves_selection_and_viewport() -> Result<()> {
         let mut terminal = Terminal::new(20, 3)?;
