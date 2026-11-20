@@ -1,5 +1,6 @@
 //! Stable, bounded history inspection; no per-frame history formatting.
 use super::*;
+use unicode_segmentation::GraphemeCursor;
 const MAX_BYTES: usize = 8 * 1024 * 1024;
 const MAX_LINES: usize = 65_536;
 
@@ -34,12 +35,34 @@ impl Buffer {
         }
         Some(matches)
     }
+    fn line(&self, row: usize) -> &str { &self.text[self.lines[row].clone()] }
+    fn character_range(&self, row: usize, column: usize, anchor: Option<(usize, usize)>) -> Range<usize> {
+        let here = self.lines[row].start + column;
+        let (anchor_row, anchor_column) = anchor.unwrap_or((row, column));
+        let there = self.lines[anchor_row].start + anchor_column;
+        let (last_row, last_column) = if here >= there { (row, column) } else { (anchor_row, anchor_column) };
+        here.min(there)..self.lines[last_row].start + next_grapheme(self.line(last_row), last_column)
+    }
     fn selected(&self, cursor: usize, anchor: Option<usize>) -> &str {
         let anchor = anchor.unwrap_or(cursor);
         let first = cursor.min(anchor).min(self.lines.len() - 1);
         let last = cursor.max(anchor).min(self.lines.len() - 1);
         &self.text[self.lines[first].start..self.lines[last].end]
     }
+}
+
+fn next_grapheme(text: &str, offset: usize) -> usize {
+    GraphemeCursor::new(offset, text.len(), true).next_boundary(text, 0).expect("complete grapheme context").unwrap_or(text.len())
+}
+fn previous_grapheme(text: &str, offset: usize) -> usize {
+    GraphemeCursor::new(offset, text.len(), true).prev_boundary(text, 0).expect("complete grapheme context").unwrap_or(0)
+}
+fn clamp_grapheme(text: &str, offset: usize) -> usize {
+    let mut offset = offset.min(text.len());
+    while !text.is_char_boundary(offset) { offset -= 1; }
+    let mut cursor = GraphemeCursor::new(offset, text.len(), true);
+    if cursor.is_boundary(text, 0).expect("complete grapheme context") { offset }
+    else { cursor.prev_boundary(text, 0).expect("complete grapheme context").unwrap_or(0) }
 }
 
 pub(super) struct CopyMode {
@@ -54,6 +77,9 @@ pub(super) struct CopyMode {
     message: String,
     cursor: usize,
     anchor: Option<usize>,
+    characters: bool,
+    column: usize,
+    character_anchor: Option<(usize, usize)>,
     scroll: ListState,
     _load: Task<()>,
 }
@@ -99,7 +125,7 @@ impl CopyMode {
         focus.focus(window);
         Self { focus, buffer: None, search: None, query: String::new(), matches: Vec::new(),
             search_message: String::new(), search_cancel: Arc::new(AtomicBool::new(false)), search_job: None, message: "Reading terminal history…".into(), cursor: 0,
-            anchor: None, scroll: ListState::new(0, ListAlignment::Bottom, px(128.)), _load: load }
+            anchor: None, characters: false, column: 0, character_anchor: None, scroll: ListState::new(0, ListAlignment::Bottom, px(128.)), _load: load }
     }
     fn open_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(search) = &self.search { search.read(cx).focus.focus(window); return; }
@@ -122,6 +148,8 @@ impl CopyMode {
     fn jump_match(&mut self, reverse: bool, inclusive: bool) {
         if let Some(index) = match_line(&self.matches, self.cursor, reverse, inclusive) {
             self.cursor = index;
+            self.column = 0;
+            self.character_anchor = None;
             self.anchor = None;
             self.scroll.scroll_to_reveal_item(index);
         }
@@ -157,7 +185,9 @@ impl CopyMode {
     }
     fn copy(&self, cx: &mut Context<Self>) {
         if let Some(buffer) = &self.buffer {
-            clipboard::write(ClipboardItem::new_string(buffer.selected(self.cursor, self.anchor).to_owned()), cx);
+            let text = if self.characters { &buffer.text[buffer.character_range(self.cursor, self.column, self.character_anchor)] }
+                else { buffer.selected(self.cursor, self.anchor) };
+            clipboard::write(ClipboardItem::new_string(text.to_owned()), cx);
         }
     }
     fn key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
@@ -167,6 +197,14 @@ impl CopyMode {
         else if !key.modifiers.platform && !key.modifiers.control && !key.modifiers.alt {
             let count = self.buffer.as_ref().map_or(0, |buffer| buffer.lines.len());
             if count > 0 {
+                if matches!(key.key.as_str(), "left" | "right" | "h" | "l") {
+                    if !self.characters { self.characters = true; self.anchor = None; }
+                    if key.modifiers.shift && self.character_anchor.is_none() { self.character_anchor = Some((self.cursor, self.column)); }
+                    let buffer = self.buffer.as_ref().unwrap();
+                    let line = buffer.line(self.cursor);
+                    self.column = if matches!(key.key.as_str(), "left" | "h") { previous_grapheme(line, self.column) } else { next_grapheme(line, self.column) };
+                    cx.stop_propagation(); cx.notify(); return;
+                }
                 let next = match key.key.as_str() {
                     "up" | "k" => Some(self.cursor.saturating_sub(1)),
                     "down" | "j" => Some((self.cursor + 1).min(count - 1)),
@@ -175,13 +213,20 @@ impl CopyMode {
                     "home" => Some(0), "end" => Some(count - 1), _ => None,
                 };
                 if let Some(next) = next {
-                    if key.modifiers.shift && self.anchor.is_none() { self.anchor = Some(self.cursor); }
+                    if self.characters {
+                        if key.modifiers.shift && self.character_anchor.is_none() { self.character_anchor = Some((self.cursor, self.column)); }
+                        self.column = clamp_grapheme(self.buffer.as_ref().unwrap().line(next), self.column);
+                    } else if key.modifiers.shift && self.anchor.is_none() { self.anchor = Some(self.cursor); }
                     self.cursor = next;
                     self.scroll.scroll_to_reveal_item(next);
                 } else { match key.key.as_str() {
                     "/" => self.open_search(window, cx),
                     "n" | "N" => self.jump_match(key.modifiers.shift || key.key == "N", false),
-                    "space" | "v" => self.anchor = if self.anchor.is_some() { None } else { Some(self.cursor) },
+                    "c" => { self.characters = !self.characters; self.anchor = None; self.character_anchor = None; self.column = 0; }
+                    "space" | "v" => {
+                        if self.characters { self.character_anchor = if self.character_anchor.is_some() { None } else { Some((self.cursor, self.column)) }; }
+                        else { self.anchor = if self.anchor.is_some() { None } else { Some(self.cursor) }; }
+                    },
                     "enter" | "y" => self.copy(cx),
                     _ => {},
                 } }
@@ -195,15 +240,27 @@ impl CopyMode {
         let range = &buffer.lines[index];
         let text = &buffer.text[range.clone()];
         // A pathological single line must not cause unbounded shaping work.
-        let mut end = text.len().min(4096);
+        let mut start = if self.characters && index == self.cursor { self.column.saturating_sub(2048) } else { 0 };
+        while !text.is_char_boundary(start) { start -= 1; }
+        let mut end = text.len().min(start + 4096);
         while !text.is_char_boundary(end) { end -= 1; }
-        let display = if end < text.len() { format!("{}… [display clipped; copy includes full line]", &text[..end]) } else { text.to_owned() };
+        let prefix = if start > 0 { "…" } else { "" };
+        let suffix = if end < text.len() { "… [display clipped]" } else { "" };
+        let display = format!("{prefix}{}{suffix}", &text[start..end]);
+        let highlights = if self.characters {
+            let selected = buffer.character_range(self.cursor, self.column, self.character_anchor);
+            let from = selected.start.max(range.start + start);
+            let to = selected.end.min(range.start + end);
+            (from < to).then(|| (from - range.start - start + prefix.len()..to - range.start - start + prefix.len(),
+                HighlightStyle { background_color: Some(rgb(0x41638c).into()), ..Default::default() }))
+        } else { None };
         let anchor = self.anchor.unwrap_or(self.cursor);
         let selected = (self.cursor.min(anchor)..=self.cursor.max(anchor)).contains(&index);
         div().id(("copy-line", index)).w_full().min_h(px(22.)).px_2().py_1().text_size(px(12.)).font_family(FONT_FAMILY)
-            .when(selected, |row| row.bg(rgb(0x354969)))
+            .when(selected && !self.characters, |row| row.bg(rgb(0x354969)))
             .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
                 if event.standard_click() {
+                    this.characters = false; this.character_anchor = None; this.column = 0;
                     if event.modifiers().shift && this.anchor.is_none() { this.anchor = Some(this.cursor); }
                     else if !event.modifiers().shift { this.anchor = None; }
                     this.cursor = index;
@@ -213,7 +270,7 @@ impl CopyMode {
             }))
             .flex().gap_2()
             .child(div().w(px(54.)).flex_shrink_0().text_color(rgb(0x909090)).child((index + 1).to_string()))
-            .child(div().min_w_0().flex_1().child(display)).into_any_element()
+            .child(div().min_w_0().flex_1().child(StyledText::new(display).with_highlights(highlights))).into_any_element()
     }
 }
 impl Render for CopyMode {
@@ -226,6 +283,7 @@ impl Render for CopyMode {
             .on_action(|_: &Paste, _, cx| cx.stop_propagation())
             .on_action(cx.listener(|this, _: &EditorSelectAll, _, cx| {
                 if let Some(buffer) = &this.buffer {
+                    this.characters = false; this.character_anchor = None; this.column = 0;
                     this.anchor = Some(0);
                     this.cursor = buffer.lines.len() - 1;
                     this.scroll.scroll_to_reveal_item(this.cursor);
@@ -253,13 +311,14 @@ impl Render for CopyMode {
             .child(list(self.scroll.clone(), move |index, _, cx| entity.update(cx, |this, cx| this.row(index, cx)))
                 .flex_1().min_h_0().w_full())
             .child(div().px_3().py_2().text_xs().border_t_1().border_color(rgb(0x383838))
-                .child("↑↓ / j k move · Shift or Space select lines · Enter / y copy · / search · Esc close"))
+                .child(if self.characters { "Character mode · ←→ / h l move · Shift / Space select · c line mode · Enter copy · Esc close" }
+                    else { "Line mode · ↑↓ move · Shift / Space select · c characters · Enter copy · / search · Esc close" }))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Buffer, MAX_LINES, match_line};
+    use super::{Buffer, MAX_LINES, match_line, next_grapheme, previous_grapheme, clamp_grapheme};
     use std::sync::atomic::AtomicBool;
     #[test]
     fn snapshot_search_matches_unicode_lines_and_wraps_in_both_directions() {
@@ -273,6 +332,21 @@ mod tests {
         assert_eq!(match_line(&matches, 1, false, true), Some(1));
         assert_eq!(match_line(&matches, 2, true, true), Some(1));
         assert_eq!(match_line(&[], 0, false, false), None);
+    }
+    #[test]
+    fn character_selection_preserves_graphemes_across_lines_and_reverse_ranges() {
+        let text = "a👩‍💻e\u{301}界";
+        let woman_end = next_grapheme(text, 1);
+        assert_eq!(&text[1..woman_end], "👩‍💻");
+        let accent_end = next_grapheme(text, woman_end);
+        assert_eq!(&text[woman_end..accent_end], "e\u{301}");
+        assert_eq!(previous_grapheme(text, accent_end), woman_end);
+        assert_eq!(clamp_grapheme(text, 5), 1);
+        let buffer = Buffer::new(format!("{text}\n界"), false);
+        let range = buffer.character_range(0, 1, Some((1, 0)));
+        assert_eq!(&buffer.text[range.clone()], "👩‍💻e\u{301}界\n界");
+        assert_eq!(range, buffer.character_range(1, 0, Some((0, 1))));
+        assert_eq!(&buffer.text[buffer.character_range(0, woman_end, None)], "e\u{301}");
     }
     #[test]
     fn snapshot_selection_keeps_unicode_empty_lines_and_reverse_ranges() {

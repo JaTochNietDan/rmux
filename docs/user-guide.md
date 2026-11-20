@@ -12,8 +12,13 @@ their retained full text. Press / or Command-F (Control-F on Linux/Windows) to
 search the snapshot. Enter submits a case-sensitive literal query; Shift-Enter
 searches backward. n and Shift-N jump between matching lines with wraparound.
 Search works on the full retained text, including clipped portions of long lines.
-Escape in the search field returns to navigation. Character/rectangle selection
-and named copy buffers remain pending.
+Escape in the search field returns to navigation. Press c to toggle character
+selection; ←/→ or h/l also enter character mode. Shift-movement or Space/v anchors
+a character range; Enter copies it. Navigation and copy preserve complete Unicode
+graphemes, including combined emoji and accents. Press c to return to line mode;
+clicking a row or Select All also returns to line mode. Long-line display follows
+the character cursor without shaping the entire line. Rectangle selection and
+named copy buffers remain pending.
 
 **Choose Terminal Font…** searches installed font families for the current
 terminal. Type to filter, use arrows and Enter to choose, or Escape to cancel.

@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Copy mode now supports character ranges alongside line selection. c toggles the
+mode; horizontal arrows or h/l enter character navigation, and Shift or Space/v
+anchors ranges across lines. GraphemeCursor keeps combined emoji, accents and
+CJK UTF-8 intact; reversing an anchored selection preserves the same text.
+Character spans are highlighted and the bounded 4 KiB display window follows
+the cursor on long lines. Copy remains based on full retained text. All four
+focused copy-mode tests and desktop test compilation passed. A fresh desktop
+check still reports the Mac locked, so no screenshot or native interaction claim
+is made. Rectangle selection, visual-column vertical navigation refinement,
+named buffers and native acceptance remain pending.
+
 Copy mode now searches its retained history snapshot. / or the platform Find
 shortcut opens the input; Enter runs a case-sensitive literal search, Shift-Enter
 runs backward, and n / Shift-N wrap between matching lines. Search shares the
