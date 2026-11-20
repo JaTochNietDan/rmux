@@ -118,8 +118,8 @@
       ],
       "acceptance": "Keyboard navigation selects the expected pane with no accidental terminal input.",
       "rmux_status": "in_progress",
-      "implementation": "Directional pane focus, numeric workspace shortcuts and Focus Pane 1\u20139 palette actions with Cmd+Option+number on macOS / Ctrl+Alt+Shift+number elsewhere. Numeric selection follows pane traversal order and moves zoom to the selected pane.",
-      "remaining": "Complete native navigation coverage, including new Select Tab 1\u20139 shortcuts (Cmd+Shift+number on macOS / Ctrl+Shift+number elsewhere) and palette actions. Missing tab numbers are no-ops; tab numbering is per focused pane.",
+      "implementation": "Directional pane focus, numeric workspace shortcuts and Focus Pane 1–9 palette actions with Cmd+Option+number on macOS / Ctrl+Alt+Shift+number elsewhere. Numeric selection follows pane traversal order and moves zoom to the selected pane.",
+      "remaining": "Complete native navigation coverage, including new Select Tab 1–9 shortcuts (Cmd+Shift+number on macOS / Ctrl+Shift+number elsewhere) and palette actions. Missing tab numbers are no-ops; tab numbering is per focused pane.",
       "implementation_sources": [
         "crates/rmux-desktop/src/main.rs"
       ],
@@ -668,7 +668,9 @@
         "NOTIFY"
       ],
       "acceptance": "Implement OS adapters; respect focused-surface and app-wide suppression settings.",
-      "rmux_status": "not_started"
+      "rmux_status": "in_progress",
+      "implementation": "Opt-in native_notifications setting and Settings toggle; lazy single dispatcher with eight queued weak terminal references, one delivery per second, focused-terminal/read/dismissed/closed suppression before dispatch, bounded plain-text payloads, and asynchronous error reporting. notify-rust uses modern macOS Notification Center, XDG and Windows backends; Windows uses rmux AppUserModelID and still needs installer registration. OS permission/delivery/click routing, app-wide focus policy and platform acceptance remain incomplete.",
+      "progress_record": "docs/progress.md"
     },
     {
       "id": "N04",

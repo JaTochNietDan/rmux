@@ -7,7 +7,7 @@ pub struct State {
     pub selected: usize,
     pub scroll: ScrollHandle,
 }
-pub const KEYS: &[&str] = &["font", "padding", "theme", "focused_cursor", "cursor", "copy", "close", "group_placement", "scrollback"];
+pub const KEYS: &[&str] = &["font", "padding", "theme", "focused_cursor", "cursor", "copy", "close", "group_placement", "scrollback", "native_notifications"];
 // Each control owns its explanatory content. Only the heading and footer hint
 // are separate non-control children of the scroll container.
 pub fn scroll_index(control: usize) -> usize {
@@ -49,6 +49,7 @@ pub fn adjust(settings: &mut Preferences, key: &str, delta: i32) {
                 _ => AfterCurrent,
             };
         }
+        "native_notifications" => settings.native_notifications = !settings.native_notifications,
         "copy" => settings.copy_on_select = !settings.copy_on_select,
         "cursor" => settings.unfocused_cursor = match settings.unfocused_cursor { preferences::UnfocusedCursor::Hollow => preferences::UnfocusedCursor::Hidden, preferences::UnfocusedCursor::Hidden => preferences::UnfocusedCursor::Hollow },
         _ => {}
@@ -126,6 +127,8 @@ pub fn panel(state: State, cx: &mut Context<window_view::WorkspaceWindow>) -> An
             .child(div()
                 .child(row("New terminal history", "scrollback", format!("{} MiB", settings.scrollback_mib), true, state.selected == 8, false))
                 .child(div().pt_2().text_xs().text_color(rgb(0xa0a0a0)).child("History budget per new terminal. 0 disables scrollback. Existing terminals keep their current history; total app memory also includes other resources.")))
+            .child(div().child(row("Desktop notifications", "native_notifications", if settings.native_notifications { "On" } else { "Off" }.into(), false, state.selected == 9, false))
+                .child(div().pt_2().text_xs().text_color(rgb(0xa0a0a0)).child("Optional OS banners for unfocused terminals. macOS asks for permission on first delivery. In-app history stays available when off.")))
             .child(div().py_3().text_xs().text_color(rgb(0xa0a0a0)).child("Tab / ↑↓ to navigate · ←→ to change · Enter to activate · Esc to close. Changes apply to this session. Text size updates terminals using the previous default. Per-terminal zoom stays unchanged; Reset Font Size rejoins the default. Custom colors in your config override the theme."))
             .child(div().id("settings-save").border_1().border_color(if state.selected == KEYS.len() { rgb(0xffffff) } else { rgb(0x007aff) }).px_3().py_2().rounded_sm().text_sm()
                 .bg(rgb(if busy { 0x353535 } else { 0x007aff }))

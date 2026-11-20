@@ -771,7 +771,7 @@ impl WorkspaceWindow {
             Ok(serde_json::json!({"surface_id":change.surface_id,"revision":revision,"dismissed":matches}))
         } else {
             terminal.update(cx, |terminal, cx| {
-                let revision = terminal.store_notification(change.title.clone().unwrap_or_default(), change.body.clone().unwrap_or_default());
+                let revision = terminal.store_notification(change.title.clone().unwrap_or_default(), change.body.clone().unwrap_or_default(), cx);
                 cx.emit(TabMetadataChanged);
                 cx.notify();
                 Ok(serde_json::json!({"surface_id":change.surface_id,"revision":revision}))

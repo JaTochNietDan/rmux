@@ -1,6 +1,6 @@
 # cmux feature parity inventory
 
-Target: macOS, Linux and Windows. Current status is tracked in [features.json](reference/features.json): 35 families are **in progress**, with explicit implementation sources and remaining gaps; 97 are **not started**. No family is verified or released. Phases are proposed sequencing, not exclusions. The inventory captures product capabilities and candidate contracts at the pinned upstream revision, not proof that every capability ships in the latest stable binary.
+Target: macOS, Linux and Windows. Current status is tracked in [features.json](reference/features.json): 36 families are **in progress**, with explicit implementation sources and remaining gaps; 96 are **not started**. No family is verified or released. Phases are proposed sequencing, not exclusions. The inventory captures product capabilities and candidate contracts at the pinned upstream revision, not proof that every capability ships in the latest stable binary.
 
 Upstream snapshot: [`a76816e4f078`](https://github.com/manaflow-ai/cmux/tree/a76816e4f0788003758b9434ab702068a640fb5d), reviewed November 19, 2026.
 

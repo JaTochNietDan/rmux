@@ -121,6 +121,7 @@ pub struct Preferences {
     pub font_family: String,
     pub scrollback_mib: u16,
     pub copy_on_select: bool,
+    pub native_notifications: bool,
     pub macos_option_as_alt: bool,
     pub unfocused_cursor: UnfocusedCursor,
     pub focused_cursor: FocusedCursor,
@@ -149,6 +150,7 @@ impl Default for Preferences {
             font_family: crate::FONT_FAMILY.into(),
             scrollback_mib: 4,
             copy_on_select: false,
+            native_notifications: false,
             macos_option_as_alt: true,
             unfocused_cursor: UnfocusedCursor::default(),
             focused_cursor: FocusedCursor::default(),
@@ -248,6 +250,7 @@ impl Preferences {
             && self.unfocused_cursor == other.unfocused_cursor
             && self.focused_cursor == other.focused_cursor
             && self.copy_on_select == other.copy_on_select
+            && self.native_notifications == other.native_notifications
             && self.group_new_workspace_placement == other.group_new_workspace_placement
             && (self.close_policy_overridden() || self.confirm_close == other.confirm_close)
     }
@@ -270,6 +273,7 @@ impl Preferences {
         latest.unfocused_cursor = self.unfocused_cursor;
         latest.focused_cursor = self.focused_cursor;
         latest.copy_on_select = self.copy_on_select;
+        latest.native_notifications = self.native_notifications;
         latest.group_new_workspace_placement = self.group_new_workspace_placement;
         if !self.close_policy_overridden() { latest.confirm_close = self.confirm_close; }
         let bytes = serde_json::to_vec_pretty(&latest)?;
@@ -392,6 +396,9 @@ mod tests {
         assert!(!saved.same_saved_appearance(&current));
         current = saved.clone();
         current.copy_on_select = !current.copy_on_select;
+        assert!(!saved.same_saved_appearance(&current));
+        current = saved.clone();
+        current.native_notifications = true;
         assert!(!saved.same_saved_appearance(&current));
         current = saved.clone();
         current.scrollback_mib += 1;

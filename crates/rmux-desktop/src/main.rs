@@ -12,6 +12,7 @@ mod git_context;
 mod git_watch;
 mod clipboard;
 mod notifications;
+mod native_notifications;
 mod automation;
 #[cfg(unix)]
 mod socket_transport;
@@ -480,9 +481,12 @@ impl TerminalView {
     fn has_active_work(&self) -> bool {
         self.session.has_active_work()
     }
-    fn store_notification(&mut self, title: String, body: String) -> u64 {
+    fn store_notification(&mut self, title: String, body: String, cx: &mut Context<Self>) -> u64 {
         let revision = self.notifications.push(title, body, !self.input_focused);
-        if !self.input_focused { self.attention.notify(); }
+        if !self.input_focused {
+            self.attention.notify();
+            native_notifications::enqueue(revision, cx);
+        }
         revision
     }
     fn dismiss_notification(&mut self, revision: u64, cx: &mut Context<Self>) {
@@ -665,7 +669,7 @@ impl TerminalView {
                             let visible = notification.visibility == rmux_terminal::NotificationVisibility::Invisible
                                 && window_view::terminal_is_visible(cx.entity_id(), cx);
                             if notification.visibility.allows(view.input_focused, visible) {
-                                view.store_notification(notification.title.clone(), notification.body.clone());
+                                view.store_notification(notification.title.clone(), notification.body.clone(), cx);
                                 metadata_changed = true;
                             }
                         }
@@ -3023,6 +3027,7 @@ fn main() {
     };
     Application::new().with_assets(icons::Assets).run(move |cx: &mut App| {
         cx.set_global(Shutdowns::default());
+        cx.set_global(native_notifications::Dispatcher::default());
         cx.set_global(preferences.confirm_close);
         cx.set_global(preferences.clone());
         recovery::install(recovery_lease.clone(), cx);

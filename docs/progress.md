@@ -2,6 +2,23 @@
 
 ## Current implementation focus
 
+N03 now has an opt-in native notification dispatcher and persisted Settings
+control. The default remains off and does not initialize an OS backend. Delivery
+uses one lazy consumer, at most eight queued weak terminal references and a
+one-per-second admission limit; excess native banners are dropped while in-app
+history remains independent. Before dispatch it rechecks the setting, focus,
+read/dismissal state and terminal lifetime. Backend calls run off the UI thread;
+errors appear in the originating terminal. Titles/bodies are bounded and XDG
+markup is escaped. The pinned notify-rust 4.18.2 adapter uses the modern macOS
+UserNotifications backend; its bundle check precedes permission requests.
+Windows uses rmux's own AppUserModelID, whose installer registration remains
+pending. Source: https://docs.rs/notify-rust/4.18.2/notify_rust/ . Native delivery,
+permission denial, click-to-focus, app-wide focus policy, OS resource costs and
+Linux/Windows acceptance remain unverified. No OS notifications were enabled or
+sent during development. Desktop compilation and three focused tests passed:
+UTF-8/control-character payload bounds, flood admission, and persisted-control
+comparison. These tests do not establish native delivery or permission behavior.
+
 Added a native-rendered terminal context menu for Copy, Copy with Line Breaks,
 Paste, Select All, Find, working-directory copy/reveal, and Clear Scrollback.
 Right-click opens it when the terminal application does not consume mouse input;

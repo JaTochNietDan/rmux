@@ -1,5 +1,15 @@
 # rmux
 
+**Desktop notifications** in Settings enables optional OS banners for unfocused
+terminals. Save settings to keep the choice (`"native_notifications": true` in
+JSON); the default is off. On macOS, use the bundled app and allow Notification
+Center permission when prompted. Delivery failures appear in the terminal.
+Banners are limited to one per second and a bounded queue; the in-app notification
+history remains available independently. Turning the setting off skips queued
+requests but does not recall a banner already submitted to the OS. Clicking an OS banner does not yet jump
+to its terminal. Windows installer registration and native platform acceptance
+remain pending.
+
 Right-click terminal content for Copy, Paste, Find, selection, directory actions
 and Clear Scrollback. Use Shift-right-click when a terminal app handles mouse
 input. The palette’s **Terminal Actions** command opens the same menu; custom
