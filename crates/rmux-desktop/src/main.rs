@@ -301,6 +301,7 @@ actions!(
         RenameTab,
         ToggleWorkspacePin,
         NextUnreadTerminal,
+        MarkAllRead,
         ToggleNotifications,
         DismissAllNotifications,
         RefreshGitContext,
@@ -772,15 +773,18 @@ impl TerminalView {
             cx.notify();
         }
     }
-    fn set_input_focus(&mut self, focused: bool, cx: &mut Context<Self>) {
-        if focused {
-            self.compression_task = None;
-        }
-        if focused && self.attention.any() {
+    fn acknowledge_attention(&mut self, cx: &mut Context<Self>) {
+        if self.attention.any() {
             self.attention.acknowledge();
             cx.emit(TabMetadataChanged);
             cx.notify();
         }
+    }
+    fn set_input_focus(&mut self, focused: bool, cx: &mut Context<Self>) {
+        if focused {
+            self.compression_task = None;
+        }
+        if focused { self.acknowledge_attention(cx); }
         if self.input_focused == focused {
             return;
         }
@@ -2956,6 +2960,7 @@ fn main() {
                             .collect(),
                     }),
                     MenuItem::action("Next Unread Terminal", NextUnreadTerminal),
+                    MenuItem::action("Mark All Read in This Window", MarkAllRead),
                     MenuItem::action("Toggle Notifications", ToggleNotifications),
                     MenuItem::action("Toggle Program Status", ToggleProgramStatus),
                     MenuItem::action("Show / Refresh Terminal Memory", RefreshTerminalMemory),

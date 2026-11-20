@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Added Mark All Read in This Window in the notification panel, View menu, palette,
+and custom shortcut actions. It acknowledges all alert sources across hidden
+and visible tabs in this window without focusing terminals, removing messages,
+or touching parser locks. Focus acknowledgement shares the same helper. Other
+windows remain untouched. The desktop compiled and the existing attention-source
+transition test passed. Native interaction acceptance remains pending.
+
 Follow-up after v0.1.0: moved Settings into the application menu and added native
 macOS About, Hide, Hide Others and Show All commands. Cmd-H and Cmd-Option-H use
 GPUI's platform operations; defaults are registered before custom shortcuts so

@@ -27,6 +27,7 @@ fn action(name: &str) -> Option<Box<dyn Action>> {
         "tab_picker" => Box::new(ShowTabPicker), "palette" => Box::new(ShowCommandPalette),
         "toggle_zoom" => Box::new(TogglePaneZoom), "toggle_sidebar" => Box::new(ToggleSidebar),
         "settings" => Box::new(ToggleSettings), "notifications" => Box::new(ToggleNotifications),
+        "mark_all_read" => Box::new(MarkAllRead),
         "next_unread" => Box::new(NextUnreadTerminal), "find" => Box::new(Find),
         "reload_settings" => Box::new(ReloadSettings), "disabled" => Box::new(NoAction {}),
         _ => return None,

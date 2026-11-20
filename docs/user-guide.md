@@ -78,7 +78,7 @@ Supported action names: `new_workspace`, `new_window`, `new_tab`, `split_right`,
 `split_down`, `focus_left`, `focus_right`, `focus_up`, `focus_down`,
 `next_workspace`, `previous_workspace`, `next_tab`, `previous_tab`, `tab_picker`,
 `palette`, `toggle_zoom`, `toggle_sidebar`, `settings`, `notifications`,
-`next_unread`, `find`, `reload_settings`, and `disabled`. Graphical binding editing,
+`next_unread`, `mark_all_read`, `find`, `reload_settings`, and `disabled`. Graphical binding editing,
 full conflict explanations and complete upstream shortcut coverage remain pending.
 
 Workspace groups are available from the File menu and command palette: create
@@ -952,3 +952,9 @@ Start with the [roadmap](roadmap.md), then the [feature inventory](feature-parit
 | [Contract inventories](reference/README.md) | Commands, settings, shortcut IDs and static RPC capabilities |
 
 The comparison baseline is cmux commit `a76816e4f0788003758b9434ab702068a640fb5d`, reviewed November 19, 2026. Main-branch capabilities are not all stable-release features. rmux's architecture and phase assignments are proposals; upstream evidence is identified separately.
+
+Mark All Read in This Window is available in the View menu, command palette,
+and notification panel. It acknowledges bell, notification and task-status
+alerts across all workspaces and hidden tabs in the current window while keeping
+messages visible. Other windows retain their unread state. A custom shortcut can
+bind `mark_all_read`. Clear all dismisses messages instead.

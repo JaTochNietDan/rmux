@@ -160,6 +160,7 @@ impl CommandPalette {
         command!("Pin / Unpin Workspace", ToggleWorkspacePin);
         command!("Previous Workspace", PreviousWorkspace);
         command!("Next Unread Terminal", NextUnreadTerminal);
+        command!("Mark All Read in This Window", MarkAllRead);
         command!("Toggle Notifications", ToggleNotifications);
         command!("Dismiss All Notifications", DismissAllNotifications);
         command!("Refresh Git Branch for Current Terminal", RefreshGitContext);

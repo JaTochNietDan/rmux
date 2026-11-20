@@ -1335,6 +1335,19 @@ impl WorkspaceWindow {
         pane.update(cx, |pane, cx| pane.select(tab, window, cx));
         cx.notify();
     }
+    fn mark_all_read(&mut self, cx: &mut Context<Self>) {
+        // Cached UI state only: no parser locks, input, focus changes or pane reveals.
+        let terminals: Vec<_> = self.entries.iter().flat_map(|entry| {
+            entry.workspace.read(cx).panes.iter().flat_map(|pane| {
+                pane.read(cx).terminals.iter().filter(|terminal| terminal.read(cx).attention.any()).cloned()
+            })
+        }).collect();
+        for terminal in terminals {
+            terminal.update(cx, |view, cx| view.acknowledge_attention(cx));
+        }
+        cx.notify();
+    }
+
     fn dismiss_all_notifications(&mut self, cx: &mut Context<Self>) {
         let mut pending = Vec::new();
         for entry in &self.entries {
@@ -1411,6 +1424,7 @@ impl WorkspaceWindow {
 
     fn notification_panel(&self, cx: &mut Context<Self>) -> AnyElement {
         let navigation = self.notification_navigation.as_ref().expect("open notification panel").clone();
+        let has_unread = self.entries.iter().any(|entry| entry.workspace.read(cx).needs_attention(cx));
         let mut messages = Vec::new();
         for index in self.workspace_order(true) {
             let entry = &self.entries[index];
@@ -1472,6 +1486,15 @@ impl WorkspaceWindow {
                             .child(icons::icon("close")),
                     ),
             )
+                    .when(has_unread, |panel| panel.child(
+                        div().id("mark-all-read").flex_shrink_0().mx_3().mb_2().px_2().py_1().rounded_sm().text_xs()
+                            .text_color(rgb(0x8ebfff)).cursor_pointer().hover(|style| style.bg(rgb(0x353535)))
+                            .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("Acknowledge all alerts in this window; keep messages".into())).into())
+                            .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
+                                if event.standard_click() { this.mark_all_read(cx); }
+                            })).child("Mark all read")
+                    ))
+
             .child(
                 div()
                     .id("notification-list")
@@ -2837,6 +2860,7 @@ impl Render for WorkspaceWindow {
             .on_action(cx.listener(|this, _: &NextUnreadTerminal, window, cx| this.next_unread(window, cx)))
             .on_action(cx.listener(|this, _: &ToggleNotifications, window, cx| this.toggle_notifications(window, cx)))
             .on_action(cx.listener(|this, _: &DismissAllNotifications, _, cx| this.dismiss_all_notifications(cx)))
+            .on_action(cx.listener(|this, _: &MarkAllRead, _, cx| this.mark_all_read(cx)))
             .on_action(cx.listener(|this, _: &MoveWorkspaceUp, _, cx| this.reorder(-1, cx)))
             .on_action(cx.listener(|this, _: &MoveWorkspaceDown, _, cx| this.reorder(1, cx)))
             .on_action(
