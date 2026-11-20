@@ -27,17 +27,43 @@ unsafe impl Send for Search {}
 
 impl Search {
     pub(crate) fn new(terminal: Arc<Mutex<Terminal>>) -> Result<Self> {
-        let mut this = Self {
-            handle: ptr::null_mut(),
-            terminal,
+        let handle = {
+            let guard = terminal.lock().unwrap_or_else(|e| e.into_inner());
+            Self::register(&guard)?
         };
-        let result = {
-            let terminal = this.terminal.lock().unwrap_or_else(|e| e.into_inner());
-            // SAFETY: the mutex serializes registration with terminal changes.
-            unsafe { ghostty_search_new(ptr::null(), &mut this.handle, terminal.terminal) }
+        Ok(Self { handle, terminal })
+    }
+
+    /// Only the worker uses this path. Closing Find must cancel registration
+    /// even while a busy parser owns the terminal; no tracked refs exist yet.
+    pub(crate) fn new_cancellable(
+        terminal: Arc<Mutex<Terminal>>,
+        canceled: &std::sync::atomic::AtomicBool,
+    ) -> Result<Self> {
+        use std::sync::{TryLockError, atomic::Ordering};
+        let handle = loop {
+            ensure!(!canceled.load(Ordering::Acquire), "search canceled");
+            let guard = match terminal.try_lock() {
+                Ok(guard) => guard,
+                Err(TryLockError::Poisoned(error)) => error.into_inner(),
+                Err(TryLockError::WouldBlock) => {
+                    // Back off only during initialization contention; completed
+                    // searches still sleep on their command channel at idle.
+                    std::thread::sleep(std::time::Duration::from_millis(1));
+                    continue;
+                }
+            };
+            ensure!(!canceled.load(Ordering::Acquire), "search canceled");
+            break Self::register(&guard)?;
         };
-        check(result)?;
-        Ok(this)
+        Ok(Self { handle, terminal })
+    }
+
+    fn register(terminal: &Terminal) -> Result<GhosttySearch> {
+        let mut handle = ptr::null_mut();
+        // SAFETY: callers hold the parser mutex for registration.
+        check(unsafe { ghostty_search_new(ptr::null(), &mut handle, terminal.terminal) })?;
+        Ok(handle)
     }
 
     /// Ghostty currently matches ASCII case-insensitively and other bytes exactly.

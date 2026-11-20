@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Search-worker initialization now checks cancellation while waiting for the
+parser lock, using a 1 ms backoff only during registration contention. Closing
+Find can terminate an unregistered worker without waiting for the parser to
+release its lock. A deterministic test holds that lock, waits for the worker to
+consume its query, then verifies cancellation closes the result channel without
+publishing. All five search tests passed, including Unicode/alternate-screen
+search and worker navigation/refresh. Existing searches still require the parser
+lock to release tracked references safely; this change concerns initialization,
+not a guarantee of immediate cancellation during every search operation.
+
 Opening Find no longer registers the Ghostty search on the UI thread. The
 on-demand search worker now initializes it when processing its first command,
 keeping parser-lock waits in that worker. Selection-prefill uses a nonblocking

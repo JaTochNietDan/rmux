@@ -69,7 +69,7 @@ impl SearchWorker {
                     };
                     let result = (|| -> Result<Progress> {
                         if search.is_none() {
-                            search = Some(Search::new(terminal.clone())?);
+                            search = Some(Search::new_cancellable(terminal.clone(), &canceled)?);
                         }
                         let search = search.as_mut().expect("initialized search");
                         if let Some(query) = query {
@@ -217,6 +217,31 @@ mod tests {
         creator.join().unwrap();
         let (worker, revision) = result.expect("opening Find waited for the parser lock");
         assert_eq!(wait_for(&worker, revision, false).result.unwrap().matches, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn closing_find_cancels_registration_while_parser_is_locked() -> Result<()> {
+        let terminal = Arc::new(Mutex::new(Terminal::new(30, 3)?));
+        let guard = terminal.lock().unwrap();
+        let worker = SearchWorker::new(terminal.clone())?;
+        worker.set_query("needle".into())?;
+        // Wait until the worker consumes the query, so cancellation exercises
+        // initialization rather than merely closing an idle command channel.
+        let deadline = Instant::now() + Duration::from_secs(1);
+        while worker.pending.lock().unwrap().query.is_some() {
+            assert!(Instant::now() < deadline, "worker did not consume query");
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        let updates = worker.updates.clone();
+        drop(worker);
+        while !updates.is_closed() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        let stopped_while_locked = updates.is_closed();
+        drop(guard);
+        assert!(stopped_while_locked, "canceled search waited for the parser");
+        assert!(updates.try_recv().is_err(), "canceled query published a result");
         Ok(())
     }
 
