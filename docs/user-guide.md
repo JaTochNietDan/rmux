@@ -1,5 +1,13 @@
 # rmux
 
+**Settings → Terminal background opacity** adjusts the default terminal background
+from 0–100% in 5% steps. **Blur behind terminal** requests platform blur below
+100% opacity; availability depends on your OS/compositor. Text, explicitly colored
+cells, tabs and sidebar remain opaque. Changes apply live across windows; use
+**Save these settings** to retain them. JSON keys are `background_opacity` (integer
+percentage, default 100) and `background_blur` (boolean, default false).
+Native visual and compositor-performance acceptance remains pending.
+
 On macOS/Linux, **Paste** also accepts clipboard images when no text representation
 is present. rmux writes the original image bytes to a private temporary file in
 the background, then pastes its quoted local path without Enter. Files remain

@@ -385,7 +385,16 @@
         "APPEAR"
       ],
       "acceptance": "Publish per-platform capabilities; enabling effects must pass frame and memory budgets.",
-      "rmux_status": "not_started"
+      "rmux_status": "in_progress",
+      "implementation": "Live terminal background opacity (0–100%) and optional platform blur are exposed in Settings and persisted configuration. Only the default terminal fill is translucent; text, explicit colored cell backgrounds and app chrome remain opaque. Parent backgrounds no longer mask transparency, and native background appearance changes only when its mode changes. Focused settings validation/step/save tests and desktop compilation pass.",
+      "remaining": "Native transparency/blur/compositor and performance acceptance across platforms, background images, shaders and full upstream settings semantics.",
+      "implementation_sources": [
+        "crates/rmux-desktop/src/preferences.rs",
+        "crates/rmux-desktop/src/settings_view.rs",
+        "crates/rmux-desktop/src/main.rs",
+        "crates/rmux-desktop/src/window_view.rs"
+      ],
+      "progress_record": "docs/progress.md"
     },
     {
       "id": "T05",

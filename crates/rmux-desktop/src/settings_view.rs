@@ -7,7 +7,7 @@ pub struct State {
     pub selected: usize,
     pub scroll: ScrollHandle,
 }
-pub const KEYS: &[&str] = &["font", "padding", "theme", "focused_cursor", "cursor", "copy", "close", "group_placement", "scrollback", "native_notifications", "notification_focus", "font_family"];
+pub const KEYS: &[&str] = &["font", "padding", "theme", "focused_cursor", "cursor", "copy", "close", "group_placement", "scrollback", "native_notifications", "notification_focus", "font_family", "opacity", "blur"];
 // Each control owns its explanatory content. Only the heading and footer hint
 // are separate non-control children of the scroll container.
 pub fn scroll_index(control: usize) -> usize {
@@ -28,6 +28,8 @@ pub fn next_control(selected: usize, key: &str, shift: bool) -> Option<usize> {
 
 pub fn adjust(settings: &mut Preferences, key: &str, delta: i32) {
     match key {
+        "opacity" => settings.background_opacity = (settings.background_opacity as i32 + 5 * delta.signum()).clamp(0, 100) as u8,
+        "blur" => settings.background_blur = !settings.background_blur,
         "font" => settings.font_size = (settings.font_size + delta as f32).clamp(8., 40.),
         "padding" => settings.terminal_padding = (settings.terminal_padding as i32 + delta).clamp(0, 32) as u8,
         "scrollback" => settings.scrollback_mib = (settings.scrollback_mib as i32 + delta.signum()).clamp(0, 256) as u16,
@@ -132,6 +134,9 @@ pub fn panel(state: State, cx: &mut Context<window_view::WorkspaceWindow>) -> An
                 .child(div().pt_2().text_xs().text_color(rgb(0xa0a0a0)).child("Optional OS banners for unfocused terminals. macOS asks for permission on first delivery. In-app history stays available when off.")))
             .child(row("Show desktop banners", "notification_focus", settings.notification_focus.label().into(), false, state.selected == 10, false))
             .child(row("Default font family", "font_family", settings.font_family.clone(), false, state.selected == 11, false))
+            .child(row("Terminal background opacity", "opacity", format!("{}%", settings.background_opacity), true, state.selected == 12, false))
+            .child(div().child(row("Blur behind terminal", "blur", if settings.background_blur { "On" } else { "Off" }.into(), false, state.selected == 13, false))
+                .child(div().pt_2().text_xs().text_color(rgb(0xa0a0a0)).child("Blur requires opacity below 100% and OS/compositor support. Text, colored cells, tabs and sidebar remain opaque.")))
             .child(div().py_3().text_xs().text_color(rgb(0xa0a0a0)).child("Tab / ↑↓ to navigate · ←→ to change · Enter to activate · Esc to close. Changes apply to this session. Font family and text size update terminals using the previous defaults. Per-terminal zoom stays unchanged; Reset Font Size rejoins the default. Custom colors in your config override the theme."))
             .child(div().id("settings-save").border_1().border_color(if state.selected == KEYS.len() { rgb(0xffffff) } else { rgb(0x007aff) }).px_3().py_2().rounded_sm().text_sm()
                 .bg(rgb(if busy { 0x353535 } else { 0x007aff }))

@@ -2059,7 +2059,9 @@ impl Element for TerminalElement {
                 window.is_window_active() && view.focus.is_focused(window),
             )
         });
-        let backgrounds = vec![fill(outer_bounds, color(frame.background))];
+        let mut background = color(frame.background);
+        background.a = f32::from(cx.global::<Preferences>().background_opacity) / 100.;
+        let backgrounds = vec![fill(outer_bounds, background)];
         let mut lines = Vec::new();
         let mut preedit_backgrounds = Vec::new();
         let shaped_rows = self.view.update(cx, |view, _| {
@@ -2826,7 +2828,6 @@ impl Render for Workspace {
             .size_full()
             .relative()
             .child(split_view::drag_capture(cx))
-            .bg(rgb(0x12141a))
             .text_color(rgb(0xdcdfe6))
             .flex()
             .flex_col()

@@ -135,6 +135,7 @@ pub(super) struct WorkspaceWindow {
     sidebar_selection_anchor: Option<EntityId>,
     active: usize,
     rendered_workspace: Option<WeakEntity<Workspace>>,
+    rendered_background: Option<WindowBackgroundAppearance>,
     previous_workspace: Option<EntityId>,
     close_prompt: Option<EntityId>,
     window_close_prompt: bool,
@@ -151,9 +152,7 @@ pub(super) struct WorkspaceWindow {
 }
 impl WorkspaceWindow {
     fn observe_settings(cx: &mut Context<Self>) {
-        cx.observe_global::<Preferences>(|this, cx| {
-            if this.settings_state.is_some() { cx.notify(); }
-        }).detach();
+        cx.observe_global::<Preferences>(|_, cx| cx.notify()).detach();
         cx.observe_global::<preferences::ReloadState>(|this, cx| {
             if this.settings_state.is_some() { cx.notify(); }
         }).detach();
@@ -2536,6 +2535,7 @@ impl WorkspaceWindow {
             sidebar_selection: Vec::new(),
             sidebar_selection_anchor: None,
             rendered_workspace: None,
+            rendered_background: None,
             previous_workspace: None,
             close_prompt: None,
             window_close_prompt: false,
@@ -2706,6 +2706,7 @@ impl WorkspaceWindow {
             sidebar_selection: Vec::new(),
             sidebar_selection_anchor: None,
             rendered_workspace: None,
+            rendered_background: None,
             previous_workspace: None,
             close_prompt: None,
             window_close_prompt: false,
@@ -3183,6 +3184,11 @@ impl WorkspaceWindow {
 
 impl Render for WorkspaceWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let background = cx.global::<Preferences>().window_background();
+        if self.rendered_background != Some(background) {
+            window.set_background_appearance(background);
+            self.rendered_background = Some(background);
+        }
         let navigation_order = self.workspace_order(true);
         // Read cached notification state once per workspace, including hidden
         // members. This neither touches terminal parser locks nor acknowledges it.
@@ -3243,7 +3249,7 @@ impl Render for WorkspaceWindow {
             .size_full()
             .relative()
             .flex()
-            .bg(rgb(0x12141a))
+            .when(background == WindowBackgroundAppearance::Opaque, |root| root.bg(rgb(0x12141a)))
             .text_color(rgb(0xdcdfe6))
             .child(canvas(|_, _, _| (), move |_, _, window, _| {
                 let moving = entity.clone();

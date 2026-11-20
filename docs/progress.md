@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Started T04 with live default-terminal-background opacity and optional compositor
+blur. Settings provides 0–100% opacity in 5% steps plus blur, with config validation,
+change tracking and Save Settings persistence. The terminal base fill uses alpha;
+text and explicit cell backgrounds remain opaque. Removed the redundant workspace
+background and made the window root fill conditional so parent layers cannot mask
+transparency. Window appearance changes are cached by mode (opaque/transparent/
+blurred), and preference updates notify all window roots. Desktop compilation and
+a focused defaults/bounds/stepping/mode/save-reload test passed. Native main-app
+visual parity, compositor availability/cost, cross-platform acceptance, background
+images and shaders remain pending; no screenshot or performance claim is made.
+
 Added crash-orphan cleanup for newly pasted images in a private per-user cache
 directory. A stable directory lock serializes file publication and bounded cleanup;
 content writes run after releasing it, while a per-image lock remains held for

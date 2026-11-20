@@ -147,6 +147,8 @@ pub struct Preferences {
     pub focused_cursor: FocusedCursor,
     pub foreground_color: Option<HexColor>,
     pub background_color: Option<HexColor>,
+    pub background_opacity: u8,
+    pub background_blur: bool,
     pub cursor_color: Option<HexColor>,
     pub ansi_palette: Option<[HexColor; 16]>,
     pub terminal_theme: TerminalTheme,
@@ -177,6 +179,8 @@ impl Default for Preferences {
             focused_cursor: FocusedCursor::default(),
             foreground_color: None,
             background_color: None,
+            background_opacity: 100,
+            background_blur: false,
             cursor_color: None,
             ansi_palette: None,
             terminal_theme: TerminalTheme::default(),
@@ -261,11 +265,19 @@ impl Preferences {
     }
     pub fn close_policy_overridden(&self) -> bool { self.policy_override.is_some() }
 
+    /// Keep opaque compositing at 100%, even when the blur preference is on.
+    pub fn window_background(&self) -> gpui::WindowBackgroundAppearance {
+        if self.background_opacity == 100 { gpui::WindowBackgroundAppearance::Opaque }
+        else if self.background_blur { gpui::WindowBackgroundAppearance::Blurred }
+        else { gpui::WindowBackgroundAppearance::Transparent }
+    }
     /// Compare precisely the session values written by Save Settings. A close
     /// policy supplied by the environment is intentionally not persisted.
     pub fn same_saved_appearance(&self, other: &Self) -> bool {
         self.font_size == other.font_size
             && self.font_family == other.font_family
+            && self.background_opacity == other.background_opacity
+            && self.background_blur == other.background_blur
             && self.terminal_padding == other.terminal_padding
             && self.scrollback_mib == other.scrollback_mib
             && self.terminal_theme == other.terminal_theme
@@ -291,6 +303,8 @@ impl Preferences {
         let mut latest = Self::read(&path, false)?;
         latest.font_size = self.font_size;
         latest.font_family = self.font_family.clone();
+        latest.background_opacity = self.background_opacity;
+        latest.background_blur = self.background_blur;
         latest.terminal_padding = self.terminal_padding;
         latest.scrollback_mib = self.scrollback_mib;
         latest.terminal_theme = self.terminal_theme;
@@ -366,6 +380,7 @@ impl Preferences {
             value.font_size.is_finite() && (8. ..=40.).contains(&value.font_size),
             "font_size must be between 8 and 40"
         );
+        ensure!(value.background_opacity <= 100, "background_opacity must be between 0 and 100");
         crate::shortcuts::compile(&value)?;
         Ok(value)
     }
@@ -412,6 +427,38 @@ impl Preferences {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn background_appearance_controls_validate_cycle_and_persist() -> Result<()> {
+        use gpui::WindowBackgroundAppearance::{Opaque, Transparent, Blurred};
+        let mut settings = Preferences::decode(b"{}")?;
+        assert_eq!(settings.background_opacity, 100);
+        assert_eq!(settings.window_background(), Opaque);
+        crate::settings_view::adjust(&mut settings, "opacity", -1);
+        assert_eq!(settings.background_opacity, 95);
+        assert_eq!(settings.window_background(), Transparent);
+        crate::settings_view::adjust(&mut settings, "blur", 1);
+        assert_eq!(settings.window_background(), Blurred);
+        assert!(!settings.same_saved_appearance(&Preferences::default()));
+        for _ in 0..30 { crate::settings_view::adjust(&mut settings, "opacity", -1); }
+        assert_eq!(settings.background_opacity, 0);
+        for _ in 0..30 { crate::settings_view::adjust(&mut settings, "opacity", 1); }
+        assert_eq!(settings.background_opacity, 100);
+        assert_eq!(settings.window_background(), Opaque);
+        for value in ["-1", "101", "256", "0.5", "null"] {
+            assert!(Preferences::decode(format!("{{\"background_opacity\":{value}}}").as_bytes()).is_err());
+        }
+        let directory = tempfile::tempdir()?;
+        let path = directory.path().join("config.json");
+        settings.source = Some(path.clone());
+        settings.background_opacity = 75;
+        settings.save_appearance()?;
+        let saved = Preferences::read(&path, false)?;
+        assert_eq!(saved.background_opacity, 75);
+        assert!(saved.background_blur);
+        assert_eq!(saved.window_background(), Blurred);
+        Ok(())
+    }
+
     #[test]
     fn saved_appearance_comparison_tracks_only_persisted_controls() {
         let saved = Preferences::default();
