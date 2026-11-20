@@ -30,6 +30,14 @@ fn check_cancel(canceled: &AtomicBool) -> anyhow::Result<()> {
     Ok(())
 }
 pub const MAX_ENTRIES: usize = 2048;
+pub fn entered_directory(text: &str) -> Result<PathBuf, &'static str> {
+    if text.is_empty() || text.len() > 4096 || text.contains('\0') {
+        return Err("Enter a directory path of 1–4096 bytes without NUL characters");
+    }
+    let path = PathBuf::from(text);
+    if !path.is_absolute() { return Err("Enter an absolute directory path"); }
+    Ok(path)
+}
 pub struct Entry { pub path: PathBuf, pub directory: bool, pub symlink: bool }
 pub struct Listing { pub path: PathBuf, pub entries: Vec<Entry>, pub truncated: bool }
 pub struct Preview { pub path: PathBuf, pub lines: Vec<String>, pub truncated: bool }
@@ -96,6 +104,16 @@ pub fn list_cancellable(path: PathBuf, canceled: &AtomicBool) -> anyhow::Result<
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn directory_input_preserves_literal_paths_and_rejects_relative_expansion() {
+        let root = std::env::temp_dir();
+        let path = root.join("space 世界 $(literal) ");
+        assert_eq!(super::entered_directory(path.to_str().unwrap()).unwrap(), path);
+        for text in ["", "relative", "~/project", "$HOME/project", "bad\0path"] {
+            assert!(super::entered_directory(text).is_err());
+        }
+        assert!(super::entered_directory(&"x".repeat(4097)).is_err());
+    }
     #[test]
     fn file_reads_share_a_bounded_budget_until_workers_release_it() {
         static LIMIT: super::LoadLimit = super::LoadLimit(super::AtomicUsize::new(0));

@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Local file browsing now offers Go to Directory from listings and read-error
+recovery. The existing picker transitions to a prefilled path editor with
+Open/Cancel controls, Enter/Escape handling and IME protection. It validates
+absolute UTF-8 paths up to 4,096 bytes without trimming names or expanding shell
+syntax, then uses the bounded asynchronous loader. Invalid input remains in the
+editor for correction. Focused literal-path/Unicode/relative-input tests and
+desktop check/test compilation passed; native navigation acceptance is pending.
+
 Local directory and preview reads now share a four-job process-wide permit
 budget, acquired before scheduling. The worker owns its permit until filesystem
 work exits, so cancel/retry cannot bypass the cap while an OS read is still

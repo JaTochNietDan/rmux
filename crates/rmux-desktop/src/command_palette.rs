@@ -107,6 +107,7 @@ pub enum BufferMode { Paste, Delete, Rename, Copy }
 pub struct CommandPalette {
     feedback: Option<&'static str>,
     buffer_rename: Option<(String, u64)>,
+    directory_input: bool,
     input: Entity<text_field::TextField>,
     heading: &'static str,
     empty_message: &'static str,
@@ -381,6 +382,8 @@ impl CommandPalette {
     }
     pub fn files(listing: file_browser::Listing, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let mut commands = Vec::new();
+        commands.push(Command { title: "Go to Directory…".into(), subtitle: Some(listing.path.display().to_string()), shortcut: None,
+            target: PaletteEvent::Run(Box::new(EnterDirectory { path: listing.path.clone() })) });
         if let Some(parent) = listing.path.parent() {
             commands.push(Command { title: ".. · Parent directory".into(), subtitle: Some(parent.display().to_string()), shortcut: None,
                 target: PaletteEvent::Run(Box::new(BrowseDirectory { path: parent.to_owned() })) });
@@ -401,6 +404,8 @@ impl CommandPalette {
     }
     pub fn file_error(path: std::path::PathBuf, error: String, directory: bool, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let mut commands = Vec::new();
+        commands.push(Command { title: "Go to Directory…".into(), subtitle: None, shortcut: None,
+            target: PaletteEvent::Run(Box::new(EnterDirectory { path: path.parent().unwrap_or(&path).to_owned() })) });
         if let Some(parent) = path.parent() {
             commands.push(Command { title: "Back to directory".into(), subtitle: Some(parent.display().to_string()), shortcut: None,
                 target: PaletteEvent::Run(Box::new(BrowseDirectory { path: parent.to_owned() })) });
@@ -492,8 +497,8 @@ impl CommandPalette {
             |this, _, event: &text_field::EditEvent, cx| match event {
                 text_field::EditEvent::Changed(query) => {
                     this.feedback = None;
-                    if this.buffer_rename.is_some() {
-                        this.empty_message = "Enter a unique buffer name (up to 128 bytes)";
+                    if this.buffer_rename.is_some() || this.directory_input {
+                        this.empty_message = if this.directory_input { "Enter an absolute directory path; no shell expansion" } else { "Enter a unique buffer name (up to 128 bytes)" };
                         cx.notify();
                         return;
                     }
@@ -508,7 +513,7 @@ impl CommandPalette {
         )
         .detach();
         Self {
-            input, heading, empty_message, buffer_rename: None, feedback: None,
+            input, heading, empty_message, buffer_rename: None, feedback: None, directory_input: false,
             search: palette_match::RankedSearch::new(commands
                 .iter()
                 .map(|command| format!("{} {} {}", command.title, command.subtitle.as_deref().unwrap_or_default(),
@@ -567,6 +572,30 @@ impl CommandPalette {
     }
     fn run(&mut self, cx: &mut Context<Self>) {
         if self.input.read(cx).is_composing() { return; }
+        if self.directory_input {
+            match file_browser::entered_directory(self.input.read(cx).value()) {
+                Ok(path) => cx.emit(PaletteEvent::Run(Box::new(BrowseDirectory { path }))),
+                Err(error) => { self.empty_message = error; cx.notify(); }
+            }
+            return;
+        }
+        let directory = self.search.matches.get(self.selected).and_then(|index| match &self.commands[*index].target {
+            PaletteEvent::Run(action) => action.as_any().downcast_ref::<EnterDirectory>().map(|action| action.path.clone()),
+            _ => None,
+        });
+        if let Some(path) = directory {
+            let Some(path) = path.to_str() else { self.feedback = Some("This path cannot be represented as UTF-8 text"); cx.notify(); return; };
+            if path.len() > 4096 { self.feedback = Some("Path exceeds the editor's 4096-byte limit"); cx.notify(); return; }
+            self.directory_input = true;
+            self.heading = "Go to directory · Enter to open · Escape to cancel";
+            self.empty_message = "Enter an absolute directory path; no shell expansion";
+            self.commands.clear();
+            self.search = palette_match::RankedSearch::new(Vec::new());
+            self.scroll.reset(0);
+            self.input.update(cx, |input, cx| { input.replace_draft(path, cx); input.select_all_text(cx); });
+            cx.notify();
+            return;
+        }
         if let Some(PaletteEvent::Run(action)) = self.search.matches.get(self.selected)
             .map(|index| &self.commands[*index].target) {
             if let Some(line) = action.as_any().downcast_ref::<CopyPreviewLine>() {
@@ -684,10 +713,10 @@ impl Render for CommandPalette {
                 .h(px(result_area_height(self.search.matches.iter().map(|index| self.commands[*index].subtitle.is_some()))))
                 .into_any_element()
             })
-            .when(self.buffer_rename.is_some(), |palette| palette.child(
+            .when(self.buffer_rename.is_some() || self.directory_input, |palette| palette.child(
                 div().flex_shrink_0().px_3().py_2().flex().flex_wrap().items_center().gap_2()
                     .child(div().flex_1().min_w_0().text_xs().text_color(rgb(0xa0a0a0))
-                        .child("Enter saves · Escape cancels"))
+                        .child(if self.directory_input { "Enter opens · Escape cancels" } else { "Enter saves · Escape cancels" }))
                     .child(div().id("buffer-rename-cancel").px_3().py_1().rounded_sm()
                         .text_sm().cursor_pointer().bg(rgb(0x353535)).hover(|style| style.bg(rgb(0x454545)))
                         .on_click(cx.listener(|_, event: &ClickEvent, _, cx| {
@@ -697,9 +726,9 @@ impl Render for CommandPalette {
                         .text_sm().cursor_pointer().bg(rgb(0x007aff)).hover(|style| style.bg(rgb(0x1685ff)))
                         .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
                             if event.standard_click() { this.run(cx); }
-                        })).child("Save"))
+                        })).child(if self.directory_input { "Open" } else { "Save" }))
             ))
-            .when((!compact || self.feedback.is_some()) && self.buffer_rename.is_none(), |palette| palette.child(
+            .when((!compact || self.feedback.is_some()) && self.buffer_rename.is_none() && !self.directory_input, |palette| palette.child(
                 div()
                     .flex_shrink_0()
                     .px_3()
