@@ -182,6 +182,8 @@ to keep the default across launches.
 Use **Show Listening Ports** in the palette or menu to inspect a snapshot of local
 TCP listeners owned by the current terminal’s shell and descendants. Refresh
 manually and copy an address from its row. In the panel, ↑/↓ or Home/End select,
+Page Up/Down moves by the visible list height, and hovering a truncated address
+shows it in full.
 Enter or Command-C (Control-C on Linux/Windows) copies, R refreshes, and Escape
 closes and returns to the terminal. **Close Listening Ports** is also in
 the palette; custom actions are `listening_ports` and `close_listening_ports`.

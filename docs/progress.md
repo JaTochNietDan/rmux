@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Listening Ports now supports Page Up/Down using measured listener heights and
+the visible viewport. Shared notice-offset calculation keeps navigation aligned
+when ownership/truncation notices precede rows; empty results no longer request
+a listener scroll target. Truncated addresses expose their full text on hover.
+The shared mixed-height paging test and desktop cargo check passed. Native
+keyboard and tooltip acceptance remain pending.
+
 Native macOS first-launch recovery now passes an isolated smoke scenario against
 the rebuilt desktop binary: missing nested recovery folders are created with
 private Unix permissions, normal Quit writes a valid single-window checkpoint,

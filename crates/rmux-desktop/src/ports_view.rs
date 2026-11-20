@@ -16,6 +16,12 @@ impl Drop for State {
         if let Some(canceled) = &self.canceled { canceled.store(true, Ordering::Release); }
     }
 }
+impl State {
+    fn listener_offset(&self) -> usize {
+        self.report.as_ref().map_or(0, |report| usize::from(report.ownership_changed)
+            + usize::from(report.truncated)) + usize::from(self.error.is_some())
+    }
+}
 
 fn refreshed_selection(listeners: &[ports::Listener], previous: Option<ports::Listener>) -> usize {
     previous.and_then(|previous| listeners.iter().position(|row| *row == previous)).unwrap_or(0)
@@ -23,9 +29,8 @@ fn refreshed_selection(listeners: &[ports::Listener], previous: Option<ports::Li
 
 impl TerminalView {
     fn reveal_selected_port(&self) {
-        if let Some(report) = &self.ports.report {
-            let notices = usize::from(report.ownership_changed) + usize::from(report.truncated) + usize::from(self.ports.error.is_some());
-            self.ports.scroll.scroll_to_item(notices + self.ports.selected);
+        if self.ports.report.as_ref().is_some_and(|report| !report.listeners.is_empty()) {
+            self.ports.scroll.scroll_to_item(self.ports.listener_offset() + self.ports.selected);
         }
     }
     fn copy_port(&self, cx: &mut Context<Self>) {
@@ -48,6 +53,14 @@ impl TerminalView {
             "down" if count > 0 => self.ports.selected = (self.ports.selected + 1) % count,
             "home" => self.ports.selected = 0,
             "end" => self.ports.selected = count.saturating_sub(1),
+            key @ ("pageup" | "pagedown") => {
+                let offset = self.ports.listener_offset();
+                if let Some(next) = command_palette::paged_result(self.ports.selected, count,
+                    key == "pageup", f32::from(self.ports.scroll.bounds().size.height), |index| {
+                        self.ports.scroll.bounds_for_item(offset + index)
+                            .map(|bounds| f32::from(bounds.size.height)).unwrap_or(36.).max(1.)
+                    }) { self.ports.selected = next; }
+            }
             _ => {},
         }
         self.reveal_selected_port();
@@ -170,7 +183,9 @@ pub(super) fn panel(state: &State, window: &Window, cx: &mut Context<TerminalVie
                             if let Some(focus) = &this.ports.focus { focus.focus(window); }
                             cx.stop_propagation(); cx.notify();
                         }))
-                        .child(div().flex_1().min_w_0().truncate().child(address.clone()))
+                        .child(div().id(("listener-address", index)).flex_1().min_w_0().truncate()
+                            .tooltip({ let address: SharedString = address.clone().into(); move |_, cx| cx.new(|_| pane_view::ControlHint(address.clone())).into() })
+                            .child(address.clone()))
                         .child(div().text_color(rgb(0xa0a0a0)).child(format!("PID {}", row.pid)))
                         .when_some(ports::http_url(row.address), |row, url| row.child(
                             pane_view::pane_control("open-port-http", "Open as HTTP in Default Browser").id(("open-port-http", index))
