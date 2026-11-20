@@ -316,6 +316,9 @@ split. Completion splits the original pane; switching focus during launch keeps
 your newer focus. Closing the original pane or transferring the workspace to
 another window discards the pending result. Startup failure leaves existing
 panes intact.
+The split inherits the source tab's font at request time, even if you switch
+tabs during startup. Inherited defaults follow settings changes made while it
+starts; custom font choices are retained.
 Use the pending indicator's cancel control, Cancel Split Terminal in the
 File menu/palette, or a custom `cancel_split` binding to discard a pending split.
 The indicator changes to Canceling until background work finishes; another split

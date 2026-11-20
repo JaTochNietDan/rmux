@@ -2035,7 +2035,7 @@ fn color(c: Color) -> Hsla {
 
 enum TerminalSeed {
     Session(Session),
-    Ready(PreparedTerminal),
+    Ready(PreparedTerminal, CellMetrics, SharedString),
 }
 
 struct Workspace {
@@ -2435,6 +2435,10 @@ impl Workspace {
             return;
         }
         let target = pane.entity_id();
+        let cells = pane.read(cx).active_cell_metrics(cx);
+        let family = pane.read(cx).active_font_family(cx);
+        let previous_default_size = cx.global::<Preferences>().font_size;
+        let previous_default_family = cx.global::<Preferences>().font_family.clone();
         let directory = pane.read(cx).cached_directory(cx)
             .or_else(|| cx.global::<InitialDirectory>().0.clone());
         let scrollback = cx.global::<Preferences>().scrollback_bytes();
@@ -2472,7 +2476,10 @@ impl Workspace {
                 match result {
                     Ok(prepared) => {
                         let focus = origin.as_ref().is_some_and(|focus| focus.is_focused(window));
-                        this.add_seed_at(Some(target), axis, None, focus, Some((TerminalSeed::Ready(prepared), None)), window, cx);
+                        let (size, family) = preferences::updated_font(cells.font_size, &family,
+                            previous_default_size, &previous_default_family, cx.global::<Preferences>());
+                        let cells = if size == cells.font_size { cells } else { CellMetrics::new(size) };
+                        this.add_seed_at(Some(target), axis, None, focus, Some((TerminalSeed::Ready(prepared, cells, family.into()), None)), window, cx);
                     }
                     Err(error) => this.error = Some(format!("Start split terminal: {error}")),
                 }
@@ -2503,7 +2510,7 @@ impl Workspace {
         let mut created = None;
         let directory = directory.or_else(|| anchor
             .and_then(|index| self.panes[index].read(cx).cached_directory(cx)));
-        let cells = if self.benchmark {
+        let mut cells = if self.benchmark {
             CellMetrics::new(14.)
         } else {
             anchor
@@ -2514,7 +2521,7 @@ impl Workspace {
             Some((session, label)) => (Some(session), label),
             None => (None, None),
         };
-        let family = if self.benchmark {
+        let mut family = if self.benchmark {
             FONT_FAMILY.into()
         } else {
             anchor
@@ -2522,7 +2529,11 @@ impl Workspace {
                 .unwrap_or_else(|| cx.global::<Preferences>().font_family.clone().into())
         };
         let prepared = match prepared {
-            Some(TerminalSeed::Ready(prepared)) => Ok(prepared),
+            Some(TerminalSeed::Ready(prepared, inherited_cells, inherited_family)) => {
+                cells = inherited_cells;
+                family = inherited_family;
+                Ok(prepared)
+            }
             seed => {
                 let session = if let Some(TerminalSeed::Session(session)) = seed {
                     Ok(session)

@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Asynchronous splits now capture source font size/family at request time instead
+of inheriting whichever tab happens to be active at completion. The ready seed
+carries this appearance through attachment. Inherited defaults reconcile with
+settings changed during launch; custom attributes remain preserved. The focused
+font-inheritance test passed and the desktop test target compiled. Native tab
+switching/settings changes during a pending split remain unverified.
+
 The pending-split status/cancel control is now an out-of-flow overlay rather
 than a row in the workspace layout. This removes the indicator's contribution
 to terminal sizing, avoiding resize/reflow solely for pending/canceling status.
