@@ -6,7 +6,10 @@ manually and copy an address from its row. **Close Listening Ports** is also in
 the palette; custom actions are `listening_ports` and `close_listening_ports`.
 The panel does not discover remote-host ports or assume that a listener serves
 HTTP. Results can change immediately as processes and sockets come and go. A
-refresh notice appears if process ownership changed during the scan.
+refresh notice appears if process ownership changed during the scan. Closing
+the panel cancels remaining scan work between OS reads; an OS call already in
+progress can finish first. If an immediate refresh reports another scan running,
+retry after it releases the scan slot.
 
 **Desktop notifications** in Settings enables optional OS banners for unfocused
 terminals. Save settings to keep the choice (`"native_notifications": true` in

@@ -6,9 +6,19 @@ pub(super) struct State {
     loading: bool,
     report: Option<ports::Report>,
     error: Option<String>,
+    canceled: Option<Arc<AtomicBool>>,
 }
+impl Drop for State {
+    fn drop(&mut self) {
+        if let Some(canceled) = &self.canceled { canceled.store(true, Ordering::Release); }
+    }
+}
+
 impl TerminalView {
     pub(super) fn close_ports(&mut self, cx: &mut Context<Self>) {
+        if let Some(canceled) = self.ports.canceled.take() { canceled.store(true, Ordering::Release); }
+        self.ports.generation = self.ports.generation.wrapping_add(1);
+        self.ports.loading = false;
         self.ports.visible = false;
         self.ports.report = None;
         self.ports.error = None;
@@ -30,17 +40,20 @@ impl TerminalView {
                 self.ports.loading = true;
                 self.ports.generation = self.ports.generation.wrapping_add(1);
                 let generation = self.ports.generation;
+                let canceled = Arc::new(AtomicBool::new(false));
+                self.ports.canceled = Some(canceled.clone());
                 cx.spawn(async move |entity, cx| {
                     let result = cx.background_executor().spawn(async move {
                         let _permit = permit;
-                        ports::scan(pid)
+                        ports::scan(pid, &canceled)
                     }).await;
                     let _ = entity.update(cx, |this, cx| {
                         if this.ports.generation != generation { return; }
                         this.ports.loading = false;
+                        this.ports.canceled = None;
                         if !this.ports.visible { return; }
                         if this.session.exit_status().is_some() { this.ports.error = Some("Terminal process has exited".into()); }
-                        else { match result { Ok(report) => this.ports.report = Some(report), Err(error) => this.ports.error = Some(error.to_string()) } }
+                        else { match result { Ok(report) => this.ports.report = report, Err(error) => this.ports.error = Some(error.to_string()) } }
                         cx.notify();
                     });
                 }).detach();

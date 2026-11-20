@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Listening-port scans now accept cancellation from panel close and terminal-state
+destruction. Checkpoints run before process discovery, before socket backend
+creation, before each iterator read, and around the final ownership snapshot.
+Close clears loading/results and advances the generation so an older completion
+cannot overwrite a reopened panel. The global scan permit stays held until the
+worker actually returns, preventing overlapping scans while an OS call finishes.
+Four focused port tests passed, including pre-canceled entry without a live PID
+and existing live loopback discovery. Mid-syscall interruption and native
+close/reopen behavior are not verified or promised; cancellation is cooperative.
+
 Port ownership now compares fresh process snapshots before and after socket
 enumeration. Listener rows survive only when the PID's start time and parent,
 and its entire ancestry back to the terminal root, remain unchanged. Reused,

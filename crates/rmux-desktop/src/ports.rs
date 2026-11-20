@@ -47,17 +47,24 @@ fn descendants(root: u32, processes: impl IntoIterator<Item = (u32, Option<u32>)
     Ok(owned)
 }
 
-pub fn scan(root: u32) -> Result<Report> {
+pub fn scan(root: u32, canceled: &AtomicBool) -> Result<Option<Report>> {
     use netstat2::{AddressFamilyFlags, ProtocolFlags, ProtocolSocketInfo, TcpState};
+    if canceled.load(Ordering::Acquire) { return Ok(None); }
     let before = process_snapshot();
+    if canceled.load(Ordering::Acquire) { return Ok(None); }
     ensure!(before.contains_key(&root), "Terminal process is no longer running");
     let owned = descendants(root, before.iter().map(|(pid, identity)| (*pid, identity.parent)))?;
     let mut listeners = BTreeSet::new();
     let mut truncated = false;
-    let sockets = netstat2::iterate_sockets_info(AddressFamilyFlags::IPV4 | AddressFamilyFlags::IPV6, ProtocolFlags::TCP)?;
-    for (index, socket) in sockets.enumerate() {
+    if canceled.load(Ordering::Acquire) { return Ok(None); }
+    let mut sockets = netstat2::iterate_sockets_info(AddressFamilyFlags::IPV4 | AddressFamilyFlags::IPV6, ProtocolFlags::TCP)?;
+    let mut index = 0;
+    loop {
+        if canceled.load(Ordering::Acquire) { return Ok(None); }
         if index == 100_000 { truncated = true; break; }
+        let Some(socket) = sockets.next() else { break; };
         let socket = socket?;
+        index += 1;
         let ProtocolSocketInfo::Tcp(tcp) = socket.protocol_socket_info else { continue; };
         if tcp.state != TcpState::Listen { continue; }
         for pid in socket.associated_pids.into_iter().filter(|pid| owned.contains(pid)) {
@@ -66,11 +73,14 @@ pub fn scan(root: u32) -> Result<Report> {
         }
         if truncated { break; }
     }
-    let stable = stable_owned(root, &before, &process_snapshot())?;
+    if canceled.load(Ordering::Acquire) { return Ok(None); }
+    let after = process_snapshot();
+    if canceled.load(Ordering::Acquire) { return Ok(None); }
+    let stable = stable_owned(root, &before, &after)?;
     let count = listeners.len();
     listeners.retain(|listener| stable.contains(&listener.pid));
     let ownership_changed = listeners.len() != count;
-    Ok(Report { listeners: listeners.into_iter().collect(), truncated, ownership_changed })
+    Ok(Some(Report { listeners: listeners.into_iter().collect(), truncated, ownership_changed }))
 }
 
 #[cfg(test)]
@@ -102,10 +112,15 @@ mod tests {
         Ok(())
     }
     #[test]
+    fn canceled_scan_does_not_require_a_live_process() -> Result<()> {
+        assert!(scan(0, &AtomicBool::new(true))?.is_none());
+        Ok(())
+    }
+    #[test]
     fn snapshot_finds_current_process_loopback_listener() -> Result<()> {
         let socket = std::net::TcpListener::bind("127.0.0.1:0")?;
         let address = socket.local_addr()?;
-        let report = scan(std::process::id())?;
+        let report = scan(std::process::id(), &AtomicBool::new(false))?.expect("active scan");
         assert!(report.listeners.iter().any(|row| row.address == address && row.pid == std::process::id()));
         Ok(())
     }
