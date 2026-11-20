@@ -445,7 +445,7 @@ impl TerminalView {
     }
     fn store_notification(&mut self, title: String, body: String) -> u64 {
         let revision = self.notification.as_ref().map_or(1, |message| message.revision.wrapping_add(1));
-        self.notification = Some(Arc::new(rmux_terminal::DesktopNotification { revision, title, body }));
+        self.notification = Some(Arc::new(rmux_terminal::DesktopNotification { revision, title, body, visibility: rmux_terminal::NotificationVisibility::Always }));
         self.dismissed_notification = None;
         if !self.input_focused { self.attention.notify(); }
         revision
@@ -611,8 +611,12 @@ impl TerminalView {
                         }
                         if let Some(notification) = metadata.notification {
                             view.engine_notification_revision = notification.revision;
-                            view.store_notification(notification.title.clone(), notification.body.clone());
-                            metadata_changed = true;
+                            let visible = notification.visibility == rmux_terminal::NotificationVisibility::Invisible
+                                && window_view::terminal_is_visible(cx.entity_id(), cx);
+                            if notification.visibility.allows(view.input_focused, visible) {
+                                view.store_notification(notification.title.clone(), notification.body.clone());
+                                metadata_changed = true;
+                            }
                         }
                         if metadata.bell_revision != view.bell_revision {
                             view.bell_revision = metadata.bell_revision;

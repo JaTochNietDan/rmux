@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+OSC 99 now retains `o=always|unfocused|invisible` across notification chunks and
+applies the policy before storing messages or marking unread. Invisible uses the
+active OS window, selected workspace/tab and pane zoom structure without acquiring
+parser locks; unfocused uses the existing focus state. Suppression advances the
+engine revision, preventing stale alerts on later focus changes. Legacy OSC/RPC
+notifications retain their existing always-accept behavior. Three focused protocol
+and truth-table tests passed and the desktop compiled. Native activation, hidden
+pane/tab and multi-window interaction acceptance remain pending.
+
 Added a conservative OSC 99 prefix fast path after the boundary benchmark exposed
 OSC-heavy overhead. Chunks without `9`, without a potentially split introducer,
 and without an active capture use Ghostty's original bulk writer. Differential

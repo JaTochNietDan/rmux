@@ -74,8 +74,25 @@ unsafe extern "C" fn progress_report(
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum NotificationVisibility {
+    #[default]
+    Always,
+    Unfocused,
+    Invisible,
+}
+impl NotificationVisibility {
+    pub fn allows(self, focused: bool, visible: bool) -> bool {
+        match self {
+            Self::Always => true,
+            Self::Unfocused => !focused,
+            Self::Invisible => !focused && !visible,
+        }
+    }
+}
 #[derive(Debug)]
 pub struct DesktopNotification {
+    pub visibility: NotificationVisibility,
     pub revision: u64,
     pub title: String,
     pub body: String,
@@ -110,6 +127,7 @@ unsafe extern "C" fn desktop_notification(
             .map_or(1, |previous| previous.revision.wrapping_add(1));
         state.notification = Some(Arc::new(DesktopNotification {
             revision,
+            visibility: NotificationVisibility::Always,
             title: copy(&request.title, 256),
             body: copy(&request.body, 1024),
         }));
@@ -607,9 +625,9 @@ impl Terminal {
             }
             if end {
                 if !self.osc_discard && matches!(stop.end, GHOSTTY_TERMINAL_STRING_END_ST_ESC | GHOSTTY_TERMINAL_STRING_END_BEL) {
-                    if let Some((title, body)) = self.osc_capture.as_deref().and_then(|bytes| self.callbacks.kitty_notifications.receive(bytes)) {
+                    if let Some((title, body, visibility)) = self.osc_capture.as_deref().and_then(|bytes| self.callbacks.kitty_notifications.receive(bytes)) {
                         let revision = self.callbacks.notification.as_ref().map_or(1, |previous| previous.revision.wrapping_add(1));
-                        self.callbacks.notification = Some(Arc::new(DesktopNotification { revision, title, body }));
+                        self.callbacks.notification = Some(Arc::new(DesktopNotification { revision, title, body, visibility }));
                     }
                 }
                 self.osc_capture = None;
@@ -1439,7 +1457,7 @@ mod tests {
                     optimized.write(chunk);
                     reference.write_with_osc_boundaries(chunk);
                 }
-                let message = |terminal: &Terminal| terminal.notification_since(0).map(|n| (n.revision, n.title.clone(), n.body.clone()));
+                let message = |terminal: &Terminal| terminal.notification_since(0).map(|n| (n.revision, n.title.clone(), n.body.clone(), n.visibility));
                 assert_eq!(message(&optimized), message(&reference), "split {split} in {stream:?}");
                 assert_eq!(optimized.frame()?.text(), reference.frame()?.text());
             }
@@ -1461,9 +1479,10 @@ mod tests {
         assert!(terminal.notification_since(first.revision).is_none());
         terminal.write(b"\x1b]9;Legacy\x07");
         let second = terminal.notification_since(first.revision).expect("legacy notification still works");
-        terminal.write(b"\x1b]99;;Current\x1b\\");
+        terminal.write(b"\x1b]99;o=invisible;Current\x1b\\");
         let third = terminal.notification_since(second.revision).expect("shared notification revision");
         assert_eq!(third.title, "Current");
+        assert_eq!(third.visibility, NotificationVisibility::Invisible);
         assert_eq!(terminal.frame()?.text().trim(), "");
         Ok(())
     }

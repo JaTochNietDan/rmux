@@ -1,5 +1,23 @@
 use super::*;
 
+/// Notification visibility is structural, not a scan of terminal/parser state.
+/// An inactive OS window, inactive workspace/tab or a zoom-hidden pane is invisible.
+pub(super) fn terminal_is_visible(terminal: EntityId, cx: &mut App) -> bool {
+    cx.windows().into_iter().any(|handle| {
+        let Some(handle) = handle.downcast::<WorkspaceWindow>() else { return false; };
+        handle.update(cx, |root, window, cx| {
+            if !window.is_window_active() { return false; }
+            let Some(entry) = root.entries.get(root.active) else { return false; };
+            let workspace = entry.workspace.read(cx);
+            workspace.panes.iter().any(|pane| {
+                workspace.zoomed.is_none_or(|zoomed| zoomed == pane.entity_id())
+                    && pane.read(cx).active_terminal_id() == Some(terminal)
+            })
+        }).unwrap_or(false)
+    })
+}
+
+
 #[derive(Clone)]
 struct NotificationNavigation {
     focus: FocusHandle,
