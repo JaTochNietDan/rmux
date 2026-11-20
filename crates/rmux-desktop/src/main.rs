@@ -15,6 +15,8 @@ mod image_paste;
 mod git_context;
 mod git_watch;
 mod clipboard;
+#[cfg(target_os = "macos")]
+mod file_clipboard;
 mod notifications;
 mod native_notifications;
 mod automation;
@@ -1371,6 +1373,19 @@ impl TerminalView {
     }
     fn paste(&mut self, _: &Paste, window: &mut Window, cx: &mut Context<Self>) {
         self.refresh_input_mode(cx);
+        #[cfg(target_os = "macos")]
+        match file_clipboard::read_paths() {
+            Ok(Some(paths)) => {
+                if !self.focus.is_focused(window) || self.copy_mode.is_some() || self.find.is_some() || self.ports.visible
+                    || cx.global::<PromptGate>().is_active() || cx.global::<Shutdowns>().quitting || cx.global::<Shutdowns>().quit_prompt { return; }
+                self.cancel_image_preparation(cx);
+                self.error = file_drop::quoted_paths(&paths).and_then(|text| self.session.paste_owned(text)).err().map(|error| error.to_string());
+                cx.notify();
+                return;
+            }
+            Err(error) => { self.error = Some(error.to_string()); cx.notify(); return; }
+            Ok(None) => {},
+        }
         let Some(item) = cx.read_from_clipboard() else { return; };
         if let Some(text) = item.text() {
             #[cfg(unix)]

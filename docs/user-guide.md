@@ -1,5 +1,12 @@
 # rmux
 
+On macOS, **Copy** files in Finder and **Paste** into a focused terminal to insert
+quoted absolute paths. Finder's file-URL metadata takes precedence over filename
+text or image representations. This reads paths only, without opening files or
+uploading them, and uses the same 256-file/64 KiB limits as file drops. Ordinary
+text and image paste remain available when file metadata is absent. Linux
+copied-file clipboard formats and native Finder paste acceptance remain pending.
+
 **Settings → Terminal background opacity** adjusts the default terminal background
 from 0–100% in 5% steps. **Blur behind terminal** requests platform blur below
 100% opacity; availability depends on your OS/compositor. Text, explicitly colored

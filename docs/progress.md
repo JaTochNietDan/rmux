@@ -2,6 +2,18 @@
 
 ## Current implementation focus
 
+Added a macOS Finder copied-file clipboard adapter using per-item AppKit file-URL
+metadata, preceding GPUI's text/image fallback. It reads only on Paste, never
+changes the system clipboard, bounds item/path data, rejects non-local URLs and
+checks pasteboard changeCount before queueing shared POSIX-quoted paths. The
+native NSURL fixture passed escaped spaces/apostrophes/hash/Unicode and rejection
+of remote/non-file/query/fragment URLs without reading file contents or touching
+the clipboard. Desktop test compilation passed. See Apple's
+[pasteboard item API](https://developer.apple.com/documentation/appkit/nspasteboard/pasteboarditems)
+and [item string API](https://developer.apple.com/documentation/appkit/nspasteboarditem/string%28fortype%3A%29).
+Native Finder paste/focus acceptance, Linux copied-file MIME handling and Windows
+quoting remain pending; AppKit provider reads may still block on the provider.
+
 Started T04 with live default-terminal-background opacity and optional compositor
 blur. Settings provides 0–100% opacity in 5% steps plus blur, with config validation,
 change tracking and Save Settings persistence. The terminal base fill uses alpha;
