@@ -1539,7 +1539,15 @@
         "SCHEMA"
       ],
       "acceptance": "Open correct local or remote files; directory navigation and refresh remain asynchronous.",
-      "rmux_status": "not_started"
+      "rmux_status": "in_progress",
+      "implementation": "On-demand asynchronous local directory picker from the current terminal cwd, bounded to 2,048 entries with searchable names, parent/refresh navigation and file/link path copy. No file execution or idle scanning. Focused directory/limit/Unicode and symlink tests pass.",
+      "remaining": "File previews, remote filesystem support, persistent explorer UI, cancellation during OS reads, native navigation/focus/visual acceptance and performance measurements.",
+      "implementation_sources": [
+        "crates/rmux-desktop/src/file_browser.rs",
+        "crates/rmux-desktop/src/command_palette.rs",
+        "crates/rmux-desktop/src/window_view.rs"
+      ],
+      "progress_record": "docs/progress.md"
     },
     {
       "id": "F02",

@@ -119,6 +119,7 @@ pub(super) struct WorkspaceWindow {
     workspace_menu_blur: Option<Subscription>,
     palette: Option<(Entity<command_palette::CommandPalette>, Option<FocusHandle>)>,
     font_picker_job: Option<Task<()>>,
+    file_browser_job: Option<Task<()>>,
     restore_job: Option<restore::Job>,
     workspace_scroll: ScrollHandle,
     notice: Option<String>,
@@ -2446,6 +2447,30 @@ impl WorkspaceWindow {
         let palette = cx.new(|cx| command_palette::CommandPalette::buffers(entries, revision, surface, mode, window, cx));
         self.install_palette(palette, focus, window, cx);
     }
+    fn browse_directory(&mut self, path: std::path::PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+        if self.file_browser_job.is_some() || self.automation_available(cx).is_err() { return; }
+        let Some(focus) = window.focused(cx) else { return; };
+        self.notice = Some("Loading local directory…".into());
+        let executor = cx.background_executor().clone();
+        self.file_browser_job = Some(cx.spawn_in(window, async move |entity, cx| {
+            let result = executor.spawn(async move { file_browser::list(path) }).await;
+            let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
+                this.file_browser_job = None;
+                if this.notice.as_deref() == Some("Loading local directory…") { this.notice = None; }
+                if focus.is_focused(window) && this.automation_available(cx).is_ok() {
+                    match result {
+                        Ok(listing) => {
+                            let palette = cx.new(|cx| command_palette::CommandPalette::files(listing, window, cx));
+                            this.install_palette(palette, Some(focus), window, cx);
+                        }
+                        Err(error) => this.notice = Some(format!("Browse directory: {error:#}")),
+                    }
+                }
+                cx.notify();
+            }));
+        }));
+        cx.notify();
+    }
     fn show_font_picker(&mut self, default: bool, window: &mut Window, cx: &mut Context<Self>) {
         if self.font_picker_job.is_some() || self.automation_available(cx).is_err() { return; }
         let Some(focus) = window.focused(cx) else { return; };
@@ -2728,6 +2753,7 @@ impl WorkspaceWindow {
         let mut this = Self {
             palette: None,
             font_picker_job: None,
+            file_browser_job: None,
             restore_job: None,
             workspace_scroll: ScrollHandle::new(),
             notice: None,
@@ -2932,6 +2958,7 @@ impl WorkspaceWindow {
         Self {
             palette: None,
             font_picker_job: None,
+            file_browser_job: None,
             restore_job: None,
             workspace_scroll: ScrollHandle::new(),
             notice: None,
@@ -3577,6 +3604,23 @@ impl Render for WorkspaceWindow {
                     this.automation_send_text(&automation::SurfaceText { surface_id: action.surface_id.clone(), text, paste: true }, target, cx)
                 })();
                 this.notice = Some(match result { Ok(_) => format!("Queued buffer {}", action.name), Err(error) => error.message.into() });
+                cx.notify();
+            }))
+            .on_action(cx.listener(|this, _: &BrowseTerminalFiles, window, cx| {
+                let directory = this.entries.get(this.active).and_then(|entry| {
+                    let workspace = entry.workspace.read(cx);
+                    workspace.focused_index(window, cx).and_then(|index| workspace.panes.get(index))
+                        .and_then(|pane| pane.read(cx).cached_directory(cx))
+                });
+                if let Some(path) = directory { this.browse_directory(path, window, cx); }
+                else { this.notice = Some("The current terminal has not reported a local directory yet.".into()); cx.notify(); }
+            }))
+            .on_action(cx.listener(|this, action: &BrowseDirectory, window, cx| this.browse_directory(action.path.clone(), window, cx)))
+            .on_action(cx.listener(|this, action: &CopyLocalPath, _, cx| {
+                this.notice = Some(match action.path.to_str() {
+                    Some(path) => { clipboard::write(ClipboardItem::new_string(path.into()), cx); "Copied file path".into() }
+                    None => "This path cannot be represented as UTF-8 text.".into(),
+                });
                 cx.notify();
             }))
             .on_action(cx.listener(|this, _: &ShowFontPicker, window, cx| this.show_font_picker(false, window, cx)))

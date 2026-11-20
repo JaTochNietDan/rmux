@@ -186,6 +186,17 @@ Renaming moves the retained text without cloning it and preserves its byte count
 An existing destination is rejected; renaming to the same name is a no-op.
 Successful renames invalidate open buffer pickers, which must be reopened.
 
+**Browse Terminal Directory…** in the menu/palette (custom action `browse_files`)
+opens an on-demand local directory picker from the current terminal's cached
+working directory. Search names, press Enter on a directory to browse it, or
+choose Parent/Refresh. Enter on a file or symbolic link copies its full path to
+the clipboard; it does not open or execute the file. Hidden entries are included.
+Directory reads run in the background and retain at most 2,048 entries per
+snapshot, sorted directories-first within that subset. A limit notice identifies
+partial listings. Switching focus during loading prevents the result from taking
+focus. This is the first local browsing slice; file previews, editing, remote
+files and a persistent explorer panel are not yet implemented.
+
 **Choose Terminal Font…** searches installed font families for the current
 terminal. Type to filter, use arrows and Enter to choose, or Escape to cancel.
 Monospaced families suit the terminal grid best. The picker preserves text size;

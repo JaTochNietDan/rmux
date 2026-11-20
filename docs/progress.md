@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Started F01 local file browsing: Browse Terminal Directory in menu/palette and
+`browse_files` opens an asynchronous, searchable directory snapshot from the
+focused terminal's cached cwd. Parent and Refresh navigate without shell input;
+file/link rows copy literal paths. Reads retain at most 2,048 entries, include
+hidden names and sort directories first within the returned subset. There is
+no idle watcher or file-content read; late results do not steal changed focus.
+Focused tests passed bounded listings, Unicode paths, invalid paths and dangling/
+cyclic symlink non-traversal; desktop test compilation passed. This is an initial
+browsing slice, not completed F01: preview/editor, remote files, persistent panel,
+native interaction and performance acceptance remain open.
+
 The tab-picker container now occludes underlying terminal hit targets and
 consumes bubbled left/middle/right mouse presses/releases, movement and wheel
 events. Child text-field/list handlers still run first; outside-click dismissal

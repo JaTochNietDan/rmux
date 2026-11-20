@@ -243,6 +243,7 @@ impl CommandPalette {
         command!("Delete Named Buffer…", ShowDeleteBufferPicker);
         command!("Rename Named Buffer…", ShowRenameBufferPicker);
         command!("Copy Named Buffer…", ShowCopyBufferPicker);
+        command!("Browse Terminal Directory…", BrowseTerminalFiles);
         command!("Choose Terminal Font…", ShowFontPicker);
         command!("Choose Default Font…", ShowDefaultFontPicker);
         command!("Use Configured Font", UseConfiguredFont);
@@ -376,6 +377,25 @@ impl CommandPalette {
                 else { Box::new(PasteNamedBuffer { name, revision, surface_id: surface_id.clone() }) }),
         }).collect();
         Self::with_commands(commands, match mode { BufferMode::Paste => "Paste named buffer", BufferMode::Delete => "Delete named buffer", BufferMode::Rename => "Rename named buffer", BufferMode::Copy => "Copy buffer to clipboard" }, "No matching buffers · Save a selection in Copy Mode first", window, cx)
+    }
+    pub fn files(listing: file_browser::Listing, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let mut commands = Vec::new();
+        if let Some(parent) = listing.path.parent() {
+            commands.push(Command { title: ".. · Parent directory".into(), subtitle: Some(parent.display().to_string()), shortcut: None,
+                target: PaletteEvent::Run(Box::new(BrowseDirectory { path: parent.to_owned() })) });
+        }
+        commands.push(Command { title: "Refresh this directory".into(), subtitle: Some(listing.path.display().to_string()), shortcut: None,
+            target: PaletteEvent::Run(Box::new(BrowseDirectory { path: listing.path })) });
+        commands.extend(listing.entries.into_iter().map(|entry| Command {
+            title: entry.path.file_name().unwrap_or_default().to_string_lossy().chars()
+                .map(|ch| if ch.is_control() { ' ' } else { ch }).collect(),
+            subtitle: Some(if entry.directory { "Directory · Enter to browse" } else if entry.symlink { "Symbolic link · Enter to copy path" } else { "File · Enter to copy path" }.into()),
+            shortcut: None,
+            target: PaletteEvent::Run(if entry.directory { Box::new(BrowseDirectory { path: entry.path }) }
+                else { Box::new(CopyLocalPath { path: entry.path }) }),
+        }));
+        Self::with_commands(commands, if listing.truncated { "Local files · Limited to 2,048 entries; use a narrower directory" } else { "Local files · Browse directories or copy file paths" },
+            "No matching entries", window, cx)
     }
     pub fn custom_commands(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let mut commands: Vec<_> = cx.global::<Preferences>().commands.iter().map(custom_command).collect();

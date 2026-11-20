@@ -10,6 +10,7 @@ mod cell_metrics;
 mod icons;
 #[cfg(unix)]
 mod file_drop;
+mod file_browser;
 #[cfg(unix)]
 mod image_paste;
 mod git_context;
@@ -84,6 +85,14 @@ struct RenameNamedBuffer { name: String, revision: u64 }
 #[derive(Clone, Debug, Default, PartialEq, Action)]
 #[action(namespace = rmux, no_json)]
 struct CopyNamedBuffer { name: String, revision: u64 }
+
+#[derive(Clone, Debug, Default, PartialEq, Action)]
+#[action(namespace = rmux, no_json)]
+struct BrowseDirectory { path: std::path::PathBuf }
+
+#[derive(Clone, Debug, Default, PartialEq, Action)]
+#[action(namespace = rmux, no_json)]
+struct CopyLocalPath { path: std::path::PathBuf }
 
 #[derive(Clone, Debug, Default, PartialEq, Action)]
 #[action(namespace = rmux, no_json)]
@@ -415,6 +424,7 @@ actions!(
         ShowDeleteBufferPicker,
         ShowRenameBufferPicker,
         ShowCopyBufferPicker,
+        BrowseTerminalFiles,
         ShowTerminalMenu,
         CopySelectionWithLineBreaks,
         CopyWorkingDirectory,
@@ -3735,6 +3745,7 @@ fn main() {
                     MenuItem::action("Delete Named Buffer…", ShowDeleteBufferPicker),
                     MenuItem::action("Rename Named Buffer…", ShowRenameBufferPicker),
                     MenuItem::action("Copy Named Buffer…", ShowCopyBufferPicker),
+                    MenuItem::action("Browse Terminal Directory…", BrowseTerminalFiles),
                     MenuItem::action("Choose Terminal Font…", ShowFontPicker),
                     MenuItem::action("Choose Default Font…", ShowDefaultFontPicker),
                     MenuItem::action("Use Configured Font", UseConfiguredFont),

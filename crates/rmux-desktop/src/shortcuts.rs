@@ -126,6 +126,7 @@ fn action(name: &str) -> Option<Box<dyn Action>> {
         "delete_buffer" => Box::new(ShowDeleteBufferPicker),
         "rename_buffer" => Box::new(ShowRenameBufferPicker),
         "copy_buffer" => Box::new(ShowCopyBufferPicker),
+        "browse_files" => Box::new(BrowseTerminalFiles),
         "choose_font" => Box::new(ShowFontPicker),
         "choose_default_font" => Box::new(ShowDefaultFontPicker),
         "use_configured_font" => Box::new(UseConfiguredFont),
