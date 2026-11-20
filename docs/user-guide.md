@@ -115,6 +115,14 @@ pane using the same geometry as directional focus, exchange entire panes
 stay fixed. At a layout edge, or while zoomed, they do nothing. No default keys
 are assigned.
 
+**Join Pane Left/Right/Up/Down** moves all tabs from the focused pane into the
+neighbor in that direction, then removes the empty split. Existing destination
+tabs come first, followed by source tabs in their original order; the source's
+active terminal stays selected. Other tabs retain their unread state. The
+custom actions are `join_pane_left`, `join_pane_right`, `join_pane_up`, and
+`join_pane_down`. Like directional swaps, these do nothing at a layout edge or
+while zoomed, and have no default keybindings.
+
 For example, bind `last_terminal` to return to the previous live terminal across
 panes and workspaces, or `last_prompt` to jump to the newest retained shell prompt:
 

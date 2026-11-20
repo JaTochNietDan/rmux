@@ -271,6 +271,10 @@ actions!(
         BreakTabRight,
         BreakTabBelow,
         JoinPaneNext,
+        JoinPaneLeft,
+        JoinPaneRight,
+        JoinPaneUp,
+        JoinPaneDown,
         MoveTabNextWorkspace,
         DetachTab,
         DetachWorkspace,
@@ -2077,8 +2081,23 @@ impl Workspace {
         let Some(index) = self.focused_index(window, cx) else {
             return;
         };
-        let source = self.panes[index].clone();
-        let target = self.panes[(index + 1) % self.panes.len()].clone();
+        self.join_panes(index, (index + 1) % self.panes.len(), window, cx);
+    }
+    fn join_pane_direction(
+        &mut self,
+        direction: layout::Direction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if cx.global::<Shutdowns>().quitting { return; }
+        let Some(current) = self.focused_index(window, cx) else { return; };
+        if let Some(next) = self.directional_neighbor(current, direction, cx) {
+            self.join_panes(current, next, window, cx);
+        }
+    }
+    fn join_panes(&mut self, source: usize, target: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let source = self.panes[source].clone();
+        let target = self.panes[target].clone();
         let (tabs, active) = source.update(cx, |pane, cx| pane.take_all_tabs(cx));
         target.update(cx, |pane, cx| pane.append_tabs(tabs, active, window, cx));
         self.remove_pane(&source, cx);
@@ -2471,6 +2490,18 @@ impl Render for Workspace {
             .on_action(
                 cx.listener(|view, _: &JoinPaneNext, window, cx| view.join_pane_next(window, cx)),
             )
+            .on_action(cx.listener(|view, _: &JoinPaneLeft, window, cx| {
+                view.join_pane_direction(layout::Direction::Left, window, cx)
+            }))
+            .on_action(cx.listener(|view, _: &JoinPaneRight, window, cx| {
+                view.join_pane_direction(layout::Direction::Right, window, cx)
+            }))
+            .on_action(cx.listener(|view, _: &JoinPaneUp, window, cx| {
+                view.join_pane_direction(layout::Direction::Up, window, cx)
+            }))
+            .on_action(cx.listener(|view, _: &JoinPaneDown, window, cx| {
+                view.join_pane_direction(layout::Direction::Down, window, cx)
+            }))
             .on_action(cx.listener(|view, _: &BreakTabRight, window, cx| {
                 view.break_tab(SplitAxis::Columns, window, cx)
             }))
@@ -3020,6 +3051,10 @@ fn main() {
                     MenuItem::action("Move Tab to Split Right", BreakTabRight),
                     MenuItem::action("Move Tab to Split Below", BreakTabBelow),
                     MenuItem::action("Join Pane into Next", JoinPaneNext),
+                    MenuItem::action("Join Pane Left", JoinPaneLeft),
+                    MenuItem::action("Join Pane Right", JoinPaneRight),
+                    MenuItem::action("Join Pane Up", JoinPaneUp),
+                    MenuItem::action("Join Pane Down", JoinPaneDown),
                     MenuItem::action("Move Tab to Next Workspace", MoveTabNextWorkspace),
                     MenuItem::action("Detach Tab to New Window", DetachTab),
                     MenuItem::action("Move Workspace to New Window", DetachWorkspace),

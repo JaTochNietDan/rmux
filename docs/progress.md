@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Directional joins now use the shared geometric neighbor selection, available
+from the View menu, palette and custom shortcuts. Both next-pane and directional
+joins share the existing batch transfer: destination tabs remain first, source
+tab order is retained, and only the source active tab is selected after transfer.
+The desktop compiled and two focused shortcut tests passed. Code inspection
+confirmed the batch path avoids selecting intermediate unread tabs; native
+multi-tab order, unread-state and directional interaction acceptance remain open.
+
 Directional pane swapping is now available from the View menu, command palette
 and four custom shortcut actions. Swaps share directional focus's geometric
 neighbor selection and the existing identity-preserving tree swap; pane order

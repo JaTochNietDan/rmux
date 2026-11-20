@@ -155,6 +155,10 @@ impl CommandPalette {
         command!("Move Tab to Split Right", BreakTabRight);
         command!("Move Tab to Split Below", BreakTabBelow);
         command!("Join Pane into Next", JoinPaneNext);
+        command!("Join Pane Left", JoinPaneLeft);
+        command!("Join Pane Right", JoinPaneRight);
+        command!("Join Pane Up", JoinPaneUp);
+        command!("Join Pane Down", JoinPaneDown);
         command!("Move Tab to Next Workspace", MoveTabNextWorkspace);
         command!("Detach Tab to New Window", DetachTab);
         command!("Move Workspace to New Window", DetachWorkspace);
