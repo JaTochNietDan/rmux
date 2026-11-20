@@ -480,6 +480,10 @@ The notification panel lists messages newest-first across all workspaces in the
 window, using arrival order rather than pane order. Keyboard selection remains
 attached to the same message as newer messages arrive.
 
+Each notification card has a Copy button for its title and body. With the panel
+focused, Command-C on macOS or Control-C on Linux/Windows copies the selected
+message. Copying preserves unread state and does not open the source terminal.
+
 The notification panel owns keyboard focus while open. Up/down, Page Up/Down,
 and Tab/Shift-Tab navigate messages; Enter/Space closes the panel and opens the
 selected terminal. Delete/Backspace dismisses the selected message, and Escape

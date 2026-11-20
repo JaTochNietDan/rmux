@@ -2,6 +2,14 @@
 use std::{collections::VecDeque, sync::{Arc, atomic::{AtomicU64, Ordering}}};
 static ARRIVAL: AtomicU64 = AtomicU64::new(0);
 use rmux_terminal::{DesktopNotification, NotificationVisibility};
+pub fn copy_text(message: &DesktopNotification) -> String {
+    match (message.title.is_empty(), message.body.is_empty()) {
+        (true, _) => message.body.clone(),
+        (_, true) => message.title.clone(),
+        _ => format!("{}\n{}", message.title, message.body),
+    }
+}
+
 pub struct Record { pub message: Arc<DesktopNotification>, pub unread: bool, pub arrival: u64 }
 #[derive(Default)]
 pub struct History { records: VecDeque<Record>, revision: u64, latest_unread: Option<(u64, Arc<DesktopNotification>)> }
@@ -48,6 +56,18 @@ impl History {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn copied_message_preserves_content_without_extra_empty_lines() {
+        let mut message = DesktopNotification { revision: 1, title: "Build 世界".into(), body: "line 1\nline 2".into(), visibility: NotificationVisibility::Always };
+        assert_eq!(copy_text(&message), "Build 世界\nline 1\nline 2");
+        message.title.clear();
+        assert_eq!(copy_text(&message), "line 1\nline 2");
+        message.body.clear();
+        assert_eq!(copy_text(&message), "");
+        message.title = "Only title".into();
+        assert_eq!(copy_text(&message), "Only title");
+    }
+
     #[test]
     fn preview_arrival_order_spans_terminals_and_survives_dismissal() {
         let mut first = History::default();

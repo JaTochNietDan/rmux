@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Notification cards now offer Copy, and the focused panel handles Command-C on
+macOS / Control-C elsewhere for the selected message. Copy formats title and body
+without extra blank lines for empty fields, uses the shared clipboard ordering
+path, and does not acknowledge or open the terminal. Four notification tests
+passed, including Unicode/multiline copy formatting; desktop compilation passed.
+Native clipboard, focus and card-layout verification remain pending.
+
 Notification panel construction now filters read records before cloning message
 handles or building labels in Unread mode. Visible messages from one terminal
 share a single formatted workspace/tab label instead of copying both titles and

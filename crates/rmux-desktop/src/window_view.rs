@@ -1529,6 +1529,21 @@ impl WorkspaceWindow {
         cx.stop_propagation();
     }
 
+    fn copy_selected_notification(&self, cx: &mut Context<Self>) {
+        let Some(state) = &self.notification_navigation else { return; };
+        let targets = self.notification_targets(cx);
+        let Some((_, terminal, revision)) = targets.iter()
+            .find(|row| Some((row.1, row.2)) == state.selected).or_else(|| targets.first()) else { return; };
+        let message = self.entries.iter().flat_map(|entry| &entry.workspace.read(cx).panes)
+            .flat_map(|pane| &pane.read(cx).terminals)
+            .find(|view| view.entity_id() == *terminal)
+            .and_then(|view| view.read(cx).notifications.iter().find(|record| record.message.revision == *revision))
+            .map(|record| record.message.clone());
+        if let Some(message) = message {
+            clipboard::write(ClipboardItem::new_string(notifications::copy_text(&message)), cx);
+        }
+    }
+
     fn notification_panel(&self, cx: &mut Context<Self>) -> AnyElement {
         let navigation = self.notification_navigation.as_ref().expect("open notification panel").clone();
         let has_unread = self.entries.iter().any(|entry| entry.workspace.read(cx).needs_attention(cx));
@@ -1566,6 +1581,7 @@ impl WorkspaceWindow {
         div().track_focus(&navigation.focus).key_context("Notifications")
             .on_mouse_down(MouseButton::Left, { let focus = navigation.focus.clone(); move |_, window, _| focus.focus(window) })
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| this.notification_key(event, window, cx)))
+            .on_action(cx.listener(|this, _: &CopySelection, _, cx| this.copy_selected_notification(cx)))
             .w(px(340.))
             .max_w(relative(0.45))
             .h_full()
@@ -1643,6 +1659,7 @@ impl WorkspaceWindow {
                     .children(messages.into_iter().map(
                         |(workspace, terminal, source_label, unread, message, _)| {
                             let revision = message.revision;
+                            let copy_message = message.clone();
                             div()
                                 .id(SharedString::from(format!("notification-{terminal}-{revision}")))
                                 .p_3()
@@ -1690,7 +1707,17 @@ impl WorkspaceWindow {
                                 })
                                 .child(div().mt_1().child(message.body.clone()))
                                 .child(
-                                    div().mt_2().flex().justify_end().child(
+                                    div().mt_2().flex().justify_end().gap_2()
+                                        .child(div().id(SharedString::from(format!("copy-notification-{terminal}-{revision}")))
+                                            .px_2().py_1().rounded_sm().text_xs()
+                                            .hover(|style| style.bg(rgb(0x43506a)))
+                                            .on_click(move |event, _, cx| {
+                                                cx.stop_propagation();
+                                                if event.standard_click() {
+                                                    clipboard::write(ClipboardItem::new_string(notifications::copy_text(&copy_message)), cx);
+                                                }
+                                            }).child("Copy"))
+                                        .child(
                                         div()
                                             .id(SharedString::from(format!("dismiss-notification-{terminal}-{revision}")))
                                             .px_2()
