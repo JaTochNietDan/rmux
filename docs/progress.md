@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Native paste no longer waits on the terminal parser mutex to read bracketed
+paste mode. Busy-parser rejection queues no input, releases its paste permit
+and displays an explicit retry message; successful retry clears the error.
+Oversized clipboard input is rejected before parser access. Desktop compilation,
+the held-parser nonblocking test and large bracketed-paste ordering test passed.
+Encoding remains on the UI thread within the existing 1 MiB input bound, and
+already-writing paste cancellation is not implemented; native clipboard and
+output-pressure timing acceptance remain pending.
+
 Repeated Copy/Reveal Working Directory requests now supersede earlier requests
 instead of being ignored while a lookup is pending. Workers use a weak request
 generation plus clipboard ordering, check cancellation before/after parser

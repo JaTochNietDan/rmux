@@ -1224,8 +1224,9 @@ impl TerminalView {
             if let Err(error) = self.session.paste(&text) {
                 self.error = Some(error.to_string());
                 cx.notify();
-            } else if self.frame.scrollback_offset > 0 {
-                cx.notify();
+            } else {
+                let had_error = self.error.take().is_some();
+                if had_error || self.frame.scrollback_offset > 0 { cx.notify(); }
             }
         }
     }

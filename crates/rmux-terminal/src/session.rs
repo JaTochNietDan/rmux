@@ -527,9 +527,17 @@ impl Session {
         }
     }
     pub fn paste(&self, text: &str) -> Result<()> {
+        anyhow::ensure!(text.len() <= 1024 * 1024, "paste exceeds 1 MiB input limit");
         anyhow::ensure!(self.exit_status().is_none(), "process has exited");
         let permit = PastePermit::acquire(&self.paste_pending)?;
-        let bracketed = self.terminal.lock().unwrap_or_else(|e| e.into_inner()).bracketed_paste()?;
+        let bracketed = {
+            let terminal = match self.terminal.try_lock() {
+                Ok(terminal) => terminal,
+                Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),
+                Err(std::sync::TryLockError::WouldBlock) => anyhow::bail!("Terminal is busy; paste again to retry. No paste input was queued."),
+            };
+            terminal.bracketed_paste()?
+        };
         let bytes = crate::keyboard::encode_paste(text, bracketed)?;
         self.writer
             .try_send(InputMessage { bytes, _paste: Some(permit) })
@@ -984,6 +992,9 @@ mod tests {
         assert!(session.history_export(4096)()?.is_none(), "busy parser must return no history export");
         assert!(session.selection_export(4096, true)()?.is_none(), "busy parser must return no selection export");
         assert!(session.memory_sample()()?.is_none(), "busy parser must return no memory sample");
+        let paste_error = session.paste("must-not-be-queued").unwrap_err();
+        assert!(paste_error.to_string().contains("No paste input was queued"));
+        assert!(!session.paste_pending.load(Ordering::Acquire), "rejected paste retained its permit");
         session.input_without_scroll("state-世界\n".as_bytes())?;
         let elapsed = started_at.elapsed();
         let _ = release.send(());
