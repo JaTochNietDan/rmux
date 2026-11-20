@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Added optional absolute cwd defaults to named layout/session presets, allowing
+one reusable template to serve several projects. Background import fills only
+unset tab directories across every nested pane/window, preserving authored
+per-tab paths and leaving the source JSON unchanged. Existing preflight validates
+the resulting directories before any shell starts. Updated example and user-guide
+workflows. Desktop test compilation and focused preset validation/nested-directory
+precedence tests passed. Native shell-cwd/preset invocation acceptance remains.
+
 Added reusable development and services layout files plus a practical setup
 guide. Development has a wide editor pane and stacked run/output panes; services
 has equal API/worker/log columns. Files contain no executable commands, geometry,

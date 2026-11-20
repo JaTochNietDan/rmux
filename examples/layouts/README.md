@@ -25,7 +25,7 @@ replacing the example path with the absolute path of your copy:
 ```json
 {
   "layout_presets": [
-    {"name":"Development", "path":"/absolute/path/development.json"}
+    {"name":"Development", "path":"/absolute/path/development.json", "cwd":"/absolute/project"}
   ],
   "keybindings": [
     {"key":"ctrl-k d", "preset":"Development"}
@@ -36,6 +36,10 @@ replacing the example path with the absolute path of your copy:
 Use **Reload Settings**, then **Open Preset: Development** in the palette, or
 press the configured chord. On Windows, use an absolute Windows path with JSON
 backslash escaping, such as `C:\\Users\\you\\Layouts\\development.json`.
+The optional `cwd` fills only tabs whose `directory` is null; explicit saved tab
+directories remain unchanged. Define multiple presets with the same file and
+different `cwd` values to reuse a template across projects. Both paths must be
+absolute. Applying a preset never rewrites the source layout.
 Preset files are read on invocation, so your next use picks up file edits.
 Missing directories or invalid layouts produce an import error.
 

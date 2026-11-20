@@ -2777,8 +2777,8 @@ impl WorkspaceWindow {
             cx.notify();
         }
     }
-    fn open_layout(&mut self, cx: &mut Context<Self>) { self.open_snapshot(false, None, cx); }
-    fn open_snapshot(&mut self, session: bool, path: Option<std::path::PathBuf>, cx: &mut Context<Self>) {
+    fn open_layout(&mut self, cx: &mut Context<Self>) { self.open_snapshot(false, None, None, cx); }
+    fn open_snapshot(&mut self, session: bool, path: Option<std::path::PathBuf>, directory: Option<std::path::PathBuf>, cx: &mut Context<Self>) {
         let kind = if session { "session" } else { "layout" };
         if cx.global::<Shutdowns>().quitting || self.restore_job.is_some() {
             return;
@@ -2824,7 +2824,7 @@ impl WorkspaceWindow {
                 let worker_token = token.clone();
                 let prepared = executor
                     .spawn(async move {
-                        restore::PreparedSession::read_import(&path, session, &worker_token, scrollback_bytes,
+                        restore::PreparedSession::read_import(&path, session, directory.as_deref(), &worker_token, scrollback_bytes,
                             |completed, total| { let _ = progress_sender.try_send((completed, total)); })
                     })
                     .await?;
@@ -3494,10 +3494,10 @@ impl Render for WorkspaceWindow {
             .on_action(cx.listener(|this, _: &SaveLayout, window, cx| this.save_layout(window, cx)))
             .on_action(cx.listener(|this, _: &SaveSession, window, cx| this.save_session(window, cx)))
             .on_action(cx.listener(|this, _: &OpenLayout, _, cx| this.open_layout(cx)))
-            .on_action(cx.listener(|this, _: &OpenSession, _, cx| this.open_snapshot(true, None, cx)))
+            .on_action(cx.listener(|this, _: &OpenSession, _, cx| this.open_snapshot(true, None, None, cx)))
             .on_action(cx.listener(|this, action: &OpenLayoutPreset, _, cx| {
                 if let Some(preset) = cx.global::<Preferences>().layout_presets.iter().find(|preset| preset.name == action.name).cloned() {
-                    this.open_snapshot(preset.session, Some(preset.path), cx);
+                    this.open_snapshot(preset.session, Some(preset.path), preset.cwd, cx);
                 } else { this.notice = Some("Layout preset is no longer configured".into()); cx.notify(); }
             }))
             .on_action(cx.listener(|this, _: &CancelRestore, _, cx| this.cancel_restore(cx)))

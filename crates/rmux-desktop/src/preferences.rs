@@ -133,6 +133,7 @@ pub struct CustomCommand {
 pub struct LayoutPreset {
     pub name: String,
     pub path: std::path::PathBuf,
+    pub cwd: Option<std::path::PathBuf>,
     #[serde(default)]
     pub session: bool,
 }
@@ -363,6 +364,7 @@ impl Preferences {
             ensure!(!preset.name.trim().is_empty() && preset.name.len() <= 128 && !preset.name.chars().any(char::is_control), "preset name must be nonempty, at most 128 bytes and contain no controls");
             ensure!(preset_names.insert(preset.name.trim().to_lowercase()), "duplicate layout preset name");
             ensure!(preset.path.is_absolute() && preset.path.as_os_str().len() <= 8192 && !preset.path.to_string_lossy().chars().any(char::is_control), "preset path must be absolute, at most 8192 bytes and contain no controls");
+            ensure!(preset.cwd.as_ref().is_none_or(|path| path.is_absolute() && path.as_os_str().len() <= 8192 && !path.to_string_lossy().chars().any(char::is_control)), "preset cwd must be absolute, at most 8192 bytes and contain no controls");
         }
         ensure!(value.commands.len() <= 32, "at most 32 custom commands are allowed");
         let mut names = std::collections::HashSet::new();
@@ -609,6 +611,7 @@ mod tests {
             serde_json::json!({"layout_presets":[preset.clone(),{"name":" build ","path":path}]}),
             serde_json::json!({"layout_presets":[{"name":"Build","path":"relative.json"}]}),
             serde_json::json!({"layout_presets":[{"name":" ","path":path}]}),
+            serde_json::json!({"layout_presets":[{"name":"Build","path":path,"cwd":"relative"}]}),
             serde_json::json!({"layout_presets":vec![preset.clone();33]}),
             serde_json::json!({"keybindings":[{"key":"ctrl-k b","preset":"Missing"}]}),
             serde_json::json!({"layout_presets":[preset],"keybindings":[{"key":"ctrl-k b","preset":"Build","text":"echo"}]}),

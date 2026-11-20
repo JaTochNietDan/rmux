@@ -125,15 +125,32 @@ pub struct PreparedSession {
     pub active_window: Option<usize>,
     pub windows: Vec<Prepared>,
 }
+fn default_directory(node: &mut snapshot::Node, directory: &std::path::Path) {
+    match node {
+        snapshot::Node::Pane { tabs, .. } => {
+            for tab in tabs { if tab.directory.is_none() { tab.directory = Some(directory.to_owned()); } }
+        }
+        snapshot::Node::Split { children, .. } => {
+            for child in children { default_directory(child, directory); }
+        }
+    }
+}
+
 impl PreparedSession {
     /// GUI import with bounded, caller-coalesced progress notifications.
-    pub fn read_import(path: &std::path::Path, session: bool, token: &AtomicBool, scrollback_bytes: usize,
+    pub fn read_import(path: &std::path::Path, session: bool, directory: Option<&std::path::Path>, token: &AtomicBool, scrollback_bytes: usize,
         mut progress: impl FnMut(usize, usize)) -> anyhow::Result<Self> {
         check_cancelled(token)?;
-        let snapshot = if session { snapshot::SessionSnapshot::load(path)? } else {
+        let mut snapshot = if session { snapshot::SessionSnapshot::load(path)? } else {
             snapshot::SessionSnapshot { version: 1, active_window: Some(0), windows: vec![snapshot::WindowSnapshot::load(path)?] }
         };
         anyhow::ensure!(!snapshot.windows.is_empty(), "session contains no windows");
+        if let Some(directory) = directory {
+            anyhow::ensure!(directory.is_absolute(), "preset working directory must be absolute");
+            for window in &mut snapshot.windows {
+                for workspace in &mut window.workspaces { default_directory(&mut workspace.layout, directory); }
+            }
+        }
         fn count(node: &snapshot::Node) -> usize {
             match node {
                 snapshot::Node::Pane { tabs, .. } => tabs.len(),
@@ -231,6 +248,27 @@ mod tests {
     use super::{Job, Prepared, cancelled};
 
     #[test]
+    fn preset_default_directory_fills_nested_tabs_without_replacing_saved_paths() -> anyhow::Result<()> {
+        let root = tempfile::tempdir()?;
+        let project = root.path().join("project 世界");
+        let explicit = root.path().join("other project");
+        let mut node: super::snapshot::Node = serde_json::from_value(serde_json::json!({
+            "kind":"split","axis":"Columns","weights":[1,1],"children":[
+                {"kind":"pane","active_tab":0,"tabs":[{"label":"default","directory":null}]},
+                {"kind":"pane","active_tab":0,"tabs":[{"label":"explicit","directory":explicit},{"label":"default2","directory":null}]}
+            ]
+        }))?;
+        super::default_directory(&mut node, &project);
+        let actual = serde_json::to_value(&node)?;
+        assert_eq!(actual["children"][0]["tabs"][0]["directory"], serde_json::to_value(&project)?);
+        assert_eq!(actual["children"][1]["tabs"][0]["directory"], serde_json::to_value(&explicit)?);
+        assert_eq!(actual["children"][1]["tabs"][1]["directory"], serde_json::to_value(&project)?);
+        super::default_directory(&mut node, &root.path().join("replacement"));
+        assert_eq!(serde_json::to_value(&node)?, actual);
+        Ok(())
+    }
+
+    #[test]
     fn import_progress_counts_terminals_and_allows_cancellation_before_spawn() -> anyhow::Result<()> {
         let directory = tempfile::tempdir()?;
         let path = directory.path().join("import.json");
@@ -242,7 +280,7 @@ mod tests {
             std::fs::write(&path, serde_json::to_vec(&document)?)?;
             let token = std::sync::atomic::AtomicBool::new(false);
             let mut progress = Vec::new();
-            let result = super::PreparedSession::read_import(&path, session, &token, 4096, |completed, total| {
+            let result = super::PreparedSession::read_import(&path, session, None, &token, 4096, |completed, total| {
                 progress.push((completed, total));
                 token.store(true, std::sync::atomic::Ordering::Release);
             });

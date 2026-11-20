@@ -1089,7 +1089,7 @@ presets to your settings. Replace these example paths with your saved files:
 ```json
 {
   "layout_presets": [
-    {"name":"Development", "path":"/absolute/path/development.json"},
+    {"name":"Development", "path":"/absolute/path/development.json", "cwd":"/absolute/project"},
     {"name":"All Projects", "path":"/absolute/path/projects.json", "session":true}
   ],
   "keybindings": [{"key":"ctrl-k d", "preset":"Development"}]
@@ -1101,6 +1101,11 @@ its shortcut. Each invocation opens fresh windows/shells in the directories save
 in the file; it does not replay prior terminal commands or resume running jobs.
 The file is read when invoked, so edits apply to the next use. Layout presets
 (default `session:false`) contain one window; session presets contain multiple.
+An optional absolute `cwd` supplies the directory for tabs whose saved `directory`
+is null. Explicit saved tab directories take precedence. This lets several named
+presets reuse one template for different projects without editing the template.
+The resulting directories are checked before any shell starts; the source file
+is never modified by applying a preset.
 Up to 32 presets are allowed, with unique names and absolute paths. Invalid files
 or missing working directories report an import error. Configuration loading does
 not read preset files. A binding selects exactly one `action`, `command`, `text`,
