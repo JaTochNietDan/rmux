@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Palette search now indexes each displayed, resolved shortcut alongside the action
+title/subtitle. macOS modifier/key symbols receive searchable names (cmd/command,
+ctrl/control, alt/option, shift and navigation keys); textual cross-platform
+shortcuts and chords are searchable by words too. Indexing derives from the
+existing origin-context hint, not a separate default-binding table. A focused
+ranking test passes for symbols, named modifiers, arrow keys, chords and unbound
+actions. Desktop test compilation passed; native typing/reload acceptance remains
+pending. Search retains normal fuzzy ranking rather than becoming an exact
+keybinding-conflict inspector.
+
 Fixed stale OSC 9;4 activity indicators after terminal completion. The existing
 process-exit/output-closure path now clears running, indeterminate and paused
 progress while retaining error reports. Late buffered activity cannot resurrect

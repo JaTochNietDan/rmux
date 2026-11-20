@@ -1705,3 +1705,9 @@ you scroll, keeping large tab collections from building every result row at once
 palette. Bind `split_left` or `split_up` for custom shortcuts; they have no default
 bindings. All four split directions inherit the target terminal’s directory and
 font settings through the same shell-launch path.
+
+Palette search includes the shortcut shown beside each action. Try separate words
+such as `cmd shift d` on macOS or `ctrl shift k` for a configured binding; macOS
+symbols such as `⇧⌘D` also work. Combine key names with an action name to narrow
+fuzzy matches. Hints reflect the originating terminal's bindings when you open
+the picker, including custom overrides and disabled shortcuts.

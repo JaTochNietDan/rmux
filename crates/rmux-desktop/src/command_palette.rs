@@ -443,7 +443,8 @@ impl CommandPalette {
             input, heading, empty_message,
             search: palette_match::RankedSearch::new(commands
                 .iter()
-                .map(|command| format!("{} {}", command.title, command.subtitle.as_deref().unwrap_or_default()).to_lowercase())
+                .map(|command| format!("{} {} {}", command.title, command.subtitle.as_deref().unwrap_or_default(),
+                    command.shortcut.as_deref().map(shortcuts::search_terms).unwrap_or_default()).to_lowercase())
                 .collect()),
             scroll: ListState::new(commands.len(), ListAlignment::Top, px(96.)),
             commands,

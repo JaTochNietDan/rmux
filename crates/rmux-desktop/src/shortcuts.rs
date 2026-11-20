@@ -11,6 +11,23 @@ pub(super) fn hint(action: &dyn Action, focus: &FocusHandle, window: &Window) ->
 
 /// Presentation only: parsing and keymap identity continue using GPUI's syntax.
 pub(super) fn key_label(key: &Keystroke) -> String { format_keystroke(key, cfg!(target_os = "macos")) }
+/// Keep the displayed shortcut searchable both as symbols and familiar key names.
+/// This is derived from the resolved hint, so disabled/default overrides cannot
+/// advertise a binding that is not actually used by the originating terminal.
+pub(super) fn search_terms(label: &str) -> String {
+    let mut words = String::new();
+    for ch in label.chars() {
+        words.push_str(match ch {
+            '⌘' => " cmd command ", '⌃' => " ctrl control ",
+            '⌥' => " alt option ", '⇧' => " shift ",
+            '↑' => " up ", '↓' => " down ", '←' => " left ", '→' => " right ",
+            '↩' => " enter return ", '⌫' => " backspace ", '⌦' => " delete ",
+            '⇥' => " tab ", '+' => " ",
+            _ => { words.push(ch); continue; }
+        });
+    }
+    format!("{label} {words}").to_lowercase()
+}
 fn format_keystroke(key: &Keystroke, mac: bool) -> String { format_key_parts(&key.key, key.modifiers, mac) }
 fn format_key_parts(key: &str, modifiers: Modifiers, mac: bool) -> String {
     let mut parts = Vec::with_capacity(6);
@@ -228,6 +245,26 @@ pub fn install(cx: &mut App) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn resolved_shortcuts_are_searchable_by_symbols_and_key_names() {
+        use crate::palette_match::RankedSearch;
+        let mut search = RankedSearch::new(vec![
+            format!("split below {}", super::search_terms("⇧⌘D")),
+            format!("focus pane {}", super::search_terms("⌃⌥←")),
+            format!("custom command {}", super::search_terms("Ctrl+Shift+K Ctrl+Enter")),
+            "split above".into(),
+        ]);
+        for (query, expected) in [
+            ("cmd shift d", 0), ("split command shift", 0), ("⇧⌘D", 0),
+            ("control option left", 1), ("alt left", 1),
+            ("ctrl shift k enter", 2),
+        ] {
+            search.update(query);
+            assert_eq!(search.matches.first(), Some(&expected), "{query}");
+        }
+        search.update("split above cmd");
+        assert!(search.matches.is_empty(), "unbound action must not inherit shortcut terms");
+    }
     use super::compile;
     use crate::{preferences::Preferences, ShowCommandPalette, ToggleSettings};
     use gpui::{KeyBinding, KeyContext, Keymap, Keystroke};
