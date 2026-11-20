@@ -96,6 +96,14 @@ struct CopyLocalPath { path: std::path::PathBuf }
 
 #[derive(Clone, Debug, Default, PartialEq, Action)]
 #[action(namespace = rmux, no_json)]
+struct PreviewLocalFile { path: std::path::PathBuf }
+
+#[derive(Clone, Debug, Default, PartialEq, Action)]
+#[action(namespace = rmux, no_json)]
+struct CopyPreviewLine { text: String }
+
+#[derive(Clone, Debug, Default, PartialEq, Action)]
+#[action(namespace = rmux, no_json)]
 struct CheckForUpdates;
 
 #[derive(Clone, Debug, Default, PartialEq, Action)]

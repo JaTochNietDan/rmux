@@ -2471,6 +2471,30 @@ impl WorkspaceWindow {
         }));
         cx.notify();
     }
+    fn preview_local_file(&mut self, path: std::path::PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+        if self.file_browser_job.is_some() || self.automation_available(cx).is_err() { return; }
+        let Some(focus) = window.focused(cx) else { return; };
+        let executor = cx.background_executor().clone();
+        self.notice = Some("Loading text preview…".into());
+        self.file_browser_job = Some(cx.spawn_in(window, async move |entity, cx| {
+            let result = executor.spawn(async move { file_browser::preview(path) }).await;
+            let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
+                this.file_browser_job = None;
+                if this.notice.as_deref() == Some("Loading text preview…") { this.notice = None; }
+                if focus.is_focused(window) && this.automation_available(cx).is_ok() {
+                    match result {
+                        Ok(preview) => {
+                            let palette = cx.new(|cx| command_palette::CommandPalette::file_preview(preview, window, cx));
+                            this.install_palette(palette, Some(focus), window, cx);
+                        }
+                        Err(error) => this.notice = Some(format!("Preview file: {error:#}")),
+                    }
+                }
+                cx.notify();
+            }));
+        }));
+        cx.notify();
+    }
     fn show_font_picker(&mut self, default: bool, window: &mut Window, cx: &mut Context<Self>) {
         if self.font_picker_job.is_some() || self.automation_available(cx).is_err() { return; }
         let Some(focus) = window.focused(cx) else { return; };
@@ -3616,6 +3640,11 @@ impl Render for WorkspaceWindow {
                 else { this.notice = Some("The current terminal has not reported a local directory yet.".into()); cx.notify(); }
             }))
             .on_action(cx.listener(|this, action: &BrowseDirectory, window, cx| this.browse_directory(action.path.clone(), window, cx)))
+            .on_action(cx.listener(|this, action: &PreviewLocalFile, window, cx| this.preview_local_file(action.path.clone(), window, cx)))
+            .on_action(cx.listener(|this, action: &CopyPreviewLine, _, cx| {
+                clipboard::write(ClipboardItem::new_string(action.text.clone()), cx);
+                this.notice = Some("Copied preview line".into()); cx.notify();
+            }))
             .on_action(cx.listener(|this, action: &CopyLocalPath, _, cx| {
                 this.notice = Some(match action.path.to_str() {
                     Some(path) => { clipboard::write(ClipboardItem::new_string(path.into()), cx); "Copied file path".into() }

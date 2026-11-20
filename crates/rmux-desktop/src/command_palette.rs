@@ -389,13 +389,34 @@ impl CommandPalette {
         commands.extend(listing.entries.into_iter().map(|entry| Command {
             title: entry.path.file_name().unwrap_or_default().to_string_lossy().chars()
                 .map(|ch| if ch.is_control() { ' ' } else { ch }).collect(),
-            subtitle: Some(if entry.directory { "Directory · Enter to browse" } else if entry.symlink { "Symbolic link · Enter to copy path" } else { "File · Enter to copy path" }.into()),
+            subtitle: Some(if entry.directory { "Directory · Enter to browse" } else if entry.symlink { "Symbolic link · Enter to copy path" } else { "File · Enter to preview text" }.into()),
             shortcut: None,
             target: PaletteEvent::Run(if entry.directory { Box::new(BrowseDirectory { path: entry.path }) }
-                else { Box::new(CopyLocalPath { path: entry.path }) }),
+                else if entry.symlink { Box::new(CopyLocalPath { path: entry.path }) }
+                else { Box::new(PreviewLocalFile { path: entry.path }) }),
         }));
-        Self::with_commands(commands, if listing.truncated { "Local files · Limited to 2,048 entries; use a narrower directory" } else { "Local files · Browse directories or copy file paths" },
+        Self::with_commands(commands, if listing.truncated { "Local files · Limited to 2,048 entries; use a narrower directory" } else { "Local files · Browse directories or preview text" },
             "No matching entries", window, cx)
+    }
+    pub fn file_preview(preview: file_browser::Preview, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let mut commands = Vec::new();
+        if let Some(parent) = preview.path.parent() {
+            commands.push(Command { title: "Back to directory".into(), subtitle: Some(parent.display().to_string()), shortcut: None,
+                target: PaletteEvent::Run(Box::new(BrowseDirectory { path: parent.to_owned() })) });
+        }
+        commands.push(Command { title: "Copy file path".into(), subtitle: Some(preview.path.display().to_string()), shortcut: None,
+            target: PaletteEvent::Run(Box::new(CopyLocalPath { path: preview.path.clone() })) });
+        commands.push(Command { title: "Refresh preview".into(), subtitle: None, shortcut: None,
+            target: PaletteEvent::Run(Box::new(PreviewLocalFile { path: preview.path })) });
+        commands.extend(preview.lines.into_iter().enumerate().map(|(index, text)| {
+            let mut chars = text.chars();
+            let mut title: String = chars.by_ref().take(1024).map(|ch| if ch.is_control() { ' ' } else { ch }).collect();
+            if chars.next().is_some() { title.push('…'); }
+            if title.is_empty() { title.push_str("(empty line)"); }
+            Command { title, subtitle: Some(format!("Line {} · Enter copies this preview line", index + 1)), shortcut: None,
+                target: PaletteEvent::Run(Box::new(CopyPreviewLine { text })) }
+        }));
+        Self::with_commands(commands, if preview.truncated { "Text preview · Limited to 64 KiB / 512 lines" } else { "Text preview · Search lines · Read only" }, "No matching preview lines", window, cx)
     }
     pub fn custom_commands(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let mut commands: Vec<_> = cx.global::<Preferences>().commands.iter().map(custom_command).collect();

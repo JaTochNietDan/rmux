@@ -4675,6 +4675,7 @@ dependencies = [
  "async-channel 2.5.0",
  "futures-lite 2.6.1",
  "gpui",
+ "libc",
  "mac-usernotifications",
  "netstat2",
  "notify",

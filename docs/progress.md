@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+F01 local browsing now opens regular files as bounded, inert UTF-8 previews on
+the background executor. The virtualized/searchable palette shows numbered
+lines and Back/Refresh/Copy Path actions; selecting a line copies its retained
+text. Reads cap at 64 KiB plus one detection byte and 512 lines, with truncation
+labels and UTF-8-boundary handling. Display/search caps each line at 1,024 scalar
+values. Binary/non-UTF-8 and nonregular files are rejected; Unix opens use
+O_NOFOLLOW/O_NONBLOCK and recheck handle type. The existing locked libc version
+is now a direct Unix dependency. All three focused file-browser tests passed.
+Native preview UI/performance, remote browsing and richer viewer/editor parity
+remain open.
+
 Started F01 local file browsing: Browse Terminal Directory in menu/palette and
 `browse_files` opens an asynchronous, searchable directory snapshot from the
 focused terminal's cached cwd. Parent and Refresh navigate without shell input;
