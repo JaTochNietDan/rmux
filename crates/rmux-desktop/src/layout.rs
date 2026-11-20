@@ -180,23 +180,28 @@ impl<T: Clone + PartialEq> PaneTree<T> {
     }
 
     pub fn split(&mut self, target: &T, new: T, axis: Axis) -> bool {
-        if !self.can_split(target) { return false; }
-        self.split_unchecked(target, new, axis)
+        self.split_positioned(target, new, axis, false)
     }
 
-    fn split_unchecked(&mut self, target: &T, new: T, axis: Axis) -> bool {
+    pub fn split_positioned(&mut self, target: &T, new: T, axis: Axis, before: bool) -> bool {
+        if !self.can_split(target) { return false; }
+        self.split_unchecked(target, new, axis, before)
+    }
+
+    fn split_unchecked(&mut self, target: &T, new: T, axis: Axis, before: bool) -> bool {
         match self {
             Self::Pane(pane) if pane == target => {
                 *self = Self::Split {
                     axis,
-                    children: vec![Self::Pane(pane.clone()), Self::Pane(new)],
+                    children: if before { vec![Self::Pane(new), Self::Pane(pane.clone())] }
+                        else { vec![Self::Pane(pane.clone()), Self::Pane(new)] },
                     weights: vec![1., 1.],
                 };
                 true
             }
             Self::Split { children, .. } => children
                 .iter_mut()
-                .any(|child| child.split_unchecked(target, new.clone(), axis)),
+                .any(|child| child.split_unchecked(target, new.clone(), axis, before)),
             _ => false,
         }
     }
@@ -303,6 +308,28 @@ mod tests {
         assert_eq!(weights, &[1.1, 0.9, 2.]);
         let PaneTree::Split { weights, .. } = &children[0] else { panic!() };
         assert_eq!(weights, &[0.2, 1.8]);
+    }
+
+    #[test]
+    fn positioned_splits_preserve_nested_order_and_existing_weights() {
+        for axis in [Axis::Rows, Axis::Columns] {
+            for before in [false, true] {
+                let mut tree = PaneTree::Split { axis: Axis::Columns,
+                    children: vec![PaneTree::Pane(1), PaneTree::Pane(2)], weights: vec![3., 7.] };
+                assert!(tree.split_positioned(&2, 3, axis, before));
+                assert_eq!(tree.pane_index(&1), Some(0));
+                assert_eq!(tree.pane_index(&3), Some(if before { 1 } else { 2 }));
+                assert_eq!(tree.pane_index(&2), Some(if before { 2 } else { 1 }));
+                let PaneTree::Split { weights, children, .. } = &tree else { panic!() };
+                assert_eq!(weights, &[3., 7.]);
+                let PaneTree::Split { axis: actual, weights, .. } = &children[1] else { panic!() };
+                assert_eq!(*actual, axis);
+                assert_eq!(weights, &[1., 1.]);
+                let saved = format!("{tree:?}");
+                assert!(!tree.split_positioned(&99, 4, axis, before));
+                assert_eq!(format!("{tree:?}"), saved);
+            }
+        }
     }
 
     #[test]

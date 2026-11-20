@@ -85,6 +85,23 @@ for mode in ["end", "top", "after_current"]:
                         call("pane.zoom.set", pane_id=pane, zoomed=False)
                         assert call("pane.resize", pane_id=pane, direction="left")["changed"] is True
                         print("PASS: pane.resize weights, identity, selection, single-pane no-op and rejection paths")
+                        selected = [r["id"] for r in rows() if r["selected"]]
+                        # Split before an existing pane on both axes, preserving identities.
+                        for direction, axis in [("left", "columns"), ("up", "rows")]:
+                            created = call("pane.split", pane_id=pane, direction=direction)
+                            tree = next(r["layout"] for r in rows() if r["id"] == original)
+                            def containing_pair(node):
+                                if "children" not in node:
+                                    return None
+                                if [child.get("pane_id") for child in node["children"]] == [created["pane_id"], pane]:
+                                    return node
+                                return next((found for child in node["children"] if (found := containing_pair(child))), None)
+                            pair = containing_pair(tree)
+                            assert pair and pair["axis"] == axis and pair["weights"] == [1.0, 1.0], tree
+                            current = identity()
+                            assert all(item in current for item in surfaces)
+                            assert [r["id"] for r in rows() if r["selected"]] == selected
+                        print("PASS: left/up splits preserve nested order, identities and workspace selection")
                     if mode == "after_current":
                         group = call("workspace.group.create", window_id=window, name="Placement", workspace_ids=[second, original])
                         call("workspace.select", workspace_id=original)

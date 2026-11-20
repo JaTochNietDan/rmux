@@ -112,7 +112,7 @@ pub fn candidates(args: &[OsString]) -> Vec<&'static str> {
         return if matches!(flag, "--focus" | "--zoomed") {
             ["true", "false"].into_iter().filter(|value| value.starts_with(current)).collect()
         } else if flag == "--direction" {
-            ["right", "down"].into_iter().filter(|value| value.starts_with(current)).collect()
+            ["left", "right", "up", "down"].into_iter().filter(|value| value.starts_with(current)).collect()
         } else { Vec::new() };
     }
     options.iter().copied().chain(["--help"].into_iter().filter(|_| initial)).filter(|flag| flag.starts_with(current) && !used.contains(flag)

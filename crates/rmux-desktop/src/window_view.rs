@@ -975,8 +975,9 @@ impl WorkspaceWindow {
         if workspace.read(cx).layout.as_ref().is_none_or(|tree| !tree.can_split(&target_pane)) {
             return Err(automation::Failure { code: -32005, message: "Pane split nesting limit reached" });
         }
-        let axis = match split.direction { automation::SplitDirection::Right => SplitAxis::Columns, automation::SplitDirection::Down => SplitAxis::Rows };
-        let pane_id = workspace.update(cx, |workspace, cx| workspace.add_prepared_at(Some(target), axis, split.cwd.clone(), false, None, window, cx))
+        let axis = match split.direction { automation::SplitDirection::Left | automation::SplitDirection::Right => SplitAxis::Columns, automation::SplitDirection::Up | automation::SplitDirection::Down => SplitAxis::Rows };
+        let before = matches!(split.direction, automation::SplitDirection::Left | automation::SplitDirection::Up);
+        let pane_id = workspace.update(cx, |workspace, cx| workspace.add_prepared_at(Some(target), axis, before, split.cwd.clone(), false, None, window, cx))
             .ok_or(automation::Failure { code: -32005, message: "Could not start pane shell" })?;
         let pane = workspace.read(cx).panes.iter().find(|pane| pane.entity_id() == pane_id).unwrap();
         let surface = pane.read(cx).active_terminal_id().unwrap();

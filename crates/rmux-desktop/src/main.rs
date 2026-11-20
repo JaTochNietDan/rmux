@@ -310,6 +310,8 @@ actions!(
         CloseWorkspace,
         Split,
         SplitBelow,
+        SplitLeft,
+        SplitAbove,
         TogglePaneZoom,
         EqualizePanes,
         ResizePaneLeft,
@@ -2835,6 +2837,9 @@ impl Workspace {
         }
     }
     fn add(&mut self, axis: SplitAxis, window: &mut Window, cx: &mut Context<Self>) {
+        self.add_positioned(axis, false, window, cx);
+    }
+    fn add_positioned(&mut self, axis: SplitAxis, before: bool, window: &mut Window, cx: &mut Context<Self>) {
         if self.benchmark {
             self.add_prepared(axis, None, true, None, window, cx);
             return;
@@ -2892,7 +2897,7 @@ impl Workspace {
                         let (size, family) = preferences::updated_font(cells.font_size, &family,
                             previous_default_size, &previous_default_family, cx.global::<Preferences>());
                         let cells = if size == cells.font_size { cells } else { CellMetrics::new(size) };
-                        this.add_seed_at(Some(target), axis, None, focus, Some((TerminalSeed::Ready(prepared, cells, family.into()), None)), window, cx);
+                        this.add_seed_at(Some(target), axis, before, None, focus, Some((TerminalSeed::Ready(prepared, cells, family.into()), None)), window, cx);
                     }
                     Err(error) => this.error = Some(format!("Start split terminal: {error}")),
                 }
@@ -2902,12 +2907,12 @@ impl Workspace {
     }
 
     fn add_prepared(&mut self, axis: SplitAxis, directory: Option<std::path::PathBuf>, focus: bool, prepared: Option<(Session, Option<String>)>, window: &mut Window, cx: &mut Context<Self>) {
-        self.add_prepared_at(None, axis, directory, focus, prepared, window, cx);
+        self.add_prepared_at(None, axis, false, directory, focus, prepared, window, cx);
     }
-    fn add_prepared_at(&mut self, target: Option<EntityId>, axis: SplitAxis, directory: Option<std::path::PathBuf>, focus: bool, prepared: Option<(Session, Option<String>)>, window: &mut Window, cx: &mut Context<Self>) -> Option<EntityId> {
-        self.add_seed_at(target, axis, directory, focus, prepared.map(|(session, label)| (TerminalSeed::Session(session), label)), window, cx)
+    fn add_prepared_at(&mut self, target: Option<EntityId>, axis: SplitAxis, before: bool, directory: Option<std::path::PathBuf>, focus: bool, prepared: Option<(Session, Option<String>)>, window: &mut Window, cx: &mut Context<Self>) -> Option<EntityId> {
+        self.add_seed_at(target, axis, before, directory, focus, prepared.map(|(session, label)| (TerminalSeed::Session(session), label)), window, cx)
     }
-    fn add_seed_at(&mut self, target: Option<EntityId>, axis: SplitAxis, directory: Option<std::path::PathBuf>, focus: bool, prepared: Option<(TerminalSeed, Option<String>)>, window: &mut Window, cx: &mut Context<Self>) -> Option<EntityId> {
+    fn add_seed_at(&mut self, target: Option<EntityId>, axis: SplitAxis, before: bool, directory: Option<std::path::PathBuf>, focus: bool, prepared: Option<(TerminalSeed, Option<String>)>, window: &mut Window, cx: &mut Context<Self>) -> Option<EntityId> {
         if cx.global::<Shutdowns>().quitting { return None; }
         let anchor = if let Some(target) = target {
             Some(self.panes.iter().position(|pane| pane.entity_id() == target)?)
@@ -2992,8 +2997,8 @@ impl Workspace {
                         weights: vec![1.; self.panes.len()],
                     });
                 } else if let Some(tree) = &mut self.layout {
-                    tree.split(&self.panes[focused], view.clone(), axis);
-                    self.panes.insert(focused + 1, view.clone());
+                    tree.split_positioned(&self.panes[focused], view.clone(), axis, before);
+                    self.panes.insert(focused + usize::from(!before), view.clone());
                 } else {
                     self.layout = Some(PaneTree::Pane(view.clone()));
                     self.panes.push(view.clone());
@@ -3068,6 +3073,8 @@ impl Render for Workspace {
             .on_action(cx.listener(|view, _: &BreakTabBelow, window, cx| {
                 view.break_tab(SplitAxis::Rows, window, cx)
             }))
+            .on_action(cx.listener(|view, _: &SplitLeft, window, cx| view.add_positioned(SplitAxis::Columns, true, window, cx)))
+            .on_action(cx.listener(|view, _: &SplitAbove, window, cx| view.add_positioned(SplitAxis::Rows, true, window, cx)))
             .on_action(
                 cx.listener(|view, _: &Split, window, cx| view.add(SplitAxis::Columns, window, cx)),
             )
@@ -3694,6 +3701,8 @@ fn main() {
                     MenuItem::action("Split Right", Split),
                     MenuItem::action("Command Palette…", ShowCommandPalette),
                     MenuItem::action("Split Below", SplitBelow),
+                    MenuItem::action("Split Left", SplitLeft),
+                    MenuItem::action("Split Above", SplitAbove),
                     MenuItem::action("Toggle Pane Zoom", TogglePaneZoom),
                     MenuItem::action("Equalize Pane Sizes", EqualizePanes),
                     MenuItem::action("Resize Pane Left", ResizePaneLeft),

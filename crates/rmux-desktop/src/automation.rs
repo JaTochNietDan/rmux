@@ -184,7 +184,7 @@ pub(super) struct PaneResize {
 
 #[derive(serde::Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]
-pub(super) enum SplitDirection { Right, Down }
+pub(super) enum SplitDirection { Left, Right, Up, Down }
 #[derive(serde::Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub(super) struct PaneSplit {
@@ -981,7 +981,7 @@ fn dispatch_inner(
         match request.get("params").cloned().and_then(|params| serde_json::from_value::<PaneSplit>(params).ok()) {
             Some(split) if target_id(&split.pane_id).is_ok()
                 && split.cwd.as_ref().is_none_or(|path| path.is_absolute() && path.as_os_str().len() <= 8192) => Some(split),
-            _ => return respond(error(id, -32602, "Expected pane_id, direction right|down, optional absolute cwd, focus and activate booleans")),
+            _ => return respond(error(id, -32602, "Expected pane_id, direction left|right|up|down, optional absolute cwd, focus and activate booleans")),
         }
     } else { None };
     let pane_zoom = if method == "pane.zoom.set" {

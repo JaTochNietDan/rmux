@@ -165,6 +165,8 @@ impl CommandPalette {
         command!("New Window", NewWindow);
         command!("Split Right", Split);
         command!("Split Below", SplitBelow);
+        command!("Split Left", SplitLeft);
+        command!("Split Above", SplitAbove);
         command!("Toggle Pane Zoom", TogglePaneZoom);
         command!("Equalize Pane Sizes", EqualizePanes);
         command!("Resize Pane Left", ResizePaneLeft);

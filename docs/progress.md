@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Added left/above pane creation alongside right/below through the shared layout
+and shell-launch paths. Menu/palette actions and split_left/split_up custom
+shortcuts expose the UI path; pane.split and rmuxctl split-pane accept all four
+cardinal directions, including completions/help. Before-target insertion preserves
+outer weights, existing entity ownership and pane traversal order. Focused layout
+and CLI tests passed, desktop build passed, and native socket smoke verified
+nested left/up ordering, equal pair weights, unchanged existing surface identities
+and workspace selection. The native fixture uses immediately exiting shells;
+live-process continuity and actual menu/shortcut interaction remain unverified.
+
 Fixed keyboard/search jumps to unmeasured virtual-list rows. A regression using
 GPUI's actual ListState reproduced a fresh 256-row list staying at row 0 when
 asked to reveal row 255. A shared helper now uses a logical row offset for

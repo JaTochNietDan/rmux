@@ -411,7 +411,7 @@ Use `"context":"window"` for a binding that should also work while a window pane
 has focus; bindings otherwise require terminal context. No new defaults are added.
 
 Supported action names: `new_workspace`, `new_window`, `new_tab`, `split_right`,
-`split_down`, `focus_left`, `focus_right`, `focus_up`, `focus_down`,
+`split_down`, `split_left`, `split_up`, `focus_left`, `focus_right`, `focus_up`, `focus_down`,
 `next_workspace`, `previous_workspace`, `last_workspace`, `last_terminal`,
 `next_pane`, `previous_pane`, `next_tab`, `previous_tab`, `tab_picker`,
 `move_tab_left`, `move_tab_right`, `move_workspace_up`, `move_workspace_down`,
@@ -804,7 +804,8 @@ rmuxctl split-pane --pane PANE_ID --direction right --focus false
 rmuxctl pane.split '{"pane_id":"PANE_ID","direction":"right","focus":false}'
 ```
 
-Use `right` for a side-by-side split or `down` for a stacked split. Optional `--cwd` (`cwd` in RPC)
+Use `left` or `right` for a side-by-side split, and `up` or `down` for a stacked
+split. The new pane appears on the requested side of the target. Optional `--cwd` (`cwd` in RPC)
 must be absolute; otherwise the new terminal inherits the target pane's cached
 working directory. Its font settings follow that pane too. The reply contains
 `pane_id`, `surface_id`, and `workspace_id` for subsequent layout operations.
@@ -1696,3 +1697,8 @@ shortcut if desired; it has no default binding.
 The pane's **Choose Terminal Tab** picker also searches finished state and exit
 messages. Its scrollable results use fixed-height rows and render on demand as
 you scroll, keeping large tab collections from building every result row at once.
+
+**Split Left** and **Split Above** are also available in the menu and command
+palette. Bind `split_left` or `split_up` for custom shortcuts; they have no default
+bindings. All four split directions inherit the target terminal’s directory and
+font settings through the same shell-launch path.
