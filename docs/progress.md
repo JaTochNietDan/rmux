@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Default font selection now uses the installed-font picker from Settings, the
+command palette, and the native menu. Save Settings persists the family and
+tracks family changes during saves; existing inheritance preserves explicit
+per-terminal font overrides independently of text size. The custom action is
+choose_default_font. The desktop test build and all 13 focused preference tests
+passed, including persistence and inheritance. Native picker interaction and
+visual polish remain unverified while the desktop is unavailable.
+
 Choose Terminal Font now opens a searchable installed-font picker from the
 palette/menu or custom choose_font action. Font discovery runs on the background
 executor with one pending job per window, and the picker opens only while its

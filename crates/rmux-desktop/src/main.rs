@@ -57,6 +57,10 @@ struct SetTerminalFont { family: String }
 
 #[derive(Clone, Debug, Default, PartialEq, Action)]
 #[action(namespace = rmux, no_json)]
+struct SetDefaultFont { family: String }
+
+#[derive(Clone, Debug, Default, PartialEq, Action)]
+#[action(namespace = rmux, no_json)]
 struct CheckForUpdates;
 
 #[derive(Clone, Debug, Default, PartialEq, Action)]
@@ -269,6 +273,7 @@ actions!(
         ResetFontSize,
         UseConfiguredFont,
         ShowFontPicker,
+        ShowDefaultFontPicker,
         ShowCommandPalette,
         NewWindow,
         CloseWindow,
@@ -3281,6 +3286,7 @@ fn main() {
                     MenuItem::action("Decrease Font Size", DecreaseFontSize),
                     MenuItem::action("Reset Font Size", ResetFontSize),
                     MenuItem::action("Choose Terminal Font…", ShowFontPicker),
+                    MenuItem::action("Choose Default Font…", ShowDefaultFontPicker),
                     MenuItem::action("Use Configured Font", UseConfiguredFont),
                 ],
             },

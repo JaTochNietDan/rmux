@@ -265,6 +265,7 @@ impl Preferences {
     /// policy supplied by the environment is intentionally not persisted.
     pub fn same_saved_appearance(&self, other: &Self) -> bool {
         self.font_size == other.font_size
+            && self.font_family == other.font_family
             && self.terminal_padding == other.terminal_padding
             && self.scrollback_mib == other.scrollback_mib
             && self.terminal_theme == other.terminal_theme
@@ -289,6 +290,7 @@ impl Preferences {
         };
         let mut latest = Self::read(&path, false)?;
         latest.font_size = self.font_size;
+        latest.font_family = self.font_family.clone();
         latest.terminal_padding = self.terminal_padding;
         latest.scrollback_mib = self.scrollback_mib;
         latest.terminal_theme = self.terminal_theme;
@@ -428,7 +430,7 @@ mod tests {
         assert!(!saved.same_saved_appearance(&current));
         current = saved.clone();
         current.font_family = "Other Mono".into();
-        assert!(saved.same_saved_appearance(&current));
+        assert!(!saved.same_saved_appearance(&current));
     }
 
     #[test]
@@ -581,7 +583,7 @@ mod tests {
         assert!(saved.native_notifications);
         assert_eq!(saved.notification_focus, NotificationFocus::BackgroundApp);
         assert_eq!(saved.group_new_workspace_placement, crate::workspace_groups::Placement::End);
-        assert_eq!(saved.font_family, "Custom Mono");
+        assert_eq!(saved.font_family, preferences.font_family);
         assert_eq!(saved.scrollback_mib, 8);
         assert_eq!(saved.confirm_close, ClosePolicy::Never);
         preferences.policy_override = Some(ClosePolicy::Always);

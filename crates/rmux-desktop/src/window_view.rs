@@ -1083,6 +1083,11 @@ impl WorkspaceWindow {
         } else if matches!(key, "left" | "right" | "enter" | "space") {
             let selected = state.selected;
             if selected < settings_view::KEYS.len() {
+                if settings_view::KEYS[selected] == "font_family" {
+                    self.show_font_picker(true, window, cx);
+                    cx.stop_propagation();
+                    return;
+                }
                 if settings_view::KEYS[selected] == "close" && cx.global::<Preferences>().close_policy_overridden() {
                     self.notice = Some("Close confirmation is controlled by RMUX_CONFIRM_CLOSE. Remove the override and restart rmux to change it here.".into());
                     cx.notify();
@@ -2199,7 +2204,7 @@ impl WorkspaceWindow {
         });
         self.install_palette(palette, focus, window, cx);
     }
-    fn show_font_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn show_font_picker(&mut self, default: bool, window: &mut Window, cx: &mut Context<Self>) {
         if self.font_picker_job.is_some() || self.automation_available(cx).is_err() { return; }
         let Some(focus) = window.focused(cx) else { return; };
         let text = cx.text_system().clone();
@@ -2211,7 +2216,7 @@ impl WorkspaceWindow {
                 this.font_picker_job = None;
                 if this.notice.as_deref() == Some("Loading installed fonts…") { this.notice = None; }
                 if focus.is_focused(window) && this.automation_available(cx).is_ok() {
-                    let palette = cx.new(|cx| command_palette::CommandPalette::fonts(families, window, cx));
+                    let palette = cx.new(|cx| command_palette::CommandPalette::fonts(families, default, window, cx));
                     this.install_palette(palette, Some(focus), window, cx);
                 }
                 cx.notify();
@@ -3234,7 +3239,17 @@ impl Render for WorkspaceWindow {
             }).absolute().size_full())
             .on_action(cx.listener(|this, _: &CloseWindow, window, cx| this.request_close_window(window, cx)))
             .on_action(cx.listener(|this, _: &CloseWorkspace, window, cx| this.request_close_workspace(this.active, window, cx)))
-            .on_action(cx.listener(|this, _: &ShowFontPicker, window, cx| this.show_font_picker(window, cx)))
+            .on_action(cx.listener(|this, _: &ShowFontPicker, window, cx| this.show_font_picker(false, window, cx)))
+            .on_action(cx.listener(|this, _: &ShowDefaultFontPicker, window, cx| this.show_font_picker(true, window, cx)))
+            .on_action(cx.listener(|_, action: &SetDefaultFont, _, cx| {
+                if !action.family.trim().is_empty() && action.family.len() <= 128 && !action.family.chars().any(char::is_control) {
+                    let mut settings = cx.global::<Preferences>().clone();
+                    if settings.font_family != action.family {
+                        settings.font_family = action.family.clone();
+                        cx.set_global(settings);
+                    }
+                }
+            }))
             .on_action(cx.listener(|this, _: &ShowCommandPalette, window, cx| this.show_palette(window, cx)))
             .on_action(cx.listener(|this, _: &SaveLayout, window, cx| this.save_layout(window, cx)))
             .on_action(cx.listener(|this, _: &SaveSession, window, cx| this.save_session(window, cx)))
@@ -3260,6 +3275,10 @@ impl Render for WorkspaceWindow {
                     state.focus.focus(window);
                 }
                 let mut settings = cx.global::<Preferences>().clone();
+                if change.key == "font_family" {
+                    this.show_font_picker(true, window, cx);
+                    return;
+                }
                 settings_view::adjust(&mut settings, &change.key, change.delta);
                 if !settings.same_saved_appearance(cx.global::<Preferences>()) {
                     cx.set_global(settings.confirm_close);

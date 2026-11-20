@@ -224,6 +224,7 @@ impl CommandPalette {
         command!("Decrease Font Size", DecreaseFontSize);
         command!("Reset Font Size", ResetFontSize);
         command!("Choose Terminal Font…", ShowFontPicker);
+        command!("Choose Default Font…", ShowDefaultFontPicker);
         command!("Use Configured Font", UseConfiguredFont);
         command!("Save Layout…", SaveLayout);
         command!("Save Session…", SaveSession);
@@ -347,7 +348,7 @@ impl CommandPalette {
         }
         Self::with_commands(commands, "Search commands and workspaces", "No matching commands or workspaces", window, cx)
     }
-    pub fn fonts(mut families: Vec<String>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn fonts(mut families: Vec<String>, default: bool, window: &mut Window, cx: &mut Context<Self>) -> Self {
         families.retain(|name| !name.trim().is_empty() && name.len() <= 128 && !name.chars().any(char::is_control) && !name.starts_with('.'));
         families.sort_unstable();
         families.dedup();
@@ -355,9 +356,14 @@ impl CommandPalette {
         families.truncate(2048);
         let commands = families.into_iter().map(|family| Command {
             title: family.clone(), subtitle: None, shortcut: None,
-            target: PaletteEvent::Run(Box::new(SetTerminalFont { family })),
+            target: PaletteEvent::Run(if default { Box::new(SetDefaultFont { family }) } else { Box::new(SetTerminalFont { family }) }),
         }).collect();
-        Self::with_commands(commands, if limited { "Choose terminal font · First 2,048 families" } else { "Choose font for this terminal" }, "No matching installed fonts", window, cx)
+        Self::with_commands(commands, match (default, limited) {
+            (true, true) => "Choose default font · First 2,048 families",
+            (true, false) => "Choose default font · Save in Settings to keep",
+            (false, true) => "Choose terminal font · First 2,048 families",
+            (false, false) => "Choose font for this terminal",
+        }, "No matching installed fonts", window, cx)
     }
     fn with_commands(commands: Vec<Command>, heading: &'static str, empty_message: &'static str, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let input = cx.new(|cx| text_field::TextField::new("", cx));

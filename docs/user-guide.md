@@ -4,7 +4,11 @@
 terminal. Type to filter, use arrows and Enter to choose, or Escape to cancel.
 Monospaced families suit the terminal grid best. The picker preserves text size;
 **Use Configured Font** restores the configured family and size. The custom
-action is `choose_font`; change `font_family` in JSON to set the default.
+action is `choose_font`. To change the default, use **Default font family** in
+Settings or **Choose Default Font…** in the palette/menu (`choose_default_font`
+for custom shortcuts). It updates terminals using the previous default family
+and preserves per-terminal overrides and text size. Click **Save these settings**
+to keep the default across launches.
 
 Use **Show Listening Ports** in the palette or menu to inspect a snapshot of local
 TCP listeners owned by the current terminal’s shell and descendants. Refresh
