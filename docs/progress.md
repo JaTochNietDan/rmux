@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Added per-terminal Find query history with Alt+Up/Down recall, editable drafts and
+return-to-draft navigation. Submit/close remembers queries; exact duplicates move
+to the front, with eight-entry/16 KiB retained-text limits and 4 KiB per query.
+History moves into the open Find bar and returns on dismissal, avoiding a retained
+duplicate while open. IME composition and oversized drafts bypass recall. Query
+replacement uses the existing text-field undo/change path and search worker.
+Desktop test build and two focused history tests passed (Unicode, deduplication,
+byte/entry eviction, edit reset and draft restoration). Native Alt-key, IME and
+find-bar interaction acceptance remain pending.
+
 Polished the zoomed-pane restore banner with a hidden-pane count, split icon,
 explicit Restore layout label and the current Toggle Pane Zoom binding resolved
 in the zoomed terminal context. Long status/shortcut text truncates and a tooltip

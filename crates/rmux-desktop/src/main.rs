@@ -433,6 +433,7 @@ struct TerminalView {
     cells: CellMetrics,
     find: Option<Entity<find_bar::FindBar>>,
     last_find_query: String,
+    find_history: find_bar::QueryHistory,
     selecting: bool,
     selection_pointer: Option<(Point<Pixels>, bool)>,
     selection_scroll: Option<Task<()>>,
@@ -802,6 +803,7 @@ impl TerminalView {
             measured_font_size: None,
             find: None,
             last_find_query: String::new(),
+            find_history: Default::default(),
             selecting: false,
             selection_pointer: None,
             selection_scroll: None,
@@ -1603,6 +1605,7 @@ impl TerminalView {
             return false;
         };
         self.last_find_query = find.read(cx).query(cx).to_owned();
+        self.find_history = find.read(cx).saved_history(cx);
         true
     }
     fn open_find(&mut self, _: &Find, window: &mut Window, cx: &mut Context<Self>) {
@@ -1627,7 +1630,7 @@ impl TerminalView {
                         .selected_search_query()
                         .unwrap_or_else(|| self.last_find_query.clone())
                 });
-                let find = cx.new(|cx| find_bar::FindBar::new(worker, parent, &initial_query, cx));
+                let find = cx.new(|cx| find_bar::FindBar::new(worker, parent, &initial_query, std::mem::take(&mut self.find_history), cx));
                 cx.subscribe_in(
                     &find,
                     window,
