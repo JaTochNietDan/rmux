@@ -2908,7 +2908,7 @@ impl Render for WorkspaceWindow {
                             .map(|(arrival, message)| (arrival, message.clone()))
                     })
                 }).max_by_key(|(arrival, _)| *arrival);
-                if let Some((_, preview)) = preview { notification_previews.insert(entry.workspace.entity_id(), preview); }
+                if let Some(preview) = preview { notification_previews.insert(entry.workspace.entity_id(), preview); }
             }
         }
         let current = self
@@ -3125,8 +3125,11 @@ impl Render for WorkspaceWindow {
                                         else { format!("{count} {label} · {unread_count} unread") }
                                     });
                                     let display_name = header.map(|group| group.name.clone()).unwrap_or_else(|| entry.name.clone());
-                                    let preview = header.and_then(|group| group.members.iter().find_map(|member| notification_previews.get(member)))
-                                        .or_else(|| notification_previews.get(&entry.workspace.entity_id()));
+                                    let preview = header.and_then(|group| group.members.iter()
+                                        .filter_map(|member| notification_previews.get(member))
+                                        .max_by_key(|(arrival, _)| *arrival))
+                                        .or_else(|| notification_previews.get(&entry.workspace.entity_id()))
+                                        .map(|(_, message)| message);
                                     let container = cx.entity_id();
                                     let target = entry.workspace.entity_id();
                                     let selected = self.sidebar_selection.contains(&target) || index == self.active || header.is_some_and(|group| group.collapsed && self.entries.get(self.active).is_some_and(|entry| group.members.contains(&entry.workspace.entity_id())));

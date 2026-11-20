@@ -160,7 +160,9 @@ still pending.
 Workspace number shortcuts and next/previous navigation follow group order.
 Collapsed members keep their shortcut numbers; selecting one expands its group.
 Group headers show workspace and unread-workspace counts, including hidden
-members. Collapsing a group does not acknowledge its notifications.
+members. Their notification preview shows the newest unread message across all
+members, regardless of group order. Collapsing a group does not acknowledge its
+notifications.
 Close Workspace Group in the File menu/palette closes its terminals after one
 confirmation for a multi-member group. Ungroup Workspaces keeps them running.
 Cmd-click (macOS) or Ctrl-click toggles sidebar selections; Shift-click selects

@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Group header notification previews now choose the newest unread message across
+all members, including collapsed members, instead of the first member with an
+unread message. The sidebar retains the existing arrival sequence alongside its
+shared message cache and compares cached values; this adds no terminal parser
+locks or history scans. Desktop compilation passed. Native grouped-sidebar
+visual acceptance remains pending.
+
 Notification mutation routing now has a focused contract test for both
 `notification.mark_read` and `notification.dismiss`: missing/null, negative,
 fractional and string revisions, unexpected content/internal fields, and
