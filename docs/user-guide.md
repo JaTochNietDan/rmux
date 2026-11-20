@@ -1686,3 +1686,9 @@ messages.
 Finished terminals carry a **Finished** label in the tab strip. Hover the title
 for the exit message, or search terminals in the palette to see and search their
 finished status across windows. Custom tab names remain intact.
+
+**Close Finished Tabs…** in the menu or command palette closes exited terminals
+in the current pane while retaining the current tab and all running terminals.
+It follows your close-confirmation policy. Tabs created or moved into the pane
+while a confirmation is open are excluded. Bind `close_finished_tabs` to a custom
+shortcut if desired; it has no default binding.

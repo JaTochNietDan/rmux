@@ -256,6 +256,7 @@ impl CommandPalette {
         command!("Close Terminal Tab", ClosePane);
         command!("Close Other Terminal Tabs…", CloseOtherTabs);
         command!("Close Terminal Tabs to the Right…", CloseTabsToRight);
+        command!("Close Finished Terminal Tabs…", CloseFinishedTabs);
         command!("Close Workspace", CloseWorkspace);
         command!("Close Window", CloseWindow);
         for theme in preferences::TerminalTheme::ALL {

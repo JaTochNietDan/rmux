@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Added Close Finished Tabs to the menu, command palette and custom shortcut actions
+(`close_finished_tabs`). It selects only exited non-current tabs and reuses the
+policy-aware batch-close path, preserving the current tab, live processes and
+tabs arriving after confirmation began. Finished-only confirmations describe
+discarding output without claiming to stop already-exited processes. Four focused
+tab-order/close tests passed, including mixed running/exited tabs and reordering
+with a newly arrived tab. Native menu/prompt interaction remains unverified.
+
 Finished terminals now show a neutral Finished label in active and inactive tab
 strips, with the complete exit message in the title hover hint. Terminal palette
 entries across windows include the finished state and exit message for searching,
