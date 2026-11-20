@@ -90,6 +90,23 @@ Supported action names: `new_workspace`, `new_window`, `new_tab`, `split_right`,
 `next_unread`, `mark_all_read`, `find`, `reload_settings`, and `disabled`. Graphical binding editing,
 full conflict explanations and complete upstream shortcut coverage remain pending.
 
+Layout and workspace editing also support these action names:
+`equalize_panes`, `swap_pane_next`, `break_tab_right`, `break_tab_down`,
+`join_pane_next`, `move_tab_next_workspace`, `detach_tab`, `detach_workspace`,
+`move_workspace_next_window`, `rename_tab`, `rename_workspace`,
+`toggle_workspace_pin`, `edit_workspace_description`, `edit_workspace_icon`,
+and `edit_workspace_color`. These reuse menu handlers, preserving live terminal
+sessions during movement and existing split limits. They have no additional
+default bindings; choose keys in your configuration. For example:
+
+```json
+{"keybindings":[
+  {"key":"ctrl-k ctrl-e","action":"equalize_panes"},
+  {"key":"ctrl-k ctrl-j","action":"join_pane_next"},
+  {"key":"ctrl-k ctrl-d","action":"detach_tab"}
+]}
+```
+
 For example, bind `last_terminal` to return to the previous live terminal across
 panes and workspaces, or `last_prompt` to jump to the newest retained shell prompt:
 

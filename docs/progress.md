@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Fifteen existing layout/workspace actions now accept custom shortcut bindings:
+equalize, swap, break in either direction, join, tab/workspace movement and
+detachment, rename, pin and metadata editors. They dispatch existing typed menu
+handlers with terminal-context defaults; no new default shortcuts were assigned.
+The guide includes a shared-prefix chord example. Focused shortcut tests passed;
+native chord dispatch for these actions remains pending.
+
 Notification history now maintains a shared pointer to its latest unread message.
 Sidebar preview retrieval and unread checks no longer scan the 32-record ring on
 each render; only removal of the cached message searches for its predecessor.
