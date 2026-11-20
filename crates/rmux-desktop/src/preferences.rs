@@ -196,6 +196,7 @@ impl Preferences {
         latest.terminal_theme = self.terminal_theme;
         latest.unfocused_cursor = self.unfocused_cursor;
         latest.copy_on_select = self.copy_on_select;
+        latest.group_new_workspace_placement = self.group_new_workspace_placement;
         if !self.close_policy_overridden() { latest.confirm_close = self.confirm_close; }
         let bytes = serde_json::to_vec_pretty(&latest)?;
         Self::decode(&bytes)?;
@@ -421,6 +422,7 @@ mod tests {
         preferences.font_size = 19.;
         preferences.terminal_padding = 12;
         preferences.copy_on_select = true;
+        preferences.group_new_workspace_placement = crate::workspace_groups::Placement::End;
         preferences.confirm_close = ClosePolicy::Never;
         std::fs::write(&path, br##"{"font_family":"Custom Mono","scrollback_mib":16,"background_color":"#112233","confirm_close":"always"}"##)?;
         preferences.save_appearance()?;
@@ -428,6 +430,7 @@ mod tests {
         assert_eq!(saved.font_size, 19.);
         assert_eq!(saved.terminal_padding, 12);
         assert!(saved.copy_on_select);
+        assert_eq!(saved.group_new_workspace_placement, crate::workspace_groups::Placement::End);
         assert_eq!(saved.font_family, "Custom Mono");
         assert_eq!(saved.scrollback_mib, 16);
         assert_eq!(saved.confirm_close, ClosePolicy::Never);

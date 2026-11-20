@@ -2893,6 +2893,8 @@ fn main() {
                     MenuItem::action("Close Workspace Group…", CloseWorkspaceGroup),
                     MenuItem::action("Remove Workspace from Group", RemoveWorkspaceFromGroup),
                     MenuItem::action("Use Workspace as Group Anchor", SetGroupAnchor),
+                    MenuItem::action("Use Current Terminal Directory for Group", UseCurrentDirectoryForGroup),
+                    MenuItem::action("Reset Group Directory to Follow Anchor", ResetGroupDirectory),
                     MenuItem::action("Rename Workspace", RenameWorkspace),
                     MenuItem::action("Edit Workspace Icon", EditWorkspaceIcon),
                     MenuItem::action("Edit Workspace Color", EditWorkspaceColor),

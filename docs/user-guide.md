@@ -114,10 +114,15 @@ confirmation for a multi-member group. Ungroup Workspaces keeps them running.
 Cmd-click (macOS) or Ctrl-click toggles sidebar selections; Shift-click selects
 a visible range. Group Selected Workspaces groups them in sidebar order with no
 new shell. Its shortcut is Cmd-Shift-G on macOS, Ctrl-Alt-Shift-G elsewhere.
-Set `group_new_workspace_placement` to `after_current` (default), `top` or `end`
-in config to choose where Cmd-N and the group header `+` insert new members.
+Settings → New group workspace chooses After current (default), First or Last
+for where Cmd-N and the group header `+` insert new members. Save persists it;
+changes apply immediately. The config equivalent is `group_new_workspace_placement`
+with `after_current`, `top` or `end`.
 The header button uses the anchor as its reference; `top` always inserts directly
 below the anchor. Reload Settings applies changes to subsequent creations.
+The File menu also includes the group directory capture/reset actions. Custom
+shortcut action names include `new_group`, `group_selected`, `rename_group`,
+`use_current_directory_for_group` and `reset_group_directory`.
 
 Set `RMUX_SHELL` when launching rmux to choose the executable for new shell
 terminals, including fresh shells restored from layouts. It takes precedence

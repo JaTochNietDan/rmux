@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Settings now exposes new group workspace placement (After current / First / Last)
+with keyboard cycling and saved preferences. Group directory capture/reset actions
+also appear in the File menu; group creation, selection, rename and directory
+actions can be bound to custom shortcuts. Five focused settings tests passed,
+covering cycling, navigation and persistence. Native visual acceptance remains
+pending: the desktop was checked again and is locked, preventing screenshots.
+
 Workspace groups now retain an optional starting directory independently of anchor
 shell navigation. Palette actions capture the focused terminal directory or reset
 to following the anchor. Group create/update RPC accepts an absolute cwd, update

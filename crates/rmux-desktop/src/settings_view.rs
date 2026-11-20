@@ -7,7 +7,7 @@ pub struct State {
     pub selected: usize,
     pub scroll: ScrollHandle,
 }
-pub const KEYS: &[&str] = &["font", "padding", "theme", "cursor", "copy", "close"];
+pub const KEYS: &[&str] = &["font", "padding", "theme", "cursor", "copy", "close", "group_placement"];
 pub fn next_control(selected: usize, key: &str, shift: bool) -> Option<usize> {
     let count = KEYS.len() + 2;
     match key {
@@ -32,6 +32,14 @@ pub fn adjust(settings: &mut Preferences, key: &str, delta: i32) {
                 (Active, false) | (Never, true) => Always,
                 (Always, false) | (Active, true) => Never,
                 _ => Active,
+            };
+        }
+        "group_placement" => {
+            use workspace_groups::Placement::{AfterCurrent, Top, End};
+            settings.group_new_workspace_placement = match (settings.group_new_workspace_placement, delta < 0) {
+                (AfterCurrent, false) | (End, true) => Top,
+                (Top, false) | (AfterCurrent, true) => End,
+                _ => AfterCurrent,
             };
         }
         "copy" => settings.copy_on_select = !settings.copy_on_select,
@@ -73,6 +81,11 @@ pub fn panel(state: State, cx: &mut Context<window_view::WorkspaceWindow>) -> An
             .child(row("Confirm before closing", "close", if settings.close_policy_overridden() { "Environment override".into() } else { match settings.confirm_close {
                 close_policy::ClosePolicy::Active => "Active tasks", close_policy::ClosePolicy::Always => "Always", close_policy::ClosePolicy::Never => "Never",
             }.into() }, false, state.selected == 5))
+            .child(row("New group workspace", "group_placement", match settings.group_new_workspace_placement {
+                workspace_groups::Placement::AfterCurrent => "After current",
+                workspace_groups::Placement::Top => "First",
+                workspace_groups::Placement::End => "Last",
+            }.into(), false, state.selected == 6))
             .child(div().py_3().text_xs().text_color(rgb(0xa0a0a0)).child("Tab / ↑↓ to navigate · ←→ to change · Enter to activate · Esc to close. Changes apply to this session. Text size updates terminals using the previous default. Per-terminal zoom stays unchanged; Reset Font Size rejoins the default. Custom colors in your config override the theme."))
             .child(div().id("settings-save").border_1().border_color(if state.selected == KEYS.len() { rgb(0xffffff) } else { rgb(0x007aff) }).px_3().py_2().rounded_sm().bg(rgb(0x007aff)).hover(|s| s.bg(rgb(0x1685ff))).text_sm().cursor_pointer()
                 .on_click(|event, window, cx| { if event.standard_click() { window.dispatch_action(Box::new(SaveAppearanceSettings), cx); } }).child("Save these settings"))
@@ -83,12 +96,12 @@ pub fn panel(state: State, cx: &mut Context<window_view::WorkspaceWindow>) -> An
 
 #[cfg(test)]
 mod tests {
-    use super::{adjust, next_control, Preferences, close_policy};
+    use super::{adjust, next_control, Preferences, close_policy, workspace_groups, KEYS};
     #[test]
     fn keyboard_navigation_wraps_and_adjustments_stay_in_bounds() {
-        assert_eq!(next_control(0, "tab", true), Some(7));
-        assert_eq!(next_control(7, "down", false), Some(0));
-        assert_eq!(next_control(3, "end", false), Some(7));
+        assert_eq!(next_control(0, "tab", true), Some(KEYS.len() + 1));
+        assert_eq!(next_control(KEYS.len() + 1, "down", false), Some(0));
+        assert_eq!(next_control(3, "end", false), Some(KEYS.len() + 1));
         assert_eq!(next_control(3, "a", false), None);
         let mut prefs = Preferences::default();
         for _ in 0..100 { adjust(&mut prefs, "font", 1); adjust(&mut prefs, "padding", -1); }
@@ -98,6 +111,12 @@ mod tests {
         assert_eq!(prefs.confirm_close, close_policy::ClosePolicy::Active);
         adjust(&mut prefs, "close", -1);
         assert_eq!(prefs.confirm_close, close_policy::ClosePolicy::Never);
+        adjust(&mut prefs, "group_placement", 1);
+        assert_eq!(prefs.group_new_workspace_placement, workspace_groups::Placement::Top);
+        adjust(&mut prefs, "group_placement", -1);
+        assert_eq!(prefs.group_new_workspace_placement, workspace_groups::Placement::AfterCurrent);
+        adjust(&mut prefs, "group_placement", -1);
+        assert_eq!(prefs.group_new_workspace_placement, workspace_groups::Placement::End);
         assert_eq!(prefs.font_size, 40.);
         assert_eq!(prefs.terminal_padding, 0);
     }
