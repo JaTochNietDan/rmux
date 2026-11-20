@@ -1727,6 +1727,21 @@ regex and case-sensitive modes are not yet available.
 Invoke Find again while it is open to focus and select the query for replacement.
 Active IME composition is preserved rather than selecting over marked text.
 
+**Search Terminal Output…** in the menu or palette (`search_terminal_output` in
+custom bindings) searches across terminals in the current window. Enter a literal
+query and submit; typing does not scan terminals. Matching follows Find's ASCII
+case-insensitive rules. Each terminal contributes at most its oldest 64 KiB of
+retained history, with a 256-terminal limit. The result summary reports capped
+snapshots, busy/closed terminals and terminals beyond the limit, so no matches
+does not necessarily mean the query is absent from all output.
+Select a result to focus that terminal and open Find with the same query, then
+use Find navigation to move between live matches. Results contain one excerpt
+per matching terminal, not every occurrence. Output may have changed since the
+snapshot. Search again refreshes the result set; typing in results only filters
+that snapshot. The loading notice offers cancellation. This currently excludes
+other windows, external agent-session archives and output beyond the snapshot
+cap; full global-search parity remains in progress.
+
 When a terminal application enables mouse reporting, clicks, movement and vertical wheel events are sent through Ghostty's mouse encoder. Hold Shift while scrolling to browse local history instead.
 
 `mise run bundle-release` creates the optimized macOS bundle. For isolated idle measurements, run `mise exec -- sh scripts/prepare-macos-benchmark.sh 8`, open the resulting benchmark bundle, and sample its PID with `mise exec -- sh scripts/sample-macos-idle.sh PID`. The benchmark uses clean shells and disables the Metal HUD without changing normal launches or system settings.

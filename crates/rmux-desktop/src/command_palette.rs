@@ -125,6 +125,7 @@ pub enum PaletteEvent {
     SelectWorkspace(EntityId),
     SelectWindowWorkspace(AnyWindowHandle, EntityId),
     SelectTerminal(EntityId, EntityId),
+    SearchTerminal(EntityId, EntityId, String),
     SelectWindowTerminal(AnyWindowHandle, EntityId, EntityId),
     MoveTabToWorkspace(EntityId),
     MoveTabToWindowWorkspace(AnyWindowHandle, EntityId),
@@ -140,6 +141,7 @@ pub struct CommandPalette {
     feedback: Option<&'static str>,
     buffer_rename: Option<(String, u64)>,
     directory_input: bool,
+    terminal_search_input: bool,
     input: Entity<text_field::TextField>,
     heading: &'static str,
     empty_message: &'static str,
@@ -279,6 +281,7 @@ impl CommandPalette {
         command!("Copy Named Buffer…", ShowCopyBufferPicker);
         command!("Browse Terminal Directory…", BrowseTerminalFiles);
         command!("Open Text Preview…", OpenTextPreview);
+        command!("Search Terminal Output…", ShowTerminalSearch);
         command!("Open Folder…", OpenFolderBrowser);
         command!("Choose Terminal Font…", ShowFontPicker);
         command!("Choose Default Font…", ShowDefaultFontPicker);
@@ -492,6 +495,23 @@ impl CommandPalette {
         palette.location = Some(location);
         palette
     }
+    pub fn terminal_search(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let mut palette = Self::with_commands(Vec::new(), "Search terminal output · Current window", "Enter submits a literal search · Up to 256 terminals / 64 KiB each", window, cx);
+        palette.terminal_search_input = true;
+        palette
+    }
+    pub fn terminal_search_results(report: terminal_search::Report, query: String, extra: usize, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let summary = format!("{} matching terminals · {} scanned · {} unavailable · {} capped · {extra} beyond terminal limit", report.hits.len(), report.scanned, report.unavailable, report.limited);
+        let mut commands = vec![Command { title: "Search again".into(), subtitle: Some(query.clone()), shortcut: None,
+            target: PaletteEvent::Run(Box::new(SearchTerminalOutput { query: query.clone() })) },
+            Command { title: "New search…".into(), subtitle: None, shortcut: None, target: PaletteEvent::Run(Box::new(ShowTerminalSearch)) }];
+        commands.extend(report.hits.into_iter().map(|hit| Command { title: hit.name, subtitle: Some(hit.snippet), shortcut: None,
+            target: PaletteEvent::SearchTerminal(hit.workspace, hit.terminal, query.clone()) }));
+        let mut palette = Self::with_commands(commands, "Terminal output matches · Enter opens Find", "No matching results · Clear the filter to search again", window, cx);
+        palette.location = Some(summary.into());
+        if palette.commands.len() > 2 { palette.selected = 2; }
+        palette
+    }
     pub fn custom_commands(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let mut commands: Vec<_> = cx.global::<Preferences>().commands.iter().map(custom_command).collect();
         let empty = if commands.is_empty() { "No commands · Add commands in Settings, then Reload Settings" } else { "No matching configured commands" };
@@ -553,8 +573,8 @@ impl CommandPalette {
             |this, _, event: &text_field::EditEvent, cx| match event {
                 text_field::EditEvent::Changed(query) => {
                     this.feedback = None;
-                    if this.buffer_rename.is_some() || this.directory_input {
-                        this.empty_message = if this.directory_input { "Enter an absolute directory path; no shell expansion" } else { "Enter a unique buffer name (up to 128 bytes)" };
+                    if this.buffer_rename.is_some() || this.directory_input || this.terminal_search_input {
+                        this.empty_message = if this.terminal_search_input { "Enter submits a literal search · Up to 256 terminals / 64 KiB each" } else if this.directory_input { "Enter an absolute directory path; no shell expansion" } else { "Enter a unique buffer name (up to 128 bytes)" };
                         cx.notify();
                         return;
                     }
@@ -569,7 +589,7 @@ impl CommandPalette {
         )
         .detach();
         Self {
-            input, heading, empty_message, buffer_rename: None, feedback: None, directory_input: false, location: None,
+            input, heading, empty_message, buffer_rename: None, feedback: None, directory_input: false, terminal_search_input: false, location: None,
             search: palette_match::RankedSearch::new(commands
                 .iter()
                 .map(Command::search_text)
@@ -630,6 +650,14 @@ impl CommandPalette {
     }
     fn run(&mut self, cx: &mut Context<Self>) {
         if self.input.read(cx).is_composing() { return; }
+        if self.terminal_search_input {
+            let query = self.input.read(cx).value();
+            match terminal_search::validate(query) {
+                Ok(()) => cx.emit(PaletteEvent::Run(Box::new(SearchTerminalOutput { query: query.to_owned() }))),
+                Err(error) => { self.empty_message = error; cx.notify(); }
+            }
+            return;
+        }
         if self.directory_input {
             match file_browser::entered_directory(self.input.read(cx).value()) {
                 Ok(path) => cx.emit(PaletteEvent::Run(Box::new(BrowseDirectory { path }))),
@@ -705,6 +733,7 @@ impl CommandPalette {
                     PaletteEvent::SelectTerminal(*workspace, *terminal)
                 }
                 PaletteEvent::SelectWindowTerminal(window, workspace, terminal) => PaletteEvent::SelectWindowTerminal(*window, *workspace, *terminal),
+                PaletteEvent::SearchTerminal(workspace, terminal, query) => PaletteEvent::SearchTerminal(*workspace, *terminal, query.clone()),
                 PaletteEvent::MoveTabToWorkspace(id) => PaletteEvent::MoveTabToWorkspace(*id),
                 PaletteEvent::MoveTabToWindowWorkspace(window, workspace) => PaletteEvent::MoveTabToWindowWorkspace(*window, *workspace),
                 PaletteEvent::MergeWorkspaces(source, destination, target) => PaletteEvent::MergeWorkspaces(*source, *destination, *target),
@@ -783,10 +812,10 @@ impl Render for CommandPalette {
                 .h(px(result_area_height(self.search.matches.iter().map(|index| self.commands[*index].subtitle.is_some()))))
                 .into_any_element()
             })
-            .when(self.buffer_rename.is_some() || self.directory_input, |palette| palette.child(
+            .when(self.buffer_rename.is_some() || self.directory_input || self.terminal_search_input, |palette| palette.child(
                 div().flex_shrink_0().px_3().py_2().flex().flex_wrap().items_center().gap_2()
                     .child(div().flex_1().min_w_0().text_xs().text_color(rgb(0xa0a0a0))
-                        .child(if self.directory_input { "Enter opens · Escape cancels" } else { "Enter saves · Escape cancels" }))
+                        .child(if self.terminal_search_input { "Enter searches · Escape cancels" } else if self.directory_input { "Enter opens · Escape cancels" } else { "Enter saves · Escape cancels" }))
                     .child(div().id("buffer-rename-cancel").px_3().py_1().rounded_sm()
                         .text_sm().cursor_pointer().bg(rgb(0x353535)).hover(|style| style.bg(rgb(0x454545)))
                         .on_click(cx.listener(|_, event: &ClickEvent, _, cx| {
@@ -796,9 +825,9 @@ impl Render for CommandPalette {
                         .text_sm().cursor_pointer().bg(rgb(0x007aff)).hover(|style| style.bg(rgb(0x1685ff)))
                         .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
                             if event.standard_click() { this.run(cx); }
-                        })).child(if self.directory_input { "Open" } else { "Save" }))
+                        })).child(if self.terminal_search_input { "Search" } else if self.directory_input { "Open" } else { "Save" }))
             ))
-            .when((!compact || self.feedback.is_some()) && self.buffer_rename.is_none() && !self.directory_input, |palette| palette.child(
+            .when((!compact || self.feedback.is_some()) && self.buffer_rename.is_none() && !self.directory_input && !self.terminal_search_input, |palette| palette.child(
                 div()
                     .flex_shrink_0()
                     .px_3()

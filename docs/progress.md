@@ -2,6 +2,18 @@
 
 ## Current implementation focus
 
+Added Search Terminal Output to the menu, command palette and
+`search_terminal_output` custom bindings. An explicit submit scans up to 256
+terminal history prefixes (64 KiB each) in the current window on one background
+worker globally. Results retain one bounded excerpt per matching terminal, show
+scanned/unavailable/capped counts, support rerunning, and resolve stable surface
+identity before focusing and opening Find with the query and queued navigation.
+Cancellation stops between snapshots; focus changes suppress result takeover.
+Two focused tests passed for matching rules, literal punctuation, Unicode,
+snippet bounds, busy/closed reporting, cancellation and the terminal cap.
+Native search/result/focus acceptance, full-history indexing, cross-window and
+agent-session search remain pending; F05 is in progress, not complete.
+
 Added Copy Preview Text, preserving captured CRLF/LF separators and the trailing
 newline without closing the preview or rereading the file. Incomplete previews
 explicitly identify the copy as captured text only. It copies the complete

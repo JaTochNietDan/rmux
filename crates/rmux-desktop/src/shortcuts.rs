@@ -128,6 +128,7 @@ fn action(name: &str) -> Option<Box<dyn Action>> {
         "copy_buffer" => Box::new(ShowCopyBufferPicker),
         "browse_files" => Box::new(BrowseTerminalFiles),
         "open_text_preview" => Box::new(OpenTextPreview),
+        "search_terminal_output" => Box::new(ShowTerminalSearch),
         "open_folder" => Box::new(OpenFolderBrowser),
         "choose_font" => Box::new(ShowFontPicker),
         "choose_default_font" => Box::new(ShowDefaultFontPicker),

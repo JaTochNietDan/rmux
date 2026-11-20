@@ -1595,7 +1595,11 @@
         "C"
       ],
       "acceptance": "Navigate to the matching surface and text without scanning all scrollback on each keypress.",
-      "rmux_status": "not_started"
+      "rmux_status": "in_progress",
+      "implementation": "Explicit current-window terminal-output search through menu, palette and custom shortcuts. One background scan globally reads up to 256 bounded 64 KiB history prefixes, retains one excerpt per matching terminal, reports incomplete/unavailable snapshots and supports cancellation/rerun. Results resolve stable terminal identity, focus the surface and open Find with matching query and queued navigation. Two focused matching/bounds/cancellation/reporting tests pass.",
+      "remaining": "Full retained-history indexing, cross-window and agent-session search, native query/result/focus acceptance and performance measurements.",
+      "implementation_sources": ["crates/rmux-desktop/src/terminal_search.rs", "crates/rmux-desktop/src/command_palette.rs", "crates/rmux-desktop/src/window_view.rs"],
+      "progress_record": "docs/progress.md"
     },
     {
       "id": "F06",

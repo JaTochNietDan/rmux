@@ -11,6 +11,7 @@ mod icons;
 #[cfg(unix)]
 mod file_drop;
 mod file_browser;
+mod terminal_search;
 #[cfg(unix)]
 mod image_paste;
 mod git_context;
@@ -118,6 +119,10 @@ struct CopyPreviewLine { text: String }
 #[derive(Clone, Debug, Default, PartialEq, Action)]
 #[action(namespace = rmux, no_json)]
 struct CopyPreviewText { text: String }
+
+#[derive(Clone, Debug, Default, PartialEq, Action)]
+#[action(namespace = rmux, no_json)]
+struct SearchTerminalOutput { query: String }
 
 #[derive(Clone, Debug, Default, PartialEq, Action)]
 #[action(namespace = rmux, no_json)]
@@ -451,6 +456,7 @@ actions!(
         ShowCopyBufferPicker,
         BrowseTerminalFiles,
         OpenTextPreview,
+        ShowTerminalSearch,
         OpenFolderBrowser,
         ShowTerminalMenu,
         CopySelectionWithLineBreaks,
@@ -3762,6 +3768,7 @@ fn main() {
                     MenuItem::action("Open Settings File", OpenSettingsFile),
                     MenuItem::action("Open Layout in New Window…", OpenLayout),
                     MenuItem::action("Open Text Preview…", OpenTextPreview),
+                    MenuItem::action("Search Terminal Output…", ShowTerminalSearch),
                     MenuItem::action("Open Folder…", OpenFolderBrowser),
                     MenuItem::action("New Tab", NewTab),
                     MenuItem::action("Cancel New Terminal Tab", CancelNewTab),

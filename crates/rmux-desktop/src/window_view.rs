@@ -121,6 +121,8 @@ pub(super) struct WorkspaceWindow {
     font_picker_job: Option<Task<()>>,
     file_browser_job: Option<Task<()>>,
     file_browser_cancel: Option<file_browser::Cancellation>,
+    terminal_search_job: Option<Task<()>>,
+    terminal_search_cancel: Option<file_browser::Cancellation>,
     restore_job: Option<restore::Job>,
     workspace_scroll: ScrollHandle,
     notice: Option<String>,
@@ -2501,6 +2503,47 @@ impl WorkspaceWindow {
         }));
         cx.notify();
     }
+    fn search_terminal_output(&mut self, query: String, window: &mut Window, cx: &mut Context<Self>) {
+        if self.terminal_search_job.is_some() || self.automation_available(cx).is_err() { return; }
+        if let Err(error) = terminal_search::validate(&query) { self.notice = Some(error.into()); cx.notify(); return; }
+        let Some(focus) = window.focused(cx) else { return; };
+        let Some(permit) = terminal_search::Permit::acquire() else {
+            self.notice = Some("Another terminal search is running; retry shortly.".into()); cx.notify(); return;
+        };
+        let mut jobs = Vec::new();
+        let mut extra = 0;
+        for index in self.workspace_order(true) {
+            let entry = &self.entries[index];
+            for pane in &entry.workspace.read(cx).panes {
+                for (tab, terminal) in pane.read(cx).terminals.iter().enumerate() {
+                    if jobs.len() == terminal_search::MAX_TERMINALS { extra += 1; continue; }
+                    jobs.push(terminal_search::Job { workspace: entry.workspace.entity_id(), terminal: terminal.entity_id(),
+                        name: format!("{} / {}", entry.name, pane.read(cx).tab_title(tab, cx)),
+                        read: terminal.read(cx).session.history_export(terminal_search::MAX_BYTES) });
+                }
+            }
+        }
+        let cancellation = file_browser::Cancellation::default();
+        let canceled = cancellation.0.clone();
+        self.terminal_search_cancel = Some(cancellation);
+        self.notice = Some("Searching terminal output…".into());
+        let executor = cx.background_executor().clone();
+        self.terminal_search_job = Some(cx.spawn_in(window, async move |entity, cx| {
+            let scan_query = query.clone();
+            let report = executor.spawn(async move { let _permit = permit; terminal_search::scan(jobs, &scan_query, &canceled) }).await;
+            let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
+                this.terminal_search_job = None;
+                this.terminal_search_cancel = None;
+                if this.notice.as_deref() == Some("Searching terminal output…") { this.notice = None; }
+                if focus.is_focused(window) && this.automation_available(cx).is_ok() {
+                    let palette = cx.new(|cx| command_palette::CommandPalette::terminal_search_results(report, query, extra, window, cx));
+                    this.install_palette(palette, Some(focus), window, cx);
+                }
+                cx.notify();
+            }));
+        }));
+        cx.notify();
+    }
     fn choose_local_path(&mut self, directory: bool, window: &mut Window, cx: &mut Context<Self>) {
         if self.file_browser_job.is_some() || self.automation_available(cx).is_err() { return; }
         let Some(permit) = cx.global::<PromptGate>().acquire() else { return; };
@@ -2622,6 +2665,22 @@ impl WorkspaceWindow {
                     }
                     command_palette::PaletteEvent::SelectTerminal(workspace, terminal) => {
                         this.focus_terminal(*workspace, *terminal, window, cx);
+                    }
+                    command_palette::PaletteEvent::SearchTerminal(workspace, terminal, query) => {
+                        if this.automation_available(cx).is_err() { return; }
+                        let target = this.entries.iter().find(|entry| entry.workspace.entity_id() == *workspace)
+                            .and_then(|entry| entry.workspace.read(cx).panes.iter().find_map(|pane|
+                                pane.read(cx).terminals.iter().find(|entity| entity.entity_id() == *terminal).cloned()));
+                        if let Some(target) = target {
+                            this.focus_terminal(*workspace, *terminal, window, cx);
+                            target.update(cx, |view, cx| {
+                                view.dismiss_find(cx);
+                                view.open_find_with_query(Some(query.clone()), window, cx);
+                                if let Some(find) = &view.find {
+                                    find.update(cx, |find, cx| find.navigate(rmux_terminal::search::Direction::Older, cx));
+                                }
+                            });
+                        } else { this.notice = Some("Search result terminal moved or closed; search again.".into()); cx.notify(); }
                     }
                     command_palette::PaletteEvent::SelectWindowTerminal(target, workspace, terminal) => {
                         let result = target.downcast::<Self>().ok_or_else(|| anyhow::anyhow!("window unavailable"))
@@ -2855,6 +2914,8 @@ impl WorkspaceWindow {
             font_picker_job: None,
             file_browser_job: None,
             file_browser_cancel: None,
+            terminal_search_job: None,
+            terminal_search_cancel: None,
             restore_job: None,
             workspace_scroll: ScrollHandle::new(),
             notice: None,
@@ -3061,6 +3122,8 @@ impl WorkspaceWindow {
             font_picker_job: None,
             file_browser_job: None,
             file_browser_cancel: None,
+            terminal_search_job: None,
+            terminal_search_cancel: None,
             restore_job: None,
             workspace_scroll: ScrollHandle::new(),
             notice: None,
@@ -3727,6 +3790,13 @@ impl Render for WorkspaceWindow {
             }))
             .on_action(cx.listener(|this, action: &PreviewLocalFile, window, cx| this.preview_local_file(action.path.clone(), window, cx)))
             .on_action(cx.listener(|this, _: &OpenTextPreview, window, cx| this.choose_local_path(false, window, cx)))
+            .on_action(cx.listener(|this, _: &ShowTerminalSearch, window, cx| {
+                if this.automation_available(cx).is_err() || this.terminal_search_job.is_some() { return; }
+                let focus = window.focused(cx);
+                let palette = cx.new(|cx| command_palette::CommandPalette::terminal_search(window, cx));
+                this.install_palette(palette, focus, window, cx);
+            }))
+            .on_action(cx.listener(|this, action: &SearchTerminalOutput, window, cx| this.search_terminal_output(action.query.clone(), window, cx)))
             .on_action(cx.listener(|this, _: &OpenFolderBrowser, window, cx| this.choose_local_path(true, window, cx)))
             .on_action(cx.listener(|this, action: &RevealLocalPath, _, cx| {
                 if this.automation_available(cx).is_ok() && action.path.is_absolute() {
@@ -4147,9 +4217,17 @@ impl Render for WorkspaceWindow {
                             .on_click(move |event, _, cx| {
                                 if event.standard_click() { clipboard::write(ClipboardItem::new_string(notice.clone()), cx); }
                             }).child(icons::icon("copy")))
-                        .when(self.restore_job.is_none() && self.file_browser_job.is_none(), |row| row.child(pane_view::pane_control("dismiss-notice", "Dismiss message")
+                        .when(self.restore_job.is_none() && self.file_browser_job.is_none() && self.terminal_search_job.is_none(), |row| row.child(pane_view::pane_control("dismiss-notice", "Dismiss message")
                             .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
                                 if event.standard_click() { this.notice = None; cx.notify(); }
+                            })).child(icons::icon("close"))))
+                        .when(self.terminal_search_job.is_some(), |row| row.child(pane_view::pane_control("cancel-terminal-search", "Cancel terminal search")
+                            .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
+                                if !event.standard_click() { return; }
+                                this.terminal_search_cancel = None;
+                                this.terminal_search_job = None;
+                                if this.notice.as_deref() == Some("Searching terminal output…") { this.notice = None; }
+                                cx.notify();
                             })).child(icons::icon("close"))))
                         .when(self.file_browser_job.is_some(), |row| row.child(pane_view::pane_control("cancel-file-load", "Cancel file loading")
                             .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
