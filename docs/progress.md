@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Copy mode now searches its retained history snapshot. / or the platform Find
+shortcut opens the input; Enter runs a case-sensitive literal search, Shift-Enter
+runs backward, and n / Shift-N wrap between matching lines. Search shares the
+immutable buffer, runs on the background executor only when submitted, and
+checks cancellation between lines when replaced or closed. Queries are capped
+at 4 KiB; match indices cannot exceed the existing 65,536-line snapshot bound.
+Input focus stays separate from terminal typing, and the view keeps the live
+terminal's viewport unchanged. Three focused copy-mode tests passed, including
+Unicode matching, cancellation and forward/reverse wraparound; desktop test
+compilation passed. Native interaction/layout verification remains pending.
+
 T14 now has a keyboard copy-mode view with a stable, bounded history snapshot.
 Opening formats history off the UI thread, then renders only visible rows. The
 snapshot caps text at 8 MiB and indices at 65,536 logical lines; truncation and

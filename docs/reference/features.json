@@ -540,8 +540,8 @@
       ],
       "acceptance": "Validate copy-mode and buffer semantics separately from ordinary clipboard operations.",
       "rmux_status": "in_progress",
-      "implementation": "Bounded asynchronous history snapshot with virtualized copy-mode rows, keyboard and mouse line-range selection, Unicode clipboard copy and Select All. Snapshot text stays stable while output continues.",
-      "remaining": "Native input/layout acceptance, character and rectangle selection, snapshot search, named buffer lifecycle and CLI/RPC parity.",
+      "implementation": "Bounded asynchronous history snapshot with virtualized copy-mode rows, keyboard and mouse line-range selection, Unicode clipboard copy and Select All. Snapshot text stays stable while output continues. Submitted literal searches share the snapshot, run off the UI thread and navigate matching lines with wraparound.",
+      "remaining": "Native input/layout acceptance, character and rectangle selection, named buffer lifecycle and CLI/RPC parity.",
       "implementation_sources": [
         "crates/rmux-desktop/src/copy_mode.rs"
       ],

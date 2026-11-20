@@ -8,8 +8,12 @@ extends. Enter/y or the platform Copy shortcut copies selected logical lines;
 Select All selects the snapshot. Escape closes it. Paste is disabled in this
 view. The snapshot includes at most the first 8 MiB and 65,536 lines; truncation
 is labeled. Long displayed lines are clipped at 4,096 bytes, but copying includes
-their retained full text. Character/rectangle selection, snapshot search and
-named copy buffers remain pending.
+their retained full text. Press / or Command-F (Control-F on Linux/Windows) to
+search the snapshot. Enter submits a case-sensitive literal query; Shift-Enter
+searches backward. n and Shift-N jump between matching lines with wraparound.
+Search works on the full retained text, including clipped portions of long lines.
+Escape in the search field returns to navigation. Character/rectangle selection
+and named copy buffers remain pending.
 
 **Choose Terminal Font…** searches installed font families for the current
 terminal. Type to filter, use arrows and Enter to choose, or Escape to cancel.
