@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Local browsing/preview failures now keep a recovery picker with Back to directory,
+Copy Path and Retry instead of dropping directly to the terminal with a notice.
+The retry row exposes the error and its full hover text; retries use the same
+bounded background reads and focus guards. This covers unsupported binary text,
+removed files and directory-read errors without requiring a fresh browse from
+the terminal cwd. Desktop cargo check passed; native error/retry navigation
+acceptance remains pending.
+
 Copying a local preview line now keeps the preview, query, selection and scroll
 position open rather than returning to the terminal after each copy. The ordered
 clipboard write happens within the picker and shows a footer confirmation,

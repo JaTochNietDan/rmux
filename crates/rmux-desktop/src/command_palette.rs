@@ -399,6 +399,18 @@ impl CommandPalette {
         Self::with_commands(commands, if listing.truncated { "Local files · Limited to 2,048 entries; use a narrower directory" } else { "Local files · Browse directories or preview text" },
             "No matching entries", window, cx)
     }
+    pub fn file_error(path: std::path::PathBuf, error: String, directory: bool, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let mut commands = Vec::new();
+        if let Some(parent) = path.parent() {
+            commands.push(Command { title: "Back to directory".into(), subtitle: Some(parent.display().to_string()), shortcut: None,
+                target: PaletteEvent::Run(Box::new(BrowseDirectory { path: parent.to_owned() })) });
+        }
+        commands.push(Command { title: "Copy path".into(), subtitle: Some(path.display().to_string()), shortcut: None,
+            target: PaletteEvent::Run(Box::new(CopyLocalPath { path: path.clone() })) });
+        commands.push(Command { title: "Retry".into(), subtitle: Some(error), shortcut: None,
+            target: PaletteEvent::Run(if directory { Box::new(BrowseDirectory { path }) } else { Box::new(PreviewLocalFile { path }) }) });
+        Self::with_commands(commands, if directory { "Could not read directory" } else { "Could not preview file" }, "Clear the search to see recovery actions", window, cx)
+    }
     pub fn file_preview(preview: file_browser::Preview, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let mut commands = Vec::new();
         if let Some(parent) = preview.path.parent() {

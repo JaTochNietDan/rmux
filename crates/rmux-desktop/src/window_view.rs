@@ -2453,6 +2453,7 @@ impl WorkspaceWindow {
         self.notice = Some("Loading local directory…".into());
         let executor = cx.background_executor().clone();
         self.file_browser_job = Some(cx.spawn_in(window, async move |entity, cx| {
+            let target = path.clone();
             let result = executor.spawn(async move { file_browser::list(path) }).await;
             let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
                 this.file_browser_job = None;
@@ -2463,7 +2464,10 @@ impl WorkspaceWindow {
                             let palette = cx.new(|cx| command_palette::CommandPalette::files(listing, window, cx));
                             this.install_palette(palette, Some(focus), window, cx);
                         }
-                        Err(error) => this.notice = Some(format!("Browse directory: {error:#}")),
+                        Err(error) => {
+                            let palette = cx.new(|cx| command_palette::CommandPalette::file_error(target, format!("{error:#}"), true, window, cx));
+                            this.install_palette(palette, Some(focus), window, cx);
+                        }
                     }
                 }
                 cx.notify();
@@ -2477,6 +2481,7 @@ impl WorkspaceWindow {
         let executor = cx.background_executor().clone();
         self.notice = Some("Loading text preview…".into());
         self.file_browser_job = Some(cx.spawn_in(window, async move |entity, cx| {
+            let target = path.clone();
             let result = executor.spawn(async move { file_browser::preview(path) }).await;
             let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
                 this.file_browser_job = None;
@@ -2487,7 +2492,10 @@ impl WorkspaceWindow {
                             let palette = cx.new(|cx| command_palette::CommandPalette::file_preview(preview, window, cx));
                             this.install_palette(palette, Some(focus), window, cx);
                         }
-                        Err(error) => this.notice = Some(format!("Preview file: {error:#}")),
+                        Err(error) => {
+                            let palette = cx.new(|cx| command_palette::CommandPalette::file_error(target, format!("{error:#}"), false, window, cx));
+                            this.install_palette(palette, Some(focus), window, cx);
+                        }
                     }
                 }
                 cx.notify();

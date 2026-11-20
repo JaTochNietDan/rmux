@@ -203,6 +203,10 @@ or interprets escape sequences. Binary and non-UTF-8 files are rejected. Editing
 remote files, rich document rendering and a persistent explorer panel remain
 unimplemented.
 
+If a directory or file cannot be read, the browser shows Back, Copy Path and
+Retry actions. The Retry row includes the error; hover it for the full message.
+Escape closes the browser and returns to its prior focus.
+
 **Choose Terminal Font…** searches installed font families for the current
 terminal. Type to filter, use arrows and Enter to choose, or Escape to cancel.
 Monospaced families suit the terminal grid best. The picker preserves text size;
