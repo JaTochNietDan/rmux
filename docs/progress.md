@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Asynchronous tab completion now reconciles inherited font size/family against
+settings changes made during startup. Values matching the launch-time defaults
+adopt current defaults; custom size/family choices remain intact. This avoids
+installing an old default as an accidental permanent override. The existing
+focused font-inheritance test passed for both inherited and custom attributes,
+and the desktop test target compiled. Native in-flight settings interaction
+remains unverified.
+
 The asynchronous tab launcher now shares its cancellation/prepare boundary with
 two focused lifecycle tests. Pre-canceled work never invokes the launcher;
 cancellation immediately after starting a real PTY child returns an error and

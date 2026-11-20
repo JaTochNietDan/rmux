@@ -517,6 +517,8 @@ impl PaneView {
         let directory = self.cached_directory(cx).or_else(|| cx.global::<InitialDirectory>().0.clone());
         let cells = self.active_cell_metrics(cx);
         let family = self.active_font_family(cx);
+        let previous_default_size = cx.global::<Preferences>().font_size;
+        let previous_default_family = cx.global::<Preferences>().font_family.clone();
         let scrollback = cx.global::<Preferences>().scrollback_bytes();
         let colors = cx.global::<Preferences>().terminal_colors();
         let palette = cx.global::<Preferences>().terminal_palette();
@@ -555,8 +557,10 @@ impl PaneView {
                     Ok(prepared) => {
                         let terminal = cx.new(|cx| {
                             let mut terminal = TerminalView::from_prepared(prepared, window, cx);
-                            terminal.cells = cells;
-                            terminal.font_family = family;
+                            let (size, family) = preferences::updated_font(cells.font_size, &family,
+                                previous_default_size, &previous_default_family, cx.global::<Preferences>());
+                            terminal.cells = if size == cells.font_size { cells } else { CellMetrics::new(size) };
+                            terminal.font_family = family.into();
                             terminal
                         });
                         let title = cx.subscribe(&terminal, |this, _, _: &TabMetadataChanged, cx| {
