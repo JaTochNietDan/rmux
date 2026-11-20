@@ -56,7 +56,7 @@ pub struct CommandPalette {
     search_titles: Vec<String>,
     matches: Vec<usize>,
     selected: usize,
-    scroll: ScrollHandle,
+    scroll: ListState,
 }
 impl EventEmitter<PaletteEvent> for CommandPalette {}
 impl CommandPalette {
@@ -90,7 +90,7 @@ impl CommandPalette {
                     ranked.sort_unstable();
                     this.matches = ranked.into_iter().map(|(_, index)| index).collect();
                     this.selected = 0;
-                    this.scroll.scroll_to_item(0);
+                    this.scroll.reset(this.matches.len());
                     cx.notify();
                 }
                 text_field::EditEvent::Submitted { .. } => this.run(cx),
@@ -309,10 +309,55 @@ impl CommandPalette {
                 .iter()
                 .map(|command| format!("{} {}", command.title, command.subtitle.as_deref().unwrap_or_default()).to_lowercase())
                 .collect(),
+            scroll: ListState::new(commands.len(), ListAlignment::Top, px(96.)),
             commands,
             selected: 0,
-            scroll: ScrollHandle::new(),
         }
+    }
+    fn render_result(&mut self, row: usize, cx: &mut Context<Self>) -> AnyElement {
+        let Some(&command) = self.matches.get(row) else { return div().into_any_element(); };
+        let selected = row == self.selected;
+        let title_hint: SharedString = match &self.commands[command].subtitle {
+            Some(subtitle) => format!("{}\n{subtitle}", self.commands[command].title).into(),
+            None => self.commands[command].title.clone().into(),
+        };
+        div()
+            .id(("command", command))
+            .px_3()
+            .py_2()
+            .text_sm()
+            .flex()
+            .items_center()
+            .gap_3()
+            .cursor_pointer()
+            .when(selected, |row| row.bg(rgb(0x354969)))
+            .hover(move |row| row.bg(rgb(if selected { 0x40577b } else { 0x303b50 })))
+            .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
+                if !event.standard_click() { return; }
+                let Some(row) = this.matches.iter().position(|index| *index == command) else { return; };
+                this.selected = row;
+                this.run(cx);
+            }))
+            .child(
+                div()
+                    .id(("command-title", command))
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .tooltip(move |_, cx| cx.new(|_| pane_view::ControlHint(title_hint.clone())).into())
+                    .child(div().flex().flex_col().gap_1()
+                        .child(div().truncate().child(self.commands[command].title.clone()))
+                        .when_some(self.commands[command].subtitle.clone(), |column, subtitle| column.child(div().truncate().text_xs().text_color(rgb(0xa0a0a0)).child(subtitle)))),
+            )
+            .when_some(self.commands[command].shortcut.clone(), |row, shortcut| {
+                row.child(
+                    div()
+                        .flex_shrink_0()
+                        .text_xs()
+                        .text_color(rgb(0xa0a0a0))
+                        .child(shortcut),
+                )
+            }).into_any_element()
     }
     fn run(&self, cx: &mut Context<Self>) {
         if let Some(index) = self.matches.get(self.selected) {
@@ -359,7 +404,7 @@ impl Render for CommandPalette {
                 }
                 if let Some(selected) = navigated_result(this.selected, this.matches.len(), event.keystroke.key.as_str()) {
                     this.selected = selected;
-                    this.scroll.scroll_to_item(this.selected);
+                    this.scroll.scroll_to_reveal_item(this.selected);
                     cx.notify();
                     cx.stop_propagation();
                 }
@@ -374,67 +419,16 @@ impl Render for CommandPalette {
                     .child("Search commands and workspaces"),
             ))
             .child(div().flex_shrink_0().p_3().child(self.input.clone()))
-            .child(
-                div()
-                    .id("command-results")
-                    .min_h_0()
-                    .max_h(px(320.))
-                    .overflow_y_scroll()
-                    .track_scroll(&self.scroll)
-                    .children(self.matches.iter().enumerate().map(|(row, index)| {
-                        let command = *index;
-                        let selected = row == self.selected;
-                        let title_hint: SharedString = match &self.commands[command].subtitle {
-                            Some(subtitle) => format!("{}\n{subtitle}", self.commands[command].title).into(),
-                            None => self.commands[command].title.clone().into(),
-                        };
-                        div()
-                            .id(("command", *index))
-                            .px_3()
-                            .py_2()
-                            .text_sm()
-                            .flex()
-                            .items_center()
-                            .gap_3()
-                            .cursor_pointer()
-                            .when(selected, |row| row.bg(rgb(0x354969)))
-                            .hover(move |row| row.bg(rgb(if selected { 0x40577b } else { 0x303b50 })))
-                            .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
-                                if !event.standard_click() { return; }
-                                let Some(row) = this.matches.iter().position(|index| *index == command) else { return; };
-                                this.selected = row;
-                                this.run(cx);
-                            }))
-                            .child(
-                                div()
-                                    .id(("command-title", command))
-                                    .flex_1()
-                                    .min_w_0()
-                                    .truncate()
-                                    .tooltip(move |_, cx| cx.new(|_| pane_view::ControlHint(title_hint.clone())).into())
-                                    .child(div().flex().flex_col().gap_1()
-                                        .child(div().truncate().child(self.commands[*index].title.clone()))
-                                        .when_some(self.commands[*index].subtitle.clone(), |column, subtitle| column.child(div().truncate().text_xs().text_color(rgb(0xa0a0a0)).child(subtitle)))),
-                            )
-                            .when_some(self.commands[*index].shortcut.clone(), |row, shortcut| {
-                                row.child(
-                                    div()
-                                        .flex_shrink_0()
-                                        .text_xs()
-                                        .text_color(rgb(0xa0a0a0))
-                                        .child(shortcut),
-                                )
-                            })
-                    }))
-                    .when(self.matches.is_empty(), |list| {
-                        list.child(
-                            div()
-                                .p_3()
-                                .text_sm()
-                                .child("No matching commands or workspaces"),
-                        )
-                    }),
-            )
+            .child(if self.matches.is_empty() {
+                div().p_3().text_sm().child("No matching commands or workspaces").into_any_element()
+            } else {
+                let entity = cx.entity();
+                list(self.scroll.clone(), move |row, _, cx| {
+                    entity.update(cx, |palette, cx| palette.render_result(row, cx))
+                })
+                .with_sizing_behavior(ListSizingBehavior::Infer)
+                .w_full().min_h_0().max_h(px(320.)).into_any_element()
+            })
             .when(!compact, |palette| palette.child(
                 div()
                     .flex_shrink_0()

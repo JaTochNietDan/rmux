@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Command-palette results now use GPUI's variable-height virtual list rather than
+building elements for every match on each render. Existing title/subtitle rows,
+shortcuts, stable command click targets and empty state remain; filtering resets
+the list and arrow/page navigation reveals the selected item. Visible-item
+measurement uses 96px overdraw and the existing 320px result-height cap. Desktop
+compilation and the focused keyboard-navigation test passed. Native access was
+rechecked and remains blocked by the locked Mac; sizing/scroll/click acceptance
+and measured render-time improvement remain unverified.
+
 Added `rmuxctl dismiss-notification --surface ID --revision NUMBER`, with local
 help and completion flags. Revision parsing preserves unsigned 64-bit precision
 and rejects fractional, negative, overflowed, missing and duplicate values.
