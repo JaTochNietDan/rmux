@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Extended Move Tab to Split to the left and above, available alongside right/below
+in menus, the palette and break_tab_left/break_tab_up custom shortcut actions.
+The transfer uses the same positioned layout insertion as new splits, keeps the
+existing terminal entity/PTY, and updates pane traversal order to match geometry.
+The source retains at least one tab; focus follows the moved tab and zoom clears.
+Desktop cargo check passed. This reuses the previously tested positioned layout
+operation; native left/up transfer and live-shell continuity are still pending.
+
 Added left/above pane creation alongside right/below through the shared layout
 and shell-launch paths. Menu/palette actions and split_left/split_up custom
 shortcuts expose the UI path; pane.split and rmuxctl split-pane accept all four

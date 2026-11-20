@@ -429,7 +429,7 @@ their ordering and missing-target behavior; zero, leading zeros and numbers
 above nine are rejected.
 
 Layout and workspace editing also support these action names:
-`equalize_panes`, `swap_pane_next`, `break_tab_right`, `break_tab_down`,
+`equalize_panes`, `swap_pane_next`, `break_tab_right`, `break_tab_down`, `break_tab_left`, `break_tab_up`,
 `join_pane_next`, `move_tab_next_workspace`, `detach_tab`, `detach_workspace`,
 `move_workspace_next_window`, `move_workspace_window_picker`, `rename_tab`, `rename_workspace`,
 `toggle_workspace_pin`, `edit_workspace_description`, `edit_workspace_icon`,
@@ -1361,7 +1361,7 @@ View → Join Pane into Next (also in the command palette) appends the focused
 pane's tabs to the next pane in layout order, preserves their order and active
 terminal, then collapses the empty split. The last pane wraps to the first;
 a single pane is unchanged.
-View → Move Tab to Split Right / Below (also in the command palette) moves the
+View → Move Tab to Split Left / Right / Above / Below (also in the command palette) moves the
 active tab into a new adjacent pane without starting a new shell. It requires at
 least two tabs in the source pane and focuses the moved tab. A single-tab pane
 is unchanged.

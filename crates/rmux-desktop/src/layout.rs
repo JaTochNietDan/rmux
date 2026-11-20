@@ -179,6 +179,7 @@ impl<T: Clone + PartialEq> PaneTree<T> {
         depth(self, target, 0).is_some_and(|depth| depth < MAX_SPLIT_DEPTH)
     }
 
+    #[cfg(test)]
     pub fn split(&mut self, target: &T, new: T, axis: Axis) -> bool {
         self.split_positioned(target, new, axis, false)
     }

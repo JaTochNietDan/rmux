@@ -123,6 +123,7 @@ fn action(name: &str) -> Option<Box<dyn Action>> {
         "resize_pane_down" => Box::new(ResizePaneDown),
         "equalize_panes" => Box::new(EqualizePanes), "swap_pane_next" => Box::new(SwapPaneNext),
         "break_tab_right" => Box::new(BreakTabRight), "break_tab_down" => Box::new(BreakTabBelow),
+        "break_tab_left" => Box::new(BreakTabLeft), "break_tab_up" => Box::new(BreakTabAbove),
         "join_pane_next" => Box::new(JoinPaneNext),
         "join_pane_left" => Box::new(JoinPaneLeft),
         "join_pane_right" => Box::new(JoinPaneRight),

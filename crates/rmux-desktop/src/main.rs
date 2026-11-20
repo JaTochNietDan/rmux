@@ -325,6 +325,8 @@ actions!(
         SwapPaneDown,
         BreakTabRight,
         BreakTabBelow,
+        BreakTabLeft,
+        BreakTabAbove,
         JoinPaneNext,
         JoinPaneLeft,
         JoinPaneRight,
@@ -2572,7 +2574,7 @@ impl Workspace {
         target.update(cx, |pane, cx| pane.append_tabs(tabs, active, window, cx));
         self.remove_pane(&source, cx);
     }
-    fn break_tab(&mut self, axis: SplitAxis, window: &mut Window, cx: &mut Context<Self>) {
+    fn break_tab(&mut self, axis: SplitAxis, before: bool, window: &mut Window, cx: &mut Context<Self>) {
         if cx.global::<Shutdowns>().quitting {
             return;
         }
@@ -2595,12 +2597,12 @@ impl Workspace {
         let target = cx.new(|cx| PaneView::from_transfer(tab, workspace, cx));
         // Remove the original tab only after the tree accepts its destination.
         // Both handles refer to the existing terminal; no PTY is created.
-        if !tree.split(&source, target.clone(), axis) {
+        if !tree.split_positioned(&source, target.clone(), axis, before) {
             return;
         }
         self.error = None;
         source.update(cx, |pane, cx| pane.take_tab(id, cx));
-        self.panes.insert(index + 1, target.clone());
+        self.panes.insert(index + usize::from(!before), target.clone());
         self.observe_pane(&target, window, cx);
         self.split_drag = None;
         self.zoomed = None;
@@ -3067,11 +3069,17 @@ impl Render for Workspace {
             .on_action(cx.listener(|view, _: &JoinPaneDown, window, cx| {
                 view.join_pane_direction(layout::Direction::Down, window, cx)
             }))
+            .on_action(cx.listener(|view, _: &BreakTabLeft, window, cx| {
+                view.break_tab(SplitAxis::Columns, true, window, cx)
+            }))
+            .on_action(cx.listener(|view, _: &BreakTabAbove, window, cx| {
+                view.break_tab(SplitAxis::Rows, true, window, cx)
+            }))
             .on_action(cx.listener(|view, _: &BreakTabRight, window, cx| {
-                view.break_tab(SplitAxis::Columns, window, cx)
+                view.break_tab(SplitAxis::Columns, false, window, cx)
             }))
             .on_action(cx.listener(|view, _: &BreakTabBelow, window, cx| {
-                view.break_tab(SplitAxis::Rows, window, cx)
+                view.break_tab(SplitAxis::Rows, false, window, cx)
             }))
             .on_action(cx.listener(|view, _: &SplitLeft, window, cx| view.add_positioned(SplitAxis::Columns, true, window, cx)))
             .on_action(cx.listener(|view, _: &SplitAbove, window, cx| view.add_positioned(SplitAxis::Rows, true, window, cx)))
@@ -3721,6 +3729,8 @@ fn main() {
                     MenuItem::action("Swap Pane Down", SwapPaneDown),
                     MenuItem::action("Move Tab to Split Right", BreakTabRight),
                     MenuItem::action("Move Tab to Split Below", BreakTabBelow),
+                    MenuItem::action("Move Tab to Split Left", BreakTabLeft),
+                    MenuItem::action("Move Tab to Split Above", BreakTabAbove),
                     MenuItem::action("Join Pane into Next", JoinPaneNext),
                     MenuItem::action("Join Pane Left", JoinPaneLeft),
                     MenuItem::action("Join Pane Right", JoinPaneRight),

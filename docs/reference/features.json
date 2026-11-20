@@ -208,7 +208,7 @@
       ],
       "acceptance": "Define each operation as a layout transaction with preserved surface identity and focus.",
       "rmux_status": "in_progress",
-      "implementation": "Pane zoom, swap-with-next, geometric left/right/up/down swaps, active-tab break into right/below split and joins into next or geometric neighbors retain existing terminal entities. A native macOS break-right/swap/join sequence preserved shell PID and variable state.",
+      "implementation": "Pane zoom, swap-with-next, geometric left/right/up/down swaps, active-tab break into left/right/above/below split and joins into next or geometric neighbors retain existing terminal entities. A native macOS break-right/swap/join sequence preserved shell PID and variable state.",
       "remaining": "Complete upstream operation semantics, native directional-swap/join acceptance, multi-tab join order/unread handling, restore interactions and cross-platform acceptance.",
       "implementation_sources": [
         "crates/rmux-desktop/src/main.rs",

@@ -180,6 +180,8 @@ impl CommandPalette {
         command!("Swap Pane Down", SwapPaneDown);
         command!("Move Tab to Split Right", BreakTabRight);
         command!("Move Tab to Split Below", BreakTabBelow);
+        command!("Move Tab to Split Left", BreakTabLeft);
+        command!("Move Tab to Split Above", BreakTabAbove);
         command!("Join Pane into Next", JoinPaneNext);
         command!("Join Pane Left", JoinPaneLeft);
         command!("Join Pane Right", JoinPaneRight);
