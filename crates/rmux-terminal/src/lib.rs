@@ -76,7 +76,13 @@ unsafe extern "C" fn progress_report(
             GHOSTTY_TERMINAL_PROGRESS_STATE_PAUSE => Some(ProgressState::Paused),
             _ => None,
         };
-        (*userdata.cast::<Callbacks>()).progress = state.map(|state| Progress {
+        let callbacks = &mut *userdata.cast::<Callbacks>();
+        // The reader may still drain buffered output after process exit. Keep
+        // final errors and explicit clears, but do not revive active progress.
+        if callbacks.program_finished && state.is_some_and(|state| state != ProgressState::Error) {
+            return;
+        }
+        callbacks.progress = state.map(|state| Progress {
             state,
             percent: (0..=100)
                 .contains(&report.progress)
@@ -373,6 +379,9 @@ impl Terminal {
     pub fn finish_program_status(&mut self) {
         self.callbacks.program_finished = true;
         self.callbacks.program_status.finish_active();
+        if self.callbacks.progress.is_some_and(|progress| progress.state != ProgressState::Error) {
+            self.callbacks.progress = None;
+        }
     }
     pub fn acknowledge_program_status(&mut self) {
         self.callbacks.program_status.acknowledge();
@@ -1387,6 +1396,29 @@ mod tests {
         assert_eq!(terminal.program_status().iter().count(), 0);
         terminal.write(b"\x1b]7501;?\x07");
         assert!(!terminal.take_replies().is_empty());
+        Ok(())
+    }
+    #[test]
+    fn progress_after_exit_clears_activity_and_preserves_errors() -> Result<()> {
+        for code in [1, 3, 4] {
+            let mut terminal = Terminal::new(20, 4)?;
+            terminal.write(format!("\x1b]9;4;{code};42\x07").as_bytes());
+            assert!(terminal.progress().is_some());
+            terminal.finish_program_status();
+            assert_eq!(terminal.progress(), None);
+            // Buffered output can arrive after the reaper reports exit.
+            terminal.write(format!("\x1b]9;4;{code};80\x07").as_bytes());
+            assert_eq!(terminal.progress(), None);
+            terminal.write(b"\x1b]9;4;2;42\x07");
+            let error = Some(Progress { state: ProgressState::Error, percent: Some(42) });
+            assert_eq!(terminal.progress(), error);
+            terminal.finish_program_status();
+            assert_eq!(terminal.progress(), error);
+            terminal.write(b"\x1b]9;4;1;90\x07");
+            assert_eq!(terminal.progress(), error);
+            terminal.write(b"\x1b]9;4;0\x07");
+            assert_eq!(terminal.progress(), None);
+        }
         Ok(())
     }
     #[test]

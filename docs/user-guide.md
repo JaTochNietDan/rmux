@@ -1389,6 +1389,9 @@ Hidden tabs/workspaces, zoom-hidden panes and inactive OS windows
 count as invisible. Suppressed requests are discarded, not replayed on blur.
 OSC 9;4 progress reports show a percentage or Working/Paused/Error label in the
 terminal tab. Remove reports and terminal reset clear it; no polling is used.
+Process exit or terminal output closure clears running, indeterminate and paused
+progress. Error progress remains visible until cleared or reset. Buffered activity
+reports arriving after completion cannot restore a stale Working indicator.
 OSC 7501 program status shows a tab label and hover details. Blocked work takes
 priority, followed by errors, completed work, running work and idle state; `+N`
 indicates additional records. Up to 64 records are kept per terminal. Shell prompt,

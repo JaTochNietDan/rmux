@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Fixed stale OSC 9;4 activity indicators after terminal completion. The existing
+process-exit/output-closure path now clears running, indeterminate and paused
+progress while retaining error reports. Late buffered activity cannot resurrect
+progress or overwrite a retained error; explicit removal and reset still clear
+it. A protocol regression reproduced Running 42% surviving completion before the
+fix. Both focused progress tests now pass, covering all transient states, late
+reports, error retention, repeated completion and clearing. Close-warning logic
+already handled exited processes correctly and needed no change.
+
 Extended Move Tab to Split to the left and above, available alongside right/below
 in menus, the palette and break_tab_left/break_tab_up custom shortcut actions.
 The transfer uses the same positioned layout insertion as new splits, keeps the
