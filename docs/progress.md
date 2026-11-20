@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Measured OSC 99 stream-boundary overhead against the prior raw writer in one
+release executable, alternating three samples at one/eight panes. ANSI/Unicode
+throughput stayed within 1% in the original comparison; plain text varied by
+1–5%, and synthetic two-OSC-per-line output was 25–28% slower. Engine-resident
+memory matched each pair. Two speculative fast paths failed to improve results
+consistently and were removed. The reproducible ignored benchmark and raw samples
+are in [the measurement report](benchmarks/notification-boundaries.md). This leaves
+OSC-heavy throughput as an explicit performance gap; GUI latency is not measured.
+
 Added bounded OSC 99 text notifications (title/body, interleaved chunk IDs and
 Base64) using Ghostty's stream-boundary API. Ghostty still owns UTF-8/control-string
 framing and cancellation; non-99 OSC payloads are rejected before copying. Limits

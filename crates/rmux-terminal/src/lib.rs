@@ -1368,6 +1368,47 @@ mod tests {
         Ok(())
     }
     #[test]
+    #[ignore = "manual release-mode comparison; prints measurements, not a timing gate"]
+    fn notification_stream_boundary_throughput() -> Result<()> {
+        use std::hint::black_box;
+        let workloads = [
+            ("plain", "build src/main.rs compiling output\r\n".repeat(128)),
+            ("ansi_unicode", "\x1b[32mbuild\x1b[0m compiling 界 e\u{301}\r\n".repeat(128)),
+            ("shell_metadata", "\x1b]7;file://localhost/tmp\x1b\\\x1b]2;build\x07output\r\n".repeat(64)),
+        ];
+        for panes in [1, 8] {
+            for (workload, chunk) in &workloads {
+                for sample in 0..3 {
+                    // Alternate order to reduce systematic warmup/thermal bias.
+                    for boundaries in if sample % 2 == 0 { [false, true] } else { [true, false] } {
+                        let mut terminals = (0..panes).map(|_| Terminal::new(160, 48)).collect::<Result<Vec<_>>>()?;
+                        for terminal in &mut terminals { for _ in 0..32 { terminal.write(chunk.as_bytes()); } }
+                        let started = Instant::now();
+                        for _ in 0..1024 {
+                            for terminal in &mut terminals {
+                                if boundaries { terminal.write(black_box(chunk.as_bytes())); }
+                                else {
+                                    terminal.revision = terminal.revision.wrapping_add(1);
+                                    terminal.mouse.refresh = true;
+                                    // SAFETY: comparison uses the previous write path on
+                                    // its own exclusively owned terminal and live bytes.
+                                    unsafe { ghostty_terminal_vt_write(terminal.terminal, chunk.as_ptr(), chunk.len()); }
+                                }
+                            }
+                        }
+                        let elapsed = started.elapsed().as_secs_f64();
+                        let mib = (chunk.len() * 1024 * panes) as f64 / (1024. * 1024.);
+                        let resident: u64 = terminals.iter_mut().map(|terminal| terminal.memory_usage().map(|m| m.primary_resident_bytes + m.alternate_resident_bytes)).collect::<Result<Vec<_>>>()?.into_iter().sum();
+                        println!("{{\"workload\":\"{workload}\",\"panes\":{panes},\"sample\":{sample},\"boundaries\":{boundaries},\"mib_per_second\":{:.3},\"resident_bytes\":{resident}}}", mib / elapsed);
+                        for terminal in &mut terminals { black_box(terminal.frame()?); }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
     fn kitty_notifications_use_ghostty_framing_and_ignore_cancelled_sequences() -> Result<()> {
         let mut terminal = Terminal::new(40, 4)?;
         for byte in b"\x1b]99;i=job:d=0;Build\x1b\\\x1b]99;i=job:p=body;e=ignored" {
