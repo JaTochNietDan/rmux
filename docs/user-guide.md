@@ -171,6 +171,11 @@ does not consume the saved buffer. **Delete Named Buffer…** in the palette/men
 the chosen buffer and releases its storage. If buffers changed while the picker
 was open, reopen it before deleting.
 
+**Copy Named Buffer…** in the palette/menu (custom action `copy_buffer`) uses the
+same searchable picker to copy the complete saved text to the OS clipboard.
+It retains the buffer and sends no terminal input. If buffers change while the
+picker is open, copying is refused and the clipboard stays unchanged.
+
 Use **Rename Named Buffer…** in the palette/menu (custom action `rename_buffer`)
 to choose a buffer, edit its preselected name, and press Enter to save. Escape
 cancels. Invalid names and collisions leave the editor open for correction;

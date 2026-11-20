@@ -83,6 +83,10 @@ struct RenameNamedBuffer { name: String, revision: u64 }
 
 #[derive(Clone, Debug, Default, PartialEq, Action)]
 #[action(namespace = rmux, no_json)]
+struct CopyNamedBuffer { name: String, revision: u64 }
+
+#[derive(Clone, Debug, Default, PartialEq, Action)]
+#[action(namespace = rmux, no_json)]
 struct CheckForUpdates;
 
 #[derive(Clone, Debug, Default, PartialEq, Action)]
@@ -410,6 +414,7 @@ actions!(
         ShowBufferPicker,
         ShowDeleteBufferPicker,
         ShowRenameBufferPicker,
+        ShowCopyBufferPicker,
         ShowTerminalMenu,
         CopySelectionWithLineBreaks,
         CopyWorkingDirectory,
@@ -3729,6 +3734,7 @@ fn main() {
                     MenuItem::action("Paste Named Buffer…", ShowBufferPicker),
                     MenuItem::action("Delete Named Buffer…", ShowDeleteBufferPicker),
                     MenuItem::action("Rename Named Buffer…", ShowRenameBufferPicker),
+                    MenuItem::action("Copy Named Buffer…", ShowCopyBufferPicker),
                     MenuItem::action("Choose Terminal Font…", ShowFontPicker),
                     MenuItem::action("Choose Default Font…", ShowDefaultFontPicker),
                     MenuItem::action("Use Configured Font", UseConfiguredFont),

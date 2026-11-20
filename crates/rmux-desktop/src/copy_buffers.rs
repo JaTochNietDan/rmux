@@ -60,7 +60,7 @@ impl Store {
         self.entries.iter().map(|(name, text)| (name.clone(), text.len(), preview(text))).collect()
     }
     pub fn text_at_revision(&self, name: &str, revision: u64) -> Result<&str, &'static str> {
-        if self.revision != revision { return Err("Buffers changed; reopen the picker before pasting"); }
+        if self.revision != revision { return Err("Buffers changed; reopen the picker before using this buffer"); }
         self.entries.get(name).map(String::as_str).ok_or("Buffer not found")
     }
     pub fn delete_if_unchanged(&mut self, name: &str, revision: u64) -> Result<Value, &'static str> {

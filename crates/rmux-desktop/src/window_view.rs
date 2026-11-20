@@ -3549,6 +3549,19 @@ impl Render for WorkspaceWindow {
             .on_action(cx.listener(|this, _: &ShowBufferPicker, window, cx| this.show_buffer_picker(command_palette::BufferMode::Paste, window, cx)))
             .on_action(cx.listener(|this, _: &ShowDeleteBufferPicker, window, cx| this.show_buffer_picker(command_palette::BufferMode::Delete, window, cx)))
             .on_action(cx.listener(|this, _: &ShowRenameBufferPicker, window, cx| this.show_buffer_picker(command_palette::BufferMode::Rename, window, cx)))
+            .on_action(cx.listener(|this, _: &ShowCopyBufferPicker, window, cx| this.show_buffer_picker(command_palette::BufferMode::Copy, window, cx)))
+            .on_action(cx.listener(|this, action: &CopyNamedBuffer, _, cx| {
+                let result = cx.global::<copy_buffers::Store>().text_at_revision(&action.name, action.revision)
+                    .map(str::to_owned);
+                this.notice = Some(match result {
+                    Ok(text) => {
+                        clipboard::write(ClipboardItem::new_string(text), cx);
+                        format!("Copied buffer {}", action.name)
+                    }
+                    Err(error) => error.into(),
+                });
+                cx.notify();
+            }))
             .on_action(cx.listener(|this, action: &DeleteNamedBuffer, _, cx| {
                 this.notice = Some(match cx.global_mut::<copy_buffers::Store>().delete_if_unchanged(&action.name, action.revision) {
                     Ok(_) => format!("Deleted buffer {}", action.name),

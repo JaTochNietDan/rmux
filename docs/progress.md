@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Added Copy Named Buffer through the native menu, command palette and
+`copy_buffer` custom action. It reuses bounded searchable previews and verifies
+the captured store revision before copying full contents through rmux's ordered
+clipboard writer. The buffer remains stored; no terminal target is required
+and no terminal input is sent. Stale selections leave the clipboard unchanged.
+Desktop cargo check passed; native picker and clipboard acceptance remain open.
+
 Native macOS buffer rename passed against the rebuilt desktop app using isolated
 config and short-lived `/usr/bin/true` terminals. The new `smoke-buffers.py`
 scenario verifies advertised capabilities, collision preservation, Unicode

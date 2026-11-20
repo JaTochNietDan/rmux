@@ -102,7 +102,7 @@ pub enum PaletteEvent {
     Close,
 }
 #[derive(Clone, Copy, PartialEq)]
-pub enum BufferMode { Paste, Delete, Rename }
+pub enum BufferMode { Paste, Delete, Rename, Copy }
 
 pub struct CommandPalette {
     buffer_rename: Option<(String, u64)>,
@@ -242,6 +242,7 @@ impl CommandPalette {
         command!("Paste Named Buffer…", ShowBufferPicker);
         command!("Delete Named Buffer…", ShowDeleteBufferPicker);
         command!("Rename Named Buffer…", ShowRenameBufferPicker);
+        command!("Copy Named Buffer…", ShowCopyBufferPicker);
         command!("Choose Terminal Font…", ShowFontPicker);
         command!("Choose Default Font…", ShowDefaultFontPicker);
         command!("Use Configured Font", UseConfiguredFont);
@@ -371,9 +372,10 @@ impl CommandPalette {
             title: name.clone(), subtitle: Some(format!("{bytes} bytes · {preview}")), shortcut: None,
             target: PaletteEvent::Run(if mode == BufferMode::Rename { Box::new(RenameNamedBuffer { name, revision }) }
                 else if mode == BufferMode::Delete { Box::new(DeleteNamedBuffer { name, revision }) }
+                else if mode == BufferMode::Copy { Box::new(CopyNamedBuffer { name, revision }) }
                 else { Box::new(PasteNamedBuffer { name, revision, surface_id: surface_id.clone() }) }),
         }).collect();
-        Self::with_commands(commands, match mode { BufferMode::Paste => "Paste named buffer", BufferMode::Delete => "Delete named buffer", BufferMode::Rename => "Rename named buffer" }, "No matching buffers · Save a selection in Copy Mode first", window, cx)
+        Self::with_commands(commands, match mode { BufferMode::Paste => "Paste named buffer", BufferMode::Delete => "Delete named buffer", BufferMode::Rename => "Rename named buffer", BufferMode::Copy => "Copy buffer to clipboard" }, "No matching buffers · Save a selection in Copy Mode first", window, cx)
     }
     pub fn custom_commands(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let mut commands: Vec<_> = cx.global::<Preferences>().commands.iter().map(custom_command).collect();
