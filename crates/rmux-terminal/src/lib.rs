@@ -27,10 +27,21 @@ struct Callbacks {
     bell_revision: u64,
     directory_revision: u64,
     notification: Option<Arc<DesktopNotification>>,
+    notification_history: std::collections::VecDeque<Arc<DesktopNotification>>,
     kitty_notifications: kitty_notification::Assembler,
     progress: Option<Progress>,
     program_status: program_status::Records,
     program_finished: bool,
+}
+
+impl Callbacks {
+    fn store_notification(&mut self, title: String, body: String, visibility: NotificationVisibility) {
+        let revision = self.notification.as_ref().map_or(1, |previous| previous.revision.wrapping_add(1));
+        let message = Arc::new(DesktopNotification { revision, title, body, visibility });
+        self.notification = Some(message.clone());
+        if self.notification_history.len() == 32 { self.notification_history.pop_front(); }
+        self.notification_history.push_back(message);
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -121,16 +132,7 @@ unsafe extern "C" fn desktop_notification(
                 .collect()
         };
         let state = &mut *userdata.cast::<Callbacks>();
-        let revision = state
-            .notification
-            .as_ref()
-            .map_or(1, |previous| previous.revision.wrapping_add(1));
-        state.notification = Some(Arc::new(DesktopNotification {
-            revision,
-            visibility: NotificationVisibility::Always,
-            title: copy(&request.title, 256),
-            body: copy(&request.body, 1024),
-        }));
+        state.store_notification(copy(&request.title, 256), copy(&request.body, 1024), NotificationVisibility::Always);
     }
 }
 
@@ -385,6 +387,16 @@ impl Terminal {
             .filter(|notification| notification.revision != revision)
             .cloned()
     }
+    /// Ordered retained notifications after the supplied revision. If a consumer
+    /// fell behind the bounded ring, deliver all messages still retained.
+    pub fn notifications_since(&self, revision: u64) -> Vec<Arc<DesktopNotification>> {
+        if self.callbacks.notification.as_ref().is_none_or(|message| message.revision == revision) {
+            return Vec::new();
+        }
+        let history = &self.callbacks.notification_history;
+        let start = history.iter().position(|message| message.revision == revision).map_or(0, |index| index + 1);
+        history.iter().skip(start).cloned().collect()
+    }
     pub fn directory_since(
         &self,
         revision: u64,
@@ -635,8 +647,7 @@ impl Terminal {
                         }
                     }
                     if let Some((title, body, visibility)) = self.osc_capture.as_deref().and_then(|bytes| self.callbacks.kitty_notifications.receive(bytes)) {
-                        let revision = self.callbacks.notification.as_ref().map_or(1, |previous| previous.revision.wrapping_add(1));
-                        self.callbacks.notification = Some(Arc::new(DesktopNotification { revision, title, body, visibility }));
+                        self.callbacks.store_notification(title, body, visibility);
                     }
                 }
                 self.osc_capture = None;
@@ -1471,6 +1482,24 @@ mod tests {
                 assert_eq!(optimized.frame()?.text(), reference.frame()?.text());
             }
         }
+        Ok(())
+    }
+
+    #[test]
+    fn notification_bursts_retain_order_and_bound_consumer_backlog() -> Result<()> {
+        let mut terminal = Terminal::new(40, 4)?;
+        terminal.write(b"\x1b]9;first\x07\x1b]99;;second\x07\x1b]777;notify;third;body\x07");
+        let messages = terminal.notifications_since(0);
+        assert_eq!(messages.len(), 3);
+        assert_eq!(messages[0].body, "first");
+        assert_eq!(messages[1].title, "second");
+        assert_eq!(messages[2].title, "third");
+        assert!(terminal.notifications_since(messages[2].revision).is_empty());
+        assert_eq!(terminal.notifications_since(messages[0].revision).len(), 2);
+        terminal.write(b"\x1b]9;overflow\x07".repeat(40).as_slice());
+        let retained = terminal.notifications_since(messages[2].revision);
+        assert_eq!(retained.len(), 32);
+        assert_eq!(retained.last().unwrap().revision, 43);
         Ok(())
     }
 

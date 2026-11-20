@@ -68,7 +68,7 @@ pub struct MetadataUpdate {
     pub program_status: Option<(u64, Option<crate::program_status::Summary>)>,
     pub progress: Option<crate::Progress>,
     pub bell_revision: u64,
-    pub notification: Option<Arc<crate::DesktopNotification>>,
+    pub notifications: Vec<Arc<crate::DesktopNotification>>,
     pub title: Result<Option<(u64, String)>>,
     pub directory: Result<Option<(u64, Option<std::path::PathBuf>)>>,
 }
@@ -802,7 +802,7 @@ impl Session {
             render_delay: terminal.render_delay(),
             progress: terminal.progress(),
             bell_revision: terminal.bell_revision(),
-            notification: terminal.notification_since(notification_revision),
+            notifications: terminal.notifications_since(notification_revision),
             title: terminal.title_since(title_revision),
             directory: terminal.directory_since(directory_revision),
         })

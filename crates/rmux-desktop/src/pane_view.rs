@@ -108,7 +108,7 @@ impl PaneView {
     pub(super) fn automation_busy(&self) -> bool {
         self.rename.is_some() || self.close_prompt.is_some() || self.tab_picker.is_some()
     }
-    pub(super) fn automation_surfaces(&self, window_id: &str, workspace_id: &str, pane_id: &str, cx: &App) -> Vec<serde_json::Value> {
+    pub(super) fn automation_surfaces(&self, window_id: &str, workspace_id: &str, pane_id: &str, history: bool, cx: &App) -> Vec<serde_json::Value> {
         self.terminals.iter().enumerate().map(|(index, entity)| {
             let terminal = entity.read(cx);
             serde_json::json!({
@@ -118,8 +118,11 @@ impl PaneView {
                 "selected":index == self.active, "attention":terminal.attention.any(),
                 "directory_label":terminal.directory_label,
                 "git_branch":terminal.git_branch,
-                "notification":terminal.notification.as_ref().filter(|message| terminal.dismissed_notification != Some(message.revision))
+                "notification":terminal.notifications.latest()
                     .map(|message| serde_json::json!({"revision":message.revision,"title":message.title,"body":message.body})),
+                "notifications":terminal.notifications.iter().rev().take(if history { usize::MAX } else { 0 }).map(|record| serde_json::json!({
+                    "revision":record.message.revision,"title":record.message.title,"body":record.message.body,"unread":record.unread
+                })).collect::<Vec<_>>(),
                 "process_id":terminal.session.process_id(),
                 "process_exited":terminal.session.process_exited(),
             })

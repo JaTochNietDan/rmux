@@ -369,17 +369,18 @@ newline is appended. Without `--paste`, input retains the existing raw behavior.
 The notification panel owns keyboard focus while open. Up/down, Page Up/Down,
 and Tab/Shift-Tab navigate messages; Enter/Space closes the panel and opens the
 selected terminal. Delete/Backspace dismisses the selected message, and Escape
-closes the panel and restores its prior focus. Selection tracks terminal identity
+closes the panel and restores its prior focus. Selection tracks terminal and message revision
 as messages arrive; the panel and Settings are mutually exclusive.
 
 `notify --surface ID --title TITLE --body BODY` posts into rmux's existing
 notification panel and unread indicators without changing focus. Each surface
-retains its latest notification. `list-notifications` lists non-dismissed messages
+retains up to 32 notifications, newest first within each terminal.
+`list-notifications` lists non-dismissed messages
 and accepts optional `--window`/`--workspace` filters. These are in-app messages;
 native OS notification delivery is not implemented yet. The raw methods are
 `notification.send`, `notification.list`, and `notification.dismiss`; dismissal
 requires `surface_id` and the returned `revision`, and returns `dismissed:false`
-if a newer message has replaced it. Shell OSC notifications and RPC messages
+if the message was dismissed, evicted by the history limit, or is unknown. Shell OSC notifications and RPC messages
 share UI revisions while tracking shell updates independently. Titles/bodies are
 bounded and control characters removed. The full cmux notify/reply/clear contract
 is still pending. `surface.list` also includes its latest non-dismissed message
@@ -805,13 +806,15 @@ indicates additional records. Up to 64 records are kept per terminal. Shell prom
 exit, reset and focus events clean up records according to their state.
 View → Toggle Program Status (also in the palette) shows all records for the
 focused terminal, including hierarchical IDs, inherited app names and messages.
-View → Toggle Notifications (also in the palette) opens a panel with the latest
-bounded message per live terminal. Click a message to focus its terminal, or Dismiss
+View → Toggle Notifications (also in the palette) opens a panel with up to 32 recent
+messages per live terminal, with separate read state for each message. Click a message to focus its terminal, or Dismiss
 to acknowledge it without switching focus. Panes with unread tabs show an amber
-border. A new notification appears again after dismissal. Full
-notification history and native OS notifications are not yet implemented. OSC 99
+border. A new notification appears again after dismissal. Focusing a terminal or Mark All
+Read acknowledges retained messages without deleting them. Dismiss All clears the
+window’s retained messages while preserving bell/status alerts. History lasts for
+the terminal’s lifetime; native OS notifications are not yet implemented. OSC 99
 action/close reports, replacement IDs after delivery,
-expiry, icons and buttons remain unsupported; only text assembly is implemented.
+expiry, icons and buttons remain unsupported.
 Cmd+N creates a workspace; click sidebar rows or use Cmd+Alt+Up/Down to switch.
 View → Workspace Icon offers Terminal, Code, Build, Cloud, Notes and None.
 The same choices are available in the palette. Icons persist in saved layouts

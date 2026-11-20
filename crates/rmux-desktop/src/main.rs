@@ -10,6 +10,7 @@ mod icons;
 mod git_context;
 mod git_watch;
 mod clipboard;
+mod notifications;
 mod automation;
 #[cfg(unix)]
 mod socket_transport;
@@ -372,8 +373,7 @@ struct TerminalView {
     git_watch_task: Option<Task<()>>,
     git_refresh_pending: bool,
     bell_revision: u64,
-    notification: Option<Arc<rmux_terminal::DesktopNotification>>,
-    dismissed_notification: Option<u64>,
+    notifications: notifications::History,
     engine_notification_revision: u64,
     progress: Option<rmux_terminal::Progress>,
     program_status: Option<rmux_terminal::program_status::Summary>,
@@ -444,20 +444,13 @@ impl TerminalView {
         self.session.has_active_work()
     }
     fn store_notification(&mut self, title: String, body: String) -> u64 {
-        let revision = self.notification.as_ref().map_or(1, |message| message.revision.wrapping_add(1));
-        self.notification = Some(Arc::new(rmux_terminal::DesktopNotification { revision, title, body, visibility: rmux_terminal::NotificationVisibility::Always }));
-        self.dismissed_notification = None;
+        let revision = self.notifications.push(title, body, !self.input_focused);
         if !self.input_focused { self.attention.notify(); }
         revision
     }
     fn dismiss_notification(&mut self, revision: u64, cx: &mut Context<Self>) {
-        if self
-            .notification
-            .as_ref()
-            .is_some_and(|message| message.revision == revision)
-        {
-            self.dismissed_notification = Some(revision);
-            self.attention.dismiss_notification();
+        if self.notifications.dismiss(revision) {
+            if !self.notifications.unread() { self.attention.dismiss_notification(); }
             cx.emit(TabMetadataChanged);
             cx.notify();
         }
@@ -609,7 +602,7 @@ impl TerminalView {
                             view.progress = metadata.progress;
                             metadata_changed = true;
                         }
-                        if let Some(notification) = metadata.notification {
+                        for notification in metadata.notifications {
                             view.engine_notification_revision = notification.revision;
                             let visible = notification.visibility == rmux_terminal::NotificationVisibility::Invisible
                                 && window_view::terminal_is_visible(cx.entity_id(), cx);
@@ -692,8 +685,7 @@ impl TerminalView {
             git_watch_task: None,
             git_refresh_pending: false,
             bell_revision: 0,
-            notification: None,
-            dismissed_notification: None,
+            notifications: Default::default(),
             engine_notification_revision: 0,
             progress: None,
             program_status: None,
@@ -808,6 +800,7 @@ impl TerminalView {
     fn acknowledge_attention(&mut self, cx: &mut Context<Self>) {
         if self.attention.any() {
             self.attention.acknowledge();
+            self.notifications.mark_read();
             cx.emit(TabMetadataChanged);
             cx.notify();
         }

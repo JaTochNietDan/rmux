@@ -2,6 +2,18 @@
 
 ## Current implementation focus
 
+Added bounded notification history end-to-end: the engine retains 32 notifications
+between UI observations, and each live terminal retains 32 messages with independent
+read state. Mixed OSC 9/99/777 bursts no longer collapse to the latest message.
+The panel lists newest first per terminal with unique terminal/revision row IDs and
+keyboard selection; focus/Mark All Read acknowledges history, targeted dismiss
+removes only one message, and Dismiss All batches clearing once per terminal while
+preserving bell/status alerts. RPC lists history; `surface.list` retains its latest
+message field and avoids formatting historical text. Engine unchanged-revision
+reads avoid scanning the ring. History/burst tests and an isolated native socket
+smoke passed, including old-message dismissal and mixed OSC bursts. Native panel
+appearance/keyboard acceptance remains pending; history ends with terminal lifetime.
+
 Completed streaming OSC 99 Base64 text assembly: encoded groups and multibyte
 Unicode can span chunks, title/body maintain independent state, and independently
 padded chunks still concatenate. A final unpadded group is flushed at message

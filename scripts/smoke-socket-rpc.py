@@ -21,7 +21,7 @@ with tempfile.TemporaryDirectory(prefix="rmux-socket-") as tmp:
     config.write_text('{"confirm_close":"never"}')
     env = {k: v for k, v in os.environ.items() if not k.startswith("RMUX_")}
     shell = root / "fixture-shell"
-    shell.write_text('#!/bin/sh\ntrap "exit 0" HUP TERM\nwhile IFS= read -r line; do\n  case "$line" in\n    notify) printf "\\033]777;notify;Shell;After\\007" ;;\n    ping) printf "ordinary output\\n" ;;\n  esac\ndone\n')
+    shell.write_text('#!/bin/sh\ntrap "exit 0" HUP TERM\nwhile IFS= read -r line; do\n  case "$line" in\n    notify) printf "\\033]777;notify;Shell;After\\007" ;;\n    burst) printf "\\033]9;First burst\\007\\033]99;;Second burst\\007" ;;\n    ping) printf "ordinary output\\n" ;;\n  esac\ndone\n')
     shell.chmod(0o700)
     env.update(RMUX_SOCKET_DIR=str(endpoint), RMUX_CONFIG=str(config), RMUX_SHELL=str(shell))
     with tempfile.TemporaryFile() as log:
@@ -75,6 +75,9 @@ with tempfile.TemporaryDirectory(prefix="rmux-socket-") as tmp:
             old_revision = json.loads(notification.stdout)["result"]["revision"]
             newest = call(first, "notification.send", {"surface_id":surface,"body":"Review ready"})
             assert newest["revision"] > old_revision
+            retained = call(first, "notification.list", {"workspace_id":original["id"]})["notifications"]
+            assert [message["revision"] for message in retained] == [newest["revision"], old_revision], retained
+            assert call(first, "notification.dismiss", {"surface_id":surface,"revision":old_revision})["dismissed"]
             assert not call(first, "notification.dismiss", {"surface_id":surface,"revision":old_revision})["dismissed"]
             messages = call(first, "notification.list", {"workspace_id":original["id"]})["notifications"]
             assert len(messages) == 1 and messages[0]["body"] == "Review ready", messages
@@ -100,6 +103,16 @@ with tempfile.TemporaryDirectory(prefix="rmux-socket-") as tmp:
                 time.sleep(.01)
             messages = call(first, "notification.list", {"workspace_id":original["id"]})["notifications"]
             assert messages[0]["body"] == "RPC after OSC" and messages[0]["revision"] == replacement["revision"], messages
+
+            call(first, "surface.send_text", {"surface_id":surface,"text":"burst\n"})
+            deadline = time.monotonic() + 3
+            while True:
+                messages = call(first, "notification.list", {"workspace_id":original["id"]})["notifications"]
+                if len(messages) >= 4: break
+                assert time.monotonic() < deadline, "notification burst lost history"
+                time.sleep(.01)
+            assert messages[0]["title"] == "Second burst", messages
+            assert messages[1]["body"] == "First burst", messages
 
             other = next(row for row in all_workspaces if row["id"] != original["id"])
             assert call(first, "pane.list", {"window_id": other["window_id"], "workspace_id": original["id"]})["panes"] == []

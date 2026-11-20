@@ -685,14 +685,15 @@ pub fn attach_live(cx: &mut gpui::App, stdio: bool, socket_directory: Option<std
                         if let Ok(mut values) = handle.read::<super::window_view::WorkspaceWindow, _, _>(cx, |entity, cx| {
                             let window_id = entity.entity_id().to_string();
                             if request.list_filter.window_id.as_ref().is_some_and(|id| id != &window_id) { return Vec::new(); }
-                            entity.read(cx).automation_children(window_id, surfaces, request.list_filter.workspace_id.as_deref(), cx)
+                            entity.read(cx).automation_children(window_id, surfaces, request.list_filter.workspace_id.as_deref(), request.method == "notification.list", cx)
                         }) { items.append(&mut values); }
                     }
                     if request.method == "notification.list" {
-                        let messages = items.into_iter().filter_map(|item| {
-                            let message = item.get("notification").filter(|v| !v.is_null())?;
-                            Some(json!({"surface_id":item["id"],"workspace_id":item["workspace_id"],"window_id":item["window_id"],
-                                "revision":message["revision"],"title":message["title"],"body":message["body"],"unread":item["attention"]}))
+                        let messages = items.into_iter().flat_map(|item| {
+                            item["notifications"].as_array().into_iter().flatten().map(|message| {
+                                json!({"surface_id":item["id"],"workspace_id":item["workspace_id"],"window_id":item["window_id"],
+                                    "revision":message["revision"],"title":message["title"],"body":message["body"],"unread":message["unread"]})
+                            }).collect::<Vec<_>>()
                         }).collect();
                         return Ok(array_result("notifications", messages));
                     }

@@ -22,7 +22,7 @@ pub(super) fn terminal_is_visible(terminal: EntityId, cx: &mut App) -> bool {
 struct NotificationNavigation {
     focus: FocusHandle,
     origin: Option<FocusHandle>,
-    selected: Option<EntityId>,
+    selected: Option<(EntityId, u64)>,
     scroll: ScrollHandle,
 }
 
@@ -624,7 +624,7 @@ impl WorkspaceWindow {
         })).ok_or(automation::Failure { code: -32004, message: "Surface not found" })?;
         terminal.update(cx, |terminal, cx| {
             if let Some(revision) = change.revision {
-                let matches = terminal.notification.as_ref().is_some_and(|message| message.revision == revision);
+                let matches = terminal.notifications.contains(revision);
                 if matches { terminal.dismiss_notification(revision, cx); }
                 Ok(serde_json::json!({"surface_id":change.surface_id,"revision":revision,"dismissed":matches}))
             } else {
@@ -696,7 +696,7 @@ impl WorkspaceWindow {
         });
         Ok(serde_json::json!({"pane_id":zoom.pane_id,"zoomed":workspace.read(cx).zoomed == Some(pane.entity_id())}))
     }
-    pub(super) fn automation_children(&self, window_id: String, surfaces: bool, workspace_filter: Option<&str>, cx: &App) -> Vec<serde_json::Value> {
+    pub(super) fn automation_children(&self, window_id: String, surfaces: bool, workspace_filter: Option<&str>, history: bool, cx: &App) -> Vec<serde_json::Value> {
         let mut items = Vec::new();
         for entry in &self.entries {
             let workspace_id = entry.workspace.entity_id().to_string();
@@ -706,7 +706,7 @@ impl WorkspaceWindow {
                 let pane = entity.read(cx);
                 let pane_id = entity.entity_id().to_string();
                 if surfaces {
-                    items.extend(pane.automation_surfaces(&window_id, &workspace_id, &pane_id, cx));
+                    items.extend(pane.automation_surfaces(&window_id, &workspace_id, &pane_id, history, cx));
                 } else {
                     items.push(serde_json::json!({
                         "id":pane_id, "window_id":window_id, "workspace_id":workspace_id,
@@ -1395,16 +1395,17 @@ impl WorkspaceWindow {
             for pane in &entry.workspace.read(cx).panes {
                 for terminal in &pane.read(cx).terminals {
                     let view = terminal.read(cx);
-                    if let Some(message) = &view.notification {
-                        if view.dismissed_notification != Some(message.revision) {
-                            pending.push((terminal.clone(), message.revision));
-                        }
-                    }
+                    if view.notifications.latest().is_some() { pending.push(terminal.clone()); }
                 }
             }
         }
-        for (terminal, revision) in pending {
-            terminal.update(cx, |terminal, cx| terminal.dismiss_notification(revision, cx));
+        for terminal in pending {
+            terminal.update(cx, |terminal, cx| {
+                terminal.notifications.clear();
+                terminal.attention.dismiss_notification();
+                cx.emit(TabMetadataChanged);
+                cx.notify();
+            });
         }
         cx.notify();
     }
@@ -1416,8 +1417,8 @@ impl WorkspaceWindow {
             for pane in &entry.workspace.read(cx).panes {
                 for terminal in &pane.read(cx).terminals {
                     let view = terminal.read(cx);
-                    if let Some(message) = &view.notification && view.dismissed_notification != Some(message.revision) {
-                        targets.push((entry.workspace.entity_id(), terminal.entity_id(), message.revision));
+                    for record in view.notifications.iter().rev() {
+                        targets.push((entry.workspace.entity_id(), terminal.entity_id(), record.message.revision));
                     }
                 }
             }
@@ -1432,7 +1433,7 @@ impl WorkspaceWindow {
         } else {
             if self.settings_state.is_some() { self.toggle_settings(window, cx); }
             let state = NotificationNavigation { focus: cx.focus_handle(), origin: window.focused(cx),
-                selected: self.notification_targets(cx).first().map(|row| row.1), scroll: ScrollHandle::new() };
+                selected: self.notification_targets(cx).first().map(|row| (row.1, row.2)), scroll: ScrollHandle::new() };
             state.focus.focus(window);
             self.notification_navigation = Some(state);
         }
@@ -1443,10 +1444,10 @@ impl WorkspaceWindow {
         let targets = self.notification_targets(cx);
         let Some(state) = &mut self.notification_navigation else { return; };
         let key = event.keystroke.key.as_str();
-        let selected = targets.iter().position(|row| Some(row.1) == state.selected).unwrap_or(0);
+        let selected = targets.iter().position(|row| Some((row.1, row.2)) == state.selected).unwrap_or(0);
         let direction = if key == "tab" { if event.keystroke.modifiers.shift { "up" } else { "down" } } else { key };
         if let Some(index) = command_palette::navigated_result(selected, targets.len(), direction) {
-            state.selected = Some(targets[index].1);
+            state.selected = Some((targets[index].1, targets[index].2));
             state.scroll.scroll_to_item(index + 1);
             cx.notify();
         } else if key == "escape" {
@@ -1456,7 +1457,7 @@ impl WorkspaceWindow {
                 self.notification_navigation = None;
                 self.focus_terminal(workspace, terminal, window, cx);
             } else if matches!(key, "backspace" | "delete") {
-                state.selected = targets.get(selected + 1).or_else(|| selected.checked_sub(1).and_then(|i| targets.get(i))).map(|row| row.1);
+                state.selected = targets.get(selected + 1).or_else(|| selected.checked_sub(1).and_then(|i| targets.get(i))).map(|row| (row.1, row.2));
                 self.dismiss_notification(terminal, revision, cx);
             }
         }
@@ -1472,22 +1473,21 @@ impl WorkspaceWindow {
             for pane in &entry.workspace.read(cx).panes {
                 for (tab, terminal) in pane.read(cx).terminals.iter().enumerate() {
                     let view = terminal.read(cx);
-                    if let Some(message) = &view.notification
-                        && view.dismissed_notification != Some(message.revision)
-                    {
+                    for record in view.notifications.iter().rev() {
+                        let message = &record.message;
                         messages.push((
                             entry.workspace.entity_id(),
                             terminal.entity_id(),
                             entry.name.clone(),
                             pane.read(cx).tab_title(tab, cx),
-                            view.attention.any(),
+                            record.unread,
                             message.clone(),
                         ));
                     }
                 }
             }
         }
-        let selected = messages.iter().find(|row| Some(row.1) == navigation.selected).or_else(|| messages.first()).map(|row| row.1);
+        let selected = messages.iter().find(|row| Some((row.1, row.5.revision)) == navigation.selected).or_else(|| messages.first()).map(|row| (row.1, row.5.revision));
         div().track_focus(&navigation.focus).key_context("Notifications")
             .on_mouse_down(MouseButton::Left, { let focus = navigation.focus.clone(); move |_, window, _| focus.focus(window) })
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| this.notification_key(event, window, cx)))
@@ -1558,13 +1558,13 @@ impl WorkspaceWindow {
                         |(workspace, terminal, name, terminal_title, unread, message)| {
                             let revision = message.revision;
                             div()
-                                .id(("notification", terminal))
+                                .id(SharedString::from(format!("notification-{terminal}-{revision}")))
                                 .p_3()
                                 .mb_2()
                                 .rounded_md()
                                 .text_sm()
                                 .cursor_pointer()
-                                .bg(if selected == Some(terminal) { rgb(0x303b4a) } else { rgb(0x292929) })
+                                .bg(if selected == Some((terminal, revision)) { rgb(0x303b4a) } else { rgb(0x292929) })
                                 .hover(|style| style.bg(rgb(0x303b50)))
                                 .on_click(cx.listener(move |this, _, window, cx| {
                                     this.notification_navigation = None;
@@ -1606,7 +1606,7 @@ impl WorkspaceWindow {
                                 .child(
                                     div().mt_2().flex().justify_end().child(
                                         div()
-                                            .id(("dismiss-notification", terminal))
+                                            .id(SharedString::from(format!("dismiss-notification-{terminal}-{revision}")))
                                             .px_2()
                                             .py_1()
                                             .rounded_sm()
@@ -2750,7 +2750,7 @@ impl Render for WorkspaceWindow {
                 let preview = entry.workspace.read(cx).panes.iter().find_map(|pane| {
                     pane.read(cx).terminals.iter().find_map(|terminal| {
                         let view = terminal.read(cx);
-                        view.notification.as_ref().filter(|message| view.attention.any() && view.dismissed_notification != Some(message.revision)).cloned()
+                        view.notifications.iter().rev().find(|record| record.unread).map(|record| record.message.clone())
                     })
                 });
                 if let Some(preview) = preview { notification_previews.insert(entry.workspace.entity_id(), preview); }
