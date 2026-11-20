@@ -73,7 +73,9 @@ with tempfile.TemporaryDirectory(prefix="rmux-socket-") as tmp:
             pane_id = surfaces[0]["pane_id"]
             original_pid = surfaces[0]["process_id"]
             before_selection = [(row["id"], row["selected"]) for row in call(first, "workspace.list")["workspaces"]]
-            split = call(first, "pane.split", {"pane_id":pane_id,"direction":"right","cwd":str(root)})
+            split_command = subprocess.run([cli, "split-pane", "--pane", pane_id, "--direction", "right", "--cwd", str(root), "--focus", "false"], env=env, capture_output=True, text=True, timeout=8)
+            assert split_command.returncode == 0, (split_command.stdout, split_command.stderr)
+            split = json.loads(split_command.stdout)["result"]
             nested = call(first, "pane.split", {"pane_id":split["pane_id"],"direction":"down"})
             assert split["workspace_id"] == nested["workspace_id"] == original["id"]
             panes = call(first, "pane.list", {"workspace_id":original["id"]})["panes"]

@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Added `rmuxctl split-pane --pane ID --direction right|down` with optional cwd,
+focus and activation flags, command help and direction/boolean completions.
+Required targets/directions and duplicate/unsupported options are rejected locally.
+Ten CLI tests passed. The native socket smoke now creates its first split through
+the friendly command and verifies nested RPC splitting, PID continuity, inherited
+shell cwd and failed-start zoom preservation end to end.
+
 Added `pane.split` RPC with explicit pane identity, right/down direction, optional
 absolute cwd and opt-in focus/activation. Split construction now accepts a target
 independent of keyboard focus, inherits its cached directory/font settings, and

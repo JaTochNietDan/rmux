@@ -19,6 +19,7 @@ const COMMANDS: &[(&str, &[&str])] = &[
     ("read-screen", &["--surface", "--scrollback", "--selection"]),
     ("move-panel", &["--panel", "--workspace", "--activate"]),
     ("move-workspace", &["--workspace", "--window", "--activate"]),
+    ("split-pane", &["--pane", "--direction", "--cwd", "--focus", "--activate"]),
     ("set-pane-zoom", &["--pane", "--zoomed"]),
     ("completions", &[]),
 ];
@@ -101,6 +102,8 @@ pub fn candidates(args: &[OsString]) -> Vec<&'static str> {
     if let Some(flag) = value_for {
         return if matches!(flag, "--focus" | "--zoomed") {
             ["true", "false"].into_iter().filter(|value| value.starts_with(current)).collect()
+        } else if flag == "--direction" {
+            ["right", "down"].into_iter().filter(|value| value.starts_with(current)).collect()
         } else { Vec::new() };
     }
     options.iter().copied().chain(["--help"].into_iter().filter(|_| initial)).filter(|flag| flag.starts_with(current) && !used.contains(flag)
