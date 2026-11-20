@@ -1346,9 +1346,13 @@ impl WorkspaceWindow {
         cx.notify();
     }
     fn dismiss_notification(&mut self, id: EntityId, revision: u64, cx: &mut Context<Self>) {
+        self.change_notification(id, revision, false, cx);
+    }
+    fn change_notification(&mut self, id: EntityId, revision: u64, mark_read: bool, cx: &mut Context<Self>) {
         // Resolve the effective selection, including the first-row fallback used
         // when a previously selected message has expired from the bounded history.
         let removed_selection = self.notification_navigation.as_ref().and_then(|state| {
+            if mark_read && !state.unread_only { return None; }
             let targets = self.notification_targets(cx);
             let index = targets.iter().position(|row| Some((row.1, row.2)) == state.selected).unwrap_or(0);
             targets.get(index).filter(|row| (row.1, row.2) == (id, revision)).map(|_| index)
@@ -1364,7 +1368,8 @@ impl WorkspaceWindow {
         });
         if let Some(target) = target {
             target.update(cx, |terminal, cx| {
-                terminal.dismiss_notification(revision, cx)
+                if mark_read { terminal.mark_notification_read(revision, cx); }
+                else { terminal.dismiss_notification(revision, cx); }
             });
             if let Some(index) = removed_selection {
                 let targets = self.notification_targets(cx);
@@ -1525,6 +1530,8 @@ impl WorkspaceWindow {
                 self.focus_terminal(workspace, terminal, window, cx);
             } else if matches!(key, "backspace" | "delete") {
                 self.dismiss_notification(terminal, revision, cx);
+            } else if key == "r" {
+                self.change_notification(terminal, revision, true, cx);
             } else if key == "e" {
                 state.expanded = if state.expanded == Some((terminal, revision)) { None } else { Some((terminal, revision)) };
                 cx.notify();
@@ -1655,7 +1662,7 @@ impl WorkspaceWindow {
                             .text_xs()
                             .text_color(rgb(0xa0a0a0))
                             .mb_2()
-                            .child("↑↓ / Tab to navigate · U to filter · E to expand · Enter to open · Delete to dismiss · Esc to close"),
+                            .child("↑↓ / Tab to navigate · U to filter · R to mark read · E to expand · Enter to open · Delete to dismiss · Esc to close"),
                     )
                     .when(messages.is_empty(), |list| {
                         list.child(div().p_3().text_sm().child(if navigation.unread_only { "No unread notifications" } else { "No notifications to show" }))
@@ -1714,6 +1721,15 @@ impl WorkspaceWindow {
                                 .child(div().mt_1().when(!expanded, |body| body.line_clamp(4)).child(message.body.clone()))
                                 .child(
                                     div().mt_2().flex().flex_wrap().justify_end().gap_2()
+                                        .when(unread, |controls| controls.child(
+                                            div().id(SharedString::from(format!("read-notification-{terminal}-{revision}")))
+                                                .px_2().py_1().rounded_sm().text_xs()
+                                                .hover(|style| style.bg(rgb(0x43506a)))
+                                                .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
+                                                    cx.stop_propagation();
+                                                    if event.standard_click() { this.change_notification(terminal, revision, true, cx); }
+                                                })).child("Mark read")
+                                        ))
                                         .child(div().id(SharedString::from(format!("expand-notification-{terminal}-{revision}")))
                                             .px_2().py_1().rounded_sm().text_xs()
                                             .hover(|style| style.bg(rgb(0x43506a)))

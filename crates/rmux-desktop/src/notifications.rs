@@ -46,6 +46,15 @@ impl History {
         self.latest_unread.as_ref().map(|(arrival, message)| (*arrival, message))
     }
     pub fn unread(&self) -> bool { self.latest_unread.is_some() }
+    pub fn mark_one_read(&mut self, revision: u64) -> bool {
+        let Some(record) = self.records.iter_mut().find(|record| record.message.revision == revision && record.unread) else { return false; };
+        record.unread = false;
+        if self.latest_unread.as_ref().is_some_and(|(_, message)| message.revision == revision) {
+            self.latest_unread = self.records.iter().rev().find(|record| record.unread)
+                .map(|record| (record.arrival, record.message.clone()));
+        }
+        true
+    }
     pub fn mark_read(&mut self) {
         if self.latest_unread.take().is_some() {
             for record in &mut self.records { record.unread = false; }
@@ -56,6 +65,21 @@ impl History {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn marking_one_read_retains_history_and_other_unread_records() {
+        let mut history = History::default();
+        let first = history.push("first".into(), String::new(), true);
+        let second = history.push("second".into(), String::new(), true);
+        assert!(history.mark_one_read(second));
+        assert_eq!(history.unread_preview().unwrap().1.revision, first);
+        assert!(history.contains(second));
+        assert!(!history.mark_one_read(second));
+        assert!(!history.mark_one_read(999));
+        assert!(history.mark_one_read(first));
+        assert!(!history.unread());
+        assert_eq!(history.iter().count(), 2);
+    }
+
     #[test]
     fn copied_message_preserves_content_without_extra_empty_lines() {
         let mut message = DesktopNotification { revision: 1, title: "Build 世界".into(), body: "line 1\nline 2".into(), visibility: NotificationVisibility::Always };

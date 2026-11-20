@@ -464,6 +464,13 @@ impl TerminalView {
             cx.notify();
         }
     }
+    fn mark_notification_read(&mut self, revision: u64, cx: &mut Context<Self>) {
+        if self.notifications.mark_one_read(revision) {
+            if !self.notifications.unread() { self.attention.dismiss_notification(); }
+            cx.emit(TabMetadataChanged);
+            cx.notify();
+        }
+    }
     fn set_font_size(&mut self, value: f32, cx: &mut Context<Self>) {
         self.set_font(value, self.font_family.clone(), cx);
     }

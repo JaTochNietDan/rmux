@@ -480,6 +480,10 @@ The notification panel lists messages newest-first across all workspaces in the
 window, using arrival order rather than pane order. Keyboard selection remains
 attached to the same message as newer messages arrive.
 
+Use Mark read on a card, or R for the selected notification, to acknowledge only
+that message without opening its terminal. It remains in All history. Other
+messages and bell/task-status alerts are unaffected.
+
 Notification previews show up to two title lines and four body lines. More/Less
 expands one message at a time; press E to toggle the selected message. Expansion
 does not mark it read.

@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Notifications now support per-message Mark read through a card button or R.
+History is retained, other unread messages remain unread, and bell/status attention
+is independent. In Unread mode the shared selection-repair path chooses the next
+surviving message; All mode keeps selection on the retained record. Five focused
+notification tests passed, including individual read-state/cache behavior. Native
+panel focus, selection and badge updates remain unverified; RPC read-state
+mutation is not part of this slice.
+
 Notification cards now clamp previews to two title lines and four body lines.
 More/Less or E expands the selected message in place, with one expanded identity
 per open panel. Copy still exports complete content; expansion does not acknowledge
