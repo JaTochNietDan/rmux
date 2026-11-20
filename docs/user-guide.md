@@ -349,6 +349,11 @@ Shortcut overrides can be added alongside custom commands:
 
 The `Tests` command must exist in `commands`. Bindings default to `terminal`
 context, so they do not override text editors; `window` makes a binding global.
+Use `settings` to target only the Settings panel. While that panel is focused,
+Cmd+S on macOS or Ctrl+S elsewhere saves the settings through the same action as
+**Save these settings**. This binding leaves terminal input unchanged. Customize
+it with `{"key":"ctrl-alt-s","action":"save_appearance","context":"settings"}`;
+use `action: "disabled"` in the same context to disable the default key.
 The first stroke must use Ctrl/Cmd/Alt or F1–F24; one- and two-stroke bindings are
 supported. The second stroke may be unmodified, for example
 `{"key":"ctrl-k t","action":"new_tab"}`. Bare `t` remains normal typing.

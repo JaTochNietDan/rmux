@@ -62,8 +62,8 @@ pub struct Binding {
 }
 #[derive(Clone, Copy, Default, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Scope { #[default] Terminal, Window }
-impl Scope { fn context(self) -> Option<&'static str> { match self { Self::Terminal => Some("Terminal"), Self::Window => None } } }
+pub enum Scope { #[default] Terminal, Window, Settings }
+impl Scope { fn context(self) -> Option<&'static str> { match self { Self::Terminal => Some("Terminal"), Self::Window => None, Self::Settings => Some("Settings") } } }
 struct Defaults(Vec<KeyBinding>);
 impl Global for Defaults {}
 fn action(name: &str) -> Option<Box<dyn Action>> {
@@ -269,6 +269,26 @@ mod tests {
     use crate::{preferences::Preferences, ShowCommandPalette, ToggleSettings};
     use gpui::{KeyBinding, KeyContext, Keymap, Keystroke};
     fn settings(value: serde_json::Value) -> Preferences { serde_json::from_value(value).unwrap() }
+    #[test]
+    fn settings_save_binding_is_scoped_and_can_be_disabled() {
+        let key = if cfg!(target_os = "macos") { "cmd-s" } else { "ctrl-s" };
+        let mut map = Keymap::new(vec![KeyBinding::new(key, crate::SaveAppearanceSettings, Some("Settings"))]);
+        let keys = [Keystroke::parse(key).unwrap()];
+        let panel = [KeyContext::parse("Settings").unwrap()];
+        assert!(map.bindings_for_input(&keys, &panel).0[0].action().as_any().is::<crate::SaveAppearanceSettings>());
+        assert!(map.bindings_for_input(&keys, &[KeyContext::parse("Terminal").unwrap()]).0.is_empty());
+        let prefs = settings(serde_json::json!({"keybindings":[
+            {"key":key,"action":"disabled","context":"settings"},
+            {"key":"ctrl-alt-s","action":"save_appearance","context":"settings"}
+        ]}));
+        map.add_bindings(compile(&prefs).unwrap());
+        assert!(map.bindings_for_input(&keys, &panel).0.is_empty());
+        let replacement = [Keystroke::parse("ctrl-alt-s").unwrap()];
+        assert!(map.bindings_for_input(&replacement, &panel).0[0].action().as_any().is::<crate::SaveAppearanceSettings>());
+        assert!(compile(&settings(serde_json::json!({"keybindings":[
+            {"key":"ctrl-alt-s","text":"do not send","context":"settings"}
+        ]}))).is_err());
+    }
     #[test]
     fn shortcut_labels_use_platform_notation_without_changing_key_identity() {
         for (source, mac, expected) in [

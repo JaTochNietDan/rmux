@@ -3627,6 +3627,7 @@ fn main() {
             )
         }));
         cx.bind_keys([KeyBinding::new(if cfg!(target_os = "macos") { "cmd-," } else { "ctrl-," }, ToggleSettings, None)]);
+        cx.bind_keys([KeyBinding::new(if cfg!(target_os = "macos") { "cmd-s" } else { "ctrl-s" }, SaveAppearanceSettings, Some("Settings"))]);
         cx.bind_keys([
             KeyBinding::new("shift-f10", ShowTabMenu, Some("Terminal")),
             KeyBinding::new("ctrl-shift-pageup", MoveTabLeft, Some("Terminal")),

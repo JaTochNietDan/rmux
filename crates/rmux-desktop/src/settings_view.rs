@@ -92,9 +92,14 @@ fn row(label: &'static str, key: &'static str, value: String, stepper: bool, sel
             .when(stepper, |controls| controls
                 .child(button(format!("{key}-more"), "+".into(), key, 1))))
 }
-pub fn panel(state: State, cx: &mut Context<window_view::WorkspaceWindow>) -> AnyElement {
+pub fn panel(state: State, window: &Window, cx: &mut Context<window_view::WorkspaceWindow>) -> AnyElement {
     let settings = cx.global::<Preferences>();
     let busy = cx.global::<preferences::ReloadState>().0;
+    let save_label = if busy { "Working with settings…".to_owned() } else {
+        shortcuts::hint(&SaveAppearanceSettings, &state.focus, window)
+            .map(|key| format!("Save these settings · {key}"))
+            .unwrap_or_else(|| "Save these settings".into())
+    };
     div().track_focus(&state.focus).key_context("Settings")
         .on_mouse_down(MouseButton::Left, { let focus = state.focus.clone(); move |_, window, _| { focus.focus(window); } })
         .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| this.settings_key(event, window, cx)))
@@ -158,7 +163,7 @@ pub fn panel(state: State, cx: &mut Context<window_view::WorkspaceWindow>) -> An
             .child(div().id("settings-save").border_1().border_color(if state.selected == KEYS.len() { rgb(0xffffff) } else { rgb(0x007aff) }).px_3().py_2().rounded_sm().text_sm()
                 .bg(rgb(if busy { 0x353535 } else { 0x007aff }))
                 .when(!busy, |button| button.cursor_pointer().hover(|s| s.bg(rgb(0x1685ff))))
-                .on_click(move |event, window, cx| { if !busy && event.standard_click() { window.dispatch_action(Box::new(SaveAppearanceSettings), cx); } }).child(if busy { "Working with settings…" } else { "Save these settings" }))
+                .on_click(move |event, window, cx| { if !busy && event.standard_click() { window.dispatch_action(Box::new(SaveAppearanceSettings), cx); } }).child(save_label))
             .child(div().id("settings-json").when(state.selected == KEYS.len() + 1, |s| s.bg(rgb(0x303b4a))).py_3().text_sm().text_color(rgb(if busy { 0x777777 } else { 0x8ebfff }))
                 .when(!busy, |link| link.cursor_pointer())
                 .on_click(move |event, window, cx| { if !busy && event.standard_click() { window.dispatch_action(Box::new(OpenSettingsFile), cx); } }).child("Open all settings in editor")))

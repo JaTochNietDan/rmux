@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Settings now has a panel-scoped Cmd+S / Ctrl+S save binding and accepts a
+`settings` custom-keybinding context. Save uses the existing guarded asynchronous
+persistence action; the button displays its resolved shortcut, respecting custom
+replacement/disable bindings. A focused real-keymap test passed scope isolation,
+default disabling, replacement action routing and rejection of terminal text
+bindings in Settings. Desktop cargo check passed. Native key dispatch and
+button appearance remain pending.
+
 Program Status Page Up/Down now uses the visible scroll viewport and measured
 card strides, including wrapped messages and inter-card margins, instead of a
 fixed eight-task jump. It reuses the shared paging behavior that advances at

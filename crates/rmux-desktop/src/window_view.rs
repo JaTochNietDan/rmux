@@ -3985,7 +3985,7 @@ impl Render for WorkspaceWindow {
                     .child(format!("{}  ·  Waiting for next key…", keys.iter().map(shortcuts::key_label).collect::<Vec<_>>().join(" ")))
             ))
             .when_some(self.workspace_menu.clone(), |root, menu| root.child(self.workspace_menu_element(menu, window, cx)))
-            .when_some(self.settings_state.clone(), |root, state| root.child(settings_view::panel(state, cx)))
+            .when_some(self.settings_state.clone(), |root, state| root.child(settings_view::panel(state, window, cx)))
             .when(self.notification_navigation.is_some(), |root| root.child(self.notification_panel(cx)))
             .when_some(self.palette.as_ref(), |root, (palette, _)| root.child(
                 div().id("command-palette-overlay").occlude().absolute().inset_0().flex().justify_center().items_start()
