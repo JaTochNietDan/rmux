@@ -973,7 +973,25 @@ impl TerminalView {
         }
         cx.notify();
     }
+    fn image_paste_pending(&self) -> bool {
+        #[cfg(unix)]
+        { self.image_paste_task.is_some() }
+        #[cfg(not(unix))]
+        { false }
+    }
+    fn cancel_image_preparation(&mut self, cx: &mut Context<Self>) {
+        #[cfg(unix)]
+        if self.image_paste_task.take().is_some() { cx.notify(); }
+        #[cfg(not(unix))]
+        let _ = cx;
+    }
+    fn cancel_paste(&mut self, cx: &mut Context<Self>) {
+        self.cancel_image_preparation(cx);
+        self.session.cancel_queued_paste();
+        cx.notify();
+    }
     fn input(&mut self, bytes: &[u8], cx: &mut Context<Self>) {
+        self.cancel_image_preparation(cx);
         self.refresh_input_mode(cx);
         if let Err(error) = self.session.input(bytes) {
             self.error = Some(error.to_string());
@@ -1257,6 +1275,7 @@ impl TerminalView {
             control: key.modifiers.control,
             alt: key.modifiers.alt,
         };
+        self.cancel_image_preparation(cx);
         match self
             .session
             .key_with_text(&key.key, mods, event.is_held, key.key_char.as_deref())
@@ -1335,6 +1354,7 @@ impl TerminalView {
             let prepared = executor.spawn(async move { image_paste::Prepared::write(image, reservation) }).await;
             let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
                 this.image_paste_task = None;
+                cx.notify();
                 if !focus.is_focused(window) || this.copy_mode.is_some() || this.find.is_some() || this.ports.visible
                     || cx.global::<PromptGate>().is_active() || cx.global::<Shutdowns>().quitting || cx.global::<Shutdowns>().quit_prompt { return; }
                 let result = prepared.and_then(|file| {
@@ -1347,6 +1367,7 @@ impl TerminalView {
                 cx.notify();
             }));
         }));
+        cx.notify();
     }
     fn paste(&mut self, _: &Paste, window: &mut Window, cx: &mut Context<Self>) {
         self.refresh_input_mode(cx);
@@ -1632,7 +1653,7 @@ impl Render for TerminalView {
             .on_action(cx.listener(|this, _: &ShowTerminalMenu, window, cx| {
                 this.show_terminal_menu(this.last_bounds.origin + point(px(8.), px(8.)), window, cx);
             }))
-            .on_action(cx.listener(|this, _: &CancelQueuedPaste, _, _| this.session.cancel_queued_paste()))
+            .on_action(cx.listener(|this, _: &CancelQueuedPaste, _, cx| this.cancel_paste(cx)))
             .on_action(cx.listener(Self::copy))
             .on_action(cx.listener(|this, _: &CopySelectionWithLineBreaks, _, cx| this.copy_selection(false, cx)))
             .on_action(cx.listener(Self::select_all))
@@ -1740,7 +1761,7 @@ impl Render for TerminalView {
                     .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("The local terminal has disabled echo for line input. Remote and raw-mode password prompts may not be detected.".into())).into())
                     .child("Input hidden")
             ))
-            .when(self.rendered_paste_pending, |root| root.child(
+            .when(self.rendered_paste_pending || self.image_paste_pending(), |root| root.child(
                 div().id("paste-status").absolute().bottom(px(8.)).right(px(8.))
                     .max_w_full().px_2().h(px(28.)).flex().items_center().gap_2()
                     .occlude().rounded_md().border_1().border_color(rgb(0x465063))
@@ -1749,10 +1770,10 @@ impl Render for TerminalView {
                     .on_mouse_down(MouseButton::Middle, |_, _, cx| cx.stop_propagation())
                     .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
                     .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
-                    .child(div().min_w_0().truncate().child("Paste pending…"))
+                    .child(div().min_w_0().truncate().child(if self.image_paste_pending() { "Preparing image paste…" } else { "Paste pending…" }))
                     .child(pane_view::pane_control("cancel-paste", "Cancel Queued Paste")
                         .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
-                            if event.standard_click() { this.session.cancel_queued_paste(); }
+                            if event.standard_click() { this.cancel_paste(cx); }
                             cx.stop_propagation();
                         })).child(icons::icon("close")))
             ))

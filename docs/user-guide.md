@@ -7,7 +7,11 @@ available until their terminal closes, including when the terminal moves between
 windows. Limits are 16 MiB per image and 32 files / 64 MiB across the app. Closing
 the owning terminal removes its files and frees the quota. If the terminal is no longer focused when
 preparation finishes, delivery is canceled; a newer text paste or file drop cancels a
-pending image paste. This does not upload to remote hosts. Native clipboard
+pending image paste. The **Preparing image paste…** badge exposes a cancel button;
+**Cancel Queued Paste** also cancels preparation, and typing cancels it before
+sending the new input. Automation mutations report busy during preparation.
+Canceling delivery does not interrupt an in-flight disk write; its unused file
+is removed when that bounded write finishes. This does not upload to remote hosts. Native clipboard
 acceptance and cleanup after forced process termination remain pending.
 
 On macOS/Linux, drop files into a **focused terminal** to insert their absolute

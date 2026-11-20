@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Image preparation now participates in the existing paste status/cancel UI. The
+badge distinguishes Preparing image paste from queued delivery, and both its
+button and Cancel Queued Paste cancel the pending image task plus queued PTY
+paste. Terminal key/text input cancels preparation before sending new input;
+automation mutations use the existing busy guard while preparation is pending.
+Completion notifies even when focus/overlay changes suppress delivery, clearing
+the badge. Cancellation drops delivery immediately; an already-running bounded
+file write may finish before its unused temporary file/reservation are released.
+Desktop compilation passed. Native status/cancel/focus-race acceptance remains
+pending; no claim is made that an in-progress PTY write can be interrupted.
+
 Extended T11 to image-only clipboard paste on macOS/Linux. The pinned GPUI API
 has no copied-file clipboard representation, so Finder copied-file support was
 not claimed. Supported clipboard images are moved into a background writer,
