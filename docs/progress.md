@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Search-result navigation now prepares the Find worker before selecting the
+destination terminal or dismissing an existing Find session. If worker-thread
+creation fails, the caller receives an error and does not activate the target
+window or discard its search. Ordinary Find and result navigation share the
+same installation/subscription path. Desktop compilation passed; native failure
+and cross-window focus acceptance remain pending.
+
 Extended terminal-output search to all rmux windows with the originating window
 first and one shared 256-terminal cap. Results capture a window handle alongside
 workspace/surface identity and identify the owning window in their labels.

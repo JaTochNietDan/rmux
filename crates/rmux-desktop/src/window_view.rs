@@ -2509,10 +2509,13 @@ impl WorkspaceWindow {
             .and_then(|entry| entry.workspace.read(cx).panes.iter().find_map(|pane|
                 pane.read(cx).terminals.iter().find(|entity| entity.entity_id() == terminal).cloned()))
             .ok_or_else(|| anyhow::anyhow!("Terminal moved or closed; search again"))?;
+        // Thread creation can fail. Prepare before changing selection or
+        // dismissing an existing Find session in the destination.
+        let worker = target.read(cx).session.search_worker()?;
         self.focus_terminal(workspace, terminal, window, cx);
         target.update(cx, |view, cx| {
             view.dismiss_find(cx);
-            view.open_find_with_query(Some(query.to_owned()), window, cx);
+            view.install_find(worker, query.to_owned(), window, cx);
             if let Some(find) = &view.find {
                 find.update(cx, |find, cx| find.navigate(rmux_terminal::search::Direction::Older, cx));
             }

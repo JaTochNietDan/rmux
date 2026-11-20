@@ -1727,33 +1727,37 @@ impl TerminalView {
         }
         match self.session.search_worker() {
             Ok(worker) => {
-                let parent = cx.weak_entity();
                 let initial_query = initial_query.unwrap_or_else(|| {
                     self.session
                         .selected_search_query()
                         .unwrap_or_else(|| self.last_find_query.clone())
                 });
-                let find = cx.new(|cx| find_bar::FindBar::new(worker, parent, &initial_query, std::mem::take(&mut self.find_history), cx));
-                cx.subscribe_in(
-                    &find,
-                    window,
-                    |this, _, _: &find_bar::Closed, window, cx| {
-                        this.dismiss_find(cx);
-                        this.focus.focus(window);
-                        this.schedule_compression(cx);
-                        cx.notify();
-                    },
-                )
-                .detach();
-                find.read(cx).focus.focus(window);
-                self.find = Some(find);
-                cx.notify();
+                self.install_find(worker, initial_query, window, cx);
             }
             Err(error) => {
                 self.error = Some(error.to_string());
                 cx.notify();
             }
         }
+    }
+    fn install_find(&mut self, worker: rmux_terminal::search_worker::SearchWorker, initial_query: String, window: &mut Window, cx: &mut Context<Self>) {
+        self.compression_task = None;
+        let parent = cx.weak_entity();
+        let find = cx.new(|cx| find_bar::FindBar::new(worker, parent, &initial_query, std::mem::take(&mut self.find_history), cx));
+        cx.subscribe_in(
+            &find,
+            window,
+            |this, _, _: &find_bar::Closed, window, cx| {
+                this.dismiss_find(cx);
+                this.focus.focus(window);
+                this.schedule_compression(cx);
+                cx.notify();
+            },
+        )
+        .detach();
+        find.read(cx).focus.focus(window);
+        self.find = Some(find);
+        cx.notify();
     }
     fn navigate_find(
         &mut self,
