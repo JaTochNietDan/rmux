@@ -85,6 +85,7 @@ fn action(name: &str) -> Option<Box<dyn Action>> {
         "swap_pane_down" => Box::new(SwapPaneDown),
         "move_tab_next_workspace" => Box::new(MoveTabNextWorkspace),
         "detach_tab" => Box::new(DetachTab), "detach_workspace" => Box::new(DetachWorkspace),
+        "merge_workspace" => Box::new(ShowWorkspaceMergePicker),
         "move_workspace_window_picker" => Box::new(ShowWorkspaceWindowPicker),
         "move_workspace_next_window" => Box::new(MoveWorkspaceToNextWindow),
         "rename_tab" => Box::new(RenameTab), "rename_workspace" => Box::new(RenameWorkspace),

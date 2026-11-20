@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Started W15 with a same-window Merge Workspace into… picker, menu/palette action
+and merge_workspace custom shortcut. Source/destination IDs are captured and
+revalidated after picker dismissal. Existing interaction guards plus split-launch,
+drag and combined-depth checks run before ownership mutation. The synchronous
+transfer retains both pane trees and terminal entities, appends source panes after
+destination panes, updates drag ownership/subscriptions, clears zoom and removes
+the empty source through existing group-aware entry cleanup. No new PTY is started
+by this path. Desktop test compilation and a focused depth-boundary test passed.
+Live PID/state/order/unread, focus/group/persistence acceptance, cross-window merge,
+CLI/RPC and exact upstream behavior remain pending; W15 is not accepted as complete.
+
 Added a macOS Finder copied-file clipboard adapter using per-item AppKit file-URL
 metadata, preceding GPUI's text/image fallback. It reads only on Paste, never
 changes the system clipboard, bounds item/path data, rejects non-local URLs and

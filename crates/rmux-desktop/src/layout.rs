@@ -77,6 +77,17 @@ pub enum PaneTree<T> {
     },
 }
 impl<T: Clone + PartialEq> PaneTree<T> {
+    /// Joining two roots adds one split level without changing either subtree.
+    pub fn can_merge(&self, other: &Self) -> bool {
+        fn fits<T>(tree: &PaneTree<T>, depth: usize) -> bool {
+            if depth > MAX_SPLIT_DEPTH { return false; }
+            match tree {
+                PaneTree::Pane(_) => true,
+                PaneTree::Split { children, .. } => children.iter().all(|child| fits(child, depth + 1)),
+            }
+        }
+        fits(self, 1) && fits(other, 1)
+    }
     /// Position in the depth-first order used by layout serialization.
     pub fn pane_index(&self, target: &T) -> Option<usize> {
         fn visit<T: PartialEq>(tree: &PaneTree<T>, target: &T, index: &mut usize) -> Option<usize> {
@@ -214,6 +225,19 @@ pub fn resized_pair(left: f32, right: f32, delta: f32, minimum: f32) -> (f32, f3
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn merge_depth_accounts_for_both_preserved_subtrees() {
+        let leaf = PaneTree::Pane(0);
+        let mut deep = PaneTree::Pane(1);
+        assert!(leaf.can_merge(&deep));
+        for index in 2..=MAX_SPLIT_DEPTH + 1 {
+            deep = PaneTree::Split { axis: Axis::Rows, children: vec![deep, PaneTree::Pane(index)], weights: vec![1., 2.] };
+        }
+        assert!(!leaf.can_merge(&deep));
+        assert!(!deep.can_merge(&leaf));
+        let deep = deep.remove(&(MAX_SPLIT_DEPTH + 1)).unwrap();
+        assert!(leaf.can_merge(&deep));
+    }
     #[test]
     fn split_limit_tracks_target_depth_not_total_panes() {
         let mut tree = PaneTree::Pane(0);

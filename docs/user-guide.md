@@ -1,5 +1,15 @@
 # rmux
 
+**Merge Workspace into…** in the menu or command palette searches other
+workspaces in the current window. Enter moves the source's existing panes into
+the destination, preserving both nested split trees with the source on the right,
+then removes the source workspace entry. Destination labels, pin/group membership
+and metadata remain; source workspace metadata is discarded. Pane zoom clears so
+both trees are visible. Escape cancels. The custom shortcut action is
+`merge_workspace`. Busy/stale destinations and excessive split depth reject before
+transfer. Native session/focus/group acceptance and cross-window merging remain
+pending.
+
 On macOS, **Copy** files in Finder and **Paste** into a focused terminal to insert
 quoted absolute paths. Finder's file-URL metadata takes precedence over filename
 text or image representations. This reads paths only, without opening files or

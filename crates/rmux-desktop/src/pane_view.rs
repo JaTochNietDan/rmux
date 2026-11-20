@@ -340,6 +340,10 @@ impl PaneView {
         }
     }
 
+    pub(super) fn set_workspace_owner(&mut self, workspace: EntityId, cx: &mut Context<Self>) {
+        self.workspace = workspace;
+        cx.notify();
+    }
     pub(super) fn automation_busy(&self, cx: &App) -> bool {
         self.rename.is_some() || self.close_prompt.is_some() || self.tab_picker.is_some() || self.tab_menu.is_some() || self.spawning_tab.is_some()
             || self.terminals.iter().any(|terminal| terminal.read(cx).terminal_menu.is_some() || terminal.read(cx).copy_mode.is_some() || terminal.read(cx).image_paste_pending())

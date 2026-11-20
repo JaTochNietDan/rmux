@@ -98,6 +98,7 @@ pub enum PaletteEvent {
     MoveTabToWorkspace(EntityId),
     MoveTabToWindowWorkspace(AnyWindowHandle, EntityId),
     MoveWorkspaceToWindow(EntityId, AnyWindowHandle),
+    MergeWorkspaces(EntityId, EntityId),
     Close,
 }
 pub struct CommandPalette {
@@ -181,6 +182,7 @@ impl CommandPalette {
         command!("Move Tab to Next Workspace", MoveTabNextWorkspace);
         command!("Detach Tab to New Window", DetachTab);
         command!("Move Workspace to New Window", DetachWorkspace);
+        command!("Merge Workspace into…", ShowWorkspaceMergePicker);
         command!("Move Workspace to Window…", ShowWorkspaceWindowPicker);
         command!("Move Workspace to Next Window", MoveWorkspaceToNextWindow);
         command!("Toggle Sidebar", ToggleSidebar);
@@ -360,6 +362,14 @@ impl CommandPalette {
         }).collect();
         Self::with_commands(commands, if deleting { "Delete named buffer" } else { "Paste named buffer" }, "No matching buffers · Save a selection in Copy Mode first", window, cx)
     }
+    pub fn workspace_merge(entries: Vec<(EntityId, String)>, source: EntityId, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let empty = if entries.is_empty() { "No other workspaces in this window" } else { "No matching workspaces" };
+        let commands = entries.into_iter().map(|(destination, title)| Command {
+            title, subtitle: Some("Keep destination metadata · Add source splits on the right".into()), shortcut: None,
+            target: PaletteEvent::MergeWorkspaces(source, destination),
+        }).collect();
+        Self::with_commands(commands, "Merge workspace into…", empty, window, cx)
+    }
     pub fn workspace_windows(entries: Vec<(AnyWindowHandle, String, String)>, source: EntityId, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let empty = if entries.is_empty() { "No other windows · Open a new window first" } else { "No matching windows" };
         let commands = entries.into_iter().map(|(destination, title, subtitle)| Command {
@@ -470,6 +480,7 @@ impl CommandPalette {
                 PaletteEvent::SelectWindowTerminal(window, workspace, terminal) => PaletteEvent::SelectWindowTerminal(*window, *workspace, *terminal),
                 PaletteEvent::MoveTabToWorkspace(id) => PaletteEvent::MoveTabToWorkspace(*id),
                 PaletteEvent::MoveTabToWindowWorkspace(window, workspace) => PaletteEvent::MoveTabToWindowWorkspace(*window, *workspace),
+                PaletteEvent::MergeWorkspaces(source, destination) => PaletteEvent::MergeWorkspaces(*source, *destination),
                 PaletteEvent::MoveWorkspaceToWindow(source, destination) => {
                     PaletteEvent::MoveWorkspaceToWindow(*source, *destination)
                 }

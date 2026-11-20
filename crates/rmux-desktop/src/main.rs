@@ -315,6 +315,7 @@ actions!(
         DetachWorkspace,
         MoveWorkspaceToNextWindow,
         ShowWorkspaceWindowPicker,
+        ShowWorkspaceMergePicker,
         NewWorkspace,
         RefreshTerminalMemory,
         CloseTerminalMemory,
@@ -2295,6 +2296,41 @@ impl EventEmitter<WorkspaceEmpty> for Workspace {}
 struct WorkspaceMetadataChanged;
 impl EventEmitter<WorkspaceMetadataChanged> for Workspace {}
 impl Workspace {
+    fn absorb_workspace(&mut self, source: &Entity<Self>, window: &mut Window, cx: &mut Context<Self>) -> Result<()> {
+        let other = source.read(cx);
+        anyhow::ensure!(source.entity_id() != cx.entity_id(), "Cannot merge a workspace into itself");
+        anyhow::ensure!(!self.benchmark && !other.benchmark && self.spawning_split.is_none() && other.spawning_split.is_none()
+            && self.split_drag.is_none() && other.split_drag.is_none(), "A workspace is busy");
+        let destination_tree = self.layout.as_ref().ok_or_else(|| anyhow::anyhow!("Destination has no layout"))?;
+        let source_tree = other.layout.as_ref().ok_or_else(|| anyhow::anyhow!("Source has no layout"))?;
+        anyhow::ensure!(destination_tree.can_merge(source_tree), "Merged layout would exceed the split nesting limit");
+        // Validation is complete. Both entities are owned by this UI thread;
+        // no fallible operation or event-loop yield occurs during ownership transfer.
+        let (tree, panes) = source.update(cx, |source, cx| {
+            source.pane_subscriptions.clear();
+            source.zoomed = None;
+            source.split_drag = None;
+            let tree = source.layout.take().expect("validated source layout");
+            let panes = std::mem::take(&mut source.panes);
+            cx.notify();
+            (tree, panes)
+        });
+        self.layout = Some(PaneTree::Split {
+            axis: SplitAxis::Columns,
+            children: vec![self.layout.take().expect("validated destination layout"), tree],
+            weights: vec![1., 1.],
+        });
+        for pane in &panes {
+            let owner = cx.entity_id();
+            pane.update(cx, |pane, cx| pane.set_workspace_owner(owner, cx));
+            self.observe_pane(pane, window, cx);
+        }
+        self.panes.extend(panes);
+        self.zoomed = None;
+        cx.emit(WorkspaceMetadataChanged);
+        cx.notify();
+        Ok(())
+    }
     fn release_render_caches(&mut self, cx: &mut Context<Self>) {
         for pane in &self.panes {
             pane.update(cx, |pane, cx| pane.release_render_caches(cx));
@@ -3480,6 +3516,7 @@ fn main() {
                     MenuItem::action("Move Tab to Next Workspace", MoveTabNextWorkspace),
                     MenuItem::action("Detach Tab to New Window", DetachTab),
                     MenuItem::action("Move Workspace to New Window", DetachWorkspace),
+                    MenuItem::action("Merge Workspace into…", ShowWorkspaceMergePicker),
                     MenuItem::action("Move Workspace to Window…", ShowWorkspaceWindowPicker),
                     MenuItem::action("Move Workspace to Next Window", MoveWorkspaceToNextWindow),
                     MenuItem::action("Focus Left", FocusLeft),

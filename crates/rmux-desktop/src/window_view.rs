@@ -2203,6 +2203,29 @@ impl WorkspaceWindow {
         });
         self.install_palette(palette, focus, window, cx);
     }
+    fn show_workspace_merge_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.automation_available(cx).is_err() { return; }
+        let Some(source) = self.entries.get(self.active).map(|entry| entry.workspace.entity_id()) else { return; };
+        let focus = window.focused(cx);
+        let entries = self.workspace_order(true).into_iter().filter_map(|index| {
+            let entry = &self.entries[index];
+            (entry.workspace.entity_id() != source).then(|| (entry.workspace.entity_id(), entry.name.clone()))
+        }).collect();
+        let palette = cx.new(|cx| command_palette::CommandPalette::workspace_merge(entries, source, window, cx));
+        self.install_palette(palette, focus, window, cx);
+    }
+    fn merge_workspaces(&mut self, source: EntityId, destination: EntityId, window: &mut Window, cx: &mut Context<Self>) -> Result<()> {
+        self.automation_available(cx).map_err(|failure| anyhow::anyhow!(failure.message))?;
+        anyhow::ensure!(source != destination, "Choose another workspace");
+        let source_index = self.entries.iter().position(|entry| entry.workspace.entity_id() == source).ok_or_else(|| anyhow::anyhow!("Source workspace closed"))?;
+        let destination_index = self.entries.iter().position(|entry| entry.workspace.entity_id() == destination).ok_or_else(|| anyhow::anyhow!("Destination workspace closed"))?;
+        let source = self.entries[source_index].workspace.clone();
+        let destination = self.entries[destination_index].workspace.clone();
+        destination.update(cx, |workspace, cx| workspace.absorb_workspace(&source, window, cx))?;
+        self.select(destination_index, window, cx);
+        self.close_workspace(source_index, window, cx);
+        Ok(())
+    }
     fn show_workspace_window_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.automation_available(cx).is_err() { return; }
         let Some(source) = self.entries.get(self.active).map(|entry| entry.workspace.entity_id()) else { return; };
@@ -2285,6 +2308,11 @@ impl WorkspaceWindow {
                         if let Err(error) = this.move_tab_to_window_workspace(*destination, *workspace, window, cx) {
                             this.notice = Some(format!("Move tab: {error}"));
                             cx.notify();
+                        }
+                    }
+                    command_palette::PaletteEvent::MergeWorkspaces(source, destination) => {
+                        if let Err(error) = this.merge_workspaces(*source, *destination, window, cx) {
+                            this.notice = Some(format!("Merge workspace: {error}")); cx.notify();
                         }
                     }
                     command_palette::PaletteEvent::MoveWorkspaceToWindow(source, destination) => {
@@ -3410,6 +3438,7 @@ impl Render for WorkspaceWindow {
             .on_action(cx.listener(|this, _: &LastTerminal, window, cx| this.last_terminal(window, cx)))
             .on_action(cx.listener(|this, _: &DetachTab, window, cx| this.detach_tab(window, cx)))
             .on_action(cx.listener(|this, _: &DetachWorkspace, window, cx| this.detach_workspace(window, cx)))
+            .on_action(cx.listener(|this, _: &ShowWorkspaceMergePicker, window, cx| this.show_workspace_merge_picker(window, cx)))
             .on_action(cx.listener(|this, _: &ShowWorkspaceWindowPicker, window, cx| this.show_workspace_window_picker(window, cx)))
             .on_action(cx.listener(|this, _: &MoveWorkspaceToNextWindow, window, cx| this.move_workspace_to_next_window(window, cx)))
             .on_action(cx.listener(|this, _: &ToggleWorkspacePin, _, cx| this.toggle_workspace_pin(cx)))
