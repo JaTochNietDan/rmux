@@ -11,9 +11,11 @@ use std::{
 
 fn child(mode: &str) -> Result<()> {
     let mut output = io::stdout().lock();
-    if mode == "--flood" {
+    if mode == "--flood" || mode == "--focus-flood" {
+        if mode == "--focus-flood" { output.write_all(b"\x1b[?1004h")?; }
         let chunk = "\x1b[32mbuild\x1b[0m output pressure 界 e\u{301}\r\n".repeat(256);
         loop {
+            if mode == "--focus-flood" { output.write_all(b"\x1b]7501;state=working:id=build\x07")?; }
             output.write_all(chunk.as_bytes())?;
         }
     }
@@ -165,13 +167,65 @@ fn keyboard_benchmark(panes: usize) -> Result<()> {
     Ok(())
 }
 
+fn focus_benchmark(panes: usize) -> Result<()> {
+    let sessions: Vec<_> = (0..panes).map(|_| spawn("--focus-flood")).collect::<Result<_>>()?;
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while sessions.iter().any(|session| session.output_bytes() == 0) {
+        ensure!(Instant::now() < deadline, "focus flood workloads did not become ready");
+        thread::sleep(Duration::from_millis(5));
+    }
+    let before: u64 = sessions.iter().map(Session::output_bytes).sum();
+    let mut entering = Vec::with_capacity(128);
+    let mut leaving = Vec::with_capacity(128);
+    let mut details = Vec::with_capacity(128);
+    let started = Instant::now();
+    let target = &sessions[0];
+    let mut revision = 0;
+    for _ in 0..128 {
+        let time = Instant::now();
+        target.focus(true)?;
+        // Include the UI's follow-up summary read, but time the optional full
+        // status panel snapshot separately to expose its additional lock cost.
+        if let Some((next, summary)) = target.program_status_since(revision) {
+            revision = next;
+            black_box(summary);
+        }
+        entering.push(time.elapsed().as_nanos());
+        let time = Instant::now();
+        black_box(target.program_status_records());
+        details.push(time.elapsed().as_nanos());
+        let time = Instant::now();
+        target.focus(false)?;
+        leaving.push(time.elapsed().as_nanos());
+        thread::sleep(Duration::from_millis(5));
+    }
+    entering.sort_unstable(); leaving.sort_unstable(); details.sort_unstable();
+    let parsed = sessions.iter().map(Session::output_bytes).sum::<u64>() - before;
+    ensure!(parsed > 0, "output stopped during focus sampling");
+    println!(
+        "{{\"mode\":\"focus_same_pane_output\",\"panes\":{panes},\"samples\":128,\"elapsed_seconds\":{:.6},\"parsed_flood_bytes\":{parsed},\"focus_in_p50_ns\":{},\"focus_in_p99_ns\":{},\"focus_in_max_ns\":{},\"focus_out_p99_ns\":{},\"focus_out_max_ns\":{},\"status_details_p99_ns\":{},\"status_details_max_ns\":{}}}",
+        started.elapsed().as_secs_f64(), percentile(&entering, 50), percentile(&entering, 99), entering.last().unwrap(),
+        percentile(&leaving, 99), leaving.last().unwrap(), percentile(&details, 99), details.last().unwrap(),
+    );
+    let shutdowns: Vec<_> = sessions.iter().map(Session::shutdown_handle).collect();
+    drop(sessions);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while shutdowns.iter().any(|shutdown| !shutdown.is_finished()) {
+        ensure!(Instant::now() < deadline, "focus workload cleanup timed out");
+        thread::sleep(Duration::from_millis(5));
+    }
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let mode = std::env::args().nth(1).unwrap_or_else(|| "all".into());
-    if mode == "--flood" || mode == "--echo" {
+    if mode == "--flood" || mode == "--focus-flood" || mode == "--echo" {
         return child(&mode);
     }
     if mode == "keyboard" {
         for panes in [1, 4, 8, 16] { keyboard_benchmark(panes)?; }
+    } else if mode == "focus" {
+        for panes in [1, 4, 8, 16] { focus_benchmark(panes)?; }
     } else if mode == "all" {
         for panes in [1, 4, 8, 16] {
             benchmark(panes)?;

@@ -73,3 +73,29 @@ better scaling. There is no GUI rendering, input-to-presentation measurement,
 Kitty keyboard mode transition, IME composition or child consumption timing here.
 The encoder still shares the parser mutex; these measurements establish a
 regression baseline, not a nonblocking guarantee. No locking change was made.
+
+## Focus dispatch into an output-flooding pane
+
+`mise run bench-focus` enables application focus reports and measures 128 focus-in
+and focus-out calls into a busy terminal for each 1/4/8/16-pane run. Every pane
+emits colored Unicode output and a working-task OSC report per output chunk.
+Focus-in includes the UI's follow-up status-summary read. The optional full
+status-record read is timed separately. Owned children finish before the next run.
+Raw results: `pty-focus-same-pane.jsonl`, local Darwin arm64 release build using
+engine source at `a8ca544` plus this benchmark addition.
+
+| Flood panes | Focus-in p99 | Largest focus-in | Focus-out p99 | Status details p99 |
+| --- | --- | --- | --- | --- |
+| 1 | 0.175 ms | 0.184 ms | 0.083 ms | 0.075 ms |
+| 4 | 0.027 ms | 0.030 ms | 0.0028 ms | 0.0020 ms |
+| 8 | 0.015 ms | 0.016 ms | 0.0006 ms | 0.0010 ms |
+| 16 | 0.043 ms | 0.049 ms | 0.0004 ms | 0.0016 ms |
+
+This short sample measures dispatch/encoding and lock acquisition, not a worst-case
+bound. It has one working-task record per terminal, no GUI/OS focus switch,
+rendering, key-release cleanup, application consumption or presentation timing.
+The child generates output rather than reading/acknowledging focus reports.
+Scheduling and aggregate output throughput differ across runs, so smaller timings
+at higher pane counts do not establish improved scaling. No focus-locking change
+was made based on this sample; synchronous focus handling still has no nonblocking
+guarantee. Other UI-thread lock paths and visual input latency remain separate work.

@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Added and ran a release focus-dispatch pressure benchmark at 1/4/8/16 flooding
+panes, with application focus reporting enabled and working-task OSC metadata.
+128 samples per size measured focus-in plus summary reads, focus-out and optional
+status-record copying separately. Focus-in p99 was 0.015–0.175ms; largest observed
+focus-in was 0.184ms. Raw JSONL and limitations are recorded in docs/benchmarks.
+The benchmark waits for owned workload teardown between sizes. This sample does
+not justify changing focus/input ordering; no locking change was made. GUI focus,
+render latency, child consumption and worst-case contention remain unmeasured.
+
 Polished Program Status for narrow panes: neutral panel/card colors, shrinking
 title columns, bounded overflow, complete-heading/metadata hover hints and a
 standard close control with primary-click handling. App/title metadata omits

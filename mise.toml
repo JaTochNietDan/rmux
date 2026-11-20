@@ -149,3 +149,7 @@ run = ["mkdir -p target", "rustc --edition=2024 -O scripts/bench-palette-search.
 [tasks.bench-keyboard]
 description = "Release key dispatch timings into an output-flooding pane at 1/4/8/16 panes"
 run = "cargo run --release -p rmux-terminal --example pty_bench -- keyboard"
+
+[tasks.bench-focus]
+description = "Release focus dispatch timings into output-flooding panes at 1/4/8/16 panes"
+run = "cargo run --release -p rmux-terminal --example pty_bench -- focus"
