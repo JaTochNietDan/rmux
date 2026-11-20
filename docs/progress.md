@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Extended manual terminal memory diagnostics with Unix foreground process-group
+leader PID, RSS and CPU, plus foreground RSS/CPU sorting and JSON export. The
+sampler batches up to 256 shells, 256 foreground leaders and the rmux process;
+no polling or command-line/environment reads were added. Foreground identity is
+rechecked on completion, discarding samples after job changes or terminal moves
+out of the window. CPU retains existing process-generation/baseline checks.
+Desktop compilation and the real-PTY idle/running/interrupted foreground identity
+test passed. These are leader-only snapshots, not pipeline/descendant aggregates;
+Windows foreground discovery, native panel acceptance and performance measurements
+remain pending.
+
 Removed blocking terminal-parser and exit-state lock acquisition from the
 on-demand active-work close check. Contention conservatively requires the normal
 confirmation; it never silently treats unknown state as idle. Idle/exited sessions,

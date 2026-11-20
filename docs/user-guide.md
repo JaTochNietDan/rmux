@@ -937,13 +937,18 @@ still owns focus. Rows are virtualized for larger terminal lists.
 Its panel samples up to 256 terminals in the current window and provides manual
 Refresh/Close controls, including explicit busy or unavailable rows.
 Rows initially sort by resident storage; use the sort control or command palette's
-Cycle Terminal Memory Sort to switch to shell RSS or CPU, descending with missing
+Cycle Terminal Memory Sort to switch to shell or foreground RSS/CPU, descending with missing
 samples last. Sorting reuses existing samples without another process scan.
 Click a row to focus its terminal. Copy exports the last sample as JSON in the
 displayed order, with raw byte counts and explicit unavailable values.
 The panel also samples each terminal's root shell RSS and CPU on the background
 worker. CPU requires two sufficiently spaced refreshes with the same PID set;
 the first sample is unavailable rather than zero. Exited processes are omitted.
+On Unix, a distinct foreground process-group leader is also sampled and included
+under `foreground_group_leader` in copied JSON. Results are discarded if that
+terminal's foreground group changes before sampling completes. Windows does not
+yet expose this information. This measures the leader alone; a pipeline or compiler
+can have additional workers whose memory is not included.
 These process figures exclude descendants and helpers, and are separate from
 Ghostty screen storage. Sampling is manual, with no idle polling timer.
 The panel's rmux summary reports application-process RSS and CPU across all

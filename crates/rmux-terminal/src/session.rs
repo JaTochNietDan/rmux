@@ -980,6 +980,17 @@ impl Session {
     pub fn process_id(&self) -> Option<u32> {
         self.child_pid
     }
+    /// Current Unix foreground process-group leader, excluding the root shell.
+    /// A point-in-time identity, not an aggregate or guarantee that it stays alive.
+    /// Windows has no equivalent PTY job-control query and returns None.
+    pub fn foreground_process_id(&self) -> Option<u32> {
+        #[cfg(unix)]
+        if !self.process_exited() {
+            let group = self.master.process_group_leader()?;
+            if group > 0 && Some(group as u32) != self.child_pid { return Some(group as u32); }
+        }
+        None
+    }
     /// Reaper completion observed without acquiring the terminal or exit lock.
     pub fn process_exited(&self) -> bool {
         self.shutdown.is_finished()
@@ -1505,10 +1516,18 @@ mod tests {
             Ok(())
         };
         wait(false)?;
+        assert_eq!(session.foreground_process_id(), None);
         session.input(b"sleep 30\n")?;
         wait(true)?;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        while session.foreground_process_id().is_none() {
+            anyhow::ensure!(std::time::Instant::now() < deadline, "foreground job identity unavailable");
+            thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert_ne!(session.foreground_process_id(), session.process_id());
         session.input(b"\x03")?;
         wait(false)?;
+        assert_eq!(session.foreground_process_id(), None);
         let argv = ["/bin/sleep", "30"].map(std::ffi::OsString::from);
         let direct = Session::command_in(&argv, 80, 8, None)?;
         assert!(direct.has_active_work());

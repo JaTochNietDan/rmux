@@ -19,8 +19,8 @@ pub struct Sampler {
 
 impl Sampler {
     pub fn sample(&mut self, pids: impl IntoIterator<Item = u32>) -> HashMap<u32, Sample> {
-        // One application process plus at most 256 terminal shell processes.
-        let mut pids: Vec<_> = pids.into_iter().take(257).map(Pid::from_u32).collect();
+        // One application process plus at most 256 shells and 256 foreground leaders.
+        let mut pids: Vec<_> = pids.into_iter().take(513).map(Pid::from_u32).collect();
         pids.sort_unstable();
         pids.dedup();
         // Reset on membership change so the process cache cannot grow as tabs

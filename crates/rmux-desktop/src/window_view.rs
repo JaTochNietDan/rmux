@@ -359,7 +359,7 @@ impl WorkspaceWindow {
                 for (tab, terminal) in pane.terminals.iter().enumerate() {
                     if jobs.len() == 256 { break 'workspaces; }
                     let view = terminal.read(cx);
-                    jobs.push((entry.workspace.entity_id(), terminal.entity_id(), format!("{} / {}", entry.name, pane.tab_title(tab, cx)), view.session.process_id(), view.session.memory_sample()));
+                    jobs.push((entry.workspace.entity_id(), terminal.entity_id(), format!("{} / {}", entry.name, pane.tab_title(tab, cx)), view.session.process_id(), view.session.foreground_process_id(), view.session.memory_sample()));
                 }
             }
         }
@@ -372,27 +372,45 @@ impl WorkspaceWindow {
         let canceled = Arc::new(AtomicBool::new(false));
         self.memory_canceled = Some(canceled.clone());
         cx.spawn(async move |entity, cx| {
-            let rows = executor.spawn(async move {
+            let mut rows = executor.spawn(async move {
                 if canceled.load(Ordering::Relaxed) { return (Vec::new(), None); }
                 let processes = {
                     let mut sampler = process_sampler.lock().unwrap_or_else(|error| error.into_inner());
                     if canceled.load(Ordering::Relaxed) { return (Vec::new(), None); }
-                    sampler.sample(std::iter::once(std::process::id()).chain(jobs.iter().filter_map(|(_, _, _, pid, _)| *pid)))
+                    sampler.sample(std::iter::once(std::process::id()).chain(jobs.iter().flat_map(|(_, _, _, pid, foreground_pid, _)| [*pid, *foreground_pid].into_iter().flatten())))
                 };
                 let application = processes.get(&std::process::id()).copied();
-                let rows: Vec<_> = jobs.into_iter().take_while(|_| !canceled.load(Ordering::Relaxed)).map(|(workspace_id, surface_id, name, pid, sample)| {
+                let rows: Vec<_> = jobs.into_iter().take_while(|_| !canceled.load(Ordering::Relaxed)).map(|(workspace_id, surface_id, name, pid, foreground_pid, sample)| {
                     let (usage, status) = match sample() {
                         Ok(Some(usage)) => (Some(usage), "Sampled"),
                         Ok(None) => (None, "Busy · refresh to retry"),
                         Err(_) => (None, "Terminal closed or sample unavailable"),
                     };
                     let process = pid.and_then(|pid| processes.get(&pid).copied());
-                    memory_view::Row { workspace_id, surface_id, name, pid, process, usage, status }
+                    memory_view::Row { workspace_id, surface_id, name, pid, process, foreground_pid, foreground: foreground_pid.and_then(|pid| processes.get(&pid).copied()), usage, status }
                 }).collect();
                 (rows, application)
             }).await;
             let _ = entity.update(cx, |this, cx| {
                 if this.memory_generation != generation || this.memory_rows.is_none() { return; }
+                // A command may finish or change while the OS sampler runs.
+                // Keep only foreground samples still owned by this terminal.
+                let expected: std::collections::HashMap<_, _> = rows.0.iter().filter_map(|row| row.foreground_pid.map(|pid| (row.surface_id, pid))).collect();
+                let mut retained = std::collections::HashSet::new();
+                if !expected.is_empty() {
+                    for entry in &this.entries {
+                        for pane in &entry.workspace.read(cx).panes {
+                            for terminal in &pane.read(cx).terminals {
+                                if let Some(pid) = expected.get(&terminal.entity_id()) {
+                                    if terminal.read(cx).session.foreground_process_id() == Some(*pid) { retained.insert(terminal.entity_id()); }
+                                }
+                            }
+                        }
+                    }
+                }
+                for row in &mut rows.0 {
+                    if row.foreground_pid.is_some() && !retained.contains(&row.surface_id) { row.foreground = None; }
+                }
                 let selected = this.memory_rows.as_ref().and_then(|previous| this.memory_sort.indices(previous).get(this.memory_selected).map(|index| previous[*index].surface_id));
                 this.memory_selected = selected.and_then(|surface| this.memory_sort.indices(&rows.0).iter().position(|index| rows.0[*index].surface_id == surface))
                     .unwrap_or_else(|| this.memory_selected.min(rows.0.len().saturating_sub(1)));
