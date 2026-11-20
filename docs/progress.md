@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+The tab strip now has a right-click menu for Rename, Close, Close Other Tabs
+and Close Tabs to the Right. Opening selects the target tab, then gives the
+menu keyboard focus; arrows/Home/End navigate, Enter/Space activates and Escape
+returns focus. The menu anchors at the pointer, fits within window bounds and
+dismisses on outside click/focus loss. Actions resolve the captured tab identity.
+Close-icon clicks now require a standard click, preventing a right-click from
+closing the tab. Desktop compilation passed; native placement, hit testing,
+keyboard routing and visual acceptance remain pending.
+
 Close Tabs to the Right now shares the policy-aware batch-close implementation,
 with menu/palette access and a configurable `close_tabs_to_right` action. It
 captures the original right-side identities, preserving left-side and newly

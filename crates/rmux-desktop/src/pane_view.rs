@@ -101,12 +101,23 @@ pub(super) fn pane_control(id: &'static str, hint: &'static str) -> Stateful<Div
         .tooltip(move |_, cx| cx.new(|_| ControlHint(hint.into())).into())
 }
 
+#[derive(Clone)]
+struct TabMenu {
+    target: EntityId,
+    position: Point<Pixels>,
+    focus: FocusHandle,
+    selected: usize,
+}
+const TAB_MENU_LABELS: &[&str] = &["Rename Tab", "Close Tab", "Close Other Tabs…", "Close Tabs to the Right…"];
+
 pub(super) struct PaneView {
     // Metadata repaints preserve this offset; selection and structural edits
     // explicitly reveal the active tab. Busy background tabs must not reset it.
     tab_scroll: ScrollHandle,
     tab_picker: Option<(Entity<text_field::TextField>, Option<EntityId>, ScrollHandle)>,
     tab_picker_blur: Option<Subscription>,
+    tab_menu: Option<TabMenu>,
+    tab_menu_blur: Option<Subscription>,
     spawning_tab: Option<Task<()>>,
     tab_launch_canceled: Option<Arc<AtomicBool>>,
     workspace: EntityId,
@@ -142,6 +153,80 @@ pub(super) struct TabTransfer {
 }
 
 impl PaneView {
+    fn dismiss_tab_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let focused = self.tab_menu.as_ref().is_some_and(|menu| menu.focus.is_focused(window));
+        self.tab_menu = None;
+        self.tab_menu_blur = None;
+        if focused { self.focus(window, cx); }
+        cx.notify();
+    }
+
+    fn show_tab_menu(&mut self, target: EntityId, position: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
+        if self.close_prompt.is_some() || self.rename.is_some() { return; }
+        let Some(index) = self.terminals.iter().position(|terminal| terminal.entity_id() == target) else { return; };
+        self.select(index, window, cx);
+        let focus = cx.focus_handle();
+        let token = focus.clone();
+        self.tab_menu_blur = Some(cx.on_blur(&focus, window, move |this, _, cx| {
+            if this.tab_menu.as_ref().is_some_and(|menu| menu.focus == token) {
+                this.tab_menu = None;
+                this.tab_menu_blur = None;
+                cx.notify();
+            }
+        }));
+        focus.focus(window);
+        self.tab_menu = Some(TabMenu { target, position, focus, selected: 0 });
+        cx.notify();
+    }
+
+    fn activate_tab_menu(&mut self, item: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(menu) = self.tab_menu.clone() else { return; };
+        self.dismiss_tab_menu(window, cx);
+        let Some(index) = self.terminals.iter().position(|terminal| terminal.entity_id() == menu.target) else { return; };
+        self.select(index, window, cx);
+        match item {
+            0 => self.rename_tab(window, cx),
+            1 => self.close(index, window, cx),
+            2 => self.close_tabs(TabCloseScope::Others, window, cx),
+            3 => self.close_tabs(TabCloseScope::Right, window, cx),
+            _ => {},
+        }
+    }
+
+    fn tab_menu_element(&self, menu: TabMenu, cx: &mut Context<Self>) -> AnyElement {
+        deferred(anchored().position(menu.position).snap_to_window().child(
+            div().id("tab-context-menu").track_focus(&menu.focus).key_context("TabMenu")
+                .w(px(220.)).py_1().bg(rgb(0x292929)).border_1().border_color(rgb(0x465063)).rounded_md().shadow_md()
+                .on_mouse_down_out(cx.listener(|this, _, window, cx| this.dismiss_tab_menu(window, cx)))
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
+                .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
+                .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                    let Some(menu) = &mut this.tab_menu else { return; };
+                    match event.keystroke.key.as_str() {
+                        "up" => menu.selected = (menu.selected + TAB_MENU_LABELS.len() - 1) % TAB_MENU_LABELS.len(),
+                        "down" => menu.selected = (menu.selected + 1) % TAB_MENU_LABELS.len(),
+                        "home" => menu.selected = 0,
+                        "end" => menu.selected = TAB_MENU_LABELS.len() - 1,
+                        "enter" | "space" => { let selected = menu.selected; this.activate_tab_menu(selected, window, cx); },
+                        "escape" => this.dismiss_tab_menu(window, cx),
+                        _ => {},
+                    }
+                    cx.stop_propagation();
+                    cx.notify();
+                }))
+                .children(TAB_MENU_LABELS.iter().enumerate().map(|(index, label)| {
+                    div().id(("tab-menu-item", index)).mx_1().px_3().py_2().rounded_sm().text_size(px(13.))
+                        .cursor_pointer().when(index == menu.selected, |row| row.bg(rgb(0x354969)))
+                        .hover(|row| row.bg(rgb(0x40516c)))
+                        .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+                            if event.standard_click() { this.activate_tab_menu(index, window, cx); }
+                            cx.stop_propagation();
+                        })).child(*label)
+                }))
+        )).with_priority(2).into_any_element()
+    }
+
     fn show_tab_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.terminals.is_empty() || self.rename.is_some() || self.close_prompt.is_some() { return; }
         if let Some((input, _, _)) = &self.tab_picker { input.read(cx).focus.focus(window); return; }
@@ -208,7 +293,7 @@ impl PaneView {
     }
 
     pub(super) fn automation_busy(&self) -> bool {
-        self.rename.is_some() || self.close_prompt.is_some() || self.tab_picker.is_some() || self.spawning_tab.is_some()
+        self.rename.is_some() || self.close_prompt.is_some() || self.tab_picker.is_some() || self.tab_menu.is_some() || self.spawning_tab.is_some()
     }
     pub(super) fn automation_surfaces(&self, window_id: &str, workspace_id: &str, pane_id: &str, history: bool, cx: &App) -> Vec<serde_json::Value> {
         self.terminals.iter().enumerate().map(|(index, entity)| {
@@ -237,6 +322,8 @@ impl PaneView {
         self.rename = None;
         self.tab_picker = None;
         self.tab_picker_blur = None;
+        self.tab_menu = None;
+        self.tab_menu_blur = None;
     }
     pub fn tab_title(&self, index: usize, cx: &App) -> String {
         let view = self.terminals[index].read(cx);
@@ -423,6 +510,8 @@ impl PaneView {
             tab_scroll,
             tab_picker: None,
             tab_picker_blur: None,
+            tab_menu: None,
+            tab_menu_blur: None,
             spawning_tab: None,
             tab_launch_canceled: None,
             workspace,
@@ -473,6 +562,8 @@ impl PaneView {
             tab_scroll: ScrollHandle::new(),
             tab_picker: None,
             tab_picker_blur: None,
+            tab_menu: None,
+            tab_menu_blur: None,
             spawning_tab: None,
             tab_launch_canceled: None,
             workspace,
@@ -520,6 +611,8 @@ impl PaneView {
         self.rename = None;
         self.tab_picker = None;
         self.tab_picker_blur = None;
+        self.tab_menu = None;
+        self.tab_menu_blur = None;
         self.tab_scroll.scroll_to_item(index);
         self.focus(window, cx);
         cx.notify();
@@ -820,6 +913,9 @@ impl PaneView {
         if index >= self.terminals.len() {
             return;
         }
+        if self.tab_menu.as_ref().is_some_and(|menu| menu.target == self.terminals[index].entity_id()) {
+            self.dismiss_tab_menu(window, cx);
+        }
         // Closing an inactive tab must not steal focus from another terminal,
         // a find field or an editor elsewhere in the window.
         let replace_focus = self.terminals[index]
@@ -930,6 +1026,10 @@ impl Render for PaneView {
                                                 } else { style }
                                             })
                                             .on_drop(cx.listener(move |this, item: &drag_item::DragItem, window, cx| this.drop_tab(item, Some(target), window, cx)))
+                                            .on_mouse_down(MouseButton::Right, cx.listener(move |this, event: &MouseDownEvent, window, cx| {
+                                                this.show_tab_menu(target, event.position, window, cx);
+                                                cx.stop_propagation();
+                                            }))
                                             .text_color(rgb(0x9b9b9b))
                                             .when(index == self.active, |tab| tab
                                                 .bg(rgb(if focused { 0x303030 } else { 0x292929 }))
@@ -1003,8 +1103,9 @@ impl Render for PaneView {
                                                     .tooltip(|_, cx| cx.new(|_| ControlHint("Close Terminal Tab".into())).into())
                                                     .hover(|style| style.bg(rgb(0x505867)))
                                                     .on_click(cx.listener(
-                                                        move |this, _, window, cx| {
+                                                        move |this, event: &ClickEvent, window, cx| {
                                                             cx.stop_propagation();
+                                                            if !event.standard_click() { return; }
                                                             if let Some(index) = this.terminals.iter().position(|terminal| terminal.entity_id() == target) {
                                                                 this.close(index, window, cx);
                                                             }
@@ -1082,6 +1183,7 @@ impl Render for PaneView {
                     if event.standard_click() { this.error = None; cx.stop_propagation(); cx.notify(); }
                 })))
             })
+            .when_some(self.tab_menu.clone(), |root, menu| root.child(self.tab_menu_element(menu, cx)))
             .when_some(self.tab_picker.clone(), |root, (input, selected, scroll)| {
                 let matches = self.matching_tabs(cx);
                 let selected = matches.iter().map(|index| self.terminals[*index].entity_id())

@@ -1030,6 +1030,10 @@ and allows only 100 ms to await completion; the normal Quit action retains its
 confirmation policy and three-second cleanup deadline.
 
 Cmd+T creates a tab in the focused pane; Cmd+Shift+[ / ] switches tabs.
+Right-click a tab to select it and open a menu with Rename, Close, Close Other
+Tabs and Close Tabs to the Right. Arrow keys navigate, Enter/Space activates,
+and Escape returns to the terminal. Clicking outside or moving focus dismisses
+the menu.
 Close Other Tabs in the menu/palette keeps the chosen terminal and closes the
 other tabs in that pane, using one confirmation when the close policy requires
 it. The `close_other_tabs` shortcut action has no default binding. The prompt
