@@ -129,9 +129,19 @@ pub struct CustomCommand {
 }
 
 #[derive(Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct LayoutPreset {
+    pub name: String,
+    pub path: std::path::PathBuf,
+    #[serde(default)]
+    pub session: bool,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Preferences {
     pub commands: Vec<CustomCommand>,
+    pub layout_presets: Vec<LayoutPreset>,
     pub keybindings: Vec<crate::shortcuts::Binding>,
     pub group_new_workspace_placement: crate::workspace_groups::Placement,
     pub session_file: Option<std::path::PathBuf>,
@@ -164,6 +174,7 @@ impl Default for Preferences {
     fn default() -> Self {
         Self {
             commands: Vec::new(),
+            layout_presets: Vec::new(),
             keybindings: Vec::new(),
             session_file: None,
             group_new_workspace_placement: crate::workspace_groups::Placement::default(),
@@ -346,6 +357,13 @@ impl Preferences {
     fn decode(bytes: &[u8]) -> Result<Self> {
         ensure!(bytes.len() <= 64 * 1024, "configuration exceeds 64 KiB");
         let value: Self = serde_json::from_slice(bytes)?;
+        ensure!(value.layout_presets.len() <= 32, "at most 32 layout presets are allowed");
+        let mut preset_names = std::collections::HashSet::new();
+        for preset in &value.layout_presets {
+            ensure!(!preset.name.trim().is_empty() && preset.name.len() <= 128 && !preset.name.chars().any(char::is_control), "preset name must be nonempty, at most 128 bytes and contain no controls");
+            ensure!(preset_names.insert(preset.name.trim().to_lowercase()), "duplicate layout preset name");
+            ensure!(preset.path.is_absolute() && preset.path.as_os_str().len() <= 8192 && !preset.path.to_string_lossy().chars().any(char::is_control), "preset path must be absolute, at most 8192 bytes and contain no controls");
+        }
         ensure!(value.commands.len() <= 32, "at most 32 custom commands are allowed");
         let mut names = std::collections::HashSet::new();
         for command in &value.commands {
@@ -577,6 +595,27 @@ mod tests {
         assert!(Preferences::decode(br#"{"focused_cursor":"unknown"}"#).is_err());
         Ok(())
     }
+    #[test]
+    fn layout_presets_validate_names_paths_and_shortcut_targets() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        let path = directory.path().join("workspace 世界.json");
+        let preset = serde_json::json!({"name":"Build","path":path,"session":true});
+        let valid = serde_json::json!({"layout_presets":[preset.clone()],"keybindings":[{"key":"ctrl-k b","preset":"Build"}]});
+        let preferences = Preferences::decode(&serde_json::to_vec(&valid)?)?;
+        assert_eq!(preferences.layout_presets[0].path, path);
+        assert!(preferences.layout_presets[0].session);
+        assert!(!path.exists(), "config validation must not create or require preset files");
+        for invalid in [
+            serde_json::json!({"layout_presets":[preset.clone(),{"name":" build ","path":path}]}),
+            serde_json::json!({"layout_presets":[{"name":"Build","path":"relative.json"}]}),
+            serde_json::json!({"layout_presets":[{"name":" ","path":path}]}),
+            serde_json::json!({"layout_presets":vec![preset.clone();33]}),
+            serde_json::json!({"keybindings":[{"key":"ctrl-k b","preset":"Missing"}]}),
+            serde_json::json!({"layout_presets":[preset],"keybindings":[{"key":"ctrl-k b","preset":"Build","text":"echo"}]}),
+        ] { assert!(Preferences::decode(&serde_json::to_vec(&invalid)?).is_err()); }
+        Ok(())
+    }
+
     #[test]
     fn custom_commands_validate_limits_identity_and_literal_arguments() -> Result<()> {
         let valid = serde_json::json!({"commands":[{"name":"Build 世界", "argv":["mise","exec","--","echo","a b","", "$(literal)"], "cwd":"/tmp"}]});

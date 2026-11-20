@@ -300,6 +300,14 @@ impl CommandPalette {
                 shortcut: None,
             });
         }
+        for preset in &cx.global::<Preferences>().layout_presets {
+            commands.push(Command {
+                title: format!("Open Preset: {}", preset.name),
+                subtitle: Some(format!("{} · {}", if preset.session { "Session" } else { "Layout" }, preset.path.display())),
+                target: PaletteEvent::Run(Box::new(OpenLayoutPreset { name: preset.name.clone() })),
+                shortcut: None,
+            });
+        }
         if let Some(focus) = origin_focus {
             for command in &mut commands {
                 let PaletteEvent::Run(action) = &command.target else {

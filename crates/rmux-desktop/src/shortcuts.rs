@@ -16,6 +16,7 @@ pub struct Binding {
     pub action: Option<String>,
     pub command: Option<String>,
     pub text: Option<String>,
+    pub preset: Option<String>,
     #[serde(default)]
     pub context: Scope,
 }
@@ -159,18 +160,22 @@ pub fn compile(settings: &Preferences) -> Result<Vec<KeyBinding>> {
             }
         }
         sequences.push((binding.context.context(), sequence));
-        let target = match (&binding.action, &binding.command, &binding.text) {
-            (Some(name), None, None) => action(name).ok_or_else(|| anyhow::anyhow!("unknown shortcut action: {name}"))?,
-            (None, Some(name), None) => {
+        let target = match (&binding.action, &binding.command, &binding.text, &binding.preset) {
+            (Some(name), None, None, None) => action(name).ok_or_else(|| anyhow::anyhow!("unknown shortcut action: {name}"))?,
+            (None, Some(name), None, None) => {
                 ensure!(settings.commands.iter().any(|command| command.name == *name), "shortcut command is not configured: {name}");
                 Box::new(RunCustomCommand { name: name.clone() }) as Box<dyn Action>
             }
-            (None, None, Some(text)) => {
+            (None, None, Some(text), None) => {
                 ensure!(matches!(binding.context, Scope::Terminal), "text bindings require terminal context");
                 ensure!(!text.is_empty() && text.len() <= 16 * 1024, "shortcut text requires 1..16384 UTF-8 bytes");
                 Box::new(SendShortcutText { text: text.clone() }) as Box<dyn Action>
             }
-            _ => anyhow::bail!("keybinding requires exactly one action, command or text"),
+            (None, None, None, Some(name)) => {
+                ensure!(settings.layout_presets.iter().any(|preset| preset.name == *name), "shortcut preset is not configured: {name}");
+                Box::new(OpenLayoutPreset { name: name.clone() }) as Box<dyn Action>
+            }
+            _ => anyhow::bail!("keybinding requires exactly one action, command, text or preset"),
         };
         let context = binding.context.context().map(|context| KeyBindingContextPredicate::parse(context).unwrap().into());
         Ok(KeyBinding::load(&binding.key, target, context, false, None, &DummyKeyboardMapper)?)

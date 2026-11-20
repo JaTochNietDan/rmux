@@ -2777,8 +2777,8 @@ impl WorkspaceWindow {
             cx.notify();
         }
     }
-    fn open_layout(&mut self, cx: &mut Context<Self>) { self.open_snapshot(false, cx); }
-    fn open_snapshot(&mut self, session: bool, cx: &mut Context<Self>) {
+    fn open_layout(&mut self, cx: &mut Context<Self>) { self.open_snapshot(false, None, cx); }
+    fn open_snapshot(&mut self, session: bool, path: Option<std::path::PathBuf>, cx: &mut Context<Self>) {
         let kind = if session { "session" } else { "layout" };
         if cx.global::<Shutdowns>().quitting || self.restore_job.is_some() {
             return;
@@ -2787,12 +2787,12 @@ impl WorkspaceWindow {
         let token = job.0.clone();
         self.restore_job = Some(job);
         cx.notify();
-        let picker = cx.prompt_for_paths(PathPromptOptions {
+        let picker = path.is_none().then(|| cx.prompt_for_paths(PathPromptOptions {
             files: true,
             directories: false,
             multiple: false,
             prompt: Some(if session { "Open Session" } else { "Open Layout" }.into()),
-        });
+        }));
         let scrollback_bytes = cx.global::<Preferences>().scrollback_bytes();
         let executor = cx.background_executor().clone();
         let (progress_sender, progress_receiver) = async_channel::bounded(1);
@@ -2809,11 +2809,13 @@ impl WorkspaceWindow {
         }).detach();
         cx.spawn(async move |entity, cx| {
             let result = async {
-                let Some(paths) = picker.await?? else {
-                    return Ok::<_, anyhow::Error>(());
-                };
-                let Some(path) = paths.into_iter().next() else {
-                    return Ok(());
+                let path = match path {
+                    Some(path) => path,
+                    None => {
+                        let Some(paths) = picker.expect("picker for interactive import").await?? else { return Ok::<_, anyhow::Error>(()); };
+                        let Some(path) = paths.into_iter().next() else { return Ok(()); };
+                        path
+                    }
                 };
                 let _ = entity.update(cx, |this, cx| {
                     this.notice = Some(format!("Opening {kind}…"));
@@ -3492,7 +3494,12 @@ impl Render for WorkspaceWindow {
             .on_action(cx.listener(|this, _: &SaveLayout, window, cx| this.save_layout(window, cx)))
             .on_action(cx.listener(|this, _: &SaveSession, window, cx| this.save_session(window, cx)))
             .on_action(cx.listener(|this, _: &OpenLayout, _, cx| this.open_layout(cx)))
-            .on_action(cx.listener(|this, _: &OpenSession, _, cx| this.open_snapshot(true, cx)))
+            .on_action(cx.listener(|this, _: &OpenSession, _, cx| this.open_snapshot(true, None, cx)))
+            .on_action(cx.listener(|this, action: &OpenLayoutPreset, _, cx| {
+                if let Some(preset) = cx.global::<Preferences>().layout_presets.iter().find(|preset| preset.name == action.name).cloned() {
+                    this.open_snapshot(preset.session, Some(preset.path), cx);
+                } else { this.notice = Some("Layout preset is no longer configured".into()); cx.notify(); }
+            }))
             .on_action(cx.listener(|this, _: &CancelRestore, _, cx| this.cancel_restore(cx)))
             .on_action(cx.listener(|this, command: &RunCustomCommand, window, cx| this.run_custom_command(&command.name, window, cx)))
             .on_action(cx.listener(|this, _: &ToggleSettings, window, cx| this.toggle_settings(window, cx)))

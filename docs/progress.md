@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Added named layout/session presets to configuration, command palette and custom
+shortcuts. Up to 32 validated name/absolute-path entries appear as Open Preset:
+name; an optional session flag selects the multi-window format. Invocation resolves
+the current config, skips only the file picker, then uses the existing background
+import/progress/cancel/rollback path. Files are read only when invoked; settings
+loading and palette display do not touch them. Documented a repeatable save,
+configure, reload and apply workflow with explicit fresh-shell/cwd semantics.
+Desktop compilation and focused name/path/count/shortcut validation tests passed.
+Native preset invocation, reusable example bundles and full upstream template
+semantics remain pending.
+
 Added preparation counts to interactive layout/session imports. The worker emits
 bounded progress events (one pending update, no timer); UI updates require the
 same uncanceled job token, preventing late status overwrites. Added Cancel Layout

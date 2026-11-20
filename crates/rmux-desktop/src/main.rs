@@ -93,6 +93,11 @@ struct RunCustomCommand { name: String }
 
 #[derive(Clone, Debug, Default, PartialEq, Action)]
 #[action(namespace = rmux, no_json)]
+struct OpenLayoutPreset { name: String }
+
+
+#[derive(Clone, Debug, Default, PartialEq, Action)]
+#[action(namespace = rmux, no_json)]
 struct SendShortcutText { text: String }
 
 

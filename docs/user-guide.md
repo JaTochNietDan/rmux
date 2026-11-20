@@ -1080,6 +1080,29 @@ custom shortcut. Cancellation stops at the next preparation boundary and cleans
 up shells already prepared; it cannot interrupt a shell-spawn system call.
 
 
+For repeatable workspace setups, save a layout or session once and add named
+presets to your settings. Replace these example paths with your saved files:
+
+```json
+{
+  "layout_presets": [
+    {"name":"Development", "path":"/absolute/path/development.json"},
+    {"name":"All Projects", "path":"/absolute/path/projects.json", "session":true}
+  ],
+  "keybindings": [{"key":"ctrl-k d", "preset":"Development"}]
+}
+```
+
+After Reload Settings, choose **Open Preset: Development** in the palette or use
+its shortcut. Each invocation opens fresh windows/shells in the directories saved
+in the file; it does not replay prior terminal commands or resume running jobs.
+The file is read when invoked, so edits apply to the next use. Layout presets
+(default `session:false`) contain one window; session presets contain multiple.
+Up to 32 presets are allowed, with unique names and absolute paths. Invalid files
+or missing working directories report an import error. Configuration loading does
+not read preset files. A binding selects exactly one `action`, `command`, `text`,
+or `preset`; preset shortcuts resolve the current configuration at invocation.
+
 Use `rmux --session PATH` to restore a version-1 multi-window recovery file with
 fresh shells. It preserves window order and the selected window; an empty session
 opens one default window. `--check-session PATH` validates structure without

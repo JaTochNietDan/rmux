@@ -1523,7 +1523,11 @@
         "CLI"
       ],
       "acceptance": "Apply repeatably with explicit cwd and startup semantics; no accidental command replay.",
-      "rmux_status": "not_started"
+      "rmux_status": "in_progress",
+      "implementation": "Named layout_presets reference saved layout/session files by absolute path. Palette and preset shortcut targets resolve current configuration and reuse background import with progress/cancellation, opening fresh shells in saved directories without terminal command replay. Up to 32 unique names are validated; files are not accessed until invocation. Desktop compilation and focused configuration validation pass; user guide includes the save/configure/reload/apply workflow.",
+      "remaining": "Native preset invocation and repeated-use acceptance, reusable example bundles, complete upstream template/workflow semantics and cross-platform runtime acceptance.",
+      "implementation_sources": ["crates/rmux-desktop/src/preferences.rs", "crates/rmux-desktop/src/command_palette.rs", "crates/rmux-desktop/src/shortcuts.rs", "crates/rmux-desktop/src/window_view.rs"],
+      "progress_record": "docs/progress.md"
     },
     {
       "id": "F01",
