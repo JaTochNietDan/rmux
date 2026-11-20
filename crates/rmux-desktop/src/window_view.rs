@@ -1418,6 +1418,7 @@ impl WorkspaceWindow {
             let pane = cx.new(|cx| PaneView::from_transfer(tab, id, cx));
             let mut workspace = Workspace {
                 spawning_split: None,
+                split_launch_canceled: None,
                 pane_subscriptions: Default::default(),
                 zoomed: None,
                 split_drag: None,
@@ -2416,6 +2417,7 @@ impl WorkspaceWindow {
             let workspace = cx.new(|cx| {
                 let mut workspace = Workspace {
                     spawning_split: None,
+                    split_launch_canceled: None,
                     pane_subscriptions: Default::default(),
                     zoomed: None,
                     split_drag: None,
@@ -2772,6 +2774,7 @@ impl WorkspaceWindow {
         let workspace = cx.new(|cx| {
             let mut workspace = Workspace {
                 spawning_split: None,
+                split_launch_canceled: None,
                 pane_subscriptions: Default::default(),
                 zoomed: None,
                 split_drag: None,

@@ -2,6 +2,7 @@ use gpui::{prelude::*, *};
 use rmux_terminal::{Color, CursorShape, Frame, Scroll, session::Session};
 use std::ops::Range;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 mod app_menu;
 mod updater;
 mod attention;
@@ -325,6 +326,7 @@ actions!(
         ToggleSidebar,
         NewTab,
         CancelNewTab,
+        CancelSplit,
         NextTab,
         ShowTabPicker,
         ShowTabMenu,
@@ -2038,6 +2040,7 @@ enum TerminalSeed {
 
 struct Workspace {
     spawning_split: Option<Task<()>>,
+    split_launch_canceled: Option<Arc<AtomicBool>>,
     pane_subscriptions: std::collections::HashMap<EntityId, Vec<Subscription>>,
     zoomed: Option<EntityId>,
     split_drag: Option<split_view::SplitDrag>,
@@ -2047,6 +2050,11 @@ struct Workspace {
     benchmark: bool,
 }
 struct WorkspaceEmpty;
+impl Drop for Workspace {
+    fn drop(&mut self) {
+        if let Some(canceled) = &self.split_launch_canceled { canceled.store(true, Ordering::Relaxed); }
+    }
+}
 impl EventEmitter<WorkspaceEmpty> for Workspace {}
 struct WorkspaceMetadataChanged;
 impl EventEmitter<WorkspaceMetadataChanged> for Workspace {}
@@ -2089,6 +2097,7 @@ impl Workspace {
     }
     fn rebind_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.split_drag = None;
+        if let Some(canceled) = self.split_launch_canceled.take() { canceled.store(true, Ordering::Relaxed); }
         self.spawning_split = None;
         self.pane_subscriptions.clear();
         for pane in self.panes.clone() {
@@ -2405,6 +2414,13 @@ impl Workspace {
         cx.notify();
         Some(index)
     }
+    fn cancel_split(&mut self, cx: &mut Context<Self>) {
+        if let Some(canceled) = &self.split_launch_canceled {
+            canceled.store(true, Ordering::Relaxed);
+            // Keep the launch slot occupied until completion to bound retries.
+            cx.notify();
+        }
+    }
     fn add(&mut self, axis: SplitAxis, window: &mut Window, cx: &mut Context<Self>) {
         if self.benchmark {
             self.add_prepared(axis, None, true, None, window, cx);
@@ -2427,12 +2443,17 @@ impl Workspace {
         let origin = window.focused(cx);
         let executor = cx.background_executor().clone();
         self.error = None;
+        let canceled = Arc::new(AtomicBool::new(false));
+        self.split_launch_canceled = Some(canceled.clone());
+        let launch_canceled = canceled.clone();
         self.spawning_split = Some(cx.spawn_in(window, async move |entity, cx| {
             let mut result = executor.spawn(async move {
-                let session = Session::shell_in_with_scrollback(80, 24, directory.as_deref(), scrollback)?;
-                TerminalView::prepare(session, colors, palette)
+                pane_view::prepare_terminal_launch(&launch_canceled, || {
+                    Session::shell_in_with_scrollback(80, 24, directory.as_deref(), scrollback)
+                }, colors, palette)
             }).await;
             loop {
+                if canceled.load(Ordering::Relaxed) { break; }
                 let refresh = cx.update(|_, cx| {
                     let prepared = result.as_ref().ok()?;
                     let settings = cx.global::<Preferences>();
@@ -2445,8 +2466,9 @@ impl Workspace {
             }
             let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
                 this.spawning_split = None;
+                this.split_launch_canceled = None;
                 cx.notify();
-                if cx.global::<Shutdowns>().quitting || !this.panes.iter().any(|pane| pane.entity_id() == target) { return; }
+                if canceled.load(Ordering::Relaxed) || cx.global::<Shutdowns>().quitting || !this.panes.iter().any(|pane| pane.entity_id() == target) { return; }
                 match result {
                     Ok(prepared) => {
                         let focus = origin.as_ref().is_some_and(|focus| focus.is_focused(window));
@@ -2578,10 +2600,16 @@ impl Render for Workspace {
             .flex()
             .flex_col()
             .when(self.spawning_split.is_some(), |root| root.child(
-                div().h(px(24.)).flex_shrink_0().px_3().flex().items_center()
+                div().h(px(28.)).flex_shrink_0().px_3().flex().items_center().gap_2()
                     .text_xs().text_color(rgb(0xaab4c4)).bg(rgb(0x242424))
-                    .child("Starting split terminal…")
+                    .child(if self.split_launch_canceled.as_ref().is_some_and(|canceled| canceled.load(Ordering::Relaxed)) { "Canceling split terminal…" } else { "Starting split terminal…" })
+                    .child(pane_view::pane_control("cancel-split", "Cancel Split Terminal")
+                        .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
+                            if event.standard_click() { this.cancel_split(cx); }
+                            cx.stop_propagation();
+                        })).child(icons::icon("close")))
             ))
+            .on_action(cx.listener(|this, _: &CancelSplit, _, cx| this.cancel_split(cx)))
             .on_action(
                 cx.listener(|view, _: &TogglePaneZoom, window, cx| view.toggle_zoom(window, cx)),
             )
@@ -3121,6 +3149,7 @@ fn main() {
                     MenuItem::action("Open Layout in New Window…", OpenLayout),
                     MenuItem::action("New Tab", NewTab),
                     MenuItem::action("Cancel New Terminal Tab", CancelNewTab),
+                    MenuItem::action("Cancel Split Terminal", CancelSplit),
                     MenuItem::separator(),
                     MenuItem::action("Close Tab", ClosePane),
                     MenuItem::action("Close Other Tabs…", CloseOtherTabs),

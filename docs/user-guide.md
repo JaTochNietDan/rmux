@@ -316,6 +316,10 @@ split. Completion splits the original pane; switching focus during launch keeps
 your newer focus. Closing the original pane or transferring the workspace to
 another window discards the pending result. Startup failure leaves existing
 panes intact.
+Use the pending indicator's cancel control, Cancel Split Terminal in the
+File menu/palette, or a custom `cancel_split` binding to discard a pending split.
+The indicator changes to Canceling until background work finishes; another split
+can then start. Cancellation does not interrupt an OS spawn already in progress.
 
 Clipboard text pastes accept up to 1 MiB of UTF-8 per operation and preserve
 bracketed-paste boundaries. Each terminal accepts one pending paste at a time;

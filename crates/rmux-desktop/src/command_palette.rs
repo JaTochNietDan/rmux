@@ -173,6 +173,7 @@ impl CommandPalette {
         }
         command!("New Terminal Tab", NewTab);
         command!("Cancel New Terminal Tab", CancelNewTab);
+        command!("Cancel Split Terminal", CancelSplit);
         command!("New Window", NewWindow);
         command!("Split Right", Split);
         command!("Split Below", SplitBelow);

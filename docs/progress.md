@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Pending splits now have a Cancel Split Terminal control, File/palette action,
+and `cancel_split` custom binding. Cancellation suppresses late attachment/errors
+and retains the launch slot until work completes, bounding cancel/retry jobs.
+Workspace destruction and window rebinding also signal cancellation. Splits and
+tabs share the same pre-/post-spawn cancellation boundary; its two focused tests
+passed, including reaping an unattached real PTY child. Native cancel/focus and
+in-flight frame-preparation behavior remain unverified. Already-running OS spawn
+or engine preparation cannot be forcibly interrupted.
+
 Interactive split startup now prepares initial engine colors/palette and the
 first frame on the background executor before attaching the terminal view.
 Settings changes during launch trigger background re-preparation. Ready and
