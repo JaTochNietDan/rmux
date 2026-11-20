@@ -1,0 +1,39 @@
+{
+  "scope": "Single-process terminal engine; release build; 80x24; 64 MiB scrollback budget; 64 KiB output limit; 11 exports per case including cold first call. Excludes input setup, PTY, UI, GPU, process RSS and concurrent load. Sequential single runs, not statistical latency guarantees.",
+  "host": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
+  "command": "mise exec -- cargo test --release -p rmux-terminal --lib history_tail_costs -- --ignored --nocapture",
+  "before_revision": "2b7f1e2",
+  "after_change": "Reuse previous grid reference during backward row traversal",
+  "cases": [
+    {
+      "case": "short_tail_large_history",
+      "input_bytes": 1100000,
+      "returned_bytes": 859,
+      "truncated": false,
+      "before_median_us": 11,
+      "before_max_us": 137,
+      "after_median_us": 7,
+      "after_max_us": 20
+    },
+    {
+      "case": "long_wrapped_line",
+      "input_bytes": 1048576,
+      "returned_bytes": 65536,
+      "truncated": true,
+      "before_median_us": 2341,
+      "before_max_us": 2688,
+      "after_median_us": 1649,
+      "after_max_us": 1732
+    },
+    {
+      "case": "blank_screen",
+      "input_bytes": 0,
+      "returned_bytes": 0,
+      "truncated": false,
+      "before_median_us": 16,
+      "before_max_us": 19,
+      "after_median_us": 15,
+      "after_max_us": 21
+    }
+  ]
+}

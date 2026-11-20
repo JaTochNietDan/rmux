@@ -108,18 +108,20 @@ impl Terminal {
                 row -= 1;
             };
             let mut remaining = lines;
+            let mut grid = grid_at(0, row as u32)?;
             let start = loop {
-                let grid = grid_at(0, row as u32)?;
+                if row == 0 { break grid; }
+                let previous = grid_at(0, (row - 1) as u32)?;
                 let mut raw = 0;
                 let mut continuation = false;
-                if row > 0 {
-                    let previous = grid_at(0, (row - 1) as u32)?;
-                    check(ghostty_grid_ref_row(&previous, &mut raw))?;
-                    check(ghostty_row_get(raw, GHOSTTY_ROW_DATA_WRAP, out(&mut continuation)))?;
-                }
+                check(ghostty_grid_ref_row(&previous, &mut raw))?;
+                check(ghostty_row_get(raw, GHOSTTY_ROW_DATA_WRAP, out(&mut continuation)))?;
                 if !continuation { remaining -= 1; }
-                if row == 0 || remaining == 0 { break grid; }
+                if remaining == 0 { break grid; }
                 row -= 1;
+                // Reuse this reference on the next iteration instead of
+                // resolving the same screen coordinate a second time.
+                grid = previous;
             };
             let selection = GhosttySelection { start, end, rectangle: false };
             self.export_text_range(max_bytes, false, true, Some(selection), Some(lines))
@@ -290,6 +292,34 @@ mod tests {
                     assert_eq!(truncated, expected.len() > limit);
                 }
             }
+        }
+        Ok(())
+    }
+
+    #[test]
+    #[ignore = "explicit tail export timing fixture"]
+    fn history_tail_costs() -> Result<()> {
+        for (name, input, lines) in [
+            ("short_tail_large_history", "old output line abcdefghijklmnopqrstuvwxyz\r\n".repeat(25000), 20),
+            ("long_wrapped_line", "abcdefgh".repeat(131072), 1),
+            ("blank_screen", String::new(), 20),
+        ] {
+            let mut terminal = Terminal::new(80, 24)?;
+            terminal.set_scrollback_limit(64 * 1024 * 1024)?;
+            terminal.write(input.as_bytes());
+            let mut times = Vec::new();
+            let mut bytes = 0;
+            let mut truncated = false;
+            for _ in 0..11 {
+                let started = std::time::Instant::now();
+                let result = terminal.history_tail_limited(lines, 65536)?;
+                times.push(started.elapsed().as_micros());
+                bytes = result.0.len();
+                truncated = result.1;
+                std::hint::black_box(result);
+            }
+            times.sort_unstable();
+            println!("{{\"case\":\"{name}\",\"input_bytes\":{},\"returned_bytes\":{bytes},\"truncated\":{truncated},\"median_us\":{},\"max_us\":{}}}", input.len(), times[5], times[10]);
         }
         Ok(())
     }

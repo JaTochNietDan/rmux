@@ -1,5 +1,19 @@
 # Initial engine baseline
 
+## History tail capture
+
+[Release measurements](history-tail.json) cover a 20-line tail from 1.1 MB of
+history, a single 1 MiB wrapped line, and an empty screen. Reusing the previous
+row reference removes one grid lookup per backward-walk iteration. Sequential
+runs observed medians of 11 → 7 µs, 2341 → 1649 µs, and 16 → 15 µs respectively.
+The fixture uses 11 samples per case, an 80×24 terminal and a 64 KiB output cap.
+These are engine-only timings, excluding setup, UI, PTY, GPU and concurrent load;
+no native latency or RSS improvement is claimed. Run explicitly with:
+
+```sh
+mise exec -- cargo test --release -p rmux-terminal --lib history_tail_costs -- --ignored --nocapture
+```
+
 ## Inline cell text
 
 The snapshot cell representation now uses `smol_str` 0.2.2, already present in

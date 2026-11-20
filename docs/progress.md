@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Measured tail capture with an explicit ignored release fixture and removed a
+duplicate Ghostty grid lookup in each backward-walk iteration. The same three-case
+fixture observed median 20-line capture from 1.1 MB history at 11 → 7 µs, a 1 MiB
+wrapped line at 2.341 → 1.649 ms, and blank screen at 16 → 15 µs. Each case has
+11 samples; these sequential runs are observations, not fixed speedup guarantees.
+Output remains capped at 64 KiB in the fixture. Seven release text-export tests
+passed, including edited-wrap differential cases and UTF-8 truncation. See
+[measurement details](benchmarks/history-tail.json). Counting still scans the
+candidate range; giant-line parser contention, native input-to-pixel latency,
+whole-process memory and concurrent multi-pane acceptance remain unmeasured here.
+
 Corrected tail capture to operate on formatted text lines, following the pinned
 [cmux tail tests](https://github.com/manaflow-ai/cmux/blob/a76816e4f0788003758b9434ab702068a640fb5d/cmuxTests/TerminalControllerTerminalTextTests.swift).
 Unused trailing rows no longer consume the requested line count. Explicit spaces
