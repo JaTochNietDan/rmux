@@ -250,7 +250,9 @@
       "rmux_status": "in_progress",
       "implementation": "Tab, workspace and window close requests prompt when any reported task is working or blocked. Window actions and native close callbacks share the warning path; the Quit rmux action scans all windows and confirms once before process cleanup. Confirmation resolves original entity IDs, with tab focus-handle validation; transfers do not ask to terminate processes.",
       "remaining": "OS-originated quit routing outside the rmux action, non-reporting foreground process detection and native confirmation/cancellation acceptance. Settings now offers persistent Active tasks/Always/Never close confirmation; RMUX_CONFIRM_CLOSE=active|always|never overrides it without changing the saved policy.",
-      "implementation_sources": ["crates/rmux-desktop/src/pane_view.rs"],
+      "implementation_sources": [
+        "crates/rmux-desktop/src/pane_view.rs"
+      ],
       "progress_record": "docs/progress.md"
     },
     {
@@ -736,7 +738,15 @@
         "R"
       ],
       "acceptance": "Help works with no app running; completions cover bash, zsh and fish equivalents.",
-      "rmux_status": "not_started"
+      "rmux_status": "in_progress",
+      "implementation": "Offline help and JSON RPC output with documented exit codes; offline Bash/Zsh/Fish completion script generation for supported friendly commands, flags and boolean values. Shared candidate generator never connects to the app.",
+      "remaining": "Fish runtime and interactive completion acceptance, broader upstream command/help coverage, live target and path completion. Bash/Zsh wrapper syntax and argument handling checked locally; focused CLI tests pass.",
+      "implementation_sources": [
+        "crates/rmux-cli/src/main.rs",
+        "crates/rmux-cli/src/commands.rs",
+        "crates/rmux-cli/src/completions.rs"
+      ],
+      "progress_record": "docs/progress.md"
     },
     {
       "id": "A04",

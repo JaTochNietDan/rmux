@@ -340,6 +340,24 @@ caller-scoped permissions remain pending. `mise run smoke-socket` checks two liv
 clients, shared mutations, reconnection and normal-quit cleanup on macOS/Unix.
 
 Build the lightweight external client with `mise exec -- cargo build -p rmux-cli`.
+`rmuxctl completions bash|zsh|fish` prints shell setup without requiring a running
+app or `RMUX_SOCKET_DIR`. With `rmuxctl` on your PATH, enable it for the current shell:
+
+```sh
+# Bash
+source <(rmuxctl completions bash)
+# Zsh (after compinit in your shell setup)
+source <(rmuxctl completions zsh)
+# Fish
+rmuxctl completions fish | source
+```
+
+The scripts complete supported friendly command names, command-specific flags,
+and `--focus` boolean values. They do not contact rmux, enumerate live IDs, or
+complete raw RPC JSON. Save the generated script in your shell's startup setup
+if you want it enabled in later sessions. Bash and Zsh wrapper handling has been
+checked locally; Fish runtime verification remains pending.
+
 The macOS bundle also includes it at `Contents/MacOS/rmuxctl`, without a global
 install or PATH change. It has no desktop renderer or terminal-engine dependency:
 

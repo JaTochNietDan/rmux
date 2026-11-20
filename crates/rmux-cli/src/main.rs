@@ -1,5 +1,6 @@
 //! Small external client: no GPUI, Ghostty, shell or terminal dependencies.
 mod commands;
+mod completions;
 use serde_json::{Value, json};
 use std::{ffi::OsString, path::PathBuf};
 
@@ -88,12 +89,22 @@ fn exchange(_: Request) -> Result<Value, String> {
     Err("local socket transport is not yet available on this platform".into())
 }
 fn run() -> Result<i32, String> {
+    let args: Vec<_> = std::env::args_os().skip(1).collect();
+    if args.first().is_some_and(|arg| arg == "completions") {
+        if args.len() != 2 { return Err("usage: rmuxctl completions bash|zsh|fish".into()); }
+        print!("{}", completions::script(args[1].to_str().ok_or("shell must be UTF-8")?)?);
+        return Ok(0);
+    }
+    if args.first().is_some_and(|arg| arg == "__complete") {
+        for candidate in completions::candidates(&args[1..]) { println!("{candidate}"); }
+        return Ok(0);
+    }
     let Some(request) = parse(
-        std::env::args_os().skip(1),
+        args,
         std::env::var_os("RMUX_SOCKET_DIR"),
     )?
     else {
-        print!("{HELP}\n{}", commands::HELP);
+        print!("{HELP}\n{}\nOffline shell setup: rmuxctl completions bash|zsh|fish\n", commands::HELP);
         return Ok(0);
     };
     let reply = exchange(request)?;

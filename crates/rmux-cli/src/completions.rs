@@ -1,0 +1,124 @@
+//! Offline shell completion: never opens a socket or inspects terminal sessions.
+use std::ffi::OsString;
+
+const COMMANDS: &[(&str, &[&str])] = &[
+    ("notify", &["--surface", "--title", "--body"]),
+    ("list-notifications", &["--window", "--workspace"]),
+    ("close-workspace", &["--workspace"]),
+    ("new-window", &["--activate"]),
+    ("new-workspace", &["--window", "--name", "--description", "--cwd", "--focus", "--activate"]),
+    ("list-windows", &[]),
+    ("list-workspaces", &["--window"]),
+    ("list-panes", &["--window", "--workspace"]),
+    ("list-panels", &["--window", "--workspace"]),
+    ("select-workspace", &["--workspace", "--activate"]),
+    ("rename-workspace", &["--workspace"]),
+    ("focus-panel", &["--panel", "--activate"]),
+    ("send-key", &["--surface"]),
+    ("send", &["--surface", "--paste"]),
+    ("read-screen", &["--surface", "--scrollback", "--selection"]),
+    ("completions", &[]),
+];
+
+pub fn script(shell: &str) -> Result<&'static str, String> {
+    match shell {
+        "bash" => Ok(r#"_rmuxctl_complete() {
+    local candidate
+    COMPREPLY=()
+    while IFS= read -r candidate; do
+        COMPREPLY+=("$candidate")
+    done < <(command rmuxctl __complete "${COMP_WORDS[@]:1:COMP_CWORD}")
+}
+complete -F _rmuxctl_complete rmuxctl
+"#),
+        "zsh" => Ok(r#"#compdef rmuxctl
+_rmuxctl() {
+    local -a candidates
+    candidates=("${(@f)$(command rmuxctl __complete "${(@)words[2,CURRENT]}")}")
+    (( ${#candidates} )) && compadd -- "${candidates[@]}"
+}
+compdef _rmuxctl rmuxctl
+"#),
+        "fish" => Ok(r#"function __rmuxctl_complete
+    set -l words (commandline -opc)
+    set -e words[1]
+    set -l current (commandline -ct)
+    command rmuxctl __complete $words "$current"
+end
+complete -c rmuxctl -f -a '(__rmuxctl_complete)'
+"#),
+        _ => Err("completions expects bash, zsh, or fish".into()),
+    }
+}
+
+/// Arguments include the current (possibly empty) word as their final entry.
+pub fn candidates(args: &[OsString]) -> Vec<&'static str> {
+    let Some((current, previous)) = args.split_last() else { return Vec::new(); };
+    let Some(current) = current.to_str() else { return Vec::new(); };
+    let mut previous = previous.iter();
+    let mut command = previous.next();
+    let explicit_socket = command.is_some_and(|word| word == "--socket");
+    if explicit_socket {
+        if previous.next().is_none() { return Vec::new(); }
+        command = previous.next();
+    }
+    let options = match command {
+        None => return COMMANDS.iter().map(|(name, _)| *name)
+            .filter(|name| !explicit_socket || *name != "completions")
+            .chain(["--socket", "--help"].into_iter().filter(|_| !explicit_socket))
+            .filter(|name| name.starts_with(current)).collect(),
+        Some(command) if command == "completions" => {
+            if previous.next().is_some() { return Vec::new(); }
+            return ["bash", "zsh", "fish"].into_iter().filter(|name| name.starts_with(current)).collect();
+        }
+        Some(command) => match COMMANDS.iter().find(|(name, _)| command == *name) {
+            Some((_, options)) => *options,
+            None => return Vec::new(), // Raw RPC parameters are user-owned JSON.
+        },
+    };
+    let mut used = Vec::new();
+    let mut value_for = None;
+    for word in previous {
+        if value_for.take().is_some() { continue; }
+        let Some(word) = word.to_str() else { return Vec::new(); };
+        if word == "--" { return Vec::new(); }
+        if options.contains(&word) {
+            used.push(word);
+            if !matches!(word, "--activate" | "--paste" | "--scrollback" | "--selection") {
+                value_for = Some(word);
+            }
+        }
+    }
+    if let Some(flag) = value_for {
+        return if flag == "--focus" {
+            ["true", "false"].into_iter().filter(|value| value.starts_with(current)).collect()
+        } else { Vec::new() };
+    }
+    options.iter().copied().filter(|flag| flag.starts_with(current) && !used.contains(flag)
+        && !(matches!(*flag, "--scrollback" | "--selection") && used.iter().any(|used| matches!(*used, "--scrollback" | "--selection"))))
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn complete(args: &[&str]) -> Vec<&'static str> {
+        candidates(&args.iter().map(OsString::from).collect::<Vec<_>>())
+    }
+    #[test]
+    fn completion_respects_command_values_and_literal_text() {
+        assert!(complete(&["new-"]).contains(&"new-workspace"));
+        assert!(complete(&["--socket", "/tmp/rmux socket", "send", "--"]).contains(&"--paste"));
+        assert!(complete(&["--socket", ""]).is_empty());
+        assert!(!complete(&["--socket", "/tmp/rpc", ""]).contains(&"--socket"));
+        assert!(!complete(&["--socket", "/tmp/rpc", ""]).contains(&"completions"));
+        assert_eq!(complete(&["completions", "z"]), ["zsh"]);
+        assert_eq!(complete(&["new-workspace", "--focus", "f"]), ["false"]);
+        assert!(complete(&["send", "--surface", ""]).is_empty());
+        assert!(complete(&["send", "--", "--"]).is_empty());
+        assert!(!complete(&["read-screen", "--selection", ""]).contains(&"--scrollback"));
+        assert!(!complete(&["send", "--surface", "id", ""]).contains(&"--surface"));
+        assert!(complete(&["workspace.list", ""]).is_empty());
+        assert!(complete(&["notify", "--body", "--surface", ""]).contains(&"--surface"));
+    }
+}

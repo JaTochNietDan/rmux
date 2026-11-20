@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Added offline `rmuxctl completions bash|zsh|fish` generation and a shared local
+candidate generator for friendly commands, supported flags and boolean values.
+Completion respects leading socket paths (including spaces), option values,
+literal `--`, used options and conflicting read-screen scopes; it never connects
+to the app. Seven CLI tests passed, and installed Bash/Zsh syntax plus wrapper
+argument handling passed with no socket environment. Invalid shells exit 2.
+Fish scripts generate but runtime verification is pending because Fish is absent;
+no tools were installed. Live-ID/path/JSON completion and full CLI parity remain open.
+
 The tab picker now searches displayed tab numbers as exact tokens, fixing a gap
 between the documented behavior and the title/directory-only implementation.
 A numeric query prioritizes the matching tab number while preserving ordinary
