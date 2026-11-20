@@ -159,13 +159,15 @@ save, rmux reports a conflict and asks you to retry; it does not overwrite newer
 state. Closing copy mode cancels pending save delivery.
 
 After returning to a terminal, use **Paste Named Buffer…** in the command palette
-or native menu (custom action `paste_buffer`). Search by name, select with arrows,
+or native menu (custom action `paste_buffer`). Search by name or preview, select with arrows,
 and press Enter to queue terminal-aware paste into the terminal that opened the
-picker. Names and byte counts are shown without previewing contents. A buffer
+picker. Rows show names, byte counts and up to 96 characters of content, with
+whitespace/control characters displayed as spaces. Longer previews end in an
+ellipsis; search covers this preview, not the full saved content. A buffer
 change while the picker is open requires reopening it; a closed or moved target
 is never replaced with an unrelated terminal. Paste preserves the viewport and
 does not consume the saved buffer. **Delete Named Buffer…** in the palette/menu
-(custom action `delete_buffer`) searches the same names and sizes; Enter deletes
+(custom action `delete_buffer`) searches the same names and previews; Enter deletes
 the chosen buffer and releases its storage. If buffers changed while the picker
 was open, reopen it before deleting.
 

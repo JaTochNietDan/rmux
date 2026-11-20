@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Named-buffer paste/delete pickers now show searchable content previews alongside
+names and byte counts. Preview construction reads at most 97 Unicode scalar
+values per buffer and retains at most 96 plus an ellipsis, avoiding full-buffer
+clones/scans for 1 MiB entries. Whitespace and controls render as spaces; empty
+buffers have an explicit label. A focused test passed Unicode boundaries,
+control flattening, truncation and unchanged large-buffer contents/revision;
+desktop test compilation passed. Native picker appearance remains pending.
+
 Custom keybindings now accept `context: "find"`, mapped to the Find input's
 actual key context. Users can disable or replace search navigation bindings
 independently of terminal bindings. A real-keymap test passed default disabling,

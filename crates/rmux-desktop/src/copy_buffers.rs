@@ -5,6 +5,15 @@ const MAX_COUNT: usize = 32;
 pub const MAX_BUFFER: usize = 1024 * 1024;
 const MAX_TOTAL: usize = 8 * 1024 * 1024;
 
+fn preview(text: &str) -> String {
+    let mut characters = text.chars();
+    let mut preview: String = characters.by_ref().take(96)
+        .map(|ch| if ch.is_control() || ch.is_whitespace() { ' ' } else { ch }).collect();
+    if characters.next().is_some() { preview.push('…'); }
+    if preview.is_empty() { preview.push_str("Empty buffer"); }
+    preview
+}
+
 pub enum Command { List, Get(String), Delete(String), Set(String, String), Paste { name: String, surface_id: String, bracketed: bool } }
 pub fn parse(method: &str, params: Option<&Value>) -> Result<Option<Command>, &'static str> {
     if !matches!(method, "buffer.list" | "buffer.get" | "buffer.delete" | "buffer.set" | "buffer.paste") { return Ok(None); }
@@ -38,7 +47,9 @@ pub fn validate_name(name: &str) -> Result<(), &'static str> {
 pub struct Store { entries: BTreeMap<String, String>, bytes: usize, revision: u64 }
 impl gpui::Global for Store {}
 impl Store {
-    pub fn metadata(&self) -> Vec<(String, usize)> { self.entries.iter().map(|(name, text)| (name.clone(), text.len())).collect() }
+    pub fn metadata(&self) -> Vec<(String, usize, String)> {
+        self.entries.iter().map(|(name, text)| (name.clone(), text.len(), preview(text))).collect()
+    }
     pub fn text_at_revision(&self, name: &str, revision: u64) -> Result<&str, &'static str> {
         if self.revision != revision { return Err("Buffers changed; reopen the picker before pasting"); }
         self.entries.get(name).map(String::as_str).ok_or("Buffer not found")
@@ -87,6 +98,20 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn picker_previews_are_bounded_unicode_text_without_mutating_buffers() {
+        assert_eq!(preview("line\n世界\tend\u{1b}"), "line 世界 end ");
+        assert_eq!(preview(""), "Empty buffer");
+        assert_eq!(preview(&"界".repeat(96)), "界".repeat(96));
+        assert_eq!(preview(&"界".repeat(97)), format!("{}…", "界".repeat(96)));
+        let mut store = Store::default();
+        let content = format!("{}tail", "x".repeat(MAX_BUFFER - 4));
+        store.execute(&Command::Set("large".into(), content.clone())).unwrap();
+        let revision = store.revision();
+        let entries = store.metadata();
+        assert_eq!(entries[0], ("large".into(), MAX_BUFFER, format!("{}…", "x".repeat(96))));
+        assert_eq!(store.text_at_revision("large", revision).unwrap(), content);
+    }
     #[test]
     fn stale_picker_cannot_delete_replaced_buffer() {
         let mut store = Store::default();

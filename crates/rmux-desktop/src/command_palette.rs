@@ -361,9 +361,9 @@ impl CommandPalette {
         }
         Self::with_commands(commands, "Search commands and workspaces", "No matching commands or workspaces", window, cx)
     }
-    pub fn buffers(entries: Vec<(String, usize)>, revision: u64, surface_id: String, deleting: bool, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let commands = entries.into_iter().map(|(name, bytes)| Command {
-            title: name.clone(), subtitle: Some(format!("{bytes} bytes · {}", if deleting { "Delete this saved buffer" } else { "Paste into the originating terminal" })), shortcut: None,
+    pub fn buffers(entries: Vec<(String, usize, String)>, revision: u64, surface_id: String, deleting: bool, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let commands = entries.into_iter().map(|(name, bytes, preview)| Command {
+            title: name.clone(), subtitle: Some(format!("{bytes} bytes · {preview}")), shortcut: None,
             target: PaletteEvent::Run(if deleting { Box::new(DeleteNamedBuffer { name, revision }) }
                 else { Box::new(PasteNamedBuffer { name, revision, surface_id: surface_id.clone() }) }),
         }).collect();
