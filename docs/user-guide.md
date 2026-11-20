@@ -633,8 +633,11 @@ cost; sustained-read performance has not been benchmarked.
 
 Use `scope: "selection"` with `surface.read_text` to read only selected text.
 It uses the same bounded background export and UTF-8-safe truncation as history;
-no selection returns empty text with `truncated: false`. It does not change the
-clipboard, selection or viewport.
+no selection returns empty text with `truncated: false`. Add `preserve_wraps: true`
+to selection-scope requests, or use `read-screen --surface ID --selection
+--preserve-wraps`, to retain terminal soft-wrap line breaks. The default joins
+soft-wrapped lines. `preserve_wraps: true` is rejected for other scopes. It does
+not change the clipboard, selection or viewport.
 
 `surface.memory_usage` accepts `{"surface_id":"ID"}` and samples Ghostty screen
 storage on demand in the background. It reports primary/alternate resident,

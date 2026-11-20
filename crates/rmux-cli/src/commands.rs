@@ -21,7 +21,7 @@ pub const HELP: &str = "Commands (JSON output; explicit opaque IDs required):
   set-pane-zoom --pane ID --zoomed true|false
   send-key --surface ID KEY  (Enter, Up, Ctrl-c, Alt-Left, Shift-Tab)
   send --surface ID [--paste] TEXT
-  read-screen --surface ID [--scrollback | --selection]
+  read-screen --surface ID [--scrollback | --selection [--preserve-wraps]]
 Use -- before positional text beginning with a dash. List commands list the
 whole process unless narrowed with --window (workspaces/panes/panels) or
 --workspace (panes/panels). No implicit target, ref/index lookup or --force yet.
@@ -44,7 +44,7 @@ pub fn help(command: &str) -> Result<String, String> {
         "focus-panel" => ("--panel ID [--activate]", "Focus an existing terminal surface; --activate also activates its window."),
         "send-key" => ("--surface ID KEY", "Send one key tap, such as Enter, Up, Ctrl-c, Alt-Left or Shift-Tab."),
         "send" => ("--surface ID [--paste] TEXT", "Send literal text. --paste applies terminal paste encoding. Use -- before text starting with a dash."),
-        "read-screen" => ("--surface ID [--scrollback | --selection]", "Read visible text by default, retained history with --scrollback, or selected text with --selection."),
+        "read-screen" => ("--surface ID [--scrollback | --selection [--preserve-wraps]]", "Read visible text by default, retained history with --scrollback, or selected text with --selection; add --preserve-wraps to keep soft-wrap line breaks."),
         "move-panel" => ("--panel ID --workspace ID [--activate]", "Move a live terminal to another workspace, preserving its process. Destination selection changes; window activation requires --activate."),
         "move-workspace" => ("--workspace ID --window ID [--activate]", "Move a workspace and its live terminals to another window. Window activation requires --activate."),
         "split-pane" => ("--pane ID --direction right|down [--cwd PATH] [--focus true|false] [--activate]", "Create a terminal beside an explicit pane. Inherits its directory and font; focus and OS activation are opt-in."),
@@ -243,6 +243,7 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
                 ) => ("activate", Value::Bool(true)),
                 ("read-screen", "--scrollback") => ("scope", Value::String("history".into())),
                 ("read-screen", "--selection") => ("scope", Value::String("selection".into())),
+                ("read-screen", "--preserve-wraps") => ("preserve_wraps", Value::Bool(true)),
                 _ => return Err(format!("unsupported option for {command}: {arg}")),
             };
             if params.insert(key.into(), value).is_some() {
@@ -259,6 +260,10 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
         if !params.contains_key(key) {
             return Err(format!("{command} requires {flag} ID"));
         }
+    }
+    if command == "read-screen" && params.contains_key("preserve_wraps")
+        && params.get("scope").and_then(Value::as_str) != Some("selection") {
+        return Err("--preserve-wraps requires --selection".into());
     }
     let required = match command {
         "dismiss-notification" | "read-notification" => Some(("revision", "--revision")),
@@ -313,6 +318,17 @@ mod tests {
     use super::*;
     fn args(v: &[&str]) -> Vec<OsString> {
         v.iter().map(OsString::from).collect()
+    }
+    #[test]
+    fn preserve_wraps_requires_selection_and_rejects_duplicates() {
+        let (_, params) = expand("read-screen", args(&["--surface", "7", "--preserve-wraps", "--selection"])).unwrap();
+        assert_eq!(params["preserve_wraps"], true);
+        assert_eq!(params["scope"], "selection");
+        for flags in [
+            vec!["--surface", "7", "--preserve-wraps"],
+            vec!["--surface", "7", "--scrollback", "--preserve-wraps"],
+            vec!["--surface", "7", "--selection", "--preserve-wraps", "--preserve-wraps"],
+        ] { assert!(expand("read-screen", args(&flags)).is_err()); }
     }
     #[test]
     fn explicit_targets_and_literal_text() {

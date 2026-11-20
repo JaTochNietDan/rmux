@@ -51,8 +51,12 @@ impl Terminal {
 
     /// Stream only the current selection, preserving UTF-8 at the byte limit.
     pub fn selection_text_prefix(&self, max_bytes: usize) -> Result<Option<(String, bool)>> {
+        self.selection_text_prefix_with_wraps(max_bytes, true)
+    }
+
+    pub fn selection_text_prefix_with_wraps(&self, max_bytes: usize, unwrap: bool) -> Result<Option<(String, bool)>> {
         ensure!(max_bytes <= 16 * 1024 * 1024, "history export limit exceeds 16 MiB");
-        self.export_text_limited(max_bytes, true)
+        self.export_text_with_wraps(max_bytes, true, unwrap)
     }
 
     // Shared with the complete-selection API, which rejects truncated output.

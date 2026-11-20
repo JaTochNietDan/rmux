@@ -144,6 +144,8 @@ pub(super) struct SurfaceRead {
     pub surface_id: String,
     #[serde(default)]
     pub scope: ReadScope,
+    #[serde(default)]
+    pub preserve_wraps: bool,
     #[serde(default = "default_read_limit")]
     pub max_bytes: usize,
 }
@@ -400,7 +402,7 @@ pub fn attach_live(cx: &mut gpui::App, stdio: bool, socket_directory: Option<std
                     for handle in cx.windows() {
                         let Some(handle) = handle.downcast::<super::window_view::WorkspaceWindow>() else { continue; };
                         if let Ok(view) = handle.read(cx) {
-                            if let Some(job) = view.automation_text_export(target, read.max_bytes, read.scope == ReadScope::Selection, cx) {
+                            if let Some(job) = view.automation_text_export(target, read.max_bytes, read.scope == ReadScope::Selection, read.preserve_wraps, cx) {
                                 return Ok(job);
                             }
                         }
@@ -1107,6 +1109,7 @@ fn dispatch_inner(
             Some(read)
                 if !read.surface_id.is_empty()
                     && read.surface_id.len() <= 128
+                    && (!read.preserve_wraps || read.scope == ReadScope::Selection)
                     && (1..=1024 * 1024).contains(&read.max_bytes) =>
             {
                 Some(read)
@@ -1115,7 +1118,7 @@ fn dispatch_inner(
                 return respond(error(
                     id,
                     -32602,
-                    "Expected surface_id, optional scope (viewport, history or selection), and max_bytes from 1 to 1048576",
+                    "Expected surface_id, optional scope (viewport, history or selection), max_bytes from 1 to 1048576; preserve_wraps requires selection",
                 ));
             }
         }

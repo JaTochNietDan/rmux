@@ -32,6 +32,8 @@ mod tests {
         assert_eq!(terminal.selected_text_with_wraps(100, false)?.as_deref(), Some("abcde\nfghij\nnext"));
         assert!(terminal.selected_text_with_wraps(15, false).is_err());
         assert_eq!(terminal.selected_text_with_wraps(16, false)?.unwrap().len(), 16);
+        assert_eq!(terminal.selection_text_prefix_with_wraps(6, false)?, Some(("abcde\n".into(), true)));
+        assert_eq!(terminal.selection_text_prefix_with_wraps(6, true)?, Some(("abcdef".into(), true)));
         let after = terminal.frame()?;
         assert_eq!(after.selections, before.selections);
         assert_eq!(after.scrollback_offset, before.scrollback_offset);

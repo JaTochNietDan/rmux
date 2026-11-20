@@ -596,10 +596,10 @@ impl WorkspaceWindow {
                     })
             })).into_any_element()
     }
-    pub(super) fn automation_text_export(&self, target: EntityId, max_bytes: usize, selected: bool, cx: &App) -> Option<rmux_terminal::session::HistoryExport> {
+    pub(super) fn automation_text_export(&self, target: EntityId, max_bytes: usize, selected: bool, preserve_wraps: bool, cx: &App) -> Option<rmux_terminal::session::HistoryExport> {
         self.entries.iter().find_map(|entry| entry.workspace.read(cx).panes.iter().find_map(|pane| {
             pane.read(cx).terminals.iter().find(|terminal| terminal.entity_id() == target)
-                .map(|terminal| if selected { terminal.read(cx).session.selection_export(max_bytes) } else { terminal.read(cx).session.history_export(max_bytes) })
+                .map(|terminal| if selected { terminal.read(cx).session.selection_export(max_bytes, !preserve_wraps) } else { terminal.read(cx).session.history_export(max_bytes) })
         }))
     }
     pub(super) fn automation_memory_sample(&self, target: EntityId, cx: &App) -> Option<rmux_terminal::session::MemorySample> {

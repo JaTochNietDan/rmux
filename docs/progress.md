@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Selected-text automation now exposes the wrap choice through selection-scope
+`surface.read_text` with `preserve_wraps:true`, and `read-screen --selection
+--preserve-wraps` with help/completion support. Other scopes reject the enabled
+option. Exports retain bounded background execution and UTF-8-safe truncation.
+All twelve CLI tests and the focused engine wrap/truncation regression passed;
+desktop and CLI compilation passed. Live RPC acceptance of this option remains
+pending.
+
 T19 now includes an explicit Copy with Line Breaks action in the Edit menu,
 command palette and configurable terminal shortcuts. It preserves soft-wrap
 boundaries while ordinary Copy continues to unwrap them. Both modes share
