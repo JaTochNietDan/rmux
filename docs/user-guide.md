@@ -1080,6 +1080,9 @@ custom shortcut. Cancellation stops at the next preparation boundary and cleans
 up shells already prepared; it cannot interrupt a shell-spawn system call.
 
 
+The repository includes [development and services layout examples](../examples/layouts/README.md)
+with customization and preset setup instructions.
+
 For repeatable workspace setups, save a layout or session once and add named
 presets to your settings. Replace these example paths with your saved files:
 

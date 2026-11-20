@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "sidebar": true,
+  "sidebar_width": 200,
+  "active_workspace": 0,
+  "workspaces": [
+    {
+      "name": "Services",
+      "description": "Independent terminals for an API, a worker and logs.",
+      "active_pane": 0,
+      "layout": {
+        "kind": "split",
+        "axis": "Columns",
+        "weights": [
+          1,
+          1,
+          1
+        ],
+        "children": [
+          {
+            "kind": "pane",
+            "active_tab": 0,
+            "tabs": [
+              {
+                "label": "API",
+                "custom_title": "API",
+                "directory": null
+              }
+            ]
+          },
+          {
+            "kind": "pane",
+            "active_tab": 0,
+            "tabs": [
+              {
+                "label": "Worker",
+                "custom_title": "Worker",
+                "directory": null
+              }
+            ]
+          },
+          {
+            "kind": "pane",
+            "active_tab": 0,
+            "tabs": [
+              {
+                "label": "Logs",
+                "custom_title": "Logs",
+                "directory": null
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

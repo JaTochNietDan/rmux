@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "sidebar": true,
+  "sidebar_width": 200,
+  "active_workspace": 0,
+  "workspaces": [
+    {
+      "name": "Development",
+      "description": "Editor on the left; run commands and inspect output on the right.",
+      "active_pane": 0,
+      "layout": {
+        "kind": "split",
+        "axis": "Columns",
+        "weights": [
+          3,
+          2
+        ],
+        "children": [
+          {
+            "kind": "pane",
+            "active_tab": 0,
+            "tabs": [
+              {
+                "label": "Editor",
+                "custom_title": "Editor",
+                "directory": null
+              }
+            ]
+          },
+          {
+            "kind": "split",
+            "axis": "Rows",
+            "weights": [
+              2,
+              1
+            ],
+            "children": [
+              {
+                "kind": "pane",
+                "active_tab": 0,
+                "tabs": [
+                  {
+                    "label": "Run",
+                    "custom_title": "Run",
+                    "directory": null
+                  }
+                ]
+              },
+              {
+                "kind": "pane",
+                "active_tab": 0,
+                "tabs": [
+                  {
+                    "label": "Output",
+                    "custom_title": "Output",
+                    "directory": null
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

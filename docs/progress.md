@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Added reusable development and services layout files plus a practical setup
+guide. Development has a wide editor pane and stacked run/output panes; services
+has equal API/worker/log columns. Files contain no executable commands, geometry,
+font overrides or machine-specific paths. The guide explains null versus explicit
+absolute cwd, fresh-shell semantics, preset registration, Windows JSON paths and
+saving customized arrangements. Both files passed the current rmux --check-layout
+validator after a desktop build. This verifies schema/layout structure only;
+native appearance, repeated-use behavior and cross-platform runtime remain pending.
+
 Added named layout/session presets to configuration, command palette and custom
 shortcuts. Up to 32 validated name/absolute-path entries appear as Open Preset:
 name; an optional session flag selects the multi-window format. Invocation resolves
