@@ -1035,6 +1035,9 @@ other tabs in that pane, using one confirmation when the close policy requires
 it. The `close_other_tabs` shortcut action has no default binding. The prompt
 captures its targets: tabs added afterward are spared, and the operation aborts
 if the terminal being kept leaves the pane before confirmation.
+Close Tabs to the Right uses the same policy and captured-target rules, keeping
+the chosen tab and those to its left. It is available in the menu/palette and
+as `close_tabs_to_right`, with no default shortcut.
 New tabs start in the background. The Starting… indicator has a cancel button;
 Cancel New Terminal Tab is also available in the menu/palette and as the
 `cancel_new_tab` shortcut action. Cancellation preserves existing tabs and focus.

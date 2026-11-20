@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Close Tabs to the Right now shares the policy-aware batch-close implementation,
+with menu/palette access and a configurable `close_tabs_to_right` action. It
+captures the original right-side identities, preserving left-side and newly
+added tabs even if ordering changes before confirmation. Three focused tab-order
+tests passed, including that reordered-target scenario. Native prompt, focus
+and process lifecycle acceptance remain pending.
+
 Close Other Tabs now removes its captured targets as one pane update: selection
 is resolved once, scrolling/focus repair runs once, and one metadata event is
 emitted. A newer selection is retained if it survives; otherwise the kept

@@ -246,6 +246,7 @@ impl CommandPalette {
         command!("Move Workspace Down", MoveWorkspaceDown);
         command!("Close Terminal Tab", ClosePane);
         command!("Close Other Terminal Tabs…", CloseOtherTabs);
+        command!("Close Terminal Tabs to the Right…", CloseTabsToRight);
         command!("Close Workspace", CloseWorkspace);
         command!("Close Window", CloseWindow);
         for (name, icon) in WORKSPACE_ICONS {

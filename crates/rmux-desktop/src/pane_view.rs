@@ -13,6 +13,14 @@ fn prepare_tab_launch(
     TerminalView::prepare(session, colors, palette)
 }
 
+#[derive(Clone, Copy)]
+enum TabCloseScope { Others, Right }
+impl TabCloseScope {
+    fn includes(self, index: usize, active: usize) -> bool {
+        match self { Self::Others => index != active, Self::Right => index > active }
+    }
+}
+
 fn other_tab_close_indices<T: Copy + Eq>(current: &[T], keep: T, targets: &[T]) -> Vec<usize> {
     if !current.contains(&keep) { return Vec::new(); }
     current.iter().enumerate().rev()
@@ -25,7 +33,17 @@ fn tab_drop_index(from: usize, target: usize) -> usize {
 
 #[cfg(test)]
 mod tab_order_tests {
-    use super::{tab_drop_index, other_tab_close_indices};
+    use super::{tab_drop_index, other_tab_close_indices, TabCloseScope};
+    #[test]
+    fn right_close_scope_preserves_left_and_new_tabs_after_reordering() {
+        let original = [10, 20, 30, 40];
+        let targets: Vec<_> = original.iter().enumerate()
+            .filter(|(index, _)| TabCloseScope::Right.includes(*index, 1))
+            .map(|(_, id)| *id).collect();
+        let mut current = vec![40, 10, 20, 30, 50];
+        for index in other_tab_close_indices(&current, 20, &targets) { current.remove(index); }
+        assert_eq!(current, vec![10, 20, 50]);
+    }
     #[test]
     fn batch_close_preserves_keeper_and_excludes_new_tabs_after_reordering() {
         assert_eq!(other_tab_close_indices(&[3, 4, 2, 1], 2, &[1, 3]), vec![3, 0]);
@@ -692,11 +710,12 @@ impl PaneView {
         self.select(index, window, cx);
     }
 
-    fn close_other_tabs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn close_tabs(&mut self, scope: TabCloseScope, window: &mut Window, cx: &mut Context<Self>) {
         if self.automation_busy() || cx.global::<Shutdowns>().quitting { return; }
         let Some(keep) = self.active_terminal_id() else { return; };
-        let targets: Vec<_> = self.terminals.iter().filter(|terminal| terminal.entity_id() != keep)
-            .map(Entity::entity_id).collect();
+        let targets: Vec<_> = self.terminals.iter().enumerate()
+            .filter(|(index, _)| scope.includes(*index, self.active))
+            .map(|(_, terminal)| terminal.entity_id()).collect();
         if targets.is_empty() { return; }
         let confirms = cx.global::<ClosePolicy>().confirms(true, || {
             self.terminals.iter().filter(|terminal| targets.contains(&terminal.entity_id()))
@@ -708,8 +727,12 @@ impl PaneView {
         }
         let Some(permit) = cx.global::<PromptGate>().acquire() else { return; };
         self.close_prompt = Some(keep);
-        let detail = format!("Close {} other terminal tabs in this pane? Their processes will stop and output history will be discarded. The current terminal will remain open.", targets.len());
-        let answer = window.prompt(PromptLevel::Warning, "Close other terminal tabs?", Some(&detail), &["Cancel", "Close Other Tabs"], cx);
+        let (title, button, description) = match scope {
+            TabCloseScope::Others => ("Close other terminal tabs?", "Close Other Tabs", "other terminal tabs in this pane"),
+            TabCloseScope::Right => ("Close tabs to the right?", "Close Tabs to the Right", "terminal tabs to the right of the current tab"),
+        };
+        let detail = format!("Close {} {description}? Their processes will stop and output history will be discarded. The current terminal will remain open.", targets.len());
+        let answer = window.prompt(PromptLevel::Warning, title, Some(&detail), &["Cancel", button], cx);
         cx.spawn_in(window, async move |entity, cx| {
             let confirmed = matches!(answer.await, Ok(1));
             drop(permit);
@@ -843,7 +866,8 @@ impl Render for PaneView {
             .min_h_0()
             .when(!self.benchmark, |pane| pane.border_1().border_color(if attention { rgb(0xf0b85b).into() } else { gpui::transparent_black() }))
             .on_action(cx.listener(|this, _: &NewTab, window, cx| this.add(window, cx)))
-            .on_action(cx.listener(|this, _: &CloseOtherTabs, window, cx| this.close_other_tabs(window, cx)))
+            .on_action(cx.listener(|this, _: &CloseOtherTabs, window, cx| this.close_tabs(TabCloseScope::Others, window, cx)))
+            .on_action(cx.listener(|this, _: &CloseTabsToRight, window, cx| this.close_tabs(TabCloseScope::Right, window, cx)))
             .on_action(cx.listener(|this, _: &CancelNewTab, _, cx| this.cancel_tab_launch(cx)))
             .on_action(cx.listener(|this, _: &RenameTab, window, cx| this.rename_tab(window, cx)))
             .on_action(cx.listener(|this, _: &NextTab, window, cx| this.cycle(1, window, cx)))
