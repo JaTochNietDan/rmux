@@ -247,6 +247,7 @@ impl CommandPalette {
         command!("Rename Named Buffer…", ShowRenameBufferPicker);
         command!("Copy Named Buffer…", ShowCopyBufferPicker);
         command!("Browse Terminal Directory…", BrowseTerminalFiles);
+        command!("Open Text Preview…", OpenTextPreview);
         command!("Choose Terminal Font…", ShowFontPicker);
         command!("Choose Default Font…", ShowDefaultFontPicker);
         command!("Use Configured Font", UseConfiguredFont);

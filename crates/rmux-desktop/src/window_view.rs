@@ -2484,6 +2484,26 @@ impl WorkspaceWindow {
         }));
         cx.notify();
     }
+    fn choose_text_preview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.file_browser_job.is_some() || self.automation_available(cx).is_err() { return; }
+        let Some(permit) = cx.global::<PromptGate>().acquire() else { return; };
+        let picker = cx.prompt_for_paths(PathPromptOptions {
+            files: true, directories: false, multiple: false, prompt: Some("Preview Text File".into()),
+        });
+        cx.spawn_in(window, async move |entity, cx| {
+            let result: anyhow::Result<Option<std::path::PathBuf>> = async {
+                Ok(picker.await??.and_then(|paths| paths.into_iter().next()))
+            }.await;
+            drop(permit);
+            let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
+                match result {
+                    Ok(Some(path)) => this.preview_local_file(path, window, cx),
+                    Ok(None) => {},
+                    Err(error) => { this.notice = Some(format!("Choose preview file: {error:#}")); cx.notify(); },
+                }
+            }));
+        }).detach();
+    }
     fn preview_local_file(&mut self, path: std::path::PathBuf, window: &mut Window, cx: &mut Context<Self>) {
         if self.file_browser_job.is_some() || self.automation_available(cx).is_err() { return; }
         let Some(focus) = window.focused(cx) else { return; };
@@ -3675,6 +3695,7 @@ impl Render for WorkspaceWindow {
                 this.add_with_directory(1, true, None, Some(action.path.clone()), window, cx);
             }))
             .on_action(cx.listener(|this, action: &PreviewLocalFile, window, cx| this.preview_local_file(action.path.clone(), window, cx)))
+            .on_action(cx.listener(|this, _: &OpenTextPreview, window, cx| this.choose_text_preview(window, cx)))
             .on_action(cx.listener(|this, action: &CopyLocalPath, _, cx| {
                 this.notice = Some(match action.path.to_str() {
                     Some(path) => { clipboard::write(ClipboardItem::new_string(path.into()), cx); "Copied file path".into() }

@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Added Open Text Preview in File, the command palette and `open_text_preview`
+custom bindings. A single-file native picker feeds the existing asynchronous,
+bounded preview loader without requiring a known terminal cwd. PromptGate
+prevents overlapping modal requests, picker cancellation is a no-op, and
+completion reuses shutdown/busy checks before loading. Desktop cargo check
+passed; native chooser, cancellation and focus acceptance remain pending.
+
 Added New Workspace Here to local directory browsing. The action uses the
 existing asynchronous workspace/PTY launch path with an explicit directory,
 normal group inheritance and configured placement. Explicit cwd takes precedence
