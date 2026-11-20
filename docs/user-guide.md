@@ -753,6 +753,9 @@ equally strong title matches rank ahead of directory matches. With an empty quer
 tabs retain their original order. Each row shows its cached working directory below the title when
 available, with the full title and path in its tooltip. This uses the last
 shell-reported directory or initial directory, without filesystem polling.
+Keyboard selection follows the terminal identity when live title/directory updates
+change result order. If that terminal no longer matches, the first result becomes
+the fallback; changing the query starts at the first result.
 Moving focus elsewhere dismisses the picker.
 The picker displays original tab numbers, a matching count and navigation hints.
 Numbers are searchable text; Home/End edit the search field. Page Up/Down moves

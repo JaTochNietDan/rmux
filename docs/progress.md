@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Tab-picker selection now retains a terminal entity ID instead of a ranked row
+number. Live title/directory changes can reorder results without changing the
+Enter target; drawing, navigation and submission resolve the same identity, with
+a first-result fallback if it disappears. Query edits deliberately reset to the
+first result. Desktop compilation passed. Native live-output/picker interaction
+remains pending; this does not establish complete keyboard acceptance.
+
 Tab-picker search now uses ranked fuzzy words across titles and cached directories,
 sharing the palette matcher. Each word stays within one field; contiguous matches
 beat subsequences, title matches win equal-quality directory matches, and empty

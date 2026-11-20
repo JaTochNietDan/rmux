@@ -33,7 +33,7 @@ pub(super) fn pane_control(id: &'static str, hint: &'static str) -> Stateful<Div
 
 pub(super) struct PaneView {
     tab_scroll: ScrollHandle,
-    tab_picker: Option<(Entity<text_field::TextField>, usize, ScrollHandle)>,
+    tab_picker: Option<(Entity<text_field::TextField>, Option<EntityId>, ScrollHandle)>,
     tab_picker_blur: Option<Subscription>,
     workspace: EntityId,
     titles: std::collections::HashMap<EntityId, Subscription>,
@@ -81,18 +81,21 @@ impl PaneView {
         cx.subscribe_in(&input, window, |this, _, event: &text_field::EditEvent, window, cx| {
             match event {
                 text_field::EditEvent::Changed(_) => {
-                    if let Some((_, selected, scroll)) = &mut this.tab_picker { *selected = 0; scroll.scroll_to_item(0); }
+                    let first = this.matching_tabs(cx).first().map(|index| this.terminals[*index].entity_id());
+                    if let Some((_, selected, scroll)) = &mut this.tab_picker { *selected = first; scroll.scroll_to_item(0); }
                 }
                 text_field::EditEvent::Submitted { .. } => {
                     if let Some((_, selected, _)) = &this.tab_picker {
-                        if let Some(index) = this.matching_tabs(cx).get(*selected).copied() { this.select(index, window, cx); }
+                        let matches = this.matching_tabs(cx);
+                        if let Some(index) = matches.iter().find(|index| Some(this.terminals[**index].entity_id()) == *selected)
+                            .or_else(|| matches.first()).copied() { this.select(index, window, cx); }
                     }
                 }
                 text_field::EditEvent::Cancelled => { this.tab_picker = None; this.tab_picker_blur = None; this.focus(window, cx); }
             }
             cx.notify();
         }).detach();
-        self.tab_picker = Some((input, self.active, scroll));
+        self.tab_picker = Some((input, self.active_terminal_id(), scroll));
         cx.notify();
     }
     fn matching_tabs(&self, cx: &App) -> Vec<usize> {
@@ -864,17 +867,22 @@ impl Render for PaneView {
             })
             .when_some(self.tab_picker.clone(), |root, (input, selected, scroll)| {
                 let matches = self.matching_tabs(cx);
+                let selected = matches.iter().map(|index| self.terminals[*index].entity_id())
+                    .find(|id| Some(*id) == selected)
+                    .or_else(|| matches.first().map(|index| self.terminals[*index].entity_id()));
                 root.child(deferred(div().absolute().top(px(30.)).bottom_0().left_0().right_0()
                     .flex().flex_col().min_h_0()
                     .child(div().id("tab-picker-container").min_h_0().flex().flex_col()
                     .bg(rgb(0x292929)).border_1().border_color(rgb(0x465063)).rounded_md().shadow_md()
                     .on_mouse_down_out(cx.listener(|this, _, window, cx| { this.tab_picker = None; this.tab_picker_blur = None; this.focus(window, cx); cx.notify(); }))
                     .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                        let count = this.matching_tabs(cx).len();
+                        let matches = this.matching_tabs(cx);
                         let Some((input, selected, scroll)) = &mut this.tab_picker else { return; };
                         if input.read(cx).is_composing() { return; }
-                        if let Some(next) = command_palette::navigated_result(*selected, count, &event.keystroke.key) {
-                            *selected = next; scroll.scroll_to_item(next); cx.stop_propagation(); cx.notify();
+                        let current = matches.iter().position(|index| Some(this.terminals[*index].entity_id()) == *selected).unwrap_or(0);
+                        if let Some(next) = command_palette::navigated_result(current, matches.len(), &event.keystroke.key) {
+                            *selected = Some(this.terminals[matches[next]].entity_id());
+                            scroll.scroll_to_item(next); cx.stop_propagation(); cx.notify();
                         }
                     }))
                     .child(div().px_3().pt_2().text_xs().text_color(rgb(0xaaaaaa))
@@ -882,7 +890,7 @@ impl Render for PaneView {
                     .child(div().flex_shrink_0().p_2().child(input))
                     .child(div().id("tab-picker-menu").min_h_0().max_h(px(240.)).overflow_y_scroll().track_scroll(&scroll)
                     .when(matches.is_empty(), |menu| menu.child(div().p_3().text_sm().text_color(rgb(0xaaaaaa)).child("No matching tabs")))
-                    .children(matches.into_iter().enumerate().map(|(row_index, index)| {
+                    .children(matches.into_iter().map(|index| {
                         let terminal = &self.terminals[index];
                         let id = terminal.entity_id();
                         let title: SharedString = self.tab_title(index, cx).into();
@@ -891,7 +899,7 @@ impl Render for PaneView {
                         let hint: SharedString = directory.as_ref().map(|directory| format!("{title}\n{directory}").into()).unwrap_or_else(|| title.clone());
                         div().id(("choose-tab", id)).flex().items_center().gap_2().px_3().py_2().cursor_pointer()
                             .tooltip(move |_, cx| cx.new(|_| ControlHint(hint.clone())).into())
-                            .when(row_index == selected, |row| row.bg(rgb(0x354969)))
+                            .when(Some(id) == selected, |row| row.bg(rgb(0x354969)))
                             .hover(|row| row.bg(rgb(0x40516c)))
                             .child(div().w(px(16.)).flex_shrink_0().child(if index == self.active { "✓" } else { "" }))
                             .child(div().w(px(24.)).flex_shrink_0().text_xs().text_color(rgb(0xaaaaaa)).child((index + 1).to_string()))
