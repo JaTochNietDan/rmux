@@ -465,7 +465,7 @@
       ],
       "acceptance": "Update the correct workspace asynchronously with bounded polling and explicit unknown states.",
       "rmux_status": "in_progress",
-      "implementation": "Sidebar branch/detached-HEAD context reads bounded Git metadata in background on directory reports, with worktree indirection and coalesced requests. On-demand local TCP listener panel scans shell descendants off the UI thread with one global scan permit and 128 retained rows. A macOS loopback ownership test and ARM64 Linux compilation pass; native UI, process churn, remote/automatic port metadata and PR metadata remain incomplete.",
+      "implementation": "Sidebar branch/detached-HEAD context reads bounded Git metadata in background on directory reports, with worktree indirection and coalesced requests. On-demand local TCP listener panel scans shell descendants off the UI thread with one global scan permit and 128 retained rows. A macOS loopback ownership test and ARM64 Linux compilation pass; native UI, process churn, remote/automatic port metadata and PR metadata remain incomplete. Listening Ports offers an explicit Open as HTTP button and O shortcut through the default browser, mapping wildcard listeners to loopback while keeping scoped IPv6 copy-only; URL mapping tests pass, native browser activation remains unverified.",
       "remaining": "PR and listening-port metadata, failure/unknown presentation and native visual acceptance. Manual refresh and shared native HEAD watching are implemented; prompt refresh remains available on filesystems without native events.",
       "progress_record": "docs/progress.md"
     },

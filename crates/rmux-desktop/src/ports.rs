@@ -12,6 +12,17 @@ impl Permit {
 impl Drop for Permit { fn drop(&mut self) { SCANNING.store(false, Ordering::Release); } }
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Listener { pub address: SocketAddr, pub pid: u32 }
+/// An explicit HTTP launch target, not protocol detection. Scoped IPv6
+/// addresses are copy-only because browser support for zone IDs varies.
+pub fn http_url(mut address: SocketAddr) -> Option<String> {
+    if address.port() == 0 { return None; }
+    if let SocketAddr::V6(ipv6) = address { if ipv6.scope_id() != 0 { return None; } }
+    if address.ip().is_unspecified() {
+        address.set_ip(if address.is_ipv4() { std::net::Ipv4Addr::LOCALHOST.into() } else { std::net::Ipv6Addr::LOCALHOST.into() });
+    }
+    Some(format!("http://{address}/"))
+}
+
 pub struct Report { pub listeners: Vec<Listener>, pub truncated: bool, pub ownership_changed: bool }
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct Identity { parent: Option<u32>, started: u64 }
@@ -123,5 +134,22 @@ mod tests {
         let report = scan(std::process::id(), &AtomicBool::new(false))?.expect("active scan");
         assert!(report.listeners.iter().any(|row| row.address == address && row.pid == std::process::id()));
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod http_tests {
+    use super::*;
+    #[test]
+    fn browser_targets_map_wildcards_and_preserve_explicit_addresses() {
+        for (address, expected) in [
+            ("0.0.0.0:3000", "http://127.0.0.1:3000/"),
+            ("[::]:8080", "http://[::1]:8080/"),
+            ("127.0.0.1:443", "http://127.0.0.1:443/"),
+            ("192.168.1.2:9000", "http://192.168.1.2:9000/"),
+            ("[::1]:4000", "http://[::1]:4000/"),
+        ] { assert_eq!(http_url(address.parse().unwrap()).as_deref(), Some(expected)); }
+        assert!(http_url("127.0.0.1:0".parse().unwrap()).is_none());
+        assert!(http_url("[fe80::1%2]:8000".parse().unwrap()).is_none());
     }
 }

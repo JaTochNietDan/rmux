@@ -1,5 +1,12 @@
 # rmux
 
+In **Listening Ports**, select a row and press **O**, or click its external-link
+button, to open it as HTTP in your default browser. Enter still copies the raw
+listener address. Wildcard bindings (`0.0.0.0` and `::`) open through IPv4/IPv6
+loopback. This is an explicit HTTP action, not protocol detection; for HTTPS or
+other protocols, copy the address instead. Scoped IPv6 addresses remain copy-only.
+Results are snapshots: use **R** to refresh after a server restarts.
+
 Choose **Move Workspace to Window…** from the menu or command palette to search
 other windows by their active workspace name. The picker shows workspace counts
 and whether a destination is busy. Enter moves the originating workspace and

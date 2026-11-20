@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Added an explicit Open as HTTP external-link control and O shortcut to the local
+Listening Ports panel. Wildcard IPv4/IPv6 addresses map to their loopback address;
+explicit addresses and ports are preserved. Scoped IPv6 and port-zero entries
+remain copy-only; HTTP is named explicitly rather than guessing a service's
+protocol. Uses the default-browser API only on user action, with no automatic
+network request or port polling. Desktop test compilation and focused URL-mapping
+coverage passed (wildcards, explicit IPv4/IPv6, unchanged 443 scheme, unsupported
+scope and zero port). Native browser activation, icon/layout and narrow-panel
+keyboard acceptance remain pending while the Mac is locked. T09 and the guide
+now describe the new control without claiming automatic sidebar port metadata.
+
 Added a dedicated Move Workspace to Window… picker to the native menu and command
 palette, plus custom shortcut action move_workspace_window_picker. It uses the
 existing fuzzy/virtualized palette with active workspace names, workspace counts,

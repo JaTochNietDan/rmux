@@ -29,12 +29,17 @@ impl TerminalView {
             clipboard::write(ClipboardItem::new_string(row.address.to_string()), cx);
         }
     }
+    fn open_port_http(&self, cx: &mut Context<Self>) {
+        if let Some(url) = self.ports.report.as_ref().and_then(|report| report.listeners.get(self.ports.selected))
+            .and_then(|row| ports::http_url(row.address)) { cx.open_url(&url); }
+    }
     fn ports_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let count = self.ports.report.as_ref().map_or(0, |report| report.listeners.len());
         match event.keystroke.key.as_str() {
             "escape" => self.close_ports(window, cx),
             "r" if !event.keystroke.modifiers.control && !event.keystroke.modifiers.platform && !event.keystroke.modifiers.alt => self.refresh_ports(window, cx),
             "enter" => self.copy_port(cx),
+            "o" if !event.keystroke.modifiers.control && !event.keystroke.modifiers.platform && !event.keystroke.modifiers.alt => self.open_port_http(cx),
             "up" if count > 0 => self.ports.selected = (self.ports.selected + count - 1) % count,
             "down" if count > 0 => self.ports.selected = (self.ports.selected + 1) % count,
             "home" => self.ports.selected = 0,
@@ -136,10 +141,14 @@ pub(super) fn panel(state: &State, window: &Window, cx: &mut Context<TerminalVie
                         }))
                         .child(div().flex_1().min_w_0().truncate().child(address.clone()))
                         .child(div().text_color(rgb(0xa0a0a0)).child(format!("PID {}", row.pid)))
+                        .when_some(ports::http_url(row.address), |row, url| row.child(
+                            pane_view::pane_control("open-port-http", "Open as HTTP in Default Browser").id(("open-port-http", index))
+                                .on_click(move |event, _, cx| { if event.standard_click() { cx.stop_propagation(); cx.open_url(&url); } })
+                                .child(icons::icon("external-link"))))
                         .child(pane_view::pane_control("copy-port", "Copy Listener Address").id(("copy-port", index))
                             .on_click(move |event, _, cx| { if event.standard_click() { clipboard::write(ClipboardItem::new_string(address.clone()), cx); } })
                             .child(icons::icon("copy")))
                 }))))
-        .child(div().px_2().py_1().text_xs().text_color(rgb(0xa0a0a0)).child("↑↓ Select · Enter Copy · R Refresh · Esc Close"))
+        .child(div().px_2().py_1().text_xs().text_color(rgb(0xa0a0a0)).child("↑↓ Select · Enter Copy · O Open HTTP · R Refresh · Esc Close"))
         .into_any_element()
 }
