@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Filled custom-shortcut action coverage for clipboard and lifecycle commands
+(copy/paste/select-all/clear-scrollback/close-tab/close-window/quit), layout/session
+save/open, settings-file/appearance save, and memory/git/program-status/notification
+diagnostics. These map to existing typed menu actions, retaining their dialogs,
+close policies and focus handling; no default keys or parallel action handlers
+were added. Documented names, terminal-vs-window scope and examples. Existing
+real-keymap override/context/disable test passed with desktop test compilation.
+Native dispatch/confirmation acceptance and full Ghostty action parity remain.
+
 Added terminal-scoped shortcut text targets alongside existing actions and
 configured commands. Single/chord bindings send exact UTF-8 input through the
 normal bounded terminal writer; they add neither Return nor bracketed-paste

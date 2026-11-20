@@ -345,6 +345,28 @@ named key tables are not yet imported.
 
 The palette shows shortcuts resolved for its originating focus context.
 
+Clipboard and lifecycle action names are `copy`, `paste`, `select_all`,
+`clear_scrollback`, `close_tab`, `close_workspace`, `close_window`, and `quit`.
+These invoke the same handlers as the menus, including close confirmations and
+clipboard behavior. A `close_tab` binding closes the active tab, removing an empty
+pane/workspace as usual. For example:
+
+```json
+{"keybindings":[
+  {"key":"ctrl-k c","action":"copy"},
+  {"key":"ctrl-k v","action":"paste"},
+  {"key":"ctrl-k w","action":"close_tab"}
+]}
+```
+
+Session/configuration actions include `save_layout`, `open_layout`, `save_session`,
+`open_settings_file`, and `save_appearance`. These retain the existing dialogs and
+save behavior. Diagnostics actions include `terminal_memory`,
+`close_terminal_memory`, `copy_terminal_memory`, `cycle_terminal_memory_sort`,
+`refresh_git_context`, `toggle_program_status`, and `dismiss_all_notifications`.
+Use `"context":"window"` for a binding that should also work while a window panel
+has focus; bindings otherwise require terminal context. No new defaults are added.
+
 Supported action names: `new_workspace`, `new_window`, `new_tab`, `split_right`,
 `split_down`, `focus_left`, `focus_right`, `focus_up`, `focus_down`,
 `next_workspace`, `previous_workspace`, `last_workspace`, `last_terminal`,
