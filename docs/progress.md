@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Terminal themes now include Solarized Dark/Light using the author's canonical
+ANSI mapping. Settings cycles through Dark, Light and both Solarized presets;
+configuration accepts `solarized_dark`/`solarized_light`. Explicit colors and
+palette overrides retain precedence, and existing live settings propagation
+applies the presets without recreating terminals. The focused theme test passed
+for decoding, serialization, cycle direction and overrides; the desktop test
+target compiled. Native color/contrast and Settings layout acceptance remain
+pending. This adds two built-in themes, not a complete theme catalog/importer.
+
 Asynchronous splits now capture source font size/family at request time instead
 of inheriting whichever tab happens to be active at completion. The ready seed
 carries this appearance through attachment. Inherited defaults reconcile with

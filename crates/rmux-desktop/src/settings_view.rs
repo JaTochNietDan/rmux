@@ -25,7 +25,7 @@ pub fn adjust(settings: &mut Preferences, key: &str, delta: i32) {
     match key {
         "font" => settings.font_size = (settings.font_size + delta as f32).clamp(8., 40.),
         "padding" => settings.terminal_padding = (settings.terminal_padding as i32 + delta).clamp(0, 32) as u8,
-        "theme" => settings.terminal_theme = match settings.terminal_theme { preferences::TerminalTheme::Dark => preferences::TerminalTheme::Light, preferences::TerminalTheme::Light => preferences::TerminalTheme::Dark },
+        "theme" => settings.terminal_theme = settings.terminal_theme.cycle(delta),
         "close" if !settings.close_policy_overridden() => {
             use close_policy::ClosePolicy::{Active, Always, Never};
             settings.confirm_close = match (settings.confirm_close, delta < 0) {
@@ -88,7 +88,7 @@ pub fn panel(state: State, cx: &mut Context<window_view::WorkspaceWindow>) -> An
             .child(div().pt_3().text_xs().text_color(rgb(0xa0a0a0)).child("TERMINAL & BEHAVIOR"))
             .child(row("Default text size", "font", format!("{} pt", settings.font_size), true, state.selected == 0, false))
             .child(row("Terminal padding", "padding", format!("{} px", settings.terminal_padding), true, state.selected == 1, false))
-            .child(row("Terminal theme", "theme", match settings.terminal_theme { preferences::TerminalTheme::Dark => "Dark", preferences::TerminalTheme::Light => "Light" }.into(), false, state.selected == 2, false))
+            .child(row("Terminal theme", "theme", settings.terminal_theme.label().into(), false, state.selected == 2, false))
             .child(row("Unfocused cursor", "cursor", match settings.unfocused_cursor { preferences::UnfocusedCursor::Hollow => "Hollow", preferences::UnfocusedCursor::Hidden => "Hidden" }.into(), false, state.selected == 3, false))
             .child(row("Copy on select", "copy", if settings.copy_on_select { "On" } else { "Off" }.into(), false, state.selected == 4, false))
             .child(row("Confirm before closing", "close", format!("{}{}", match settings.confirm_close {

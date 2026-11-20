@@ -32,6 +32,21 @@ pub enum TerminalTheme {
     #[default]
     Dark,
     Light,
+    SolarizedDark,
+    SolarizedLight,
+}
+impl TerminalTheme {
+    const ALL: [Self; 4] = [Self::Dark, Self::Light, Self::SolarizedDark, Self::SolarizedLight];
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Dark => "Dark", Self::Light => "Light",
+            Self::SolarizedDark => "Solarized Dark", Self::SolarizedLight => "Solarized Light",
+        }
+    }
+    pub fn cycle(self, delta: i32) -> Self {
+        let index = Self::ALL.iter().position(|theme| *theme == self).unwrap_or(0) as i32;
+        Self::ALL[(index + delta.signum()).rem_euclid(Self::ALL.len() as i32) as usize]
+    }
 }
 
 #[derive(Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -146,6 +161,13 @@ impl Preferences {
                     0x626b75, 0xc12c2c, 0x24833f, 0x916a00,
                     0x1669bf, 0x9047b5, 0x147e84, 0x6e7781,
                 ].map(|value| HexColor(value).rgb())),
+                // Canonical ANSI slot mapping: https://ethanschoonover.com/solarized/#the-values
+                TerminalTheme::SolarizedDark | TerminalTheme::SolarizedLight => Some([
+                    0x073642, 0xdc322f, 0x859900, 0xb58900,
+                    0x268bd2, 0xd33682, 0x2aa198, 0xeee8d5,
+                    0x002b36, 0xcb4b16, 0x586e75, 0x657b83,
+                    0x839496, 0x6c71c4, 0x93a1a1, 0xfdf6e3,
+                ].map(|value| HexColor(value).rgb())),
             }
         })
     }
@@ -153,6 +175,8 @@ impl Preferences {
         let defaults = match self.terminal_theme {
             TerminalTheme::Dark => [None; 3],
             TerminalTheme::Light => [Some(HexColor(0x24292f)), Some(HexColor(0xffffff)), Some(HexColor(0x0755a8))],
+            TerminalTheme::SolarizedDark => [Some(HexColor(0x839496)), Some(HexColor(0x002b36)), Some(HexColor(0x839496))],
+            TerminalTheme::SolarizedLight => [Some(HexColor(0x657b83)), Some(HexColor(0xfdf6e3)), Some(HexColor(0x657b83))],
         };
         let overrides = [self.foreground_color, self.background_color, self.cursor_color];
         std::array::from_fn(|index| overrides[index].or(defaults[index]).map(HexColor::rgb))
@@ -374,6 +398,18 @@ mod tests {
         let dark = Preferences::decode(br#"{"terminal_theme":"dark"}"#)?;
         assert_eq!(dark.terminal_colors(), [None; 3]);
         assert_eq!(dark.terminal_palette(), None);
+        for (name, background) in [("solarized_dark", rmux_terminal::Color(0, 43, 54)), ("solarized_light", rmux_terminal::Color(253, 246, 227))] {
+            let value = serde_json::json!({"terminal_theme": name});
+            let theme = Preferences::decode(&serde_json::to_vec(&value)?)?;
+            assert_eq!(theme.terminal_colors()[1], Some(background));
+            assert_eq!(theme.terminal_palette().unwrap()[1], rmux_terminal::Color(220, 50, 47));
+            assert_eq!(serde_json::to_value(&theme)?["terminal_theme"], name);
+            assert!(theme.terminal_theme.cycle(1).cycle(-1) == theme.terminal_theme);
+            let overridden = serde_json::json!({"terminal_theme": name, "background_color":"#010203", "ansi_palette": vec!["#112233"; 16]});
+            let overridden = Preferences::decode(&serde_json::to_vec(&overridden)?)?;
+            assert_eq!(overridden.terminal_colors()[1], Some(rmux_terminal::Color(1, 2, 3)));
+            assert_eq!(overridden.terminal_palette(), Some([rmux_terminal::Color(17, 34, 51); 16]));
+        }
         assert!(Preferences::decode(br#"{"terminal_theme":"unknown"}"#).is_err());
         Ok(())
     }

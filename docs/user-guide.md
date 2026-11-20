@@ -244,8 +244,10 @@ indices 16–255 and true-color output retain their colors. Application OSC pale
 overrides take precedence; setting `ansi_palette` to `null` restores the selected
 terminal theme's default palette.
 
-`terminal_theme` accepts `"dark"` (the existing default) or `"light"` (white
-background with a darker ANSI palette). It reloads live; explicit color and
+`terminal_theme` accepts `"dark"` (the existing default), `"light"` (white
+background with a darker ANSI palette), `"solarized_dark"`, or `"solarized_light"`.
+The Solarized presets use [Ethan Schoonover's published palette](https://ethanschoonover.com/solarized/).
+Settings cycles through all four presets. It reloads live; explicit color and
 palette values override the preset. This changes terminal content only, not the
 sidebar or other application controls, and does not automatically follow OS
 appearance changes.

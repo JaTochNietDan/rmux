@@ -118,8 +118,8 @@
       ],
       "acceptance": "Keyboard navigation selects the expected pane with no accidental terminal input.",
       "rmux_status": "in_progress",
-      "implementation": "Directional pane focus, numeric workspace shortcuts and Focus Pane 1–9 palette actions with Cmd+Option+number on macOS / Ctrl+Alt+Shift+number elsewhere. Numeric selection follows pane traversal order and moves zoom to the selected pane.",
-      "remaining": "Complete native navigation coverage, including new Select Tab 1–9 shortcuts (Cmd+Shift+number on macOS / Ctrl+Shift+number elsewhere) and palette actions. Missing tab numbers are no-ops; tab numbering is per focused pane.",
+      "implementation": "Directional pane focus, numeric workspace shortcuts and Focus Pane 1\u20139 palette actions with Cmd+Option+number on macOS / Ctrl+Alt+Shift+number elsewhere. Numeric selection follows pane traversal order and moves zoom to the selected pane.",
+      "remaining": "Complete native navigation coverage, including new Select Tab 1\u20139 shortcuts (Cmd+Shift+number on macOS / Ctrl+Shift+number elsewhere) and palette actions. Missing tab numbers are no-ops; tab numbering is per focused pane.",
       "implementation_sources": [
         "crates/rmux-desktop/src/main.rs"
       ],
@@ -365,8 +365,8 @@
       ],
       "acceptance": "Apply supported settings live; explicitly report unsupported Ghostty settings.",
       "rmux_status": "in_progress",
-      "implementation": "Bounded per-terminal font zoom/reset and configured font family with shared cell metrics, font-sensitive row cache and saved-layout fonts. Live-reloaded hollow/hidden unfocused cursor, default foreground/background/cursor colors and 16-color ANSI palette. Application cursor shapes and OSC color overrides remain honored. Unchanged configured colors/palettes skip engine updates.",
-      "remaining": "Named themes, additional cursor/background settings, native color reload, font/zoom/restore and focus-transition acceptance, and complete configuration acceptance.",
+      "implementation": "Bounded per-terminal font zoom/reset and configured font family with shared cell metrics, font-sensitive row cache and saved-layout fonts. Live-reloaded hollow/hidden unfocused cursor, default foreground/background/cursor colors and 16-color ANSI palette. Application cursor shapes and OSC color overrides remain honored. Unchanged configured colors/palettes skip engine updates. Built-in Solarized Dark/Light presets are selectable in Settings and configuration, with explicit color/palette override precedence.",
+      "remaining": "Broader named-theme catalog/import, additional cursor/background settings, native color reload, font/zoom/restore and focus-transition acceptance, and complete configuration acceptance.",
       "implementation_sources": [
         "crates/rmux-desktop/src/cell_metrics.rs",
         "crates/rmux-desktop/src/preferences.rs",
