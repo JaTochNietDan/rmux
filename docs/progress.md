@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Added shared type-to-select behavior to terminal and tab context menus. Plain
+character prefixes select enabled labels; repeated first letters cycle matching
+items, longer prefixes narrow selection, and a one-second gap starts a new query.
+Navigation keys reset the bounded prefix; modifier shortcuts are excluded. No
+idle timer is introduced. Enter/Space still explicitly activates the selected
+item through existing enabled-state checks. Focused navigation tests pass for
+cycling, prefix extension/fallback, disabled rows, expiry, reset and empty menus;
+desktop test compilation passed. Native keyboard/IME acceptance remains pending.
+
 Added Close Finished Tabs to the tab context menu with the current eligible-tab
 count, disabled when no other finished tabs exist or a tab launch is pending.
 The clicked tab remains the keeper; execution uses the existing identity-based,

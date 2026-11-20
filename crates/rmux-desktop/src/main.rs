@@ -48,6 +48,7 @@ mod restore;
 mod recovery;
 mod row_cache;
 mod list_navigation;
+mod menu_navigation;
 mod snapshot;
 mod startup;
 mod status_view;

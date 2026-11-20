@@ -1704,6 +1704,10 @@ The tab context menu also offers this command with an eligible-tab count. It
 retains the tab you opened the menu on and disables the command when no other
 finished tabs are available.
 
+Terminal and tab context menus support type-to-select: type a label prefix, or
+repeat its first letter to cycle enabled matches. After a one-second pause,
+typing starts a new prefix. Press Enter or Space to activate, or Escape to close.
+
 The pane's **Choose Terminal Tab** picker also searches finished state and exit
 messages. Its scrollable results use fixed-height rows and render on demand as
 you scroll, keeping large tab collections from building every result row at once.

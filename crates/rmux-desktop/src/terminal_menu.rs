@@ -8,6 +8,7 @@ pub(super) struct Menu {
     selected: usize,
     scroll: ScrollHandle,
     link: Option<String>,
+    typeahead: menu_navigation::Typeahead,
 }
 const LABELS: &[&str] = &["Copy", "Copy with Line Breaks", "Paste", "Select All", "Find…", "Copy Working Directory", "Reveal Working Directory", "Clear Scrollback", "Copy Link Address", "Open Link"];
 
@@ -39,7 +40,7 @@ impl TerminalView {
         focus.focus(window);
         let scroll = ScrollHandle::new();
         scroll.scroll_to_item(selected);
-        self.terminal_menu = Some(Menu { position, focus, selected, scroll, link });
+        self.terminal_menu = Some(Menu { position, focus, selected, scroll, link, typeahead: Default::default() });
         cx.notify();
     }
     fn dismiss_terminal_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -86,6 +87,10 @@ impl TerminalView {
                 .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                     let enabled = this.menu_enabled();
                     let Some(menu) = this.terminal_menu.as_mut() else { return; };
+                    let modifiers = event.keystroke.modifiers;
+                    let typed = if !modifiers.control && !modifiers.alt && !modifiers.platform && !modifiers.function {
+                        menu.typeahead.select(&event.keystroke.key, LABELS, &enabled, menu.selected, std::time::Instant::now())
+                    } else { None };
                     match event.keystroke.key.as_str() {
                         "up" | "down" => {
                             for step in 1..=enabled.len() {
@@ -97,7 +102,7 @@ impl TerminalView {
                         "end" => menu.selected = enabled.iter().rposition(|enabled| *enabled).unwrap_or(0),
                         "enter" | "space" => { let selected = menu.selected; this.activate_terminal_menu(selected, window, cx); },
                         "escape" => this.dismiss_terminal_menu(window, cx),
-                        _ => {},
+                        _ => { if let Some(selected) = typed { menu.selected = selected; } },
                     }
                     if let Some(menu) = &this.terminal_menu { menu.scroll.scroll_to_item(menu.selected); }
                     cx.stop_propagation();

@@ -173,6 +173,7 @@ struct TabMenu {
     focus: FocusHandle,
     selected: usize,
     scroll: ScrollHandle,
+    typeahead: menu_navigation::Typeahead,
 }
 const TAB_MENU_LABELS: &[&str] = &["Rename Tab", "Copy Working Directory", "Reveal Working Directory", "Move Tab Left", "Move Tab Right", "Close Tab", "Close Other Tabs…", "Close Tabs to the Right…", "Close Finished Tabs…"];
 
@@ -241,7 +242,7 @@ impl PaneView {
             }
         }));
         focus.focus(window);
-        self.tab_menu = Some(TabMenu { target, position, focus, selected: 0, scroll: ScrollHandle::new() });
+        self.tab_menu = Some(TabMenu { target, position, focus, selected: 0, scroll: ScrollHandle::new(), typeahead: Default::default() });
         cx.notify();
     }
 
@@ -296,6 +297,10 @@ impl PaneView {
                     let Some(target) = this.tab_menu.as_ref().map(|menu| menu.target) else { return; };
                     let enabled = this.tab_menu_enabled(target, cx);
                     let menu = this.tab_menu.as_mut().expect("open tab menu");
+                    let modifiers = event.keystroke.modifiers;
+                    let typed = if !modifiers.control && !modifiers.alt && !modifiers.platform && !modifiers.function {
+                        menu.typeahead.select(&event.keystroke.key, TAB_MENU_LABELS, &enabled, menu.selected, std::time::Instant::now())
+                    } else { None };
                     match event.keystroke.key.as_str() {
                         "up" | "down" => {
                             let backwards = event.keystroke.key == "up";
@@ -308,7 +313,7 @@ impl PaneView {
                         "end" => menu.selected = enabled.iter().rposition(|enabled| *enabled).unwrap_or(0),
                         "enter" | "space" => { let selected = menu.selected; this.activate_tab_menu(selected, window, cx); },
                         "escape" => this.dismiss_tab_menu(window, cx),
-                        _ => {},
+                        _ => { if let Some(selected) = typed { menu.selected = selected; } },
                     }
                     if let Some(menu) = &this.tab_menu { menu.scroll.scroll_to_item(menu.selected); }
                     cx.stop_propagation();
