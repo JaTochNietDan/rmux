@@ -2,6 +2,12 @@
 
 ## Current implementation focus
 
+Added Open Folder through the File menu, command palette, directory/error views
+and `open_folder` custom bindings. The native chooser accepts one folder and
+feeds the bounded asynchronous directory loader, independent of terminal cwd.
+Folder and text-file picking share the same modal gate and cancellation/error
+handling. Desktop compilation passed; native chooser/focus acceptance is pending.
+
 Text preview now labels a final line cut by the byte limit as partial, with a
 copy hint explaining that only captured text is copied. Complete newline-ended
 lines and lines hidden beyond the 512-line cap are not mislabeled. The focused

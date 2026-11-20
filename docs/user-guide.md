@@ -191,6 +191,10 @@ opens an on-demand local directory picker from the current terminal's cached
 working directory. Search names, press Enter on a directory to browse it, or
 choose Parent/Refresh. Enter on a regular file opens a read-only UTF-8 text
 preview; a symbolic link copies its path. Hidden entries are included.
+**File → Open Folder…**, the command palette, or the `open_folder` custom action
+opens the native folder chooser. This works without a terminal working directory
+and loads the selected folder asynchronously. Open Folder is also available in
+the directory browser and its error view. Canceling leaves the workspace unchanged.
 You can also use **File → Open Text Preview…** or the palette (custom action
 `open_text_preview`) to choose a single file with the system file picker.
 Canceling the picker makes no change; selected files use the same bounded,

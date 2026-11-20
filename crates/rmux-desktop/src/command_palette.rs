@@ -248,6 +248,7 @@ impl CommandPalette {
         command!("Copy Named Buffer…", ShowCopyBufferPicker);
         command!("Browse Terminal Directory…", BrowseTerminalFiles);
         command!("Open Text Preview…", OpenTextPreview);
+        command!("Open Folder…", OpenFolderBrowser);
         command!("Choose Terminal Font…", ShowFontPicker);
         command!("Choose Default Font…", ShowDefaultFontPicker);
         command!("Use Configured Font", UseConfiguredFont);
@@ -385,6 +386,8 @@ impl CommandPalette {
     pub fn files(listing: file_browser::Listing, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let location: SharedString = listing.path.display().to_string().into();
         let mut commands = Vec::new();
+        commands.push(Command { title: "Open Folder…".into(), subtitle: Some("Choose a local folder".into()), shortcut: None,
+            target: PaletteEvent::Run(Box::new(OpenFolderBrowser)) });
         commands.push(Command { title: "Go to Directory…".into(), subtitle: Some(listing.path.display().to_string()), shortcut: None,
             target: PaletteEvent::Run(Box::new(EnterDirectory { path: listing.path.clone() })) });
         commands.push(Command { title: "New Workspace Here".into(), subtitle: Some(listing.path.display().to_string()), shortcut: None,
@@ -412,6 +415,8 @@ impl CommandPalette {
     pub fn file_error(path: std::path::PathBuf, error: String, directory: bool, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let location: SharedString = path.display().to_string().into();
         let mut commands = Vec::new();
+        commands.push(Command { title: "Open Folder…".into(), subtitle: Some("Choose a different local folder".into()), shortcut: None,
+            target: PaletteEvent::Run(Box::new(OpenFolderBrowser)) });
         commands.push(Command { title: "Go to Directory…".into(), subtitle: None, shortcut: None,
             target: PaletteEvent::Run(Box::new(EnterDirectory { path: path.parent().unwrap_or(&path).to_owned() })) });
         if let Some(parent) = path.parent() {
