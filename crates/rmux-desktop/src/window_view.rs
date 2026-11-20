@@ -117,6 +117,7 @@ pub(super) struct WorkspaceWindow {
     workspace_menu: Option<WorkspaceMenu>,
     workspace_menu_blur: Option<Subscription>,
     palette: Option<(Entity<command_palette::CommandPalette>, Option<FocusHandle>)>,
+    font_picker_job: Option<Task<()>>,
     restore_job: Option<restore::Job>,
     workspace_scroll: ScrollHandle,
     notice: Option<String>,
@@ -2196,6 +2197,29 @@ impl WorkspaceWindow {
                 cx,
             )
         });
+        self.install_palette(palette, focus, window, cx);
+    }
+    fn show_font_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.font_picker_job.is_some() || self.automation_available(cx).is_err() { return; }
+        let Some(focus) = window.focused(cx) else { return; };
+        let text = cx.text_system().clone();
+        let executor = cx.background_executor().clone();
+        self.notice = Some("Loading installed fonts…".into());
+        self.font_picker_job = Some(cx.spawn_in(window, async move |entity, cx| {
+            let families = executor.spawn(async move { text.all_font_names() }).await;
+            let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
+                this.font_picker_job = None;
+                if this.notice.as_deref() == Some("Loading installed fonts…") { this.notice = None; }
+                if focus.is_focused(window) && this.automation_available(cx).is_ok() {
+                    let palette = cx.new(|cx| command_palette::CommandPalette::fonts(families, window, cx));
+                    this.install_palette(palette, Some(focus), window, cx);
+                }
+                cx.notify();
+            }));
+        }));
+        cx.notify();
+    }
+    fn install_palette(&mut self, palette: Entity<command_palette::CommandPalette>, focus: Option<FocusHandle>, window: &mut Window, cx: &mut Context<Self>) {
         cx.subscribe_in(
             &palette,
             window,
@@ -2451,6 +2475,7 @@ impl WorkspaceWindow {
         let (snapshot, mut sessions) = prepared.into_parts();
         let mut this = Self {
             palette: None,
+            font_picker_job: None,
             restore_job: None,
             workspace_scroll: ScrollHandle::new(),
             notice: None,
@@ -2620,6 +2645,7 @@ impl WorkspaceWindow {
         Self::observe_settings(cx);
         Self {
             palette: None,
+            font_picker_job: None,
             restore_job: None,
             workspace_scroll: ScrollHandle::new(),
             notice: None,
@@ -3208,6 +3234,7 @@ impl Render for WorkspaceWindow {
             }).absolute().size_full())
             .on_action(cx.listener(|this, _: &CloseWindow, window, cx| this.request_close_window(window, cx)))
             .on_action(cx.listener(|this, _: &CloseWorkspace, window, cx| this.request_close_workspace(this.active, window, cx)))
+            .on_action(cx.listener(|this, _: &ShowFontPicker, window, cx| this.show_font_picker(window, cx)))
             .on_action(cx.listener(|this, _: &ShowCommandPalette, window, cx| this.show_palette(window, cx)))
             .on_action(cx.listener(|this, _: &SaveLayout, window, cx| this.save_layout(window, cx)))
             .on_action(cx.listener(|this, _: &SaveSession, window, cx| this.save_session(window, cx)))

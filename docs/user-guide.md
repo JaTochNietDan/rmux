@@ -1,5 +1,11 @@
 # rmux
 
+**Choose Terminal Font…** searches installed font families for the current
+terminal. Type to filter, use arrows and Enter to choose, or Escape to cancel.
+Monospaced families suit the terminal grid best. The picker preserves text size;
+**Use Configured Font** restores the configured family and size. The custom
+action is `choose_font`; change `font_family` in JSON to set the default.
+
 Use **Show Listening Ports** in the palette or menu to inspect a snapshot of local
 TCP listeners owned by the current terminal’s shell and descendants. Refresh
 manually and copy an address from its row. In the panel, ↑/↓ or Home/End select,

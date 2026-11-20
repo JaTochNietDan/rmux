@@ -102,6 +102,8 @@ pub enum PaletteEvent {
 }
 pub struct CommandPalette {
     input: Entity<text_field::TextField>,
+    heading: &'static str,
+    empty_message: &'static str,
     commands: Vec<Command>,
     search: palette_match::RankedSearch,
     selected: usize,
@@ -120,22 +122,6 @@ impl CommandPalette {
         cx: &mut Context<Self>,
     ) -> Self {
         let origin_focus = window.focused(cx);
-        let input = cx.new(|cx| text_field::TextField::new("", cx));
-        input.read(cx).focus.focus(window);
-        cx.subscribe(
-            &input,
-            |this, _, event: &text_field::EditEvent, cx| match event {
-                text_field::EditEvent::Changed(query) => {
-                    this.search.update(query);
-                    this.selected = 0;
-                    this.scroll.reset(this.search.matches.len());
-                    cx.notify();
-                }
-                text_field::EditEvent::Submitted { .. } => this.run(cx),
-                text_field::EditEvent::Cancelled => cx.emit(PaletteEvent::Close),
-            },
-        )
-        .detach();
         let mut commands = Vec::new();
         macro_rules! command {
             ($title:literal, $action:expr) => {
@@ -237,6 +223,7 @@ impl CommandPalette {
         command!("Increase Font Size", IncreaseFontSize);
         command!("Decrease Font Size", DecreaseFontSize);
         command!("Reset Font Size", ResetFontSize);
+        command!("Choose Terminal Font…", ShowFontPicker);
         command!("Use Configured Font", UseConfiguredFont);
         command!("Save Layout…", SaveLayout);
         command!("Save Session…", SaveSession);
@@ -358,8 +345,39 @@ impl CommandPalette {
                 subtitle: directory,
             });
         }
+        Self::with_commands(commands, "Search commands and workspaces", "No matching commands or workspaces", window, cx)
+    }
+    pub fn fonts(mut families: Vec<String>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        families.retain(|name| !name.trim().is_empty() && name.len() <= 128 && !name.chars().any(char::is_control) && !name.starts_with('.'));
+        families.sort_unstable();
+        families.dedup();
+        let limited = families.len() > 2048;
+        families.truncate(2048);
+        let commands = families.into_iter().map(|family| Command {
+            title: family.clone(), subtitle: None, shortcut: None,
+            target: PaletteEvent::Run(Box::new(SetTerminalFont { family })),
+        }).collect();
+        Self::with_commands(commands, if limited { "Choose terminal font · First 2,048 families" } else { "Choose font for this terminal" }, "No matching installed fonts", window, cx)
+    }
+    fn with_commands(commands: Vec<Command>, heading: &'static str, empty_message: &'static str, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let input = cx.new(|cx| text_field::TextField::new("", cx));
+        input.read(cx).focus.focus(window);
+        cx.subscribe(
+            &input,
+            |this, _, event: &text_field::EditEvent, cx| match event {
+                text_field::EditEvent::Changed(query) => {
+                    this.search.update(query);
+                    this.selected = 0;
+                    this.scroll.reset(this.search.matches.len());
+                    cx.notify();
+                }
+                text_field::EditEvent::Submitted { .. } => this.run(cx),
+                text_field::EditEvent::Cancelled => cx.emit(PaletteEvent::Close),
+            },
+        )
+        .detach();
         Self {
-            input,
+            input, heading, empty_message,
             search: palette_match::RankedSearch::new(commands
                 .iter()
                 .map(|command| format!("{} {}", command.title, command.subtitle.as_deref().unwrap_or_default()).to_lowercase())
@@ -479,11 +497,11 @@ impl Render for CommandPalette {
                     .pt_2()
                     .text_xs()
                     .text_color(rgb(0xa0a0a0))
-                    .child("Search commands and workspaces"),
+                    .child(self.heading),
             ))
             .child(div().flex_shrink_0().p_3().child(self.input.clone()))
             .child(if self.search.matches.is_empty() {
-                div().p_3().text_sm().child("No matching commands or workspaces").into_any_element()
+                div().p_3().text_sm().child(self.empty_message).into_any_element()
             } else {
                 let entity = cx.entity();
                 list(self.scroll.clone(), move |row, _, cx| {

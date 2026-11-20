@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Choose Terminal Font now opens a searchable installed-font picker from the
+palette/menu or custom choose_font action. Font discovery runs on the background
+executor with one pending job per window, and the picker opens only while its
+captured focus remains current and the window is available. Results reuse the
+palette's virtual list, ranking and keyboard paths; retained entries are capped
+at 2048 with an explicit limited-catalog heading. Selection changes only that
+terminal's family and preserves its current size; Use Configured Font restores
+configured defaults. No font is installed and no idle font scan is added.
+Desktop compilation passed. Native discovery latency, font rendering, selection
+and Escape behavior remain unverified; default-family editing stays in config.
+
 The listening-port panel now owns keyboard focus and a scroll handle. Arrow keys
 wrap through results, Home/End jump, Enter or the platform Copy binding copies
 the selected address, R refreshes and Escape closes/restores terminal focus.

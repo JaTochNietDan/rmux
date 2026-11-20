@@ -53,6 +53,10 @@ use layout::{Axis as SplitAxis, PaneTree};
 
 #[derive(Clone, Debug, Default, PartialEq, Action)]
 #[action(namespace = rmux, no_json)]
+struct SetTerminalFont { family: String }
+
+#[derive(Clone, Debug, Default, PartialEq, Action)]
+#[action(namespace = rmux, no_json)]
 struct CheckForUpdates;
 
 #[derive(Clone, Debug, Default, PartialEq, Action)]
@@ -264,6 +268,7 @@ actions!(
         DecreaseFontSize,
         ResetFontSize,
         UseConfiguredFont,
+        ShowFontPicker,
         ShowCommandPalette,
         NewWindow,
         CloseWindow,
@@ -1558,6 +1563,11 @@ impl Render for TerminalView {
             }))
             .on_action(cx.listener(|view, _: &ResetFontSize, _, cx| {
                 view.set_font_size(cx.global::<Preferences>().font_size, cx)
+            }))
+            .on_action(cx.listener(|view, action: &SetTerminalFont, _, cx| {
+                if !action.family.trim().is_empty() && action.family.len() <= 128 && !action.family.chars().any(char::is_control) {
+                    view.set_font(view.cells.font_size, action.family.clone().into(), cx);
+                }
             }))
             .on_action(cx.listener(|view, _: &UseConfiguredFont, _, cx| {
                 let settings = cx.global::<Preferences>();
@@ -3270,6 +3280,7 @@ fn main() {
                     MenuItem::action("Increase Font Size", IncreaseFontSize),
                     MenuItem::action("Decrease Font Size", DecreaseFontSize),
                     MenuItem::action("Reset Font Size", ResetFontSize),
+                    MenuItem::action("Choose Terminal Font…", ShowFontPicker),
                     MenuItem::action("Use Configured Font", UseConfiguredFont),
                 ],
             },
