@@ -181,6 +181,7 @@ impl CommandPalette {
         command!("Move Tab to Next Workspace", MoveTabNextWorkspace);
         command!("Detach Tab to New Window", DetachTab);
         command!("Move Workspace to New Window", DetachWorkspace);
+        command!("Move Workspace to Window…", ShowWorkspaceWindowPicker);
         command!("Move Workspace to Next Window", MoveWorkspaceToNextWindow);
         command!("Toggle Sidebar", ToggleSidebar);
         command!("Rename Workspace", RenameWorkspace);
@@ -358,6 +359,14 @@ impl CommandPalette {
                 else { Box::new(PasteNamedBuffer { name, revision, surface_id: surface_id.clone() }) }),
         }).collect();
         Self::with_commands(commands, if deleting { "Delete named buffer" } else { "Paste named buffer" }, "No matching buffers · Save a selection in Copy Mode first", window, cx)
+    }
+    pub fn workspace_windows(entries: Vec<(AnyWindowHandle, String, String)>, source: EntityId, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let empty = if entries.is_empty() { "No other windows · Open a new window first" } else { "No matching windows" };
+        let commands = entries.into_iter().map(|(destination, title, subtitle)| Command {
+            title, subtitle: Some(subtitle), shortcut: None,
+            target: PaletteEvent::MoveWorkspaceToWindow(source, destination),
+        }).collect();
+        Self::with_commands(commands, "Move workspace to window", empty, window, cx)
     }
     pub fn fonts(mut families: Vec<String>, default: bool, window: &mut Window, cx: &mut Context<Self>) -> Self {
         families.retain(|name| !name.trim().is_empty() && name.len() <= 128 && !name.chars().any(char::is_control) && !name.starts_with('.'));

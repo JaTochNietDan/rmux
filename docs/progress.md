@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Added a dedicated Move Workspace to Window… picker to the native menu and command
+palette, plus custom shortcut action move_workspace_window_picker. It uses the
+existing fuzzy/virtualized palette with active workspace names, workspace counts,
+busy-state hints and distinct no-other-windows/no-match messages. Source identity
+and destination window handles are captured, then the existing guarded transfer
+path revalidates them on selection. General palette destination commands already
+existed; corrected the stale W06 ledger rather than claiming a new transfer
+backend. Desktop compilation passed. Native access was rechecked: the Mac remains
+locked and automatic unlock failed, so screenshots, focus, stale-window and
+visual acceptance remain pending. No synthetic preview was substituted.
+
 Measured tail capture with an explicit ignored release fixture and removed a
 duplicate Ghostty grid lookup in each backward-walk iteration. The same three-case
 fixture observed median 20-line capture from 1.1 MB history at 11 → 7 µs, a 1 MiB

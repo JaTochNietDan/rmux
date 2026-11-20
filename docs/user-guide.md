@@ -1,5 +1,12 @@
 # rmux
 
+Choose **Move Workspace to Window…** from the menu or command palette to search
+other windows by their active workspace name. The picker shows workspace counts
+and whether a destination is busy. Enter moves the originating workspace and
+activates the destination; Escape returns to the original focus. Closed or busy
+destinations are checked again when selected. The custom shortcut action is
+`move_workspace_window_picker`; the existing next-window command remains available.
+
 `rmuxctl capture-pane --surface SURFACE_ID` returns visible text in a JSON
 response. Add `--scrollback` for retained history, or `--lines 20` for the last
 20 logical screen lines (which implies scrollback). Counts must be 1–65536.
@@ -273,7 +280,7 @@ above nine are rejected.
 Layout and workspace editing also support these action names:
 `equalize_panes`, `swap_pane_next`, `break_tab_right`, `break_tab_down`,
 `join_pane_next`, `move_tab_next_workspace`, `detach_tab`, `detach_workspace`,
-`move_workspace_next_window`, `rename_tab`, `rename_workspace`,
+`move_workspace_next_window`, `move_workspace_window_picker`, `rename_tab`, `rename_workspace`,
 `toggle_workspace_pin`, `edit_workspace_description`, `edit_workspace_icon`,
 and `edit_workspace_color`. These reuse menu handlers, preserving live terminal
 sessions during movement and existing split limits. They have no additional

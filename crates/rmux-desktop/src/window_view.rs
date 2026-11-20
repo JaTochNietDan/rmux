@@ -2204,6 +2204,27 @@ impl WorkspaceWindow {
         });
         self.install_palette(palette, focus, window, cx);
     }
+    fn show_workspace_window_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.automation_available(cx).is_err() { return; }
+        let Some(source) = self.entries.get(self.active).map(|entry| entry.workspace.entity_id()) else { return; };
+        let current = window.window_handle();
+        let focus = window.focused(cx);
+        let entries = cx.windows().into_iter().enumerate().filter_map(|(index, handle)| {
+            if handle == current { return None; }
+            let root = handle.downcast::<Self>()?.read(cx).ok()?;
+            if root.benchmark { return None; }
+            let active = root.entries.get(root.active)?;
+            let count = root.entries.len();
+            let subtitle = if root.automation_available(cx).is_err() {
+                format!("{count} workspaces · Destination is busy")
+            } else {
+                format!("{count} {} · Move here and activate window", if count == 1 { "workspace" } else { "workspaces" })
+            };
+            Some((handle, format!("Window {} — {}", index + 1, active.name), subtitle))
+        }).collect();
+        let palette = cx.new(|cx| command_palette::CommandPalette::workspace_windows(entries, source, window, cx));
+        self.install_palette(palette, focus, window, cx);
+    }
     fn show_buffer_picker(&mut self, deleting: bool, window: &mut Window, cx: &mut Context<Self>) {
         if self.automation_available(cx).is_err() { return; }
         let surface = self.entries.get(self.active).and_then(|entry| {
@@ -3383,6 +3404,7 @@ impl Render for WorkspaceWindow {
             .on_action(cx.listener(|this, _: &LastTerminal, window, cx| this.last_terminal(window, cx)))
             .on_action(cx.listener(|this, _: &DetachTab, window, cx| this.detach_tab(window, cx)))
             .on_action(cx.listener(|this, _: &DetachWorkspace, window, cx| this.detach_workspace(window, cx)))
+            .on_action(cx.listener(|this, _: &ShowWorkspaceWindowPicker, window, cx| this.show_workspace_window_picker(window, cx)))
             .on_action(cx.listener(|this, _: &MoveWorkspaceToNextWindow, window, cx| this.move_workspace_to_next_window(window, cx)))
             .on_action(cx.listener(|this, _: &ToggleWorkspacePin, _, cx| this.toggle_workspace_pin(cx)))
             .on_action(cx.listener(|this, action: &SetWorkspaceColor, _, cx| this.set_workspace_color(action.color, cx)))
