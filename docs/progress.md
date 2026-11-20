@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Terminal selection copying now formats on the background executor instead of
+blocking UI dispatch on the parser and formatter. The existing 16 MiB limit and
+no-selection behavior are preserved. One pending copy per terminal coalesces
+repeated requests; selection gestures, Select All and Clear Scrollback cancel
+pending delivery. A shared generation guard orders results against newer terminal,
+text-field, directory, memory-report and notice copies within rmux. Clipboard
+export retains no engine until execution. Focused engine export and generation
+tests passed, as did desktop compilation. Native clipboard interaction under
+output pressure remains pending; other applications' clipboard writes are not
+tracked by the internal generation guard.
+
 Removed the blocking parser acquisition after queued text input. Follow-output
 scrolling now tries once and otherwise coalesces into one atomic flag, consumed
 under the next frame lock. Explicit viewport navigation cancels the deferred

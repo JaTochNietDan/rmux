@@ -219,7 +219,7 @@ impl Render for TextField {
             .on_action(cx.listener(|this, _: &CopySelection, _, cx| {
                 let text = this.text.substring(this.text.selected.clone()).0;
                 if !text.is_empty() {
-                    cx.write_to_clipboard(ClipboardItem::new_string(text));
+                    clipboard::write(ClipboardItem::new_string(text), cx);
                 }
             }))
             .on_action(cx.listener(|this, _: &EditorCut, _, cx| {
@@ -229,7 +229,7 @@ impl Render for TextField {
                 let range = this.text.selected.clone();
                 let text = this.text.substring(range.clone()).0;
                 if !text.is_empty() {
-                    cx.write_to_clipboard(ClipboardItem::new_string(text));
+                    clipboard::write(ClipboardItem::new_string(text), cx);
                     this.insert(Some(range), "", cx);
                 }
             }))

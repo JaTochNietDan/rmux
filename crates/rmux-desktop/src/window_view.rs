@@ -2841,7 +2841,7 @@ impl Render for WorkspaceWindow {
                 cx.notify();
             }))
             .on_action(cx.listener(|this, _: &CopyTerminalMemory, _, cx| {
-                if let Some(rows) = &this.memory_rows { cx.write_to_clipboard(ClipboardItem::new_string(memory_view::report(rows, this.memory_application, this.memory_sort))); }
+                if let Some(rows) = &this.memory_rows { clipboard::write(ClipboardItem::new_string(memory_view::report(rows, this.memory_application, this.memory_sort)), cx); }
             }))
             .on_action(cx.listener(|this, _: &CloseTerminalMemory, _, cx| {
                 this.memory_rows = None;
@@ -3147,7 +3147,7 @@ impl Render for WorkspaceWindow {
                             .text_color(rgb(0xd7deeb)).child(notice.clone()))
                         .child(pane_view::pane_control("copy-notice", "Copy message")
                             .on_click(move |event, _, cx| {
-                                if event.standard_click() { cx.write_to_clipboard(ClipboardItem::new_string(notice.clone())); }
+                                if event.standard_click() { clipboard::write(ClipboardItem::new_string(notice.clone()), cx); }
                             }).child(icons::icon("copy")))
                         .when(self.restore_job.is_none(), |row| row.child(pane_view::pane_control("dismiss-notice", "Dismiss message")
                             .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {

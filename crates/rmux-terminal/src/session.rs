@@ -606,6 +606,16 @@ impl Session {
     pub fn selection_export(&self, max_bytes: usize) -> HistoryExport {
         self.text_export(max_bytes, true)
     }
+    /// Bounded clipboard formatting for a background executor. Construction never
+    /// acquires the parser lock or keeps a closed terminal alive.
+    pub fn clipboard_export(&self) -> Box<dyn FnOnce() -> Result<Option<String>> + Send> {
+        let terminal = Arc::downgrade(&self.terminal);
+        Box::new(move || {
+            let terminal = terminal.upgrade().context("terminal closed before copying")?;
+            let engine = terminal.lock().unwrap_or_else(|error| error.into_inner());
+            engine.selected_text()
+        })
+    }
     fn text_export(&self, max_bytes: usize, selected: bool) -> HistoryExport {
         let terminal = Arc::downgrade(&self.terminal);
         Box::new(move || {
@@ -963,6 +973,10 @@ mod tests {
         let selected = thread::spawn(export).join().unwrap()?.expect("idle selection export");
         assert_eq!(selected, (expected.clone(), false));
         assert_eq!(session.selected_text()?, Some(expected));
+        let expected = session.selected_text()?;
+        let clipboard = session.clipboard_export();
+        assert_eq!(Arc::strong_count(&session.terminal), owners, "queued clipboard export retained the engine");
+        assert_eq!(thread::spawn(clipboard).join().unwrap()?, expected);
         Ok(())
     }
     #[test]

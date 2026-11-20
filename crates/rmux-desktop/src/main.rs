@@ -9,6 +9,7 @@ mod cell_metrics;
 mod icons;
 mod git_context;
 mod git_watch;
+mod clipboard;
 mod automation;
 #[cfg(unix)]
 mod socket_transport;
@@ -358,6 +359,7 @@ struct TerminalView {
     selecting: bool,
     selection_pointer: Option<(Point<Pixels>, bool)>,
     selection_scroll: Option<Task<()>>,
+    clipboard_task: Option<Task<()>>,
     title: String,
     custom_title: Option<String>,
     title_revision: u64,
@@ -673,6 +675,7 @@ impl TerminalView {
             selecting: false,
             selection_pointer: None,
             selection_scroll: None,
+            clipboard_task: None,
             title: String::new(),
             custom_title: None,
             title_revision: u64::MAX,
@@ -1190,6 +1193,7 @@ impl TerminalView {
         clicks: usize,
         cx: &mut Context<Self>,
     ) {
+        self.clipboard_task = None;
         if self.selecting {
             self.selection_pointer = Some((position, rectangle));
         }
@@ -1239,15 +1243,24 @@ impl TerminalView {
         cx.notify();
     }
     fn copy(&mut self, _: &CopySelection, _: &mut Window, cx: &mut Context<Self>) {
-        match self.session.selected_text() {
-            Ok(Some(text)) => cx.write_to_clipboard(ClipboardItem::new_string(text)),
-            Ok(None) => {}
-            Err(error) => {
-                self.error = Some(error.to_string());
-                cx.notify();
-            }
-        }
+        if self.clipboard_task.is_some() { return; }
+        let ticket = clipboard::begin();
+        let export = self.session.clipboard_export();
+        let executor = cx.background_executor().clone();
+        self.clipboard_task = Some(cx.spawn(async move |entity, cx| {
+            let result = executor.spawn(async move { export() }).await;
+            let _ = entity.update(cx, |this, cx| {
+                this.clipboard_task = None;
+                if !clipboard::current(ticket) { return; }
+                match result {
+                    Ok(Some(text)) => clipboard::write(ClipboardItem::new_string(text), cx),
+                    Ok(None) => {},
+                    Err(error) => { this.error = Some(error.to_string()); cx.notify(); }
+                }
+            });
+        }));
     }
+
     fn copy_working_directory(
         &mut self,
         _: &CopyWorkingDirectory,
@@ -1256,7 +1269,7 @@ impl TerminalView {
     ) {
         if let Some(path) = self.reported_directory(cx) {
             if let Some(text) = path.to_str() {
-                cx.write_to_clipboard(ClipboardItem::new_string(text.to_owned()));
+                clipboard::write(ClipboardItem::new_string(text.to_owned()), cx);
             } else {
                 self.error =
                     Some("Working directory cannot be represented as clipboard text.".into());
@@ -1289,6 +1302,7 @@ impl TerminalView {
         None
     }
     fn select_all(&mut self, _: &EditorSelectAll, _: &mut Window, cx: &mut Context<Self>) {
+        self.clipboard_task = None;
         self.selecting = false;
         self.selection_scroll = None;
         self.selection_pointer = None;
@@ -1303,6 +1317,7 @@ impl TerminalView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.clipboard_task = None;
         self.selecting = false;
         self.selection_scroll = None;
         self.selection_pointer = None;
