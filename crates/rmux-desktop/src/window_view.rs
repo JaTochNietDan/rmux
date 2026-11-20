@@ -895,6 +895,12 @@ impl WorkspaceWindow {
         } else if matches!(key, "left" | "right" | "enter" | "space") {
             let selected = state.selected;
             if selected < settings_view::KEYS.len() {
+                if settings_view::KEYS[selected] == "close" && cx.global::<Preferences>().close_policy_overridden() {
+                    self.notice = Some("Close confirmation is controlled by RMUX_CONFIRM_CLOSE. Remove the override and restart rmux to change it here.".into());
+                    cx.notify();
+                    cx.stop_propagation();
+                    return;
+                }
                 let mut settings = cx.global::<Preferences>().clone();
                 settings_view::adjust(&mut settings, settings_view::KEYS[selected], if key == "left" { -1 } else { 1 });
                 cx.set_global(settings.confirm_close);

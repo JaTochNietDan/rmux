@@ -2,6 +2,12 @@
 
 ## Current implementation focus
 
+An environment-controlled close policy now displays its effective value in
+Settings with a read-only Environment indicator instead of a no-op button. Its
+tooltip explains RMUX_CONFIRM_CLOSE; keyboard attempts show the same actionable
+explanation without republishing unchanged preferences. Desktop compilation
+passed. Native tooltip, wrapping and notice presentation remain unverified.
+
 Settings rows now wrap labels and grouped controls when horizontal space is
 limited. Numeric stepper values are plain centered labels with a stable minimum
 width instead of clickable no-op buttons. Desktop compilation passed. A fresh

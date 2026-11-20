@@ -53,14 +53,19 @@ fn button(id: String, label: String, key: &'static str, delta: i32) -> impl Into
         .on_click(move |event, window, cx| { if event.standard_click() { window.dispatch_action(Box::new(AdjustSetting { key: key.into(), delta }), cx); } })
         .child(label)
 }
-fn row(label: &'static str, key: &'static str, value: String, stepper: bool, selected: bool) -> impl IntoElement {
+fn row(label: &'static str, key: &'static str, value: String, stepper: bool, selected: bool, readonly: bool) -> impl IntoElement {
     div().px_1().py_3().when(selected, |s| s.bg(rgb(0x303b4a))).border_b_1().border_color(rgb(0x383838))
         .flex().flex_wrap().items_center().gap_2()
         .child(div().flex_1().min_w(px(120.)).text_size(px(13.)).child(label))
         .child(div().flex().items_center().gap_2().max_w_full()
             .when(stepper, |controls| controls
                 .child(button(format!("{key}-less"), "−".into(), key, -1)))
-            .child(if stepper {
+            .child(if readonly {
+                div().id(SharedString::from(format!("{key}-readonly")))
+                    .px_2().py_1().text_size(px(12.)).text_color(rgb(0xa0a0a0))
+                    .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("Controlled by RMUX_CONFIRM_CLOSE. Remove the override and restart rmux to edit this policy here.".into())).into())
+                    .child(value).into_any_element()
+            } else if stepper {
                 div().min_w(px(44.)).text_center().text_size(px(12.)).child(value).into_any_element()
             } else {
                 button(format!("{key}-value"), value, key, 1).into_any_element()
@@ -81,19 +86,19 @@ pub fn panel(state: State, cx: &mut Context<window_view::WorkspaceWindow>) -> An
                 .on_click(|event, window, cx| { if event.standard_click() { window.dispatch_action(Box::new(ToggleSettings), cx); } }).child(icons::icon("close"))))
         .child(div().id("settings-scroll").flex_1().min_h_0().overflow_y_scroll().track_scroll(&state.scroll).px_3()
             .child(div().pt_3().text_xs().text_color(rgb(0xa0a0a0)).child("TERMINAL & BEHAVIOR"))
-            .child(row("Default text size", "font", format!("{} pt", settings.font_size), true, state.selected == 0))
-            .child(row("Terminal padding", "padding", format!("{} px", settings.terminal_padding), true, state.selected == 1))
-            .child(row("Terminal theme", "theme", match settings.terminal_theme { preferences::TerminalTheme::Dark => "Dark", preferences::TerminalTheme::Light => "Light" }.into(), false, state.selected == 2))
-            .child(row("Unfocused cursor", "cursor", match settings.unfocused_cursor { preferences::UnfocusedCursor::Hollow => "Hollow", preferences::UnfocusedCursor::Hidden => "Hidden" }.into(), false, state.selected == 3))
-            .child(row("Copy on select", "copy", if settings.copy_on_select { "On" } else { "Off" }.into(), false, state.selected == 4))
-            .child(row("Confirm before closing", "close", if settings.close_policy_overridden() { "Environment override".into() } else { match settings.confirm_close {
+            .child(row("Default text size", "font", format!("{} pt", settings.font_size), true, state.selected == 0, false))
+            .child(row("Terminal padding", "padding", format!("{} px", settings.terminal_padding), true, state.selected == 1, false))
+            .child(row("Terminal theme", "theme", match settings.terminal_theme { preferences::TerminalTheme::Dark => "Dark", preferences::TerminalTheme::Light => "Light" }.into(), false, state.selected == 2, false))
+            .child(row("Unfocused cursor", "cursor", match settings.unfocused_cursor { preferences::UnfocusedCursor::Hollow => "Hollow", preferences::UnfocusedCursor::Hidden => "Hidden" }.into(), false, state.selected == 3, false))
+            .child(row("Copy on select", "copy", if settings.copy_on_select { "On" } else { "Off" }.into(), false, state.selected == 4, false))
+            .child(row("Confirm before closing", "close", format!("{}{}", match settings.confirm_close {
                 close_policy::ClosePolicy::Active => "Active tasks", close_policy::ClosePolicy::Always => "Always", close_policy::ClosePolicy::Never => "Never",
-            }.into() }, false, state.selected == 5))
+            }, if settings.close_policy_overridden() { " · Environment" } else { "" }), false, state.selected == 5, settings.close_policy_overridden()))
             .child(row("New group workspace", "group_placement", match settings.group_new_workspace_placement {
                 workspace_groups::Placement::AfterCurrent => "After current",
                 workspace_groups::Placement::Top => "First",
                 workspace_groups::Placement::End => "Last",
-            }.into(), false, state.selected == 6))
+            }.into(), false, state.selected == 6, false))
             .child(div().py_3().text_xs().text_color(rgb(0xa0a0a0)).child("Tab / ↑↓ to navigate · ←→ to change · Enter to activate · Esc to close. Changes apply to this session. Text size updates terminals using the previous default. Per-terminal zoom stays unchanged; Reset Font Size rejoins the default. Custom colors in your config override the theme."))
             .child(div().id("settings-save").border_1().border_color(if state.selected == KEYS.len() { rgb(0xffffff) } else { rgb(0x007aff) }).px_3().py_2().rounded_sm().bg(rgb(0x007aff)).hover(|s| s.bg(rgb(0x1685ff))).text_sm().cursor_pointer()
                 .on_click(|event, window, cx| { if event.standard_click() { window.dispatch_action(Box::new(SaveAppearanceSettings), cx); } }).child("Save these settings"))
