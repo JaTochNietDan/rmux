@@ -37,7 +37,7 @@ impl FindBar {
         let focus = input.read(cx).focus.clone();
         cx.subscribe(&input, |view, _, event: &EditEvent, cx| match event {
             EditEvent::Changed(text) => {
-                view.status = "Searching…".into();
+                view.status = if text.is_empty() { "Find in terminal" } else { "Searching…" }.into();
                 if let Err(error) = view.worker.set_query(text.clone()) {
                     view.status = error.to_string();
                 }
@@ -58,6 +58,8 @@ impl FindBar {
                     .update(cx, |view, cx| {
                         if let Some(update) = view.worker.latest() {
                             view.status = match update.result {
+                                Ok(_) if view.input.read(cx).value().is_empty() => "Find in terminal".into(),
+                                Ok(p) if p.matches == 0 => if p.pending { "Searching…" } else { "No matches" }.into(),
                                 Ok(p) => format!(
                                     "{} / {}{}",
                                     p.selected.map_or(0, |i| i + 1),
@@ -95,7 +97,9 @@ impl Render for FindBar {
             .items_center()
             .gap_2()
             .px_2()
-            .bg(rgb(0x242a36))
+            .bg(rgb(0x242424))
+            .border_b_1()
+            .border_color(rgb(0x353535))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, _, window, cx| {
@@ -112,23 +116,25 @@ impl Render for FindBar {
                 div()
                     .text_xs()
                     .max_w(px(140.))
+                    .flex_shrink_0()
+                    .text_color(rgb(0xa0a0a0))
                     .truncate()
                     .child(self.status.clone()),
             )
             .child(
                 pane_view::pane_control("find-older", "Older match · Enter")
                     .on_click(cx.listener(|this, _, _, _| this.worker.navigate(Direction::Older)))
-                    .child("↑"),
+                    .child(icons::icon("chevron-up")),
             )
             .child(
                 pane_view::pane_control("find-newer", "Newer match · Shift+Enter")
                     .on_click(cx.listener(|this, _, _, _| this.worker.navigate(Direction::Newer)))
-                    .child("↓"),
+                    .child(icons::icon("chevron-down")),
             )
             .child(
                 pane_view::pane_control("find-close", "Close Find · Escape")
                     .on_click(cx.listener(|_, _, _, cx| cx.emit(Closed)))
-                    .child("×"),
+                    .child(icons::icon("close")),
             )
     }
 }

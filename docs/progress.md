@@ -2,6 +2,12 @@
 
 ## Current implementation focus
 
+Find now uses the shared monochrome chevron/close icons and neutral chrome with a
+thin separator. Empty queries retain “Find in terminal”; completed zero-result
+searches show “No matches” instead of an ambiguous 0 / 0. In-flight searches retain
+their searching indicator, and status text does not shrink beneath the controls.
+Desktop compilation passed; rendered narrow-pane and keyboard acceptance is pending.
+
 Notification history now has All/Unread controls with live counts and a panel-local
 U shortcut. Mouse and keyboard navigation share the filtered records; switching
 filters preserves the selected message when visible and scrolls it into view.
