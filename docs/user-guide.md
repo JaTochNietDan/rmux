@@ -1098,6 +1098,12 @@ presets to your settings. Replace these example paths with your saved files:
 
 After Reload Settings, choose **Open Preset: Development** in the palette or use
 its shortcut. You can also launch `rmux --preset "Development"` from a shell.
+File → Open Layout Preset… opens a dedicated searchable picker. It shows the
+layout/session type, optional project directory and source file, and includes
+configured shortcut hints. Search matches those details as well as the name.
+The `layout_preset_picker` shortcut action opens the same picker. If none are
+configured, it explains how to add presets and reload settings.
+
 The name must match configuration exactly. `--rpc-stdio-live` may be combined with
 `--preset`; explicit files, `-d`, commands and config inspection cannot. Set the
 preset's `cwd` in settings instead. Like other explicit restores, a preset launch

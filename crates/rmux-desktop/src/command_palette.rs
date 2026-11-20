@@ -235,6 +235,7 @@ impl CommandPalette {
         command!("Save Layout…", SaveLayout);
         command!("Save Session…", SaveSession);
         command!("Open Session in New Windows…", OpenSession);
+        command!("Open Layout Preset…", ShowLayoutPresetPicker);
         command!("Cancel Layout / Session Restore", CancelRestore);
         command!("Settings", ToggleSettings);
         command!("Save Appearance Settings", SaveAppearanceSettings);
@@ -300,14 +301,7 @@ impl CommandPalette {
                 shortcut: None,
             });
         }
-        for preset in &cx.global::<Preferences>().layout_presets {
-            commands.push(Command {
-                title: format!("Open Preset: {}", preset.name),
-                subtitle: Some(format!("{} · {}", if preset.session { "Session" } else { "Layout" }, preset.path.display())),
-                target: PaletteEvent::Run(Box::new(OpenLayoutPreset { name: preset.name.clone() })),
-                shortcut: None,
-            });
-        }
+        commands.extend(cx.global::<Preferences>().layout_presets.iter().map(preset_command));
         if let Some(focus) = origin_focus {
             for command in &mut commands {
                 let PaletteEvent::Run(action) = &command.target else {
@@ -371,6 +365,16 @@ impl CommandPalette {
                 else { Box::new(PasteNamedBuffer { name, revision, surface_id: surface_id.clone() }) }),
         }).collect();
         Self::with_commands(commands, if deleting { "Delete named buffer" } else { "Paste named buffer" }, "No matching buffers · Save a selection in Copy Mode first", window, cx)
+    }
+    pub fn layout_presets(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let mut commands: Vec<_> = cx.global::<Preferences>().layout_presets.iter().map(preset_command).collect();
+        let empty = if commands.is_empty() { "No presets · Add layout_presets in Settings, then Reload Settings" } else { "No matching presets" };
+        if let Some(focus) = window.focused(cx) {
+            for command in &mut commands {
+                if let PaletteEvent::Run(action) = &command.target { command.shortcut = shortcuts::hint(action.as_ref(), &focus, window); }
+            }
+        }
+        Self::with_commands(commands, "Open layout preset · Fresh shells in new windows", empty, window, cx)
     }
     pub fn workspace_merge(entries: Vec<(AnyWindowHandle, EntityId, String)>, source: EntityId, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let empty = if entries.is_empty() { "No other workspaces available" } else { "No matching workspaces" };
@@ -568,5 +572,15 @@ impl Render for CommandPalette {
                     .text_color(rgb(0xa0a0a0))
                     .child("↑↓ select · PgUp/PgDn jump · Enter run · Esc close"),
             ))
+    }
+}
+
+fn preset_command(preset: &preferences::LayoutPreset) -> Command {
+    let directory = preset.cwd.as_ref().map(|path| format!(" · Project {}", path.display())).unwrap_or_default();
+    Command {
+        title: format!("Open Preset: {}", preset.name),
+        subtitle: Some(format!("{}{} · {}", if preset.session { "Session" } else { "Layout" }, directory, preset.path.display())),
+        target: PaletteEvent::Run(Box::new(OpenLayoutPreset { name: preset.name.clone() })),
+        shortcut: None,
     }
 }

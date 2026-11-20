@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Added a dedicated Open Layout Preset… picker in the File menu, general palette
+and layout_preset_picker custom action. It reuses fuzzy matching, virtualized rows,
+keyboard navigation, focus return and current-context shortcut hints. Shared preset
+rows now include layout/session type, optional project cwd and source path, making
+project directories searchable without reading files. Empty configuration and
+no-match states have distinct guidance. Invocation still resolves current config
+and uses the existing import path. Desktop compilation passed; native picker,
+focus return, narrow-window layout and screenshot acceptance remain pending.
+
 Added rmux --preset NAME startup, sharing configured layout/session decoding,
 default-cwd handling and fresh-shell preparation with GUI presets. Exact Unicode
 names and live stdio RPC are supported; conflicting launch/inspection options and
