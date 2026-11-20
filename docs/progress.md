@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Removed blocking terminal-parser and exit-state lock acquisition from the
+on-demand active-work close check. Contention conservatively requires the normal
+confirmation; it never silently treats unknown state as idle. Idle/exited sessions,
+Unix foreground job detection and direct-command lifetime handling remain intact.
+The focused real-PTY lock-contention test passed with the parser deliberately held,
+and the foreground-job/direct-command close-detection test passed. Corrected the
+stale W11 ledger item that still listed foreground job detection as missing.
+Native UI inspection was attempted again, but the Mac remains locked; no visual
+or native close-dialog acceptance is claimed.
+
 Added dedicated keyboard focus and visible selection to the terminal memory
 panel: arrows/Home/End select, Enter focuses the addressed terminal, R refreshes,
 S sorts, C copies the report and Escape closes. Sort and completed refresh resolve

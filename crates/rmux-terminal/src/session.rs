@@ -895,15 +895,16 @@ impl Session {
     /// On-demand close-warning check. Unix job control identifies a foreground
     /// group distinct from the owning shell; directly launched programs are work
     /// for their entire lifetime. No process-table scans or polling are needed.
+    /// Contended state conservatively requires confirmation without blocking.
     pub fn has_active_work(&self) -> bool {
-        if self
-            .exit
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .is_some()
-        {
-            return false;
-        }
+        // Close actions run on the UI thread. Contention means unknown, so keep
+        // confirmation enabled instead of waiting or treating a busy session as idle.
+        let exited = match self.exit.try_lock() {
+            Ok(exit) => exit.is_some(),
+            Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner().is_some(),
+            Err(std::sync::TryLockError::WouldBlock) => return true,
+        };
+        if exited { return false; }
         if self.direct_command {
             return true;
         }
@@ -913,7 +914,11 @@ impl Session {
                 return true;
             }
         }
-        self.reports_active_work()
+        match self.terminal.try_lock() {
+            Ok(terminal) => terminal.program_status().has_active_work(),
+            Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner().program_status().has_active_work(),
+            Err(std::sync::TryLockError::WouldBlock) => true,
+        }
     }
     pub fn program_status_since(
         &self,
@@ -1077,6 +1082,7 @@ mod tests {
             thread::sleep(std::time::Duration::from_millis(5));
         }
         let before = session.frame()?;
+        assert!(!session.has_active_work(), "idle fixture must not need a close warning");
         let engine = session.terminal.clone();
         let (ready, started) = mpsc::sync_channel(1);
         let (release, finish) = mpsc::sync_channel(1);
@@ -1090,6 +1096,7 @@ mod tests {
         started.recv_timeout(std::time::Duration::from_secs(2))?;
         let started_at = std::time::Instant::now();
         let snapshot = session.try_frame()?;
+        assert!(session.has_active_work(), "busy parser must require confirmation without waiting");
         assert!(session.hyperlink_at(0, 0, before.revision).unwrap_err().to_string().contains("click the link again"));
         assert!(session.try_metadata_since(0, 0, 0, 0, true).is_none(), "busy parser must not block metadata");
         assert!(session.try_render_delay().is_none(), "busy parser must not block render delay");
