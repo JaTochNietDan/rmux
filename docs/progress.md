@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+The tab-picker container now occludes underlying terminal hit targets and
+consumes bubbled left/middle/right mouse presses/releases, movement and wheel
+events. Child text-field/list handlers still run first; outside-click dismissal
+is unchanged. This aligns its event isolation with other terminal overlays and
+prevents picker interactions from reaching terminal mouse-reporting handlers.
+Desktop cargo check passed; native mouse-reporting, wheel and click acceptance
+remain pending.
+
 Tab-picker metadata reconciliation now tracks the selected result position as
 well as its terminal identity. When a title/directory change or tab reorder
 moves that result, the virtual list reveals its new row. Unchanged positions

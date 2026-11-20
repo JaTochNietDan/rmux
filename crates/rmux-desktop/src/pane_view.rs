@@ -1391,8 +1391,16 @@ impl Render for PaneView {
                     .or_else(|| matches.first().map(|index| self.terminals[*index].entity_id()));
                 root.child(deferred(div().absolute().top(px(30.)).bottom_0().left_0().right_0()
                     .flex().flex_col().min_h_0()
-                    .child(div().id("tab-picker-container").min_h_0().flex().flex_col()
+                    .child(div().id("tab-picker-container").occlude().min_h_0().flex().flex_col()
                     .bg(rgb(0x292929)).border_1().border_color(rgb(0x465063)).rounded_md().shadow_md()
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .on_mouse_down(MouseButton::Middle, |_, _, cx| cx.stop_propagation())
+                    .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
+                    .on_mouse_up(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .on_mouse_up(MouseButton::Middle, |_, _, cx| cx.stop_propagation())
+                    .on_mouse_up(MouseButton::Right, |_, _, cx| cx.stop_propagation())
+                    .on_mouse_move(|_, _, cx| cx.stop_propagation())
+                    .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
                     .on_mouse_down_out(cx.listener(|this, _, window, cx| { this.tab_picker = None; this.tab_picker_blur = None; this.focus(window, cx); cx.notify(); }))
                     .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                         let matches = this.matching_tabs(cx);
