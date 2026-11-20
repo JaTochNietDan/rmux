@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Notification cards now clamp previews to two title lines and four body lines.
+More/Less or E expands the selected message in place, with one expanded identity
+per open panel. Copy still exports complete content; expansion does not acknowledge
+alerts or focus the terminal. Card controls wrap in narrow panels. Desktop
+compilation passed; actual clamping, expanded scrolling and narrow layouts still
+need native visual acceptance.
+
 Notification cards now offer Copy, and the focused panel handles Command-C on
 macOS / Control-C elsewhere for the selected message. Copy formats title and body
 without extra blank lines for empty fields, uses the shared clipboard ordering

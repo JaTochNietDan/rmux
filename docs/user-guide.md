@@ -480,7 +480,11 @@ The notification panel lists messages newest-first across all workspaces in the
 window, using arrival order rather than pane order. Keyboard selection remains
 attached to the same message as newer messages arrive.
 
-Each notification card has a Copy button for its title and body. With the panel
+Notification previews show up to two title lines and four body lines. More/Less
+expands one message at a time; press E to toggle the selected message. Expansion
+does not mark it read.
+
+Each notification card has a Copy button for its complete title and body. With the panel
 focused, Command-C on macOS or Control-C on Linux/Windows copies the selected
 message. Copying preserves unread state and does not open the source terminal.
 

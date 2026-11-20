@@ -20,6 +20,7 @@ pub(super) fn terminal_is_visible(terminal: EntityId, cx: &mut App) -> bool {
 
 #[derive(Clone)]
 struct NotificationNavigation {
+    expanded: Option<(EntityId, u64)>,
     unread_only: bool,
     focus: FocusHandle,
     origin: Option<FocusHandle>,
@@ -1481,7 +1482,7 @@ impl WorkspaceWindow {
             }
         } else {
             if self.settings_state.is_some() { self.toggle_settings(window, cx); }
-            let state = NotificationNavigation { unread_only: false, focus: cx.focus_handle(), origin: window.focused(cx),
+            let state = NotificationNavigation { expanded: None, unread_only: false, focus: cx.focus_handle(), origin: window.focused(cx),
                 selected: self.notification_targets(cx).first().map(|row| (row.1, row.2)), scroll: ScrollHandle::new() };
             state.focus.focus(window);
             self.notification_navigation = Some(state);
@@ -1524,6 +1525,9 @@ impl WorkspaceWindow {
                 self.focus_terminal(workspace, terminal, window, cx);
             } else if matches!(key, "backspace" | "delete") {
                 self.dismiss_notification(terminal, revision, cx);
+            } else if key == "e" {
+                state.expanded = if state.expanded == Some((terminal, revision)) { None } else { Some((terminal, revision)) };
+                cx.notify();
             }
         }
         cx.stop_propagation();
@@ -1651,7 +1655,7 @@ impl WorkspaceWindow {
                             .text_xs()
                             .text_color(rgb(0xa0a0a0))
                             .mb_2()
-                            .child("↑↓ / Tab to navigate · U to filter · Enter to open · Delete to dismiss · Esc to close"),
+                            .child("↑↓ / Tab to navigate · U to filter · E to expand · Enter to open · Delete to dismiss · Esc to close"),
                     )
                     .when(messages.is_empty(), |list| {
                         list.child(div().p_3().text_sm().child(if navigation.unread_only { "No unread notifications" } else { "No notifications to show" }))
@@ -1660,6 +1664,7 @@ impl WorkspaceWindow {
                         |(workspace, terminal, source_label, unread, message, _)| {
                             let revision = message.revision;
                             let copy_message = message.clone();
+                            let expanded = navigation.expanded == Some((terminal, revision));
                             div()
                                 .id(SharedString::from(format!("notification-{terminal}-{revision}")))
                                 .p_3()
@@ -1702,12 +1707,24 @@ impl WorkspaceWindow {
                                         div()
                                             .mt_1()
                                             .font_weight(FontWeight::SEMIBOLD)
+                                            .when(!expanded, |title| title.line_clamp(2))
                                             .child(message.title.clone()),
                                     )
                                 })
-                                .child(div().mt_1().child(message.body.clone()))
+                                .child(div().mt_1().when(!expanded, |body| body.line_clamp(4)).child(message.body.clone()))
                                 .child(
-                                    div().mt_2().flex().justify_end().gap_2()
+                                    div().mt_2().flex().flex_wrap().justify_end().gap_2()
+                                        .child(div().id(SharedString::from(format!("expand-notification-{terminal}-{revision}")))
+                                            .px_2().py_1().rounded_sm().text_xs()
+                                            .hover(|style| style.bg(rgb(0x43506a)))
+                                            .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
+                                                cx.stop_propagation();
+                                                if !event.standard_click() { return; }
+                                                if let Some(state) = &mut this.notification_navigation {
+                                                    state.expanded = if state.expanded == Some((terminal, revision)) { None } else { Some((terminal, revision)) };
+                                                    cx.notify();
+                                                }
+                                            })).child(if expanded { "Less" } else { "More" }))
                                         .child(div().id(SharedString::from(format!("copy-notification-{terminal}-{revision}")))
                                             .px_2().py_1().rounded_sm().text_xs()
                                             .hover(|style| style.bg(rgb(0x43506a)))
