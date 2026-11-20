@@ -652,7 +652,7 @@
       ],
       "acceptance": "Read, dismiss, clear and jump actions keep pane and workspace unread state consistent.",
       "rmux_status": "in_progress",
-      "implementation": "BEL/OSC unread markers and pane borders, next-unread navigation, and a latest-message panel with focus links and revision-checked dismissal.",
+      "implementation": "BEL/OSC unread markers and pane borders, next-unread navigation, and a newest-first 32-message-per-terminal panel with copy, expansion, per-message acknowledgement and dismissal. Fresh macOS live socket smoke verifies CLI acknowledgement retains history, preserves another unread message, is idempotent and leaves workspace selection unchanged.",
       "remaining": "Complete notification lifecycle semantics, native panel accessibility and interaction/appearance acceptance. Per-terminal 32-message history, message-specific read/dismiss state and stable keyboard targets are implemented.",
       "implementation_sources": [
         "crates/rmux-desktop/src/window_view.rs"

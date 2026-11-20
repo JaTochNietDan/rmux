@@ -105,6 +105,19 @@ with tempfile.TemporaryDirectory(prefix="rmux-socket-") as tmp:
             assert newest["revision"] > old_revision
             retained = call(first, "notification.list", {"workspace_id":original["id"]})["notifications"]
             assert [message["revision"] for message in retained] == [newest["revision"], old_revision], retained
+            assert all(message["unread"] for message in retained), retained
+            selection_before_read = [(row["id"], row["selected"]) for row in call(first, "workspace.list")["workspaces"]]
+            acknowledgement = subprocess.run([cli, "read-notification", "--surface", surface, "--revision", str(old_revision)], env=env, capture_output=True, text=True, timeout=8)
+            assert acknowledgement.returncode == 0, (acknowledgement.stdout, acknowledgement.stderr)
+            assert json.loads(acknowledgement.stdout)["result"]["marked_read"]
+            assert not call(first, "notification.mark_read", {"surface_id":surface,"revision":old_revision})["marked_read"]
+            assert not call(first, "notification.mark_read", {"surface_id":surface,"revision":18446744073709551615})["marked_read"]
+            acknowledged = call(first, "notification.list", {"workspace_id":original["id"]})["notifications"]
+            assert len(acknowledged) == 2, acknowledged
+            by_revision = {message["revision"]: message for message in acknowledged}
+            assert not by_revision[old_revision]["unread"] and by_revision[newest["revision"]]["unread"], acknowledged
+            assert by_revision[old_revision]["title"] == "Build 世界", acknowledged
+            assert [(row["id"], row["selected"]) for row in call(first, "workspace.list")["workspaces"]] == selection_before_read
             dismissal = subprocess.run([cli, "dismiss-notification", "--surface", surface, "--revision", str(old_revision)], env=env, capture_output=True, text=True, timeout=8)
             assert dismissal.returncode == 0, (dismissal.stdout, dismissal.stderr)
             assert json.loads(dismissal.stdout)["result"]["dismissed"]
@@ -189,7 +202,7 @@ with tempfile.TemporaryDirectory(prefix="rmux-socket-") as tmp:
             assert not endpoint.exists(), "normal quit left socket directory behind"
             second.close()
             third.close()
-            print("Socket RPC passed: bundled/client discovery and error exits, private endpoint, two clients, shared UI mutation, cross-window filters, targeted nested splits and failure atomicity, notification/OSC coexistence, workspace creation/close and shell cleanup, reconnect, normal-quit cleanup.")
+            print("Socket RPC passed: bundled/client discovery and error exits, private endpoint, two clients, shared UI mutation, cross-window filters, targeted nested splits and failure atomicity, notification acknowledgement/history and OSC coexistence, workspace creation/close and shell cleanup, reconnect, normal-quit cleanup.")
         finally:
             for client in clients: client.close()
             if app.poll() is None:

@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Fresh macOS debug binaries passed `mise run smoke-socket` with the new
+`read-notification` CLI scenario. The live app retained both messages, cleared only
+the targeted unread flag, preserved Unicode title content, returned false for
+repeat/missing revisions, and kept workspace selection unchanged. The existing
+socket lifecycle, nested split, OSC history, process cleanup and reconnect checks
+also passed in that run. This is native-process RPC evidence, not screenshot or
+panel interaction acceptance. N02's implementation record now reflects the newer
+history/panel behavior and acknowledgement evidence.
+
 Individual acknowledgement is now available through `notification.mark_read`
 and `rmuxctl read-notification --surface ID --revision NUMBER`, including local
 help and shell completion. It reuses the panel's read-state/selection update path,
