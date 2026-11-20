@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Repeated terminal Copy actions now replace pending copies rather than being
+ignored. The new generation invalidates earlier background work before its UI
+task is canceled, including transitions between ordinary Copy and Copy with
+Line Breaks. Only the newest request can publish clipboard content; the existing
+worker cancellation checks handle stale queued/contended work. The clipboard
+generation test passed and the desktop test target compiled. Native rapid-copy
+interaction remains unverified; already-running formatting is not interrupted.
+
 Search workers now discard queued navigation when a scan completes without
 matches, rather than consuming up to 64 no-op steps or carrying those steps
 into later output. Five focused worker tests passed. The new regression queues
