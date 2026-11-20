@@ -213,8 +213,9 @@ server ignores it. Native click behavior still needs validation. Windows click
 routing, installer registration and platform acceptance remain pending.
 
 In terminal Find, **Alt+Up** recalls older searches and **Alt+Down** moves toward
-newer searches, then restores your draft. Enter (or Shift+Enter) remembers the
-query while navigating matches; closing Find also remembers its current query.
+newer searches, then restores your draft. Enter (or Shift+Enter), the match-arrow
+buttons and Find navigation menu/shortcut actions remember valid queries while
+navigating matches; closing Find also remembers its current query.
 History is local to each terminal and kept only in memory: up to eight distinct
 queries and 16 KiB of retained query text, with a 4 KiB limit per query. Editing a
 recalled query starts a new draft. History navigation leaves active IME composition

@@ -59,6 +59,13 @@ pub(super) struct FindBar {
 }
 impl EventEmitter<Closed> for FindBar {}
 impl FindBar {
+    pub fn navigate(&mut self, direction: Direction, cx: &App) {
+        let query = self.input.read(cx).value();
+        if query.is_empty() || self.status_error { return; }
+        self.history.remember(query);
+        // The worker retains navigation while the initial scan runs.
+        self.worker.navigate(direction);
+    }
     pub fn focus_query(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.input.update(cx, |input, cx| input.select_all_text(cx));
         self.focus.focus(window);
@@ -112,10 +119,8 @@ impl FindBar {
                 }
                 cx.notify();
             }
-            EditEvent::Submitted { text, reverse } => {
-                view.history.remember(text);
-                if view.status_error { return; }
-                view.worker.navigate(if *reverse { Direction::Newer } else { Direction::Older });
+            EditEvent::Submitted { reverse, .. } => {
+                view.navigate(if *reverse { Direction::Newer } else { Direction::Older }, cx);
             },
             EditEvent::Cancelled => cx.emit(Closed),
         })
@@ -196,12 +201,12 @@ impl Render for FindBar {
                     .tooltip({ let status: SharedString = self.status.clone().into(); move |_, cx| cx.new(|_| pane_view::ControlHint(status.clone())).into() })
                     .child(self.status.clone()))
                 .child(pane_view::pane_control("find-older", "Older match · Enter")
-                    .on_click(cx.listener(|this, event: &ClickEvent, _, _| {
-                        if event.standard_click() && !this.status_error { this.worker.navigate(Direction::Older); }
+                    .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
+                        if event.standard_click() { this.navigate(Direction::Older, cx); }
                     })).child(icons::icon("chevron-up")))
                 .child(pane_view::pane_control("find-newer", "Newer match · Shift+Enter")
-                    .on_click(cx.listener(|this, event: &ClickEvent, _, _| {
-                        if event.standard_click() && !this.status_error { this.worker.navigate(Direction::Newer); }
+                    .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
+                        if event.standard_click() { this.navigate(Direction::Newer, cx); }
                     })).child(icons::icon("chevron-down")))
                 .child(pane_view::pane_control("find-close", "Close Find · Escape")
                     .on_click(cx.listener(|_, event: &ClickEvent, _, cx| {

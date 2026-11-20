@@ -1714,11 +1714,7 @@ impl TerminalView {
             self.open_find_with_query(remembered, window, cx);
         }
         if let Some(find) = &self.find {
-            let find = find.read(cx);
-            if !find.query(cx).is_empty() {
-                // The worker retains navigation while the initial scan runs.
-                find.worker.navigate(direction);
-            }
+            find.update(cx, |find, cx| find.navigate(direction, cx));
         }
     }
 }

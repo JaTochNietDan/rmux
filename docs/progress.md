@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Terminal Find now routes Enter, mouse navigation buttons and menu/shortcut
+navigation through one method. All three record the query in bounded recent
+history and skip empty/error queries; previously buttons and menu actions
+bypassed history, and menu actions bypassed the error guard. Existing history
+recall/draft and byte-budget tests passed with desktop test compilation. Native
+button/shortcut history acceptance remains pending.
+
 Listening Ports now supports Page Up/Down using measured listener heights and
 the visible viewport. Shared notice-offset calculation keeps navigation aligned
 when ownership/truncation notices precede rows; empty results no longer request
