@@ -1533,18 +1533,26 @@ impl WorkspaceWindow {
         let navigation = self.notification_navigation.as_ref().expect("open notification panel").clone();
         let has_unread = self.entries.iter().any(|entry| entry.workspace.read(cx).needs_attention(cx));
         let mut messages = Vec::new();
+        let mut total_count = 0;
+        let mut unread_count = 0;
         for index in self.workspace_order(true) {
             let entry = &self.entries[index];
             for pane in &entry.workspace.read(cx).panes {
                 for (tab, terminal) in pane.read(cx).terminals.iter().enumerate() {
                     let view = terminal.read(cx);
+                    let mut source_label: Option<SharedString> = None;
                     for record in view.notifications.iter().rev() {
+                        total_count += 1;
+                        unread_count += usize::from(record.unread);
+                        if navigation.unread_only && !record.unread { continue; }
+                        let label = source_label.get_or_insert_with(|| {
+                            format!("{} · {}", entry.name, pane.read(cx).tab_title(tab, cx)).into()
+                        });
                         let message = &record.message;
                         messages.push((
                             entry.workspace.entity_id(),
                             terminal.entity_id(),
-                            entry.name.clone(),
-                            pane.read(cx).tab_title(tab, cx),
+                            label.clone(),
                             record.unread,
                             message.clone(),
                             record.arrival,
@@ -1553,11 +1561,8 @@ impl WorkspaceWindow {
                 }
             }
         }
-        messages.sort_unstable_by_key(|row| std::cmp::Reverse(row.6));
-        let total_count = messages.len();
-        let unread_count = messages.iter().filter(|row| row.4).count();
-        if navigation.unread_only { messages.retain(|row| row.4); }
-        let selected = messages.iter().find(|row| Some((row.1, row.5.revision)) == navigation.selected).or_else(|| messages.first()).map(|row| (row.1, row.5.revision));
+        messages.sort_unstable_by_key(|row| std::cmp::Reverse(row.5));
+        let selected = messages.iter().find(|row| Some((row.1, row.4.revision)) == navigation.selected).or_else(|| messages.first()).map(|row| (row.1, row.4.revision));
         div().track_focus(&navigation.focus).key_context("Notifications")
             .on_mouse_down(MouseButton::Left, { let focus = navigation.focus.clone(); move |_, window, _| focus.focus(window) })
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| this.notification_key(event, window, cx)))
@@ -1636,7 +1641,7 @@ impl WorkspaceWindow {
                         list.child(div().p_3().text_sm().child(if navigation.unread_only { "No unread notifications" } else { "No notifications to show" }))
                     })
                     .children(messages.into_iter().map(
-                        |(workspace, terminal, name, terminal_title, unread, message, _)| {
+                        |(workspace, terminal, source_label, unread, message, _)| {
                             let revision = message.revision;
                             div()
                                 .id(SharedString::from(format!("notification-{terminal}-{revision}")))
@@ -1672,7 +1677,7 @@ impl WorkspaceWindow {
                                                 .truncate()
                                                 .text_xs()
                                                 .text_color(rgb(0xa0a0a0))
-                                                .child(format!("{name} · {terminal_title}")),
+                                                .child(source_label),
                                         ),
                                 )
                                 .when(!message.title.is_empty(), |card| {

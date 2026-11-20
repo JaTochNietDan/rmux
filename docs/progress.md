@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Notification panel construction now filters read records before cloning message
+handles or building labels in Unread mode. Visible messages from one terminal
+share a single formatted workspace/tab label instead of copying both titles and
+formatting them for every card. All/Unread counts are collected during the same
+history walk. Desktop compilation passed. This reduces repeated allocations by
+construction; no frame-time or memory improvement has yet been measured.
+
 The notification panel and its keyboard target list now sort by descending
 arrival sequence across the window. Both All and Unread filters share that order;
 selection remains identified by terminal/revision rather than a row index.
