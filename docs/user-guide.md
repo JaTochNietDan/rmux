@@ -2,7 +2,9 @@
 
 Use **Show Listening Ports** in the palette or menu to inspect a snapshot of local
 TCP listeners owned by the current terminal’s shell and descendants. Refresh
-manually and copy an address from its row. **Close Listening Ports** is also in
+manually and copy an address from its row. In the panel, ↑/↓ or Home/End select,
+Enter or Command-C (Control-C on Linux/Windows) copies, R refreshes, and Escape
+closes and returns to the terminal. **Close Listening Ports** is also in
 the palette; custom actions are `listening_ports` and `close_listening_ports`.
 The panel does not discover remote-host ports or assume that a listener serves
 HTTP. Results can change immediately as processes and sockets come and go. A

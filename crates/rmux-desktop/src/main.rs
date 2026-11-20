@@ -582,6 +582,7 @@ impl TerminalView {
         self.set_input_focus(false, cx);
         self.terminal_menu = None;
         self.terminal_menu_blur = None;
+        self.ports = Default::default();
         // Pointer coordinates and wheel accumulation belong to the old window,
         // even when its terminal was already unfocused.
         self.mouse_button = None;
@@ -1508,8 +1509,8 @@ impl Render for TerminalView {
             .on_key_up(cx.listener(Self::key_up))
             .on_scroll_wheel(cx.listener(Self::wheel))
             .on_action(cx.listener(Self::paste))
-            .on_action(cx.listener(|this, _: &ShowListeningPorts, _, cx| this.refresh_ports(cx)))
-            .on_action(cx.listener(|this, _: &CloseListeningPorts, _, cx| this.close_ports(cx)))
+            .on_action(cx.listener(|this, _: &ShowListeningPorts, window, cx| this.refresh_ports(window, cx)))
+            .on_action(cx.listener(|this, _: &CloseListeningPorts, window, cx| this.close_ports(window, cx)))
             .on_action(cx.listener(|this, _: &ShowTerminalMenu, window, cx| {
                 this.show_terminal_menu(this.last_bounds.origin + point(px(8.), px(8.)), window, cx);
             }))
@@ -1608,7 +1609,7 @@ impl Render for TerminalView {
             .when_some(self.status_details.as_ref(), |root, records| {
                 root.child(status_view::panel(records, cx))
             })
-            .when(self.ports.visible, |root| root.child(ports_view::panel(&self.ports, cx)))
+            .when(self.ports.visible, |root| root.child(ports_view::panel(&self.ports, window, cx)))
             .child(TerminalElement { view: cx.entity() })
             .when(self.rendered_paste_pending, |root| root.child(
                 div().id("paste-status").absolute().bottom(px(8.)).right(px(8.))
@@ -3092,6 +3093,7 @@ fn main() {
                 KeyBinding::new("cmd-v", Paste, Some("TextInput")),
                 KeyBinding::new("cmd-c", CopySelection, Some("TextInput")),
                 KeyBinding::new("cmd-c", CopySelection, Some("Notifications")),
+                KeyBinding::new("cmd-c", CopySelection, Some("ListeningPorts")),
                 KeyBinding::new("cmd-x", EditorCut, Some("TextInput")),
                 KeyBinding::new("cmd-z", EditorUndo, Some("TextInput")),
                 KeyBinding::new("cmd-shift-z", EditorRedo, Some("TextInput")),
@@ -3142,6 +3144,7 @@ fn main() {
                 KeyBinding::new("ctrl-v", Paste, Some("TextInput")),
                 KeyBinding::new("ctrl-c", CopySelection, Some("TextInput")),
                 KeyBinding::new("ctrl-c", CopySelection, Some("Notifications")),
+                KeyBinding::new("ctrl-c", CopySelection, Some("ListeningPorts")),
                 KeyBinding::new("ctrl-x", EditorCut, Some("TextInput")),
                 KeyBinding::new("ctrl-z", EditorUndo, Some("TextInput")),
                 KeyBinding::new("ctrl-shift-z", EditorRedo, Some("TextInput")),

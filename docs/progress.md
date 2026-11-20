@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+The listening-port panel now owns keyboard focus and a scroll handle. Arrow keys
+wrap through results, Home/End jump, Enter or the platform Copy binding copies
+the selected address, R refreshes and Escape closes/restores terminal focus.
+Pointer selection shares the same selected row, with focused/unfocused styling
+and a compact key-help footer. Keyboard scrolling accounts for partial/churn
+notices before the data rows. Moving a terminal to another window dismisses this
+window-bound panel and cancels any scan. Desktop compilation passed; actual
+focus routing, clipping and clipboard behavior remain native acceptance work.
+
 Listening-port scans now accept cancellation from panel close and terminal-state
 destruction. Checkpoints run before process discovery, before socket backend
 creation, before each iterator read, and around the final ownership snapshot.
