@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Added directional keyboard pane resize actions to the menu, palette and custom
+shortcut mapping (resize_pane_left/right/up/down). The layout operation chooses
+the nearest matching-axis ancestor, preferring the requested-side divider and
+falling back to the opposite shared divider at an edge. It moves 5% of the pair,
+clamps each neighbor to 10%, preserves pair totals/other weights and pane identity,
+and does not fall through to outer splits when the local divider hits its limit.
+Zoomed/starting-split workspaces ignore the action. Desktop test compilation and
+focused nested-axis/identity/weight/clamp checks passed. Native shortcut, drag
+interaction, saved-ratio and cross-platform acceptance remain pending.
+
 Moved invalid-query supersession into SearchWorker: even an oversized edit advances
 the revision, clears pending navigation/refresh, schedules an empty query and
 returns its validation error. Removed the Find bar's duplicate reset. Search

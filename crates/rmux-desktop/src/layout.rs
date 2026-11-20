@@ -102,6 +102,29 @@ impl<T: Clone + PartialEq> PaneTree<T> {
         }
         visit(self, target, &mut 0)
     }
+    /// Move the nearest matching divider by 5% of its neighboring pair. Prefer
+    /// the requested side; at an outer edge, move the opposite shared divider.
+    pub fn resize_direction(&mut self, target: &T, direction: Direction) -> bool {
+        let (axis, positive) = match direction {
+            Direction::Left => (Axis::Columns, false), Direction::Right => (Axis::Columns, true),
+            Direction::Up => (Axis::Rows, false), Direction::Down => (Axis::Rows, true),
+        };
+        self.resize_ancestor(target, axis, positive).unwrap_or(false)
+    }
+    fn resize_ancestor(&mut self, target: &T, requested: Axis, positive: bool) -> Option<bool> {
+        let Self::Split { axis, children, weights } = self else { return None; };
+        let index = children.iter().position(|child| child.pane_index(target).is_some())?;
+        if let Some(changed) = children[index].resize_ancestor(target, requested, positive) { return Some(changed); }
+        if *axis != requested || children.len() < 2 { return None; }
+        let left = if positive { index.min(children.len() - 2) } else { index.saturating_sub(1) };
+        let total = weights[left] + weights[left + 1];
+        let pair = resized_pair(weights[left], weights[left + 1], total * if positive { 0.05 } else { -0.05 }, total * 0.1);
+        let changed = pair != (weights[left], weights[left + 1]);
+        weights[left] = pair.0;
+        weights[left + 1] = pair.1;
+        Some(changed)
+    }
+
     /// Give siblings equal space at every split without changing topology.
     pub fn equalize(&mut self) {
         if let Self::Split {
@@ -225,6 +248,28 @@ pub fn resized_pair(left: f32, right: f32, delta: f32, minimum: f32) -> (f32, f3
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn directional_resize_uses_nearest_axis_and_preserves_other_weights() {
+        let mut tree = PaneTree::Split { axis: Axis::Columns, weights: vec![1., 1., 2.], children: vec![
+            PaneTree::Split { axis: Axis::Rows, weights: vec![1., 1.], children: vec![PaneTree::Pane(1), PaneTree::Pane(2)] },
+            PaneTree::Pane(3), PaneTree::Pane(4),
+        ] };
+        assert!(tree.resize_direction(&2, Direction::Down));
+        assert!(tree.resize_direction(&2, Direction::Right));
+        let PaneTree::Split { weights, children, .. } = &tree else { panic!() };
+        assert_eq!(weights, &[1.1, 0.9, 2.]);
+        let PaneTree::Split { weights, .. } = &children[0] else { panic!() };
+        assert_eq!(weights, &[1.1, 0.9]);
+        assert_eq!(tree.pane_index(&2), Some(1));
+        assert!(!tree.resize_direction(&99, Direction::Left));
+        for _ in 0..100 { tree.resize_direction(&1, Direction::Up); }
+        assert!(!tree.resize_direction(&1, Direction::Up));
+        let PaneTree::Split { weights, children, .. } = &tree else { panic!() };
+        assert_eq!(weights, &[1.1, 0.9, 2.]);
+        let PaneTree::Split { weights, .. } = &children[0] else { panic!() };
+        assert_eq!(weights, &[0.2, 1.8]);
+    }
+
     #[test]
     fn merge_depth_accounts_for_both_preserved_subtrees() {
         let leaf = PaneTree::Pane(0);

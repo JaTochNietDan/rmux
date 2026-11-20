@@ -311,6 +311,10 @@ actions!(
         SplitBelow,
         TogglePaneZoom,
         EqualizePanes,
+        ResizePaneLeft,
+        ResizePaneRight,
+        ResizePaneUp,
+        ResizePaneDown,
         SwapPaneNext,
         SwapPaneLeft,
         SwapPaneRight,
@@ -2484,6 +2488,14 @@ impl Workspace {
         };
         cx.notify();
     }
+    fn resize_pane(&mut self, direction: layout::Direction, window: &Window, cx: &mut Context<Self>) {
+        if self.zoomed.is_some() || self.spawning_split.is_some() || cx.global::<Shutdowns>().quitting { return; }
+        let Some(index) = self.focused_index(window, cx) else { return; };
+        if self.layout.as_mut().is_some_and(|tree| tree.resize_direction(&self.panes[index], direction)) {
+            self.split_drag = None;
+            cx.notify();
+        }
+    }
     fn equalize_panes(&mut self, cx: &mut Context<Self>) {
         if let Some(layout) = &mut self.layout {
             layout.equalize();
@@ -2978,6 +2990,10 @@ impl Render for Workspace {
                 cx.listener(|view, _: &TogglePaneZoom, window, cx| view.toggle_zoom(window, cx)),
             )
             .on_action(cx.listener(|view, _: &EqualizePanes, _, cx| view.equalize_panes(cx)))
+            .on_action(cx.listener(|view, _: &ResizePaneLeft, window, cx| view.resize_pane(layout::Direction::Left, window, cx)))
+            .on_action(cx.listener(|view, _: &ResizePaneRight, window, cx| view.resize_pane(layout::Direction::Right, window, cx)))
+            .on_action(cx.listener(|view, _: &ResizePaneUp, window, cx| view.resize_pane(layout::Direction::Up, window, cx)))
+            .on_action(cx.listener(|view, _: &ResizePaneDown, window, cx| view.resize_pane(layout::Direction::Down, window, cx)))
             .on_action(
                 cx.listener(|view, _: &SwapPaneNext, window, cx| view.swap_pane_next(window, cx)),
             )
@@ -3641,6 +3657,10 @@ fn main() {
                     MenuItem::action("Split Below", SplitBelow),
                     MenuItem::action("Toggle Pane Zoom", TogglePaneZoom),
                     MenuItem::action("Equalize Pane Sizes", EqualizePanes),
+                    MenuItem::action("Resize Pane Left", ResizePaneLeft),
+                    MenuItem::action("Resize Pane Right", ResizePaneRight),
+                    MenuItem::action("Resize Pane Up", ResizePaneUp),
+                    MenuItem::action("Resize Pane Down", ResizePaneDown),
                     MenuItem::action("Previous Prompt", PreviousPrompt),
                     MenuItem::action("Next Prompt", NextPrompt),
                     MenuItem::action("Last Prompt", LastPrompt),

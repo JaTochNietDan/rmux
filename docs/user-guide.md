@@ -1652,3 +1652,16 @@ Group actions can be assigned custom shortcuts using `group_current_workspace`,
 `close_group`, `remove_workspace_from_group` and `set_group_anchor`.
 `close_workspace` targets the current workspace and keeps its usual confirmation
 policy. These action names do not add default key bindings.
+
+### Resize panes from the keyboard
+
+The menu and command palette expose **Resize Pane Left/Right/Up/Down**. Bind
+`resize_pane_left`, `resize_pane_right`, `resize_pane_up`, or `resize_pane_down`
+to your preferred keys in `keybindings`; no new default bindings are reserved.
+Each action moves the nearest divider on that axis by 5% of its neighboring
+pair's space. It prefers the requested side; at an outer edge it moves the
+opposite shared divider in that direction, shrinking the focused pane. Nested
+splits resize locally before considering outer splits. Each neighbor retains at
+least 10% of the pair's space. Existing pane identities, tabs and unrelated split
+weights remain intact. Restore a zoomed layout before resizing; actions are also
+ignored while a split shell is starting. **Equalize Pane Sizes** resets ratios.
