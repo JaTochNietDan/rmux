@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Split divider hover hints now describe dragging, pair-only double-click equalizing
+and palette resize commands. Drag updates compare the computed pair with current
+weights before notifying, avoiding redundant layout/render notifications while the
+pointer remains at a clamped size or repeats an unchanged position. Mouse capture
+and release semantics are unchanged. Desktop cargo check passed; native hover/drag
+acceptance and measured render-count reduction remain pending.
+
 Fixed pane.split JSON-RPC notifications being silently ignored by the mutation
 allowlist. The native socket fixture reproduced the missing split before the fix,
 then passed notification-created pane count, request-plus-notification resize

@@ -35,7 +35,9 @@ impl Workspace {
             .as_mut()
             .and_then(|tree| tree.at_mut(&drag.path))
         {
-            if drag.boundary + 1 < weights.len() {
+            if drag.boundary + 1 < weights.len()
+                && (weights[drag.boundary] != left || weights[drag.boundary + 1] != right)
+            {
                 weights[drag.boundary] = left;
                 weights[drag.boundary + 1] = right;
                 cx.notify();
@@ -129,6 +131,9 @@ pub(super) fn render_panes(
                                     CursorStyle::ResizeUpDown
                                 })
                                 .hover(|style| style.bg(rgb(0x40536b)))
+                                .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint(
+                                    "Drag to resize · Double-click to equalize these two panes · Resize Pane commands are available in the palette".into()
+                                )).into())
                                 .on_mouse_down(
                                     MouseButton::Left,
                                     cx.listener(move |this, event: &MouseDownEvent, _, cx| {
