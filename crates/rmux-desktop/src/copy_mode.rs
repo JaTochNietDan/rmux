@@ -184,7 +184,7 @@ impl CopyMode {
                     Ok(Some(buffer)) => {
                         this.cursor = buffer.lines.len().saturating_sub(1);
                         this.scroll.reset(buffer.lines.len());
-                        this.scroll.scroll_to_reveal_item(this.cursor);
+                        crate::list_navigation::reveal(&this.scroll, this.cursor);
                         this.message = if buffer.truncated { "Snapshot truncated · First 8 MiB / 65,536 lines" } else { "Snapshot · Output continues in the terminal" }.into();
                         this.buffer = Some(Arc::new(buffer));
                     }
@@ -293,7 +293,7 @@ impl CopyMode {
             self.column = 0; self.preferred_column = None;
             self.character_anchor = None;
             self.anchor = None;
-            self.scroll.scroll_to_reveal_item(index);
+            crate::list_navigation::reveal(&self.scroll, index);
         }
     }
     fn run_search(&mut self, query: String, reverse: bool, cx: &mut Context<Self>) {
@@ -396,7 +396,7 @@ impl CopyMode {
                         self.column = buffer.byte_at_column(next, goal);
                     } else if key.modifiers.shift && self.anchor.is_none() { self.anchor = Some(self.cursor); }
                     self.cursor = next;
-                    self.scroll.scroll_to_reveal_item(next);
+                    crate::list_navigation::reveal(&self.scroll, next);
                 } else { match key.key.as_str() {
                     "/" => self.open_search(window, cx),
                     "b" => self.open_buffer_name(window, cx),
@@ -470,7 +470,7 @@ impl Render for CopyMode {
                     this.characters = false; this.rectangular = false; this.character_anchor = None; this.column = 0; this.preferred_column = None;
                     this.anchor = Some(0);
                     this.cursor = buffer.lines.len() - 1;
-                    this.scroll.scroll_to_reveal_item(this.cursor);
+                    crate::list_navigation::reveal(&this.scroll, this.cursor);
                     cx.notify();
                 }
                 cx.stop_propagation();

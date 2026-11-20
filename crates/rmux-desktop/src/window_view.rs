@@ -317,7 +317,7 @@ impl WorkspaceWindow {
             },
             _ => {},
         }
-        if count > 0 && self.memory_rows.is_some() { self.memory_scroll.scroll_to_reveal_item(self.memory_selected); }
+        if count > 0 && self.memory_rows.is_some() { crate::list_navigation::reveal(&self.memory_scroll, self.memory_selected); }
         cx.stop_propagation();
         cx.notify();
     }
@@ -327,7 +327,7 @@ impl WorkspaceWindow {
         self.memory_sort = self.memory_sort.next();
         self.memory_selected = selected.and_then(|selected| self.memory_sort.indices(rows).iter().position(|index| *index == selected)).unwrap_or(0);
         self.memory_scroll.reset(rows.len());
-        if !rows.is_empty() { self.memory_scroll.scroll_to_reveal_item(self.memory_selected); }
+        if !rows.is_empty() { crate::list_navigation::reveal(&self.memory_scroll, self.memory_selected); }
         cx.notify();
     }
     fn close_memory(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -415,7 +415,7 @@ impl WorkspaceWindow {
                 this.memory_selected = selected.and_then(|surface| this.memory_sort.indices(&rows.0).iter().position(|index| rows.0[*index].surface_id == surface))
                     .unwrap_or_else(|| this.memory_selected.min(rows.0.len().saturating_sub(1)));
                 this.memory_scroll.reset(rows.0.len());
-                if !rows.0.is_empty() { this.memory_scroll.scroll_to_reveal_item(this.memory_selected); }
+                if !rows.0.is_empty() { crate::list_navigation::reveal(&this.memory_scroll, this.memory_selected); }
                 this.memory_rows = Some(rows.0);
                 this.memory_application = rows.1;
                 this.memory_loading = false;

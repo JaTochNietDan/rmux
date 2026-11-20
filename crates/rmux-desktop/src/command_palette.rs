@@ -546,7 +546,7 @@ impl Render for CommandPalette {
                 };
                 if let Some(selected) = selected {
                     this.selected = selected;
-                    this.scroll.scroll_to_reveal_item(this.selected);
+                    crate::list_navigation::reveal(&this.scroll, this.selected);
                     cx.notify();
                     cx.stop_propagation();
                 }

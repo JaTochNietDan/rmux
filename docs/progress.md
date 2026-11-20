@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Fixed keyboard/search jumps to unmeasured virtual-list rows. A regression using
+GPUI's actual ListState reproduced a fresh 256-row list staying at row 0 when
+asked to reveal row 255. A shared helper now uses a logical row offset for
+unmeasured destinations and keeps GPUI's normal minimal-scroll behavior for
+measured rows. Palette, tab picker, memory panel and copy-mode cursor/search
+navigation use the helper. Two focused tests pass for distant jumps, reset,
+backward movement, result-count clamping and empty lists. Desktop test compilation
+passes; actual native scrolling/keyboard acceptance remains pending.
+
 Converted the pane tab picker from eager row construction to GPUI ListState/list
 virtualization with a bounded viewport and fixed 52px rows. Only viewport/overdraw
 rows build their title, directory and tooltip elements; matching still scans the

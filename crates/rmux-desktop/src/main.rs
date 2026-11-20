@@ -47,6 +47,7 @@ use preferences::Preferences;
 mod restore;
 mod recovery;
 mod row_cache;
+mod list_navigation;
 mod snapshot;
 mod startup;
 mod status_view;

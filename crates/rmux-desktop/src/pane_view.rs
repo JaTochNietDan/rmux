@@ -430,7 +430,7 @@ impl PaneView {
         if selected == first { return; }
         if let Some((_, selected, scroll)) = &mut self.tab_picker {
             *selected = first;
-            if !matches.is_empty() { scroll.scroll_to_reveal_item(0); }
+            if !matches.is_empty() { crate::list_navigation::reveal(scroll, 0); }
         }
     }
 
@@ -1373,11 +1373,7 @@ impl Render for PaneView {
                         };
                         if let Some(next) = destination {
                             *selected = Some(this.terminals[matches[next]].entity_id());
-                            if scroll.bounds_for_item(next).is_some() {
-                                scroll.scroll_to_reveal_item(next);
-                            } else {
-                                scroll.scroll_to(ListOffset { item_ix: next, offset_in_item: px(0.) });
-                            }
+                            crate::list_navigation::reveal(scroll, next);
                             cx.stop_propagation(); cx.notify();
                         }
                     }))
