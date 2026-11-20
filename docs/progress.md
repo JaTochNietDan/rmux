@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Find query replacement now uses a nonblocking parser-lock attempt. On contention,
+the worker restores the query plus refresh/navigation only if that revision is
+still current, allowing later edits to supersede it during the 1 ms retry backoff.
+The engine API leaves the old query unchanged when busy. Ten search regressions
+and a new initialized-worker contention/supersession test passed; queued navigation
+lands on the latest query. Match selection and search cleanup locking remain
+separate work.
+
 Added opportunistic incremental search feed/step APIs and switched Find's worker
 to them. Busy parser feeds keep pending refresh/navigation state, back off 1 ms
 and recheck cancellation/supersession; idle searches still sleep on the command

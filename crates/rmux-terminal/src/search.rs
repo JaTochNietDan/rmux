@@ -85,6 +85,21 @@ impl Search {
         }
     }
 
+    /// Replace a query only if the parser is available. False leaves the current
+    /// query intact, so callers can retry or supersede it without blocking.
+    pub fn try_set_query(&mut self, query: &str) -> Result<bool> {
+        ensure!(query.len() <= 4096, "search query exceeds 4096 bytes");
+        let _terminal = match self.terminal.try_lock() {
+            Ok(guard) => guard,
+            Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) => return Ok(false),
+        };
+        let value = GhosttyString { ptr: query.as_ptr(), len: query.len() };
+        // SAFETY: this owner holds the parser lock; Ghostty copies query bytes.
+        check(unsafe { ghostty_search_set(self.handle, GHOSTTY_SEARCH_OPT_NEEDLE, input(&value)) })?;
+        Ok(true)
+    }
+
     /// Refresh after output, resize, viewport movement or alternate-screen changes.
     /// No periodic polling is needed when the terminal and query are unchanged.
     pub fn refresh(&mut self) -> Result<Progress> {
@@ -256,9 +271,11 @@ mod tests {
         let mut guard = terminal.lock().unwrap();
         let before = guard.frame()?;
         let selected = guard.selected_text()?;
+        assert!(!search.try_set_query("missing")?);
         assert!(search.try_refresh()?.is_none());
         assert!(search.try_step()?.is_none());
         drop(guard);
+        assert!(search.try_set_query("needle")?);
         let mut complete = false;
         for _ in 0..1000 {
             if let Some(progress) = search.try_step()? {

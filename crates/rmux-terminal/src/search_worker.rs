@@ -79,7 +79,15 @@ impl SearchWorker {
                         }
                         if let Some(query) = query {
                             navigation = 0;
-                            search.set_query(&query)?;
+                            if !search.try_set_query(&query)? {
+                                let mut pending = pending.lock().unwrap_or_else(|e| e.into_inner());
+                                if pending.revision == revision {
+                                    pending.query = Some(query);
+                                    pending.refresh |= refresh;
+                                    pending.navigation = (pending.navigation + movement).clamp(-64, 64);
+                                }
+                                return Ok(None);
+                            }
                         }
                         navigation = (navigation + movement).clamp(-64, 64);
                         if refresh {
@@ -381,6 +389,28 @@ mod tests {
             assert!(Instant::now() < deadline, "worker failed to stop");
             std::thread::sleep(Duration::from_millis(1));
         }
+        Ok(())
+    }
+
+    #[test]
+    fn busy_query_replacement_preserves_latest_navigation() -> Result<()> {
+        let terminal = Arc::new(Mutex::new(Terminal::new(30, 3)?));
+        terminal.lock().unwrap().write(b"alpha beta needle\r\n");
+        let worker = SearchWorker::new(terminal.clone())?;
+        let initial = worker.set_query("alpha".into())?;
+        assert_eq!(wait_for(&worker, initial, false).result.unwrap().matches, 1);
+        let guard = terminal.lock().unwrap();
+        worker.set_query("beta".into())?;
+        worker.navigate(Direction::Older);
+        // Allow repeated busy retries before superseding the blocked query.
+        std::thread::sleep(Duration::from_millis(10));
+        let revision = worker.set_query("needle".into())?;
+        worker.refresh();
+        worker.navigate(Direction::Older);
+        drop(guard);
+        let progress = wait_for(&worker, revision, true).result.unwrap();
+        assert_eq!(progress.matches, 1);
+        assert_eq!(terminal.lock().unwrap().selected_text()?.as_deref(), Some("needle"));
         Ok(())
     }
 }
