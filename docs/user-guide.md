@@ -807,7 +807,11 @@ exit, reset and focus events clean up records according to their state.
 View → Toggle Program Status (also in the palette) shows all records for the
 focused terminal, including hierarchical IDs, inherited app names and messages.
 View → Toggle Notifications (also in the palette) opens a panel with up to 32 recent
-messages per live terminal, with separate read state for each message. Click a message to focus its terminal, or Dismiss
+messages per live terminal, with separate read state for each message. All and Unread
+filters show live counts; press U while the panel is focused to switch filters.
+Arrow keys or Tab navigate the visible messages, Enter opens the selected terminal,
+and Delete dismisses the selected message. Switching filters preserves selection
+when that message remains visible. Click a message to focus its terminal, or Dismiss
 to acknowledge it without switching focus. Panes with unread tabs show an amber
 border. A new notification appears again after dismissal. Focusing a terminal or Mark All
 Read acknowledges retained messages without deleting them. Dismiss All clears the

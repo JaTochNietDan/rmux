@@ -2,6 +2,12 @@
 
 ## Current implementation focus
 
+Notification history now has All/Unread controls with live counts and a panel-local
+U shortcut. Mouse and keyboard navigation share the filtered records; switching
+filters preserves the selected message when visible and scrolls it into view.
+Clear all still clears window history even when the Unread filter is empty.
+Desktop compilation passed; native visual/keyboard acceptance remains pending.
+
 Added bounded notification history end-to-end: the engine retains 32 notifications
 between UI observations, and each live terminal retains 32 messages with independent
 read state. Mixed OSC 9/99/777 bursts no longer collapse to the latest message.

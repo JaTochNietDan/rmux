@@ -20,6 +20,7 @@ pub(super) fn terminal_is_visible(terminal: EntityId, cx: &mut App) -> bool {
 
 #[derive(Clone)]
 struct NotificationNavigation {
+    unread_only: bool,
     focus: FocusHandle,
     origin: Option<FocusHandle>,
     selected: Option<(EntityId, u64)>,
@@ -1412,12 +1413,13 @@ impl WorkspaceWindow {
 
     fn notification_targets(&self, cx: &App) -> Vec<(EntityId, EntityId, u64)> {
         let mut targets = Vec::new();
+        let unread_only = self.notification_navigation.as_ref().is_some_and(|state| state.unread_only);
         for index in self.workspace_order(true) {
             let entry = &self.entries[index];
             for pane in &entry.workspace.read(cx).panes {
                 for terminal in &pane.read(cx).terminals {
                     let view = terminal.read(cx);
-                    for record in view.notifications.iter().rev() {
+                    for record in view.notifications.iter().rev().filter(|record| !unread_only || record.unread) {
                         targets.push((entry.workspace.entity_id(), terminal.entity_id(), record.message.revision));
                     }
                 }
@@ -1432,15 +1434,32 @@ impl WorkspaceWindow {
             }
         } else {
             if self.settings_state.is_some() { self.toggle_settings(window, cx); }
-            let state = NotificationNavigation { focus: cx.focus_handle(), origin: window.focused(cx),
+            let state = NotificationNavigation { unread_only: false, focus: cx.focus_handle(), origin: window.focused(cx),
                 selected: self.notification_targets(cx).first().map(|row| (row.1, row.2)), scroll: ScrollHandle::new() };
             state.focus.focus(window);
             self.notification_navigation = Some(state);
         }
         cx.notify();
     }
+    fn set_notification_filter(&mut self, unread_only: bool, cx: &mut Context<Self>) {
+        let Some(state) = &mut self.notification_navigation else { return; };
+        if state.unread_only == unread_only { return; }
+        state.unread_only = unread_only;
+        let targets = self.notification_targets(cx);
+        let state = self.notification_navigation.as_mut().expect("open notification panel");
+        let index = targets.iter().position(|row| Some((row.1, row.2)) == state.selected).unwrap_or(0);
+        state.selected = targets.get(index).map(|row| (row.1, row.2));
+        state.scroll.scroll_to_item(if targets.is_empty() { 0 } else { index + 1 });
+        cx.notify();
+    }
     fn notification_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         if event.keystroke.modifiers.platform || event.keystroke.modifiers.control || event.keystroke.modifiers.alt { return; }
+        if event.keystroke.key == "u" {
+            let unread_only = !self.notification_navigation.as_ref().is_some_and(|state| state.unread_only);
+            self.set_notification_filter(unread_only, cx);
+            cx.stop_propagation();
+            return;
+        }
         let targets = self.notification_targets(cx);
         let Some(state) = &mut self.notification_navigation else { return; };
         let key = event.keystroke.key.as_str();
@@ -1487,6 +1506,9 @@ impl WorkspaceWindow {
                 }
             }
         }
+        let total_count = messages.len();
+        let unread_count = messages.iter().filter(|row| row.4).count();
+        if navigation.unread_only { messages.retain(|row| row.4); }
         let selected = messages.iter().find(|row| Some((row.1, row.5.revision)) == navigation.selected).or_else(|| messages.first()).map(|row| (row.1, row.5.revision));
         div().track_focus(&navigation.focus).key_context("Notifications")
             .on_mouse_down(MouseButton::Left, { let focus = navigation.focus.clone(); move |_, window, _| focus.focus(window) })
@@ -1509,7 +1531,7 @@ impl WorkspaceWindow {
                     .items_center()
                     .justify_between()
                     .child(div().flex_1().min_w_0().truncate().child(format!("Notifications ({})", messages.len())))
-                    .when(!messages.is_empty(), |header| header.child(
+                    .when(total_count > 0, |header| header.child(
                         div().id("dismiss-all-notifications").px_2().py_1().rounded_sm().text_xs().cursor_pointer()
                             .hover(|style| style.bg(rgb(0x353535)))
                             .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("Dismiss all notifications in this window".into())).into())
@@ -1527,7 +1549,18 @@ impl WorkspaceWindow {
                             .child(icons::icon("close")),
                     ),
             )
-                    .when(has_unread, |panel| panel.child(
+            .child(div().flex().gap_1().px_3().py_2().flex_shrink_0()
+                .children([(false, format!("All {total_count}")), (true, format!("Unread {unread_count}"))].into_iter().map(|(unread_only, label)| {
+                    div().id(if unread_only { "notification-filter-unread" } else { "notification-filter-all" })
+                        .px_2().py_1().rounded_sm().text_xs().cursor_pointer()
+                        .bg(if unread_only == navigation.unread_only { rgb(0x303b4a) } else { rgb(0x242424) })
+                        .text_color(if unread_only == navigation.unread_only { rgb(0xffffff) } else { rgb(0xa0a0a0) })
+                        .hover(|style| style.bg(rgb(0x353535)))
+                        .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
+                            if event.standard_click() { this.set_notification_filter(unread_only, cx); }
+                        })).child(label)
+                })))
+            .when(has_unread, |panel| panel.child(
                         div().id("mark-all-read").flex_shrink_0().mx_3().mb_2().px_2().py_1().rounded_sm().text_xs()
                             .text_color(rgb(0x8ebfff)).cursor_pointer().hover(|style| style.bg(rgb(0x353535)))
                             .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("Acknowledge all alerts in this window; keep messages".into())).into())
@@ -1549,10 +1582,10 @@ impl WorkspaceWindow {
                             .text_xs()
                             .text_color(rgb(0xa0a0a0))
                             .mb_2()
-                            .child("↑↓ / Tab to navigate · Enter to open · Delete to dismiss · Esc to close"),
+                            .child("↑↓ / Tab to navigate · U to filter · Enter to open · Delete to dismiss · Esc to close"),
                     )
                     .when(messages.is_empty(), |list| {
-                        list.child(div().p_3().text_sm().child("No notifications to show"))
+                        list.child(div().p_3().text_sm().child(if navigation.unread_only { "No unread notifications" } else { "No notifications to show" }))
                     })
                     .children(messages.into_iter().map(
                         |(workspace, terminal, name, terminal_title, unread, message)| {
