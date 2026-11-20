@@ -1,0 +1,47 @@
+{
+  "profile": "unoptimized test + debuginfo",
+  "measurement": "single local sample per case; excludes PTY export, allocator overhead, GPUI rendering and RSS; after sample ran with focused tests",
+  "input_bytes": 8388608,
+  "lookups": 10000,
+  "before": [
+    {
+      "case": "ascii_long",
+      "build_ms": 987.097,
+      "lookup_10k_ms": 159.331,
+      "allocated_bytes": 8650832
+    },
+    {
+      "case": "unicode_long",
+      "build_ms": 611.796,
+      "lookup_10k_ms": 125.029,
+      "allocated_bytes": 8650832
+    },
+    {
+      "case": "line_limit",
+      "build_ms": 11.232,
+      "lookup_10k_ms": 2.111,
+      "allocated_bytes": 11010048
+    }
+  ],
+  "after": [
+    {
+      "case": "ascii_long",
+      "build_ms": 118.092,
+      "lookup_10k_ms": 0.333,
+      "allocated_bytes": 8388688
+    },
+    {
+      "case": "unicode_long",
+      "build_ms": 624.965,
+      "lookup_10k_ms": 129.165,
+      "allocated_bytes": 8650832
+    },
+    {
+      "case": "line_limit",
+      "build_ms": 2.367,
+      "lookup_10k_ms": 0.332,
+      "allocated_bytes": 2228224
+    }
+  ],
+  "command": "mise exec -- cargo test -p rmux-desktop copy_mode_snapshot_costs -- --ignored --nocapture"
+}

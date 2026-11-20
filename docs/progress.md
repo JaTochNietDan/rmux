@@ -2,6 +2,19 @@
 
 ## Current implementation focus
 
+Measured and reduced copy-mode snapshot costs at the 8 MiB input limit.
+Printable ASCII rows now map byte offsets directly to cell columns without
+Unicode checkpoint construction; controls stay on the Unicode path. Truncated
+history releases string capacity when it exceeds twice retained text size.
+Single debug samples changed ASCII build time from 987.097 to 118.092 ms and
+10,000 column lookups from 159.331 to 0.333 ms. A 65,536-line truncated snapshot
+reduced tracked vector/string allocations from 11,010,048 to 2,228,224 bytes.
+Unicode sample timing remained roughly unchanged. Raw data, scope and rerun
+command are in docs/benchmarks/copy-mode-snapshot.json; these exclude PTY export,
+UI rendering, allocator overhead and RSS and are not release latency claims.
+Six behavior tests plus the explicit performance sample passed. No broad test
+suite or tool installations were needed. Native acceptance remains pending.
+
 Copy-mode paging now uses the actual viewport height and measured row heights
 (where available), reusing the existing variable-height navigation helper instead
 of jumping a fixed 20 logical lines. The header shows current/total lines; copy

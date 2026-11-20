@@ -26,6 +26,7 @@ impl Buffer {
         if lines.len() == MAX_LINES {
             truncated |= start < text.len();
             text.truncate(start);
+            if text.capacity() > text.len().saturating_mul(2) { text.shrink_to_fit(); }
         } else { lines.push(start..text.len()); }
         // Sparse checkpoints are built with the snapshot on the worker. Avoid
         // rescanning long prefixes for every vertical key press.
@@ -33,6 +34,12 @@ impl Buffer {
         let mut column_ranges = Vec::with_capacity(lines.len());
         for range in &lines {
             let first = column_marks.len();
+            // Printable ASCII has one cell per byte and needs no checkpoints.
+            // Keep controls on the Unicode path (e.g. tab is not width one).
+            if text[range.clone()].bytes().all(|byte| (b' '..=b'~').contains(&byte)) {
+                column_ranges.push(first..first);
+                continue;
+            }
             column_marks.push((0, 0));
             let mut cells = 0;
             let mut previous = 0;
@@ -59,11 +66,13 @@ impl Buffer {
     fn line(&self, row: usize) -> &str { &self.text[self.lines[row].clone()] }
     fn visual_column(&self, row: usize, byte: usize) -> usize {
         let marks = &self.column_marks[self.column_ranges[row].clone()];
+        if marks.is_empty() { return byte; }
         let (start, cells) = marks[marks.partition_point(|(start, _)| *start as usize <= byte).saturating_sub(1)];
         cells as usize + UnicodeWidthStr::width(&self.line(row)[start as usize..byte])
     }
     fn byte_at_column(&self, row: usize, goal: usize) -> usize {
         let marks = &self.column_marks[self.column_ranges[row].clone()];
+        if marks.is_empty() { return goal.min(self.line(row).len()); }
         let (start, cells) = marks[marks.partition_point(|(_, cells)| (*cells as usize) < goal).saturating_sub(1)];
         let line = self.line(row);
         let mut cells = cells as usize;
@@ -370,6 +379,32 @@ mod tests {
     use super::{Buffer, MAX_LINES, match_line, next_grapheme, previous_grapheme};
     use std::sync::atomic::AtomicBool;
     #[test]
+    #[ignore = "explicit bounded copy-mode performance sample"]
+    fn copy_mode_snapshot_costs() {
+        use std::{hint::black_box, time::Instant, mem::size_of};
+        for (name, text) in [
+            ("ascii_long", "x".repeat(super::MAX_BYTES)),
+            ("unicode_long", "界a".repeat(super::MAX_BYTES / 4)),
+            ("line_limit", "x\n".repeat(super::MAX_BYTES / 2)),
+        ] {
+            let start = Instant::now();
+            let buffer = Buffer::new(text, false);
+            let build = start.elapsed();
+            let start = Instant::now();
+            for index in 0..10_000 {
+                let row = index % buffer.lines.len();
+                let goal = index * 7919 % buffer.line(row).len().max(1);
+                let byte = buffer.byte_at_column(row, goal);
+                black_box(buffer.visual_column(row, byte));
+            }
+            let allocated = buffer.text.capacity() + buffer.lines.capacity() * size_of::<std::ops::Range<usize>>()
+                + buffer.column_ranges.capacity() * size_of::<std::ops::Range<usize>>()
+                + buffer.column_marks.capacity() * size_of::<(u32, u32)>();
+            println!("{{\"case\":\"{name}\",\"build_ms\":{:.3},\"lookup_10k_ms\":{:.3},\"allocated_bytes\":{allocated},\"retained_bytes\":{},\"lines\":{}}}",
+                build.as_secs_f64() * 1000., start.elapsed().as_secs_f64() * 1000., buffer.text.len(), buffer.lines.len());
+        }
+    }
+    #[test]
     fn snapshot_search_matches_unicode_lines_and_wraps_in_both_directions() {
         let buffer = Buffer::new("世界\nHello 世界\nhello\n世界".into(), false);
         let matches = buffer.find_lines("世界", &AtomicBool::new(false)).unwrap();
@@ -381,6 +416,16 @@ mod tests {
         assert_eq!(match_line(&matches, 1, false, true), Some(1));
         assert_eq!(match_line(&matches, 2, true, true), Some(1));
         assert_eq!(match_line(&[], 0, false, false), None);
+    }
+    #[test]
+    fn ascii_fast_path_excludes_controls_and_releases_discarded_text() {
+        let buffer = Buffer::new("hello\n\tworld\n".into(), false);
+        assert!(buffer.column_ranges[0].is_empty());
+        assert!(!buffer.column_ranges[1].is_empty());
+        assert_eq!(buffer.visual_column(0, 3), 3);
+        assert_eq!(buffer.byte_at_column(0, 99), 5);
+        let limited = Buffer::new("x\n".repeat(MAX_LINES * 4), false);
+        assert_eq!(limited.text.capacity(), limited.text.len());
     }
     #[test]
     fn vertical_columns_preserve_width_across_unicode_short_and_long_lines() {
@@ -426,6 +471,7 @@ mod tests {
         assert!(buffer.truncated);
         assert_eq!(buffer.lines.len(), MAX_LINES);
         assert_eq!(buffer.text.len(), MAX_LINES * 2);
+        assert!(buffer.column_marks.is_empty());
         assert_eq!(buffer.selected(MAX_LINES - 1, None), "x");
     }
 }
