@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Cancel Queued Paste now exposes a per-terminal cancellation generation through
+Edit, palette and custom bindings. The writer checks it before/after encoding
+and skips whole canceled paste messages while retaining ordinary queued input.
+Once write_all begins it finishes the payload, preserving bracketed delimiters.
+The paste permit remains held until the canceled queue slot is processed. Six
+focused paste tests and desktop compilation passed, including cancellation
+before encoding and subsequent slot reuse. Native cancellation timing and a
+blocked real-PTY cancellation scenario remain pending; in-progress writes are
+explicitly not interruptible by this action.
+
 Native clipboard paste now queues its owned text plus captured bracketed mode
 before encoding on the sole PTY writer thread. Later keystrokes stay behind that
 queue slot, and the paste permit remains held through encoding/write completion.

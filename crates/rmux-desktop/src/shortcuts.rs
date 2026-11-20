@@ -31,6 +31,7 @@ fn action(name: &str) -> Option<Box<dyn Action>> {
     Some(match name {
         "new_workspace" => Box::new(NewWorkspace), "new_window" => Box::new(NewWindow),
         "cancel_new_tab" => Box::new(CancelNewTab),
+        "cancel_queued_paste" => Box::new(CancelQueuedPaste),
         "cancel_split" => Box::new(CancelSplit),
         "close_other_tabs" => Box::new(CloseOtherTabs),
         "close_tabs_to_right" => Box::new(CloseTabsToRight),

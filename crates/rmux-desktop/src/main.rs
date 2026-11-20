@@ -339,6 +339,7 @@ actions!(
         MoveTabLeft,
         MoveTabRight,
         Paste,
+        CancelQueuedPaste,
         CopySelection,
         CopySelectionWithLineBreaks,
         CopyWorkingDirectory,
@@ -1481,6 +1482,7 @@ impl Render for TerminalView {
             .on_key_up(cx.listener(Self::key_up))
             .on_scroll_wheel(cx.listener(Self::wheel))
             .on_action(cx.listener(Self::paste))
+            .on_action(cx.listener(|this, _: &CancelQueuedPaste, _, _| this.session.cancel_queued_paste()))
             .on_action(cx.listener(Self::copy))
             .on_action(cx.listener(|this, _: &CopySelectionWithLineBreaks, _, cx| this.copy_selection(false, cx)))
             .on_action(cx.listener(Self::select_all))
@@ -3200,6 +3202,7 @@ fn main() {
                 items: vec![
                     MenuItem::action("Copy", CopySelection),
                     MenuItem::action("Copy with Line Breaks", CopySelectionWithLineBreaks),
+                    MenuItem::action("Cancel Queued Paste", CancelQueuedPaste),
                     MenuItem::action("Cut", EditorCut),
                     MenuItem::action("Undo", EditorUndo),
                     MenuItem::action("Redo", EditorRedo),

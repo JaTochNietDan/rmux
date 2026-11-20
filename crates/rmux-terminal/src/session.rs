@@ -22,6 +22,7 @@ pub struct Session {
     writer: mpsc::SyncSender<InputMessage>,
     input_errors: async_channel::Receiver<String>,
     paste_pending: Arc<AtomicBool>,
+    paste_generation: Arc<AtomicU64>,
     follow_output_pending: AtomicBool,
     shutdown: ShutdownHandle,
     pub updates: async_channel::Receiver<()>,
@@ -34,19 +35,27 @@ pub struct Session {
 pub type HistoryExport = Box<dyn FnOnce() -> Result<Option<(String, bool)>> + Send>;
 pub type MemorySample = Box<dyn FnOnce() -> Result<Option<crate::MemoryUsage>> + Send>;
 
-struct PastePermit(Arc<AtomicBool>);
+struct PastePermit {
+    pending: Arc<AtomicBool>,
+    generation: Arc<AtomicU64>,
+    ticket: u64,
+}
 impl PastePermit {
-    fn acquire(pending: &Arc<AtomicBool>) -> Result<Self> {
+    fn acquire(pending: &Arc<AtomicBool>, generation: &Arc<AtomicU64>) -> Result<Self> {
+        let ticket = generation.load(Ordering::Acquire);
         anyhow::ensure!(
             pending.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).is_ok(),
             "a paste is already pending for this terminal"
         );
-        Ok(Self(pending.clone()))
+        Ok(Self { pending: pending.clone(), generation: generation.clone(), ticket })
+    }
+    fn canceled(&self) -> bool {
+        self.generation.load(Ordering::Acquire) != self.ticket
     }
 }
 impl Drop for PastePermit {
     fn drop(&mut self) {
-        self.0.store(false, Ordering::Release);
+        self.pending.store(false, Ordering::Release);
     }
 }
 
@@ -55,6 +64,14 @@ enum InputPayload {
     Paste { text: String, bracketed: bool },
 }
 impl InputPayload {
+    fn encode_pending(self, paste: Option<&PastePermit>) -> Result<Option<Vec<u8>>> {
+        if paste.is_some_and(PastePermit::canceled) { return Ok(None); }
+        let bytes = self.encode()?;
+        // Cancellation ends at this boundary: write_all must preserve a whole
+        // accepted payload, including bracketed-paste closing delimiters.
+        if paste.is_some_and(PastePermit::canceled) { return Ok(None); }
+        Ok(Some(bytes))
+    }
     fn encode(self) -> Result<Vec<u8>> {
         match self {
             Self::Bytes(bytes) => Ok(bytes),
@@ -224,6 +241,7 @@ impl Session {
             writer,
             input_errors,
             paste_pending: Arc::new(AtomicBool::new(false)),
+            paste_generation: Default::default(),
             follow_output_pending: AtomicBool::new(false),
             shutdown: ShutdownHandle {
                 exit: exit.clone(),
@@ -276,8 +294,9 @@ impl Session {
             .name("rmux-pty-write".into())
             .spawn(move || {
                 while let Ok(message) = writes.recv() {
-                    let bytes = match message.payload.encode() {
-                        Ok(bytes) => bytes,
+                    let bytes = match message.payload.encode_pending(message._paste.as_ref()) {
+                        Ok(Some(bytes)) => bytes,
+                        Ok(None) => continue,
                         Err(error) => {
                             let _ = input_error.try_send(format!("Paste encoding failed: {error}"));
                             let _ = input_notify.try_send(());
@@ -559,11 +578,16 @@ impl Session {
     pub fn take_input_error(&self) -> Option<String> {
         self.input_errors.try_recv().ok()
     }
+    pub fn cancel_queued_paste(&self) {
+        if self.paste_pending.load(Ordering::Acquire) {
+            self.paste_generation.fetch_add(1, Ordering::AcqRel);
+        }
+    }
     /// Reserve queue order before encoding on the sole PTY writer thread.
     pub fn paste_owned(&self, text: String) -> Result<()> {
         anyhow::ensure!(text.len() <= 1024 * 1024, "paste exceeds 1 MiB input limit");
         anyhow::ensure!(self.exit_status().is_none(), "process has exited");
-        let permit = PastePermit::acquire(&self.paste_pending)?;
+        let permit = PastePermit::acquire(&self.paste_pending, &self.paste_generation)?;
         let bracketed = {
             let terminal = match self.terminal.try_lock() {
                 Ok(terminal) => terminal,
@@ -582,7 +606,7 @@ impl Session {
     pub fn try_paste_without_scroll(&self, text: &str) -> Result<bool> {
         anyhow::ensure!(text.len() <= 16 * 1024, "automation paste exceeds 16 KiB");
         anyhow::ensure!(self.exit_status().is_none(), "process has exited");
-        let permit = PastePermit::acquire(&self.paste_pending)?;
+        let permit = PastePermit::acquire(&self.paste_pending, &self.paste_generation)?;
         let bracketed = {
             let terminal = match self.terminal.try_lock() {
                 Ok(terminal) => terminal,
@@ -1105,25 +1129,45 @@ mod tests {
         Ok(())
     }
     #[test]
+    fn canceled_paste_skips_encoding_and_releases_its_slot() -> Result<()> {
+        let pending = Arc::new(AtomicBool::new(false));
+        let generation = Arc::new(AtomicU64::new(0));
+        let permit = PastePermit::acquire(&pending, &generation)?;
+        generation.fetch_add(1, Ordering::AcqRel);
+        // An oversized payload would fail encoding if cancellation were ignored.
+        let payload = InputPayload::Paste { text: "x".repeat(1024 * 1024 + 1), bracketed: true };
+        assert!(payload.encode_pending(Some(&permit))?.is_none());
+        assert!(pending.load(Ordering::Acquire));
+        drop(permit);
+        let permit = PastePermit::acquire(&pending, &generation)?;
+        let payload = InputPayload::Paste { text: "next".into(), bracketed: true };
+        assert_eq!(payload.encode_pending(Some(&permit))?, Some(b"\x1b[200~next\x1b[201~".to_vec()));
+        assert_eq!(InputPayload::Bytes(b"AFTER".to_vec()).encode_pending(None)?, Some(b"AFTER".to_vec()));
+        drop(permit);
+        assert!(!pending.load(Ordering::Acquire));
+        Ok(())
+    }
+    #[test]
     fn paste_permit_survives_queueing_and_recovers_from_rejection() -> Result<()> {
+        let generation = Arc::new(AtomicU64::new(0));
         let pending = Arc::new(AtomicBool::new(false));
         let (sender, receiver) = mpsc::sync_channel(1);
         sender.try_send(InputMessage {
             payload: InputPayload::Bytes(vec![1]),
-            _paste: Some(PastePermit::acquire(&pending)?),
+            _paste: Some(PastePermit::acquire(&pending, &generation)?),
         }).ok().unwrap();
-        assert!(PastePermit::acquire(&pending).is_err());
+        assert!(PastePermit::acquire(&pending, &generation).is_err());
         let message = receiver.recv()?;
-        assert!(PastePermit::acquire(&pending).is_err());
+        assert!(PastePermit::acquire(&pending, &generation).is_err());
         drop(message);
         sender.try_send(vec![2].into()).ok().unwrap();
         let rejected = sender.try_send(InputMessage {
             payload: InputPayload::Bytes(vec![3]),
-            _paste: Some(PastePermit::acquire(&pending)?),
+            _paste: Some(PastePermit::acquire(&pending, &generation)?),
         });
         assert!(rejected.is_err());
         drop(rejected);
-        drop(PastePermit::acquire(&pending)?);
+        drop(PastePermit::acquire(&pending, &generation)?);
         Ok(())
     }
     #[cfg(unix)]
