@@ -748,12 +748,15 @@ impl Render for PaneView {
                                             .gap_2()
                                             .text_size(px(12.))
                                             .border_t_1()
+                                            .border_l_2()
                                             .border_color(gpui::transparent_black())
                                             .cursor_pointer()
                                             .on_drag(drag_item::DragItem { scope, container, item: target, label }, |item, _, _, cx| cx.new(|_| item.clone()))
-                                            .can_drop(move |item, _, _| item.downcast_ref::<drag_item::DragItem>().is_some_and(|item| item.scope == scope))
+                                            .can_drop(move |item, _, _| item.downcast_ref::<drag_item::DragItem>().is_some_and(|item| item.scope == scope && item.item != target))
                                             .drag_over(move |style, item: &drag_item::DragItem, _, _| {
-                                                if item.scope == scope { style.bg(rgb(0x435a7b)) } else { style }
+                                                if item.scope == scope && item.item != target {
+                                                    style.bg(rgb(0x303b4a)).border_color(rgb(0x4599ef))
+                                                } else { style }
                                             })
                                             .on_drop(cx.listener(move |this, item: &drag_item::DragItem, window, cx| this.drop_tab(item, Some(target), window, cx)))
                                             .text_color(rgb(0x9b9b9b))
@@ -843,9 +846,10 @@ impl Render for PaneView {
                                 .child({
                                     let scope = self.workspace;
                                     div().id("tab-drop-end").w(px(20.)).h_full().flex_shrink_0()
+                                        .border_l_2().border_color(gpui::transparent_black())
                                         .can_drop(move |item, _, _| item.downcast_ref::<drag_item::DragItem>().is_some_and(|item| item.scope == scope))
                                         .drag_over(move |style, item: &drag_item::DragItem, _, _| {
-                                            if item.scope == scope { style.bg(rgb(0x435a7b)) } else { style }
+                                            if item.scope == scope { style.bg(rgb(0x303b4a)).border_color(rgb(0x4599ef)) } else { style }
                                         })
                                         .on_drop(cx.listener(|this, item: &drag_item::DragItem, window, cx| this.drop_tab(item, None, window, cx)))
                                 }),

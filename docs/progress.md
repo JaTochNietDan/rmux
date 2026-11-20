@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Tab drop targets now use a blue leading border with a subdued background to
+indicate insertion before the target; the trailing append area uses the same cue.
+Border space is reserved outside a drag so the cue does not change layout width.
+The active tab also retains that leading accent alongside its existing top accent.
+Self-drops are excluded from accepted targets and hover cues. Desktop compilation
+passed; native drag screenshots and visual parity acceptance remain pending.
+
 Cross-pane tab drops now resolve an explicit destination tab before detaching
 the source. A stale target leaves both panes untouched instead of silently
 appending. Explicit end-of-bar drops still append. The validated insertion index
