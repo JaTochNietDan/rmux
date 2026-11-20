@@ -82,6 +82,7 @@ struct Entry {
 #[derive(Clone)]
 struct WorkspaceMenu {
     target: EntityId,
+    group: Option<u64>,
     position: Point<Pixels>,
     focus: FocusHandle,
     return_focus: Option<FocusHandle>,
@@ -133,7 +134,7 @@ impl WorkspaceWindow {
         cx.notify();
     }
 
-    fn show_workspace_menu(&mut self, target: EntityId, position: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
+    fn show_workspace_menu(&mut self, target: EntityId, group: Option<u64>, position: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
         if self.automation_available(cx).is_err() { return; }
         let Some(index) = self.entries.iter().position(|entry| entry.workspace.entity_id() == target) else { return; };
         self.sidebar_selection.clear();
@@ -150,15 +151,31 @@ impl WorkspaceWindow {
             }
         }));
         focus.focus(window);
-        self.workspace_menu = Some(WorkspaceMenu { target, position, focus, return_focus, selected: 0 });
+        self.workspace_menu = Some(WorkspaceMenu { target, group, position, focus, return_focus, selected: 0 });
         cx.notify();
     }
 
     fn activate_workspace_menu(&mut self, item: usize, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(target) = self.workspace_menu.as_ref().map(|menu| menu.target) else { return; };
+        let Some((target, group)) = self.workspace_menu.as_ref().map(|menu| (menu.target, menu.group)) else { return; };
         self.dismiss_workspace_menu(window, cx);
         let Some(index) = self.entries.iter().position(|entry| entry.workspace.entity_id() == target) else { return; };
+        // Never apply a captured group command to a new group after a move.
+        if let Some(group) = group {
+            if !self.groups.containing(target).is_some_and(|current| current.id == group) { return; }
+        }
         self.select(index, window, cx);
+        if group.is_some() {
+            match item {
+                0 => self.edit_metadata(MetadataField::GroupName, window, cx),
+                1 => self.edit_metadata(MetadataField::GroupColor, window, cx),
+                2 => self.edit_metadata(MetadataField::GroupIcon, window, cx),
+                3 => self.toggle_group_pin(cx),
+                4 => self.ungroup_active(cx),
+                5 => self.request_close_group(window, cx),
+                _ => {},
+            }
+            return;
+        }
         match item {
             0 => self.edit_metadata(MetadataField::Name, window, cx),
             1 => self.edit_metadata(MetadataField::Description, window, cx),
@@ -172,7 +189,12 @@ impl WorkspaceWindow {
 
     fn workspace_menu_element(&self, menu: WorkspaceMenu, cx: &mut Context<Self>) -> AnyElement {
         let pinned = self.entries.iter().find(|entry| entry.workspace.entity_id() == menu.target).is_some_and(|entry| entry.pinned);
-        let labels = ["Rename Workspace", "Edit Description", "Change Color", "Change Icon", if pinned { "Unpin Workspace" } else { "Pin Workspace" }, "Close Workspace…"];
+        let labels = if let Some(id) = menu.group {
+            let pinned = self.groups.entries().iter().any(|group| group.id == id && group.pinned);
+            ["Rename Group", "Change Group Color", "Change Group Icon", if pinned { "Unpin Group" } else { "Pin Group" }, "Ungroup Workspaces", "Close Group…"]
+        } else {
+            ["Rename Workspace", "Edit Description", "Change Color", "Change Icon", if pinned { "Unpin Workspace" } else { "Pin Workspace" }, "Close Workspace…"]
+        };
         deferred(anchored().position(menu.position).snap_to_window().child(
             div().id("workspace-context-menu").track_focus(&menu.focus).key_context("WorkspaceMenu")
                 .w(px(230.)).py_1().bg(rgb(0x292929)).border_1().border_color(rgb(0x465063)).rounded_md().shadow_md()
@@ -3130,7 +3152,7 @@ impl Render for WorkspaceWindow {
                 if let Some(entry) = this.entries.get(this.active) {
                     let target = entry.workspace.entity_id();
                     let bounds = this.workspace_scroll.bounds();
-                    this.show_workspace_menu(target, point(bounds.left(), bounds.top()), window, cx);
+                    this.show_workspace_menu(target, None, point(bounds.left(), bounds.top()), window, cx);
                 }
             }))
             .on_action(cx.listener(|this, _: &EditWorkspaceDescription, window, cx| this.edit_metadata(MetadataField::Description, window, cx)))
@@ -3261,6 +3283,7 @@ impl Render for WorkspaceWindow {
                                         .map(|(_, message)| message);
                                     let container = cx.entity_id();
                                     let target = entry.workspace.entity_id();
+                                    let menu_group = header.map(|group| group.id);
                                     let selected = self.sidebar_selection.contains(&target) || index == self.active || header.is_some_and(|group| group.collapsed && self.entries.get(self.active).is_some_and(|entry| group.members.contains(&entry.workspace.entity_id())));
                                     let title_hint: SharedString = display_name.clone().into();
                                     let drop_owner = cx.weak_entity();
@@ -3285,7 +3308,7 @@ impl Render for WorkspaceWindow {
                                             })
                                             .on_drop(cx.listener(move |this, item: &drag_item::DragItem, window, cx| this.drop_workspace(item, target, window, cx))))
                                         .on_mouse_down(MouseButton::Right, cx.listener(move |this, event: &MouseDownEvent, window, cx| {
-                                            this.show_workspace_menu(target, event.position, window, cx);
+                                            this.show_workspace_menu(target, menu_group, event.position, window, cx);
                                             cx.stop_propagation();
                                         }))
                                         .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {

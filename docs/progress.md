@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Group-header context menus now act on the displayed group rather than silently
+editing its anchor workspace. They expose group name/color/icon, pin/unpin,
+Ungroup Workspaces (preserving terminals), and the existing Close Group prompt.
+Activation verifies captured group ownership before applying an action, avoiding
+retargeting if membership changes. The palette's Show Workspace Actions remains
+workspace-specific for editing anchors individually. Desktop compilation passed;
+native grouped-row interaction and visual acceptance remain pending.
+
 Workspace sidebar rows now offer a context menu for name, description, color,
 icon, pin/unpin and policy-aware close. Opening selects the captured workspace
 identity and clears multi-selection. Pointer and keyboard navigation share one

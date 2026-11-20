@@ -973,6 +973,11 @@ Close uses the normal confirmation policy. Arrows/Home/End navigate the menu,
 Enter/Space activates, and Escape restores terminal focus. Outside click or
 focus loss dismisses it. Show Workspace Actions in the palette also opens this
 menu; `workspace_menu` is available for custom shortcut bindings.
+Right-clicking a group header instead offers Rename Group, group Color/Icon,
+Pin/Unpin Group, Ungroup Workspaces and Close Group. Ungroup keeps the workspaces
+and their running terminals; Close Group uses the existing group-close prompt.
+Show Workspace Actions still targets the active workspace, including a group
+anchor, so its individual metadata remains accessible.
 View → Workspace Icon offers Terminal, Code, Build, Cloud, Notes and None.
 The same choices are available in the palette. Icons persist in saved layouts
 and follow a workspace when it moves into a new window.
