@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Native macOS first-launch recovery now passes an isolated smoke scenario against
+the rebuilt desktop binary: missing nested recovery folders are created with
+private Unix permissions, normal Quit writes a valid single-window checkpoint,
+and a second launch restores Unicode workspace metadata and checkpoints it again.
+The fixture uses temporary config/state and short-lived `/usr/bin/true` terminal
+processes. Run `scripts/smoke-session-restore.py --fresh-recovery` for this focused
+case; it is also part of the default recovery suite. This verifies lifecycle/RPC
+behavior, not OS focus, screenshots or cross-platform acceptance.
+
 First-launch session recovery now creates missing parent directories before
 opening its sibling lock file. New directories use mode 0700 on Unix; existing
 directories are not chmodded, and obstructing files still fail without mutation.

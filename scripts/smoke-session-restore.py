@@ -346,6 +346,39 @@ def main(automatic=False, preset=False):
     print(f"Session restore passed (preset={preset}, automatic={automatic}, forced_stop_relaunch={automatic}): headless validation, all-window directory preflight, two windows, metadata, weighted splits, tab selection, fresh shells and cleanup. OS window activation/visual focus unverified.")
 
 
+def check_fresh_recovery():
+    binary = Path("target/debug/rmux").resolve()
+    with tempfile.TemporaryDirectory(prefix="rmux-fresh-recovery-") as directory:
+        root = Path(directory)
+        session = root / "new/nested/session.json"
+        config = root / "config.json"
+        config.write_text(json.dumps({"session_file": str(session), "confirm_close": "never"}))
+        env = {key: value for key, value in os.environ.items() if not key.startswith("RMUX_")}
+        env.update(RMUX_CONFIG=str(config), RMUX_SHELL="/usr/bin/true")
+        request = b'{"jsonrpc":"2.0","id":1,"method":"workspace.list"}\n{"jsonrpc":"2.0","method":"system.quit"}\n'
+        def launch():
+            result = subprocess.run([str(binary), "--rpc-stdio-live"], env=env,
+                                    capture_output=True, timeout=8, input=request)
+            assert result.returncode == 0, result.stderr.decode()
+            assert b"recovery disabled" not in result.stderr, result.stderr.decode()
+            assert b"could not recover session" not in result.stderr, result.stderr.decode()
+            return json.loads(result.stdout.splitlines()[0])["result"]["workspaces"]
+        assert not session.parent.exists()
+        assert len(launch()) == 1
+        saved = json.loads(session.read_text())
+        assert len(saved["windows"]) == 1
+        assert len(saved["windows"][0]["workspaces"]) == 1
+        if os.name == "posix":
+            assert session.parent.stat().st_mode & 0o077 == 0
+            assert session.parent.parent.stat().st_mode & 0o077 == 0
+        saved["windows"][0]["workspaces"][0]["name"] = "Fresh recovery 世界"
+        session.write_text(json.dumps(saved))
+        restored = launch()
+        assert len(restored) == 1 and restored[0]["name"] == "Fresh recovery 世界", restored
+        assert json.loads(session.read_text())["windows"][0]["workspaces"][0]["name"] == "Fresh recovery 世界"
+    print("Fresh recovery passed: missing nested folders, private Unix permissions, normal-Quit checkpoint and relaunch metadata. OS focus/visuals unverified.")
+
+
 def check_corrupt_fallback():
     binary = Path("target/debug/rmux").resolve()
     with tempfile.TemporaryDirectory(prefix="rmux-corrupt-session-") as directory:
@@ -372,9 +405,12 @@ if __name__ == "__main__":
     import sys
     if sys.argv[1:] == ["--preset"]:
         main(preset=True)
+    elif sys.argv[1:] == ["--fresh-recovery"]:
+        check_fresh_recovery()
     elif not sys.argv[1:]:
         main()
         main(automatic=True)
         check_corrupt_fallback()
+        check_fresh_recovery()
     else:
-        raise SystemExit("Usage: smoke-session-restore.py [--preset]")
+        raise SystemExit("Usage: smoke-session-restore.py [--preset | --fresh-recovery]")
