@@ -32,6 +32,8 @@ pub(super) fn pane_control(id: &'static str, hint: &'static str) -> Stateful<Div
 }
 
 pub(super) struct PaneView {
+    // Metadata repaints preserve this offset; selection and structural edits
+    // explicitly reveal the active tab. Busy background tabs must not reset it.
     tab_scroll: ScrollHandle,
     tab_picker: Option<(Entity<text_field::TextField>, Option<EntityId>, ScrollHandle)>,
     tab_picker_blur: Option<Subscription>,
@@ -248,9 +250,8 @@ impl PaneView {
         }
         let selected = self.terminals.len() + active.min(tabs.len() - 1);
         for tab in tabs {
-            let title = cx.subscribe(&tab.terminal, |this, _, _: &TabMetadataChanged, cx| {
+            let title = cx.subscribe(&tab.terminal, |_, _, _: &TabMetadataChanged, cx| {
                 cx.emit(PaneMetadataChanged);
-                this.tab_scroll.scroll_to_item(this.active);
                 cx.notify();
             });
             self.titles.insert(tab.terminal.entity_id(), title);
@@ -310,9 +311,8 @@ impl PaneView {
                     terminal.entity_id(),
                     cx.subscribe(
                         terminal,
-                        |this: &mut Self, _, _: &TabMetadataChanged, cx| {
+                        |_, _, _: &TabMetadataChanged, cx| {
                             cx.emit(PaneMetadataChanged);
-                            this.tab_scroll.scroll_to_item(this.active);
                             cx.notify();
                         },
                     ),
@@ -363,9 +363,8 @@ impl PaneView {
     ) -> Self {
         let title = cx.subscribe(
             &terminal,
-            |this: &mut Self, _, _: &TabMetadataChanged, cx| {
+            |_, _, _: &TabMetadataChanged, cx| {
                 cx.emit(PaneMetadataChanged);
-                this.tab_scroll.scroll_to_item(this.active);
                 cx.notify();
             },
         );
@@ -466,9 +465,8 @@ impl PaneView {
                     terminal.font_family = family;
                     terminal
                 });
-                let title = cx.subscribe(&terminal, |this, _, _: &TabMetadataChanged, cx| {
+                let title = cx.subscribe(&terminal, |_, _, _: &TabMetadataChanged, cx| {
                     cx.emit(PaneMetadataChanged);
-                    this.tab_scroll.scroll_to_item(this.active);
                     cx.notify();
                 });
                 self.titles.insert(terminal.entity_id(), title);
@@ -568,9 +566,8 @@ impl PaneView {
             .iter()
             .position(|view| view.entity_id() == target)
             .unwrap_or(self.terminals.len());
-        let title = cx.subscribe(&tab.terminal, |this, _, _: &TabMetadataChanged, cx| {
+        let title = cx.subscribe(&tab.terminal, |_, _, _: &TabMetadataChanged, cx| {
             cx.emit(PaneMetadataChanged);
-            this.tab_scroll.scroll_to_item(this.active);
             cx.notify();
         });
         self.titles.insert(tab.terminal.entity_id(), title);
@@ -716,6 +713,7 @@ impl Render for PaneView {
                                         let target = terminal.entity_id();
                                         let label: SharedString = self.tab_title(index, cx).into();
                                         let title_hint = label.clone();
+                                        let display_title = label.clone();
                                         div()
                                             .id(("tab", terminal.entity_id()))
                                             .flex()
@@ -790,7 +788,7 @@ impl Render for PaneView {
                                             .child({
                                                 div().id(("tab-title", target)).min_w(px(48.)).max_w(px(220.)).truncate()
                                                     .tooltip(move |_, cx| cx.new(|_| ControlHint(title_hint.clone())).into()).child(
-                                                    self.tab_title(index, cx),
+                                                    display_title,
                                                 )
                                             })
                                             .child(

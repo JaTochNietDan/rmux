@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Tab overflow browsing no longer jumps back to the active tab on every terminal
+metadata update. All five subscription paths (new, restored, added, inserted and
+batch-transferred tabs) now repaint without changing the scroll target; explicit
+selection, reordering and removal still reveal the active tab. Tab rendering also
+reuses one shared title for display, drag preview and tooltip rather than creating
+the title twice. `cargo check -p rmux-desktop` passed. Native overflow browsing
+under progress/title updates remains to be checked; no measured performance gain
+is claimed for the allocation reduction.
+
 Directional joins now use the shared geometric neighbor selection, available
 from the View menu, palette and custom shortcuts. Both next-pane and directional
 joins share the existing batch transfer: destination tabs remain first, source
