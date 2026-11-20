@@ -108,7 +108,7 @@ struct TabMenu {
     focus: FocusHandle,
     selected: usize,
 }
-const TAB_MENU_LABELS: &[&str] = &["Rename Tab", "Move Tab Left", "Move Tab Right", "Close Tab", "Close Other Tabs…", "Close Tabs to the Right…"];
+const TAB_MENU_LABELS: &[&str] = &["Rename Tab", "Copy Working Directory", "Reveal Working Directory", "Move Tab Left", "Move Tab Right", "Close Tab", "Close Other Tabs…", "Close Tabs to the Right…"];
 
 pub(super) struct PaneView {
     // Metadata repaints preserve this offset; selection and structural edits
@@ -179,10 +179,10 @@ impl PaneView {
         cx.notify();
     }
 
-    fn tab_menu_enabled(&self, target: EntityId) -> [bool; 6] {
-        let Some(index) = self.terminals.iter().position(|terminal| terminal.entity_id() == target) else { return [false; 6]; };
+    fn tab_menu_enabled(&self, target: EntityId) -> [bool; 8] {
+        let Some(index) = self.terminals.iter().position(|terminal| terminal.entity_id() == target) else { return [false; 8]; };
         let batch_available = self.spawning_tab.is_none();
-        [true, index > 0, index + 1 < self.terminals.len(), true, batch_available && self.terminals.len() > 1, batch_available && index + 1 < self.terminals.len()]
+        [true, true, true, index > 0, index + 1 < self.terminals.len(), true, batch_available && self.terminals.len() > 1, batch_available && index + 1 < self.terminals.len()]
     }
 
     fn show_active_tab_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -199,11 +199,13 @@ impl PaneView {
         self.select(index, window, cx);
         match item {
             0 => self.rename_tab(window, cx),
-            1 => self.reorder(-1, cx),
-            2 => self.reorder(1, cx),
-            3 => self.close(index, window, cx),
-            4 => self.close_tabs(TabCloseScope::Others, window, cx),
-            5 => self.close_tabs(TabCloseScope::Right, window, cx),
+            1 => self.terminals[index].update(cx, |terminal, cx| terminal.lookup_working_directory(true, cx)),
+            2 => self.terminals[index].update(cx, |terminal, cx| terminal.lookup_working_directory(false, cx)),
+            3 => self.reorder(-1, cx),
+            4 => self.reorder(1, cx),
+            5 => self.close(index, window, cx),
+            6 => self.close_tabs(TabCloseScope::Others, window, cx),
+            7 => self.close_tabs(TabCloseScope::Right, window, cx),
             _ => {},
         }
     }

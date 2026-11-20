@@ -2,6 +2,12 @@
 
 ## Current implementation focus
 
+Tab context menus now expose Copy Working Directory and Reveal Working Directory
+for the clicked terminal identity, reusing the existing asynchronous lookup,
+clipboard ordering and missing-local-directory error handling. Both actions are
+also available to custom shortcuts. Desktop compilation passed; native menu
+layout, clipboard and file-manager activation remain pending acceptance.
+
 Custom shortcuts now expose numbered tab, pane and workspace navigation actions
 for 1–9, dispatching the existing typed commands without changing their ordering
 or target semantics. Canonical one-digit suffix validation rejects zero, leading

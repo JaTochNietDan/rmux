@@ -76,6 +76,8 @@ fn action(name: &str) -> Option<Box<dyn Action>> {
         "settings" => Box::new(ToggleSettings), "notifications" => Box::new(ToggleNotifications),
         "mark_all_read" => Box::new(MarkAllRead),
         "copy_with_line_breaks" => Box::new(CopySelectionWithLineBreaks),
+        "copy_working_directory" => Box::new(CopyWorkingDirectory),
+        "reveal_working_directory" => Box::new(RevealWorkingDirectory),
         "new_group" => Box::new(NewWorkspaceGroup),
         "group_selected" => Box::new(GroupSelectedWorkspaces),
         "rename_group" => Box::new(RenameWorkspaceGroup),
