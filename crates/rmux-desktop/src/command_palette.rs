@@ -236,6 +236,7 @@ impl CommandPalette {
         command!("Save Session…", SaveSession);
         command!("Open Session in New Windows…", OpenSession);
         command!("Open Layout Preset…", ShowLayoutPresetPicker);
+        command!("Run Configured Command…", ShowCustomCommandPicker);
         command!("Cancel Layout / Session Restore", CancelRestore);
         command!("Settings", ToggleSettings);
         command!("Save Appearance Settings", SaveAppearanceSettings);
@@ -293,14 +294,7 @@ impl CommandPalette {
                 subtitle: None,
             });
         }
-        for command in &cx.global::<Preferences>().commands {
-            commands.push(Command {
-                title: format!("Run {}", command.name),
-                subtitle: Some(command.argv.join(" ").chars().map(|ch| if ch.is_control() { ' ' } else { ch }).take(256).collect()),
-                target: PaletteEvent::Run(Box::new(RunCustomCommand { name: command.name.clone() })),
-                shortcut: None,
-            });
-        }
+        commands.extend(cx.global::<Preferences>().commands.iter().map(custom_command));
         commands.extend(cx.global::<Preferences>().layout_presets.iter().map(preset_command));
         if let Some(focus) = origin_focus {
             for command in &mut commands {
@@ -365,6 +359,16 @@ impl CommandPalette {
                 else { Box::new(PasteNamedBuffer { name, revision, surface_id: surface_id.clone() }) }),
         }).collect();
         Self::with_commands(commands, if deleting { "Delete named buffer" } else { "Paste named buffer" }, "No matching buffers · Save a selection in Copy Mode first", window, cx)
+    }
+    pub fn custom_commands(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let mut commands: Vec<_> = cx.global::<Preferences>().commands.iter().map(custom_command).collect();
+        let empty = if commands.is_empty() { "No commands · Add commands in Settings, then Reload Settings" } else { "No matching configured commands" };
+        if let Some(focus) = window.focused(cx) {
+            for command in &mut commands {
+                if let PaletteEvent::Run(action) = &command.target { command.shortcut = shortcuts::hint(action.as_ref(), &focus, window); }
+            }
+        }
+        Self::with_commands(commands, "Run configured command · Opens a new workspace", empty, window, cx)
     }
     pub fn layout_presets(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let mut commands: Vec<_> = cx.global::<Preferences>().layout_presets.iter().map(preset_command).collect();
@@ -573,6 +577,28 @@ impl Render for CommandPalette {
                     .text_color(rgb(0xa0a0a0))
                     .child("↑↓ select · PgUp/PgDn jump · Enter run · Esc close"),
             ))
+    }
+}
+
+fn custom_command(command: &preferences::CustomCommand) -> Command {
+    // Quote ambiguous arguments for display only; launching always uses literal argv.
+    // Keep long definitions bounded in tooltips and omit environment values.
+    let argv = command.argv.iter().map(|arg| {
+        if arg.is_empty() || arg.chars().any(|ch| ch.is_whitespace() || ch.is_control() || ch == '"' || ch == '\\') {
+            serde_json::to_string(arg).expect("string argument serializes")
+        } else { arg.clone() }
+    }).collect::<Vec<_>>().join(" ");
+    let directory = command.cwd.as_ref().map(|cwd| cwd.display().to_string())
+        .unwrap_or_else(|| "Current terminal directory".into());
+    let detail = format!("{directory} · {argv}");
+    let mut chars = detail.chars().map(|ch| if ch.is_control() { ' ' } else { ch });
+    let mut subtitle: String = chars.by_ref().take(768).collect();
+    if chars.next().is_some() { subtitle.push('…'); }
+    Command {
+        title: format!("Run {}", command.name),
+        subtitle: Some(subtitle),
+        target: PaletteEvent::Run(Box::new(RunCustomCommand { name: command.name.clone() })),
+        shortcut: None,
     }
 }
 

@@ -2770,6 +2770,13 @@ impl WorkspaceWindow {
         this
     }
 
+    fn show_custom_command_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.automation_available(cx).is_err() { return; }
+        self.close_palette(window, cx);
+        let focus = window.focused(cx);
+        let palette = cx.new(|cx| command_palette::CommandPalette::custom_commands(window, cx));
+        self.install_palette(palette, focus, window, cx);
+    }
     fn show_layout_preset_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.restore_job.is_some() || cx.global::<Shutdowns>().quitting { return; }
         self.close_palette(window, cx);
@@ -3508,6 +3515,7 @@ impl Render for WorkspaceWindow {
                 } else { this.notice = Some("Layout preset is no longer configured".into()); cx.notify(); }
             }))
             .on_action(cx.listener(|this, _: &CancelRestore, _, cx| this.cancel_restore(cx)))
+            .on_action(cx.listener(|this, _: &ShowCustomCommandPicker, window, cx| this.show_custom_command_picker(window, cx)))
             .on_action(cx.listener(|this, _: &ShowLayoutPresetPicker, window, cx| this.show_layout_preset_picker(window, cx)))
             .on_action(cx.listener(|this, command: &RunCustomCommand, window, cx| this.run_custom_command(&command.name, window, cx)))
             .on_action(cx.listener(|this, _: &ToggleSettings, window, cx| this.toggle_settings(window, cx)))

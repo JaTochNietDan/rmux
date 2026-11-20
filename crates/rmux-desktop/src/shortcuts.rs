@@ -70,6 +70,7 @@ fn action(name: &str) -> Option<Box<dyn Action>> {
         "save_layout" => Box::new(SaveLayout), "open_layout" => Box::new(OpenLayout),
         "save_session" => Box::new(SaveSession), "open_session" => Box::new(OpenSession),
         "cancel_restore" => Box::new(CancelRestore),
+        "custom_command_picker" => Box::new(ShowCustomCommandPicker),
         "layout_preset_picker" => Box::new(ShowLayoutPresetPicker),
         "open_settings_file" => Box::new(OpenSettingsFile),
         "save_appearance" => Box::new(SaveAppearanceSettings),

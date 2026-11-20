@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Added Run Configured Command… to the File menu, general palette and
+custom_command_picker shortcut action. The dedicated picker reuses fuzzy search,
+virtualized rows, keyboard navigation, current binding hints and focus return.
+Shared command rows now include cwd and quoted empty/space-containing argument
+previews, bounded to 768 characters; environment values are omitted. Empty config
+and no-match states provide distinct guidance. Execution resolves the current
+command definition and uses the existing background launch path. Desktop check
+passed. Native screenshots remain unavailable because the Mac is locked; picker
+appearance, focus and interaction acceptance remain pending.
+
 Added rmux --command NAME for configured custom commands. It uses the existing
 PTY command launcher with literal argv, child-only environment overrides, saved
 cwd or launcher-directory fallback, and the configured terminal label. Explicit

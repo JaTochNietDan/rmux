@@ -298,7 +298,10 @@ automatic session recovery and does not overwrite its saved file. Do not combine
 `--command` with `--preset`, layout/session options, `-d`, or a program after `--`;
 set the directory and arguments in the command definition instead.
 
-After Reload Settings, choose **Run Tests** in the palette. Each invocation
+After Reload Settings, choose **Run Tests** in the palette. For a list limited to
+your saved commands, use **File → Run Configured Command…**, or assign the
+`custom_command_picker` shortcut action. Search matches names and the displayed
+directory/argument preview; environment values are omitted. Each invocation
 starts a dedicated workspace with its own terminal; it does not inject text into
 an existing shell. Arguments are literal, including spaces and empty arguments;
 use an explicit shell executable only when shell interpretation is intended.
