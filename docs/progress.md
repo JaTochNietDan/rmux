@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Copying a local preview line now keeps the preview, query, selection and scroll
+position open rather than returning to the terminal after each copy. The ordered
+clipboard write happens within the picker and shows a footer confirmation,
+including compact windows. Editing the query or moving selection clears that
+confirmation. Desktop cargo check passed; native repeated-copy and clipboard
+acceptance remain pending.
+
 F01 local browsing now opens regular files as bounded, inert UTF-8 previews on
 the background executor. The virtualized/searchable palette shows numbered
 lines and Back/Refresh/Copy Path actions; selecting a line copies its retained

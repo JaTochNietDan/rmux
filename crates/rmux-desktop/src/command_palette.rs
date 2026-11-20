@@ -105,6 +105,7 @@ pub enum PaletteEvent {
 pub enum BufferMode { Paste, Delete, Rename, Copy }
 
 pub struct CommandPalette {
+    feedback: Option<&'static str>,
     buffer_rename: Option<(String, u64)>,
     input: Entity<text_field::TextField>,
     heading: &'static str,
@@ -478,6 +479,7 @@ impl CommandPalette {
             &input,
             |this, _, event: &text_field::EditEvent, cx| match event {
                 text_field::EditEvent::Changed(query) => {
+                    this.feedback = None;
                     if this.buffer_rename.is_some() {
                         this.empty_message = "Enter a unique buffer name (up to 128 bytes)";
                         cx.notify();
@@ -494,7 +496,7 @@ impl CommandPalette {
         )
         .detach();
         Self {
-            input, heading, empty_message, buffer_rename: None,
+            input, heading, empty_message, buffer_rename: None, feedback: None,
             search: palette_match::RankedSearch::new(commands
                 .iter()
                 .map(|command| format!("{} {} {}", command.title, command.subtitle.as_deref().unwrap_or_default(),
@@ -553,6 +555,15 @@ impl CommandPalette {
     }
     fn run(&mut self, cx: &mut Context<Self>) {
         if self.input.read(cx).is_composing() { return; }
+        if let Some(PaletteEvent::Run(action)) = self.search.matches.get(self.selected)
+            .map(|index| &self.commands[*index].target) {
+            if let Some(line) = action.as_any().downcast_ref::<CopyPreviewLine>() {
+                clipboard::write(ClipboardItem::new_string(line.text.clone()), cx);
+                self.feedback = Some("Copied preview line");
+                cx.notify();
+                return;
+            }
+        }
         if let Some((name, revision)) = &self.buffer_rename {
             let next = self.input.read(cx).value().to_owned();
             match cx.global_mut::<copy_buffers::Store>().rename_if_unchanged(name, next, *revision) {
@@ -632,6 +643,7 @@ impl Render for CommandPalette {
                     navigated_result(this.selected, this.search.matches.len(), key)
                 };
                 if let Some(selected) = selected {
+                    this.feedback = None;
                     this.selected = selected;
                     crate::list_navigation::reveal(&this.scroll, this.selected);
                     cx.notify();
@@ -675,14 +687,14 @@ impl Render for CommandPalette {
                             if event.standard_click() { this.run(cx); }
                         })).child("Save"))
             ))
-            .when(!compact && self.buffer_rename.is_none(), |palette| palette.child(
+            .when((!compact || self.feedback.is_some()) && self.buffer_rename.is_none(), |palette| palette.child(
                 div()
                     .flex_shrink_0()
                     .px_3()
                     .py_2()
                     .text_xs()
                     .text_color(rgb(0xa0a0a0))
-                    .child("↑↓ select · PgUp/PgDn jump · Enter run · Esc close"),
+                    .child(self.feedback.unwrap_or("↑↓ select · PgUp/PgDn jump · Enter run · Esc close")),
             ))
     }
 }

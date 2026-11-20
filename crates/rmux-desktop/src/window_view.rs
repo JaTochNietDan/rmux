@@ -3641,10 +3641,6 @@ impl Render for WorkspaceWindow {
             }))
             .on_action(cx.listener(|this, action: &BrowseDirectory, window, cx| this.browse_directory(action.path.clone(), window, cx)))
             .on_action(cx.listener(|this, action: &PreviewLocalFile, window, cx| this.preview_local_file(action.path.clone(), window, cx)))
-            .on_action(cx.listener(|this, action: &CopyPreviewLine, _, cx| {
-                clipboard::write(ClipboardItem::new_string(action.text.clone()), cx);
-                this.notice = Some("Copied preview line".into()); cx.notify();
-            }))
             .on_action(cx.listener(|this, action: &CopyLocalPath, _, cx| {
                 this.notice = Some(match action.path.to_str() {
                     Some(path) => { clipboard::write(ClipboardItem::new_string(path.into()), cx); "Copied file path".into() }
