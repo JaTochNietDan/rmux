@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Cross-pane tab drops now resolve an explicit destination tab before detaching
+the source. A stale target leaves both panes untouched instead of silently
+appending. Explicit end-of-bar drops still append. The validated insertion index
+is passed through the synchronous transfer, removing the ambiguous fallback from
+the insertion method. Desktop compilation passed; native drag/close race
+acceptance remains pending.
+
 Tab drops now consistently insert before the target tab within and across panes.
 A trailing 20 px drop area appends to the end, represented explicitly as an absent
 target rather than a fabricated tab identity. The moved tab remains selected;

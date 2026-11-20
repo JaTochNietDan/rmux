@@ -583,18 +583,14 @@ impl PaneView {
         Some(TabTransfer { terminal, label })
     }
 
-    pub fn insert_tab(
+    /// The workspace resolves this index before detaching the source tab.
+    pub fn insert_tab_at(
         &mut self,
         tab: TabTransfer,
-        target: Option<EntityId>,
+        index: usize,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let index = self
-            .terminals
-            .iter()
-            .position(|view| Some(view.entity_id()) == target)
-            .unwrap_or(self.terminals.len());
         let title = cx.subscribe(&tab.terminal, |_, _, _: &TabMetadataChanged, cx| {
             cx.emit(PaneMetadataChanged);
             cx.notify();

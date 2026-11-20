@@ -2208,6 +2208,16 @@ impl Workspace {
         else {
             return;
         };
+        // Resolve before detaching anything: a stale explicit target is not an
+        // append request. There is no await between validation and insertion.
+        let destination = target.read(cx);
+        let insertion = match event.target_tab {
+            Some(id) => {
+                let Some(index) = destination.terminals.iter().position(|tab| tab.entity_id() == id) else { return; };
+                index
+            }
+            None => destination.terminals.len(),
+        };
         let Some(tab) = source.update(cx, |pane, cx| pane.take_tab(event.terminal, cx)) else {
             return;
         };
@@ -2215,7 +2225,7 @@ impl Workspace {
             self.remove_pane(&source, cx);
         }
         target.update(cx, |pane, cx| {
-            pane.insert_tab(tab, event.target_tab, window, cx)
+            pane.insert_tab_at(tab, insertion, window, cx)
         });
         cx.notify();
     }
