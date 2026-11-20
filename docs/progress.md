@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+The asynchronous tab launcher now shares its cancellation/prepare boundary with
+two focused lifecycle tests. Pre-canceled work never invokes the launcher;
+cancellation immediately after starting a real PTY child returns an error and
+reaps that unattached child. Both tests passed on macOS. This provides process
+cleanup evidence for the worker boundary, while native button/focus behavior,
+mid-preparation cancellation and window-transfer interaction remain pending.
+
 Pending new-tab launches now have a cancel control, menu/palette action and
 `cancel_new_tab` shortcut action. Cancellation signals the background launch,
 skips preparation when observed after process startup, and suppresses late tab

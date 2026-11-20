@@ -1,6 +1,18 @@
 use super::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+fn prepare_tab_launch(
+    canceled: &AtomicBool,
+    launch: impl FnOnce() -> Result<Session>,
+    colors: [Option<Color>; 3],
+    palette: Option<[Color; 16]>,
+) -> Result<PreparedTerminal> {
+    anyhow::ensure!(!canceled.load(Ordering::Relaxed), "tab launch canceled");
+    let session = launch()?;
+    anyhow::ensure!(!canceled.load(Ordering::Relaxed), "tab launch canceled");
+    TerminalView::prepare(session, colors, palette)
+}
+
 fn tab_drop_index(from: usize, target: usize) -> usize {
     target.saturating_sub(usize::from(from < target))
 }
@@ -516,10 +528,9 @@ impl PaneView {
         let launch_canceled = canceled.clone();
         self.spawning_tab = Some(cx.spawn_in(window, async move |entity, cx| {
             let mut result = executor.spawn(async move {
-                anyhow::ensure!(!launch_canceled.load(Ordering::Relaxed), "tab launch canceled");
-                let session = Session::shell_in_with_scrollback(80, 24, directory.as_deref(), scrollback)?;
-                anyhow::ensure!(!launch_canceled.load(Ordering::Relaxed), "tab launch canceled");
-                TerminalView::prepare(session, colors, palette)
+                prepare_tab_launch(&launch_canceled, || {
+                    Session::shell_in_with_scrollback(80, 24, directory.as_deref(), scrollback)
+                }, colors, palette)
             }).await;
             loop {
                 if canceled.load(Ordering::Relaxed) { break; }
@@ -1032,5 +1043,38 @@ impl Render for PaneView {
                             }))
                     }))))).with_priority(1))
             })
+    }
+}
+
+#[cfg(test)]
+mod launch_tests {
+    use super::{prepare_tab_launch, AtomicBool, Ordering, Session, Result};
+
+    #[test]
+    fn canceled_launch_never_invokes_the_launcher() {
+        let canceled = AtomicBool::new(true);
+        let result = prepare_tab_launch(&canceled, || panic!("canceled launch spawned a session"), [None; 3], None);
+        assert!(result.is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn cancellation_after_spawn_reaps_the_unattached_child() -> Result<()> {
+        let canceled = AtomicBool::new(false);
+        let mut shutdown = None;
+        let result = prepare_tab_launch(&canceled, || {
+            let session = Session::command_in(&["/bin/sh".into(), "-c".into(), "while read line; do :; done".into()], 40, 4, None)?;
+            shutdown = Some(session.shutdown_handle());
+            canceled.store(true, Ordering::Relaxed);
+            Ok(session)
+        }, [None; 3], None);
+        assert!(result.is_err());
+        let shutdown = shutdown.expect("fixture launched a child");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        while !shutdown.is_finished() {
+            anyhow::ensure!(std::time::Instant::now() < deadline, "canceled launch retained its child");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        Ok(())
     }
 }
