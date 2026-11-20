@@ -110,6 +110,7 @@ struct WorkspaceMenu {
     focus: FocusHandle,
     return_focus: Option<FocusHandle>,
     selected: usize,
+    scroll: ScrollHandle,
 }
 
 pub(super) struct WorkspaceWindow {
@@ -183,7 +184,7 @@ impl WorkspaceWindow {
             }
         }));
         focus.focus(window);
-        self.workspace_menu = Some(WorkspaceMenu { target, group, position, focus, return_focus, selected: 0 });
+        self.workspace_menu = Some(WorkspaceMenu { target, group, position, focus, return_focus, selected: 0, scroll: ScrollHandle::new() });
         cx.notify();
     }
 
@@ -251,10 +252,14 @@ impl WorkspaceWindow {
                         "escape" => this.dismiss_workspace_menu(window, cx),
                         _ => {},
                     }
+                    if let Some(menu) = &this.workspace_menu { menu.scroll.scroll_to_item(menu.selected); }
                     cx.stop_propagation();
                     cx.notify();
                 }))
-                .children(labels.into_iter().enumerate().map(|(index, label)| {
+                .child(div().id("workspace-menu-scroll")
+                    .max_h((window.viewport_size().height - px(26.)).max(px(1.)))
+                    .overflow_y_scroll().track_scroll(&menu.scroll)
+                    .children(labels.into_iter().enumerate().map(|(index, label)| {
                     div().id(("workspace-menu-item", index)).mx_1().px_3().py_2().rounded_sm().text_size(px(13.)).cursor_pointer().flex().items_center().gap_3()
                         .when(index == menu.selected, |row| row.bg(rgb(0x354969)))
                         .on_mouse_move(cx.listener(move |this, _, _, cx| {
@@ -272,7 +277,7 @@ impl WorkspaceWindow {
                                 .tooltip({ let hint = hint.clone(); move |_, cx| cx.new(|_| pane_view::ControlHint(hint.clone().into())).into() })
                                 .child(hint)
                         ))
-                }))
+                })))
         )).with_priority(2).into_any_element()
     }
 

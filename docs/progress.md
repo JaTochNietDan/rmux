@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Terminal, tab, workspace and group menus now bound their content height to the
+window and keep a per-open-menu scroll handle. Arrow/Home/End navigation scrolls
+the selected action into view; the initial enabled terminal action is revealed
+as well. An inner scroll container handles menu scrolling while the outer menu
+stops wheel events from reaching terminal contents. This complements the width
+limits and prevents tall menus from simply extending beyond short windows.
+Desktop compilation passed. Desktop access was rechecked and the Mac is still
+locked; actual clipping, wheel routing and keyboard visibility remain unverified.
+
 Workspace and group context menus now use the same active-keymap shortcut column,
 window-bounded width and long-hint tooltips as terminal/tab menus. Their binding
 lookup uses the captured return focus, not the menu's temporary key context.

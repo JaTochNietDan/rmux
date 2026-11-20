@@ -6,6 +6,7 @@ pub(super) struct Menu {
     position: Point<Pixels>,
     focus: FocusHandle,
     selected: usize,
+    scroll: ScrollHandle,
 }
 const LABELS: &[&str] = &["Copy", "Copy with Line Breaks", "Paste", "Select All", "Find…", "Copy Working Directory", "Reveal Working Directory", "Clear Scrollback"];
 
@@ -29,7 +30,9 @@ impl TerminalView {
         }));
         let selected = self.menu_enabled().iter().position(|enabled| *enabled).unwrap_or(0);
         focus.focus(window);
-        self.terminal_menu = Some(Menu { position, focus, selected });
+        let scroll = ScrollHandle::new();
+        scroll.scroll_to_item(selected);
+        self.terminal_menu = Some(Menu { position, focus, selected, scroll });
         cx.notify();
     }
     fn dismiss_terminal_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -84,10 +87,14 @@ impl TerminalView {
                         "escape" => this.dismiss_terminal_menu(window, cx),
                         _ => {},
                     }
+                    if let Some(menu) = &this.terminal_menu { menu.scroll.scroll_to_item(menu.selected); }
                     cx.stop_propagation();
                     cx.notify();
                 }))
-                .children(LABELS.iter().enumerate().map(|(index, label)| {
+                .child(div().id("terminal-menu-scroll")
+                    .max_h((window.viewport_size().height - px(26.)).max(px(1.)))
+                    .overflow_y_scroll().track_scroll(&menu.scroll)
+                    .children(LABELS.iter().enumerate().map(|(index, label)| {
                     div().id(("terminal-menu-item", index)).mx_1().px_3().py_2().rounded_sm().text_size(px(13.)).flex().items_center().gap_3()
                         .when(enabled[index], |row| row.cursor_pointer()
                             .when(index == menu.selected, |row| row.bg(rgb(0x354969)))
@@ -107,7 +114,7 @@ impl TerminalView {
                                 .tooltip({ let hint = hint.clone(); move |_, cx| cx.new(|_| pane_view::ControlHint(hint.clone().into())).into() })
                                 .child(hint)
                         ))
-                }))
+                })))
         )).with_priority(2).into_any_element()
     }
 }

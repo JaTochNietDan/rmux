@@ -107,6 +107,7 @@ struct TabMenu {
     position: Point<Pixels>,
     focus: FocusHandle,
     selected: usize,
+    scroll: ScrollHandle,
 }
 const TAB_MENU_LABELS: &[&str] = &["Rename Tab", "Copy Working Directory", "Reveal Working Directory", "Move Tab Left", "Move Tab Right", "Close Tab", "Close Other Tabs…", "Close Tabs to the Right…"];
 
@@ -175,7 +176,7 @@ impl PaneView {
             }
         }));
         focus.focus(window);
-        self.tab_menu = Some(TabMenu { target, position, focus, selected: 0 });
+        self.tab_menu = Some(TabMenu { target, position, focus, selected: 0, scroll: ScrollHandle::new() });
         cx.notify();
     }
 
@@ -240,10 +241,14 @@ impl PaneView {
                         "escape" => this.dismiss_tab_menu(window, cx),
                         _ => {},
                     }
+                    if let Some(menu) = &this.tab_menu { menu.scroll.scroll_to_item(menu.selected); }
                     cx.stop_propagation();
                     cx.notify();
                 }))
-                .children(TAB_MENU_LABELS.iter().enumerate().map(|(index, label)| {
+                .child(div().id("tab-menu-scroll")
+                    .max_h((window.viewport_size().height - px(26.)).max(px(1.)))
+                    .overflow_y_scroll().track_scroll(&menu.scroll)
+                    .children(TAB_MENU_LABELS.iter().enumerate().map(|(index, label)| {
                     div().id(("tab-menu-item", index)).mx_1().px_3().py_2().rounded_sm().text_size(px(13.)).flex().items_center().gap_3()
                         .when(enabled[index], |row| row.cursor_pointer()
                             .when(index == menu.selected, |row| row.bg(rgb(0x354969)))
@@ -266,7 +271,7 @@ impl PaneView {
                                 .tooltip({ let hint = hint.clone(); move |_, cx| cx.new(|_| ControlHint(hint.clone().into())).into() })
                                 .child(hint)
                         ))
-                }))
+                })))
         )).with_priority(2).into_any_element()
     }
 
