@@ -13,6 +13,17 @@ pub(super) fn prepare_terminal_launch(
     TerminalView::prepare(session, colors, palette)
 }
 
+// Metadata changes can alter result order or row details. Invalidate list
+// measurements without jumping back to the first row on every title update.
+fn refresh_tab_picker_list(scroll: &ListState, count: usize) {
+    let mut offset = scroll.logical_scroll_top();
+    scroll.splice(0..scroll.item_count(), count);
+    if offset.item_ix >= count {
+        offset = ListOffset { item_ix: count.saturating_sub(1), offset_in_item: px(0.) };
+    }
+    scroll.scroll_to(offset);
+}
+
 #[derive(Clone, Copy)]
 enum TabCloseScope { Others, Right, Finished }
 impl TabCloseScope {
@@ -38,6 +49,22 @@ fn tab_drop_index(from: usize, target: usize) -> usize {
 #[cfg(test)]
 mod tab_order_tests {
     use super::{tab_drop_index, other_tab_close_indices, TabCloseScope};
+    #[test]
+    fn picker_metadata_refresh_preserves_scroll_and_clamps_removed_results() {
+        use super::{ListState, ListAlignment, ListOffset, px, refresh_tab_picker_list};
+        let scroll = ListState::new(256, ListAlignment::Top, px(96.));
+        scroll.scroll_to(ListOffset { item_ix: 200, offset_in_item: px(7.) });
+        refresh_tab_picker_list(&scroll, 256);
+        assert_eq!(scroll.logical_scroll_top().item_ix, 200);
+        assert_eq!(scroll.logical_scroll_top().offset_in_item, px(7.));
+        refresh_tab_picker_list(&scroll, 3);
+        assert_eq!(scroll.item_count(), 3);
+        assert_eq!(scroll.logical_scroll_top().item_ix, 2);
+        assert_eq!(scroll.logical_scroll_top().offset_in_item, px(0.));
+        refresh_tab_picker_list(&scroll, 0);
+        assert_eq!(scroll.logical_scroll_top().item_ix, 0);
+    }
+
     #[test]
     fn right_close_scope_preserves_left_and_new_tabs_after_reordering() {
         let original = [10, 20, 30, 40];
@@ -153,7 +180,7 @@ pub(super) struct PaneView {
     // Metadata repaints preserve this offset; selection and structural edits
     // explicitly reveal the active tab. Busy background tabs must not reset it.
     tab_scroll: ScrollHandle,
-    tab_picker: Option<(Entity<text_field::TextField>, Option<EntityId>, ScrollHandle)>,
+    tab_picker: Option<(Entity<text_field::TextField>, Option<EntityId>, ListState)>,
     tab_picker_blur: Option<Subscription>,
     tab_menu: Option<TabMenu>,
     tab_menu_blur: Option<Subscription>,
@@ -326,14 +353,15 @@ impl PaneView {
                 cx.notify();
             }
         }));
-        let scroll = ScrollHandle::new();
-        scroll.scroll_to_item(self.active);
+        let scroll = ListState::new(self.terminals.len(), ListAlignment::Top, px(96.));
+        scroll.scroll_to(ListOffset { item_ix: self.active, offset_in_item: px(0.) });
         focus.focus(window);
         cx.subscribe_in(&input, window, |this, _, event: &text_field::EditEvent, window, cx| {
             match event {
                 text_field::EditEvent::Changed(_) => {
-                    let first = this.matching_tabs(cx).first().map(|index| this.terminals[*index].entity_id());
-                    if let Some((_, selected, scroll)) = &mut this.tab_picker { *selected = first; scroll.scroll_to_item(0); }
+                    let matches = this.matching_tabs(cx);
+                    let first = matches.first().map(|index| this.terminals[*index].entity_id());
+                    if let Some((_, selected, scroll)) = &mut this.tab_picker { *selected = first; scroll.reset(matches.len()); }
                 }
                 text_field::EditEvent::Submitted { .. } => {
                     if let Some((_, selected, _)) = &this.tab_picker {
@@ -349,6 +377,31 @@ impl PaneView {
         self.tab_picker = Some((input, self.active_terminal_id(), scroll));
         cx.notify();
     }
+    fn render_tab_picker_row(&mut self, index: usize, selected: Option<EntityId>, cx: &mut Context<Self>) -> AnyElement {
+        let Some(terminal) = self.terminals.get(index) else { return div().into_any_element(); };
+        let id = terminal.entity_id();
+        let title: SharedString = self.terminal_search_title(index, cx).into();
+        let directory: Option<SharedString> = terminal.read(cx).snapshot_directory.as_ref()
+            .map(|path| path.to_string_lossy().into_owned().into());
+        let hint: SharedString = directory.as_ref().map(|directory| format!("{title}\n{directory}").into()).unwrap_or_else(|| title.clone());
+        div().id(("choose-tab", id)).flex().items_center().gap_2().px_3().h(px(52.)).text_sm().line_height(px(20.)).cursor_pointer()
+            .tooltip(move |_, cx| cx.new(|_| ControlHint(hint.clone())).into())
+            .when(Some(id) == selected, |row| row.bg(rgb(0x354969)))
+            .hover(|row| row.bg(rgb(0x40516c)))
+            .child(div().w(px(16.)).flex_shrink_0().child(if index == self.active { "✓" } else { "" }))
+            .child(div().w(px(24.)).flex_shrink_0().text_xs().text_color(rgb(0xaaaaaa)).child((index + 1).to_string()))
+            .child(div().flex_1().min_w_0().flex().flex_col().gap_1()
+                .child(div().truncate().child(title))
+                .when_some(directory, |column, directory| column.child(div().text_xs().line_height(px(16.)).text_color(rgb(0xaaaaaa)).truncate().child(directory))))
+            .when(terminal.read(cx).attention.any(), |row| row.child(div().w(px(6.)).h(px(6.)).rounded_full().bg(rgb(0xf0b85b))))
+            .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+                if !event.standard_click() { return; }
+                cx.stop_propagation();
+                if let Some(index) = this.terminals.iter().position(|terminal| terminal.entity_id() == id) { this.select(index, window, cx); }
+            }))
+            .into_any_element()
+    }
+
     fn matching_tabs(&self, cx: &App) -> Vec<usize> {
         let query = self.tab_picker.as_ref().map(|(input, _, _)| input.read(cx).value().to_lowercase()).unwrap_or_default();
         let words: Vec<_> = query.split_whitespace().collect();
@@ -356,7 +409,7 @@ impl PaneView {
         // title and directory merely to assign identical scores and sort them.
         if words.is_empty() { return (0..self.terminals.len()).collect(); }
         let mut matches: Vec<_> = (0..self.terminals.len()).filter_map(|index| {
-            let title = self.tab_title(index, cx).to_lowercase();
+            let title = self.terminal_search_title(index, cx).to_lowercase();
             let directory = self.terminals[index].read(cx).snapshot_directory.as_ref()
                 .map(|path| path.to_string_lossy().to_lowercase()).unwrap_or_default();
             palette_match::tab_score(index + 1, &title, &directory, &words).map(|score| (score, index))
@@ -369,12 +422,15 @@ impl PaneView {
         let Some((_, selected, _)) = &self.tab_picker else { return; };
         let selected = *selected;
         let matches = self.matching_tabs(cx);
+        if let Some((_, _, scroll)) = &self.tab_picker {
+            refresh_tab_picker_list(scroll, matches.len());
+        }
         if matches.iter().any(|index| Some(self.terminals[*index].entity_id()) == selected) { return; }
         let first = matches.first().map(|index| self.terminals[*index].entity_id());
         if selected == first { return; }
         if let Some((_, selected, scroll)) = &mut self.tab_picker {
             *selected = first;
-            scroll.scroll_to_item(0);
+            if !matches.is_empty() { scroll.scroll_to_reveal_item(0); }
         }
     }
 
@@ -1311,45 +1367,34 @@ impl Render for PaneView {
                         let key = event.keystroke.key.as_str();
                         let destination = if matches!(key, "pageup" | "pagedown") {
                             command_palette::paged_result(current, matches.len(), key == "pageup",
-                                f32::from(scroll.bounds().size.height), |index| {
-                                    scroll.bounds_for_item(index).map(|bounds| f32::from(bounds.size.height)).unwrap_or(1.).max(1.)
-                                })
+                                f32::from(scroll.viewport_bounds().size.height), |_| 52.)
                         } else {
                             command_palette::navigated_result(current, matches.len(), key)
                         };
                         if let Some(next) = destination {
                             *selected = Some(this.terminals[matches[next]].entity_id());
-                            scroll.scroll_to_item(next); cx.stop_propagation(); cx.notify();
+                            if scroll.bounds_for_item(next).is_some() {
+                                scroll.scroll_to_reveal_item(next);
+                            } else {
+                                scroll.scroll_to(ListOffset { item_ix: next, offset_in_item: px(0.) });
+                            }
+                            cx.stop_propagation(); cx.notify();
                         }
                     }))
                     .child(div().px_3().pt_2().text_xs().text_color(rgb(0xaaaaaa))
                         .child(format!("{} of {} tabs · Search title or directory · ↑↓ choose · Enter open · Esc cancel", matches.len(), self.terminals.len())))
                     .child(div().flex_shrink_0().p_2().child(input))
-                    .child(div().id("tab-picker-menu").min_h_0().max_h(px(240.)).overflow_y_scroll().track_scroll(&scroll)
-                    .when(matches.is_empty(), |menu| menu.child(div().p_3().text_sm().text_color(rgb(0xaaaaaa)).child("No matching tabs")))
-                    .children(matches.into_iter().map(|index| {
-                        let terminal = &self.terminals[index];
-                        let id = terminal.entity_id();
-                        let title: SharedString = self.tab_title(index, cx).into();
-                        let directory: Option<SharedString> = terminal.read(cx).snapshot_directory.as_ref()
-                            .map(|path| path.to_string_lossy().into_owned().into());
-                        let hint: SharedString = directory.as_ref().map(|directory| format!("{title}\n{directory}").into()).unwrap_or_else(|| title.clone());
-                        div().id(("choose-tab", id)).flex().items_center().gap_2().px_3().py_2().cursor_pointer()
-                            .tooltip(move |_, cx| cx.new(|_| ControlHint(hint.clone())).into())
-                            .when(Some(id) == selected, |row| row.bg(rgb(0x354969)))
-                            .hover(|row| row.bg(rgb(0x40516c)))
-                            .child(div().w(px(16.)).flex_shrink_0().child(if index == self.active { "✓" } else { "" }))
-                            .child(div().w(px(24.)).flex_shrink_0().text_xs().text_color(rgb(0xaaaaaa)).child((index + 1).to_string()))
-                            .child(div().flex_1().min_w_0().flex().flex_col().gap_1()
-                                .child(div().truncate().child(title))
-                                .when_some(directory, |column, directory| column.child(div().text_xs().text_color(rgb(0xaaaaaa)).truncate().child(directory))))
-                            .when(terminal.read(cx).attention.any(), |row| row.child(div().w(px(6.)).h(px(6.)).rounded_full().bg(rgb(0xf0b85b))))
-                            .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
-                                if !event.standard_click() { return; }
-                                cx.stop_propagation();
-                                if let Some(index) = this.terminals.iter().position(|terminal| terminal.entity_id() == id) { this.select(index, window, cx); }
-                            }))
-                    }))))).with_priority(1))
+                    .child(if matches.is_empty() {
+                        div().p_3().text_sm().text_color(rgb(0xaaaaaa)).child("No matching tabs").into_any_element()
+                    } else {
+                        let entity = cx.entity();
+                        let height = px((matches.len() as f32 * 52.).min(240.));
+                        list(scroll, move |row, _, cx| {
+                            let Some(&index) = matches.get(row) else { return div().into_any_element(); };
+                            entity.update(cx, |pane, cx| pane.render_tab_picker_row(index, selected, cx))
+                        }).with_sizing_behavior(ListSizingBehavior::Auto)
+                            .w_full().min_h_0().h(height).into_any_element()
+                    }))).with_priority(1))
             })
     }
 }

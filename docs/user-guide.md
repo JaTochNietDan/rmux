@@ -1692,3 +1692,7 @@ in the current pane while retaining the current tab and all running terminals.
 It follows your close-confirmation policy. Tabs created or moved into the pane
 while a confirmation is open are excluded. Bind `close_finished_tabs` to a custom
 shortcut if desired; it has no default binding.
+
+The pane's **Choose Terminal Tab** picker also searches finished state and exit
+messages. Its scrollable results use fixed-height rows and render on demand as
+you scroll, keeping large tab collections from building every result row at once.

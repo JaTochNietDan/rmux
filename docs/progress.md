@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Converted the pane tab picker from eager row construction to GPUI ListState/list
+virtualization with a bounded viewport and fixed 52px rows. Only viewport/overdraw
+rows build their title, directory and tooltip elements; matching still scans the
+bounded tab collection. Initial selection and jumps to unmeasured results use
+explicit logical offsets. Metadata invalidation preserves scroll position and
+clamps it when results shrink; a focused 256-item ListState test passed, and the
+desktop compiles. Finished state/exit messages now participate in this picker's
+search and hover details as well. Native UI access was checked again but the Mac
+remains locked; visual/keyboard acceptance and measured performance remain pending.
+
 Added Close Finished Tabs to the menu, command palette and custom shortcut actions
 (`close_finished_tabs`). It selects only exited non-current tabs and reuses the
 policy-aware batch-close path, preserving the current tab, live processes and
