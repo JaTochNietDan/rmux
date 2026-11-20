@@ -46,6 +46,17 @@ impl TerminalView {
             if let Some(current) = selected_index(records, state.selected.as_deref()) {
                 let next = match event.keystroke.key.as_str() {
                     "home" => Some(0), "end" => Some(records.len() - 1),
+                    key @ ("pageup" | "pagedown") => command_palette::paged_result(
+                        current, records.len(), key == "pageup",
+                        f32::from(state.scroll.bounds().size.height), |index| {
+                            // Cards wrap to their message height. Include the margin
+                            // between cards instead of treating every task as one line.
+                            state.scroll.bounds_for_item(index).map(|bounds| {
+                                state.scroll.bounds_for_item(index + 1)
+                                    .map(|next| f32::from(next.top() - bounds.top()))
+                                    .unwrap_or_else(|| f32::from(bounds.size.height) + 8.)
+                            }).unwrap_or(1.).max(1.)
+                        }),
                     key => command_palette::navigated_result(current, records.len(), key),
                 };
                 if let Some(next) = next {

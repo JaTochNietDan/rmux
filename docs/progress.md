@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Program Status Page Up/Down now uses the visible scroll viewport and measured
+card strides, including wrapped messages and inter-card margins, instead of a
+fixed eight-task jump. It reuses the shared paging behavior that advances at
+least one task when a card exceeds the panel height. Desktop test compilation
+and the focused mixed-height paging test passed; native paging acceptance
+remains pending.
+
 Program Status now has a lazily created keyboard focus/selection/scroll state.
 Opening focuses the panel; arrows and Home/End navigate tasks, C or Copy copies
 the selected record, and Escape closes/cancels loading and returns focus when the

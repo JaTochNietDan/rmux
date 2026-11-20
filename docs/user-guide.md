@@ -1405,7 +1405,8 @@ automatically; closing it cancels the pending load.
 Hover a truncated task heading or app/title line for details. Each task's **Copy**
 control copies its heading, app/title and complete message to the clipboard.
 Opening Program Status focuses the panel. Use ↑/↓ or Home/End to select a task,
-then C or the Copy shortcut to copy its complete details. Escape closes the panel
+or Page Up/Down to move by the visible panel height, accounting for long messages.
+Use C or the Copy shortcut to copy its complete details. Escape closes the panel
 and returns to the terminal. Clicking a task also selects it; selection follows
 its task ID as reports update.
 View → Toggle Notifications (also in the palette) opens a panel with up to 32 recent
