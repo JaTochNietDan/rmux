@@ -407,6 +407,8 @@ Focus stays unchanged by default; `focus:true` selects the new terminal and
 `activate:true` additionally activates its window. Successful splitting exits
 pane zoom. A failed shell start preserves the existing split tree and zoom.
 RPC creation is limited to 64 panes per workspace and respects busy-window guards.
+Interactive and RPC split creation stop at 32 nested splits, matching saved-layout
+validation; shallower sibling panes remain splittable.
 
 Live layout commands use explicit IDs from the list commands:
 

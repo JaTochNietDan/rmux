@@ -681,10 +681,13 @@ impl WorkspaceWindow {
     }
     pub(super) fn automation_split_pane(&mut self, split: &automation::PaneSplit, target: EntityId, window: &mut Window, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
         self.automation_available(cx)?;
-        let Some((workspace, _)) = self.automation_pane_target(target, cx) else {
+        let Some((workspace, target_pane)) = self.automation_pane_target(target, cx) else {
             return Err(automation::Failure { code: -32004, message: "Pane not found" });
         };
         if workspace.read(cx).panes.len() >= 64 { return Err(automation::Failure { code: -32005, message: "Workspace pane limit reached" }); }
+        if workspace.read(cx).layout.as_ref().is_none_or(|tree| !tree.can_split(&target_pane)) {
+            return Err(automation::Failure { code: -32005, message: "Pane split nesting limit reached" });
+        }
         let axis = match split.direction { automation::SplitDirection::Right => SplitAxis::Columns, automation::SplitDirection::Down => SplitAxis::Rows };
         let pane_id = workspace.update(cx, |workspace, cx| workspace.add_prepared_at(Some(target), axis, split.cwd.clone(), false, None, window, cx))
             .ok_or(automation::Failure { code: -32005, message: "Could not start pane shell" })?;

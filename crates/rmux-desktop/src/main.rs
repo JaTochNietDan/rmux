@@ -2322,6 +2322,14 @@ impl Workspace {
         let anchor = if let Some(target) = target {
             Some(self.panes.iter().position(|pane| pane.entity_id() == target)?)
         } else { self.focused_index(window, cx) };
+        let split_index = anchor.unwrap_or(self.panes.len().saturating_sub(1));
+        if !self.benchmark && self.layout.as_ref().is_some_and(|tree| {
+            self.panes.get(split_index).is_none_or(|pane| !tree.can_split(pane))
+        }) {
+            self.error = Some(format!("Cannot split this pane: maximum nesting is {}", layout::MAX_SPLIT_DEPTH));
+            cx.notify();
+            return None;
+        }
         let mut created = None;
         let directory = directory.or_else(|| anchor
             .and_then(|index| self.panes[index].read(cx).cached_directory(cx)));
@@ -2359,7 +2367,8 @@ impl Workspace {
         };
         match session {
             Ok(session) => {
-                let focused = anchor.unwrap_or(self.panes.len().saturating_sub(1));
+                let focused = split_index;
+                self.error = None;
                 self.split_drag = None;
                 self.zoomed = None;
                 let terminal = cx.new(|cx| {

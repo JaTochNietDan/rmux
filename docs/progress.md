@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Interactive/RPC split creation now checks the target's depth before starting a
+shell, sharing the 32-level constant with saved-layout validation. This prevents
+creation through these paths of a split tree that the restore validator rejects.
+Shallow sibling branches remain splittable even when another branch is at the
+limit. Successful creation clears stale startup errors. Focused tests passed for
+target-depth decisions and actual save/decode at depth 32 with rejection at 33.
+Other layout mutation paths and native limit-message acceptance remain to audit.
+
 Added `rmuxctl split-pane --pane ID --direction right|down` with optional cwd,
 focus and activation flags, command help and direction/boolean completions.
 Required targets/directions and duplicate/unsupported options are rejected locally.

@@ -203,7 +203,7 @@ impl WindowSnapshot {
 
 impl Node {
     fn validate(&self, depth: usize, total_tabs: &mut usize) -> Result<usize> {
-        ensure!(depth <= 32, "layout nesting exceeds 32 splits");
+        ensure!(depth <= crate::layout::MAX_SPLIT_DEPTH, "layout nesting exceeds {} splits", crate::layout::MAX_SPLIT_DEPTH);
         match self {
             Self::Pane { active_tab, tabs } => {
                 ensure!(
@@ -307,6 +307,25 @@ mod tests {
             }],
         }
     }
+    #[test]
+    fn live_split_depth_boundary_round_trips() -> Result<()> {
+        let leaf = || Node::Pane { active_tab: 0, tabs: vec![TabSnapshot {
+            label: "Shell".into(), custom_title: None, font_family: None,
+            directory: None, font_size: 14.,
+        }] };
+        let mut tree = leaf();
+        for _ in 0..crate::layout::MAX_SPLIT_DEPTH {
+            tree = Node::Split { axis: Axis::Columns, weights: vec![1., 1.], children: vec![leaf(), tree] };
+        }
+        let mut saved = fixture();
+        saved.workspaces[0].layout = tree;
+        assert_eq!(WindowSnapshot::decode(&saved.encode()?)?, saved);
+        let tree = std::mem::replace(&mut saved.workspaces[0].layout, leaf());
+        saved.workspaces[0].layout = Node::Split { axis: Axis::Rows, weights: vec![1., 1.], children: vec![leaf(), tree] };
+        assert!(saved.encode().is_err());
+        Ok(())
+    }
+
     #[test]
     fn group_state_round_trips_and_rejects_ambiguous_ownership() -> Result<()> {
         let mut snapshot = fixture();

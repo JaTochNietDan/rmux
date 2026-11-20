@@ -1,3 +1,6 @@
+/// Shared with saved-layout validation so live splits remain restorable.
+pub const MAX_SPLIT_DEPTH: usize = 32;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Axis {
     Columns,
@@ -131,6 +134,16 @@ impl<T: Clone + PartialEq> PaneTree<T> {
         true
     }
 
+    pub fn can_split(&self, target: &T) -> bool {
+        fn depth<T: PartialEq>(tree: &PaneTree<T>, target: &T, level: usize) -> Option<usize> {
+            match tree {
+                PaneTree::Pane(pane) => (pane == target).then_some(level),
+                PaneTree::Split { children, .. } => children.iter().find_map(|child| depth(child, target, level + 1)),
+            }
+        }
+        depth(self, target, 0).is_some_and(|depth| depth < MAX_SPLIT_DEPTH)
+    }
+
     pub fn split(&mut self, target: &T, new: T, axis: Axis) -> bool {
         match self {
             Self::Pane(pane) if pane == target => {
@@ -196,6 +209,19 @@ pub fn resized_pair(left: f32, right: f32, delta: f32, minimum: f32) -> (f32, f3
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn split_limit_tracks_target_depth_not_total_panes() {
+        let mut tree = PaneTree::Pane(0);
+        for next in 1..=MAX_SPLIT_DEPTH {
+            assert!(tree.can_split(&(next - 1)));
+            assert!(tree.split(&(next - 1), next, Axis::Columns));
+        }
+        assert!(!tree.can_split(&MAX_SPLIT_DEPTH));
+        assert!(!tree.can_split(&999));
+        // A shallow sibling still has room even when another branch is deep.
+        assert!(tree.can_split(&0));
+    }
+
     #[test]
     fn saved_pane_index_follows_nested_layout_after_swap_and_removal() {
         use super::{Axis, PaneTree};
