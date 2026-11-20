@@ -2594,21 +2594,12 @@ impl Render for Workspace {
         }
         div()
             .size_full()
+            .relative()
             .child(split_view::drag_capture(cx))
             .bg(rgb(0x12141a))
             .text_color(rgb(0xdcdfe6))
             .flex()
             .flex_col()
-            .when(self.spawning_split.is_some(), |root| root.child(
-                div().h(px(28.)).flex_shrink_0().px_3().flex().items_center().gap_2()
-                    .text_xs().text_color(rgb(0xaab4c4)).bg(rgb(0x242424))
-                    .child(if self.split_launch_canceled.as_ref().is_some_and(|canceled| canceled.load(Ordering::Relaxed)) { "Canceling split terminal…" } else { "Starting split terminal…" })
-                    .child(pane_view::pane_control("cancel-split", "Cancel Split Terminal")
-                        .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
-                            if event.standard_click() { this.cancel_split(cx); }
-                            cx.stop_propagation();
-                        })).child(icons::icon("close")))
-            ))
             .on_action(cx.listener(|this, _: &CancelSplit, _, cx| this.cancel_split(cx)))
             .on_action(
                 cx.listener(|view, _: &TogglePaneZoom, window, cx| view.toggle_zoom(window, cx)),
@@ -2729,6 +2720,25 @@ impl Render for Workspace {
                 cx.listener(|this, event: &ClickEvent, _, cx| {
                     if event.standard_click() { this.error = None; cx.stop_propagation(); cx.notify(); }
                 }))))
+            .when(self.spawning_split.is_some(), |root| root.child(
+                // Out of flow: starting/canceling must not resize every live PTY.
+                div().id("split-launch-status").absolute().top(px(36.)).right(px(8.))
+                    .w(px(250.)).max_w_full().h(px(32.)).px_2().flex().items_center().gap_2()
+                    .occlude().rounded_md().shadow_md().border_1().border_color(rgb(0x465063))
+                    .text_xs().text_color(rgb(0xc6cdd8)).bg(rgb(0x292929))
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .on_mouse_down(MouseButton::Middle, |_, _, cx| cx.stop_propagation())
+                    .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
+                    .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
+                    .child(div().flex_1().min_w_0().truncate().child(
+                        if self.split_launch_canceled.as_ref().is_some_and(|canceled| canceled.load(Ordering::Relaxed)) { "Canceling split terminal…" } else { "Starting split terminal…" }
+                    ))
+                    .child(pane_view::pane_control("cancel-split", "Cancel Split Terminal")
+                        .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
+                            if event.standard_click() { this.cancel_split(cx); }
+                            cx.stop_propagation();
+                        })).child(icons::icon("close")))
+            ))
     }
 }
 fn open_window(benchmark_panes: Option<usize>, cx: &mut App) -> anyhow::Result<()> {

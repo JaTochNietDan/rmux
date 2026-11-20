@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+The pending-split status/cancel control is now an out-of-flow overlay rather
+than a row in the workspace layout. This removes the indicator's contribution
+to terminal sizing, avoiding resize/reflow solely for pending/canceling status.
+It uses a bounded width, truncated label, and pointer-event occlusion so clicks
+and scrolling on the control do not reach terminal content beneath it. Desktop
+compilation passed; native narrow-window placement, hit testing and actual PTY
+resize counts remain pending verification.
+
 Pending splits now have a Cancel Split Terminal control, File/palette action,
 and `cancel_split` custom binding. Cancellation suppresses late attachment/errors
 and retains the launch slot until work completes, bounding cancel/retry jobs.
