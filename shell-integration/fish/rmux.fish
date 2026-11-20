@@ -1,4 +1,4 @@
-# Source manually from an interactive fish session or config.fish.
+# Loaded automatically for fish sessions started by rmux. Can also be sourced manually.
 # Uses built-ins and named events; never replaces prompt or user hook functions.
 status is-interactive; or return
 test "$TERM_PROGRAM" = rmux; or return

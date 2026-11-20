@@ -397,6 +397,9 @@ impl Session {
         } else if !login && std::path::Path::new(&shell).file_name() == Some(std::ffi::OsStr::new("bash"))
             && std::env::var_os("RMUX_SHELL_INTEGRATION").as_deref() != Some(std::ffi::OsStr::new("0")) {
             Some(crate::shell_integration::prepare_bash(&mut command)?)
+        } else if std::path::Path::new(&shell).file_name() == Some(std::ffi::OsStr::new("fish"))
+            && std::env::var_os("RMUX_SHELL_INTEGRATION").as_deref() != Some(std::ffi::OsStr::new("0")) {
+            Some(crate::shell_integration::prepare_fish(&mut command)?)
         } else {
             None
         };

@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Fish shell startup now automatically loads the existing directory/prompt hooks
+through --init-command after normal user configuration, in login and non-login
+sessions. The private integration directory follows session lifetime, the path
+is passed as data via an environment variable, and startup clears that variable.
+Both parent and config.fish integration opt-outs are honored. Extended the fish
+fixture for config ordering, prompt preservation, login modes and config-level
+opt-out. rmux-terminal compilation passed; the fish runtime fixture remains
+unrun because fish is not installed (no unmanaged installer was used). Native
+shell acceptance and PowerShell support remain pending.
+
 Default font selection now uses the installed-font picker from Settings, the
 command palette, and the native menu. Save Settings persists the family and
 tracks family changes during saves; existing inheritance preserves explicit

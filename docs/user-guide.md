@@ -895,7 +895,8 @@ modified. Set `RMUX_SHELL_INTEGRATION=0` before launching rmux to opt out.
 The hooks emit OSC 133 boundaries and percent-encoded OSC 7 paths using built-ins.
 For an already-running shell, source `shell-integration/zsh/rmux.zsh` manually;
 the macOS bundle also carries it under `Contents/Resources/shell-integration/zsh/`.
-Automatic fish startup and PowerShell integration remain pending. Run
+Fish automatically loads its hooks after normal shell configuration for both
+login and non-login sessions. PowerShell integration remains pending. Run
 `mise run test-zsh-integration` for the focused hook check.
 
 Bash integration can currently be sourced manually from
@@ -918,7 +919,7 @@ not explicit commands passed after `--`, and has no effect on Windows.
 The macOS PTY fixture verifies both zsh and non-login Bash directory reporting,
 Unicode path decoding, prompt navigation through scrollback and shell exit.
 
-Manual fish hooks are available in `shell-integration/fish/rmux.fish`, also copied
+Fish hooks are available in `shell-integration/fish/rmux.fish`, also copied
 into newly built macOS bundles. They report percent-encoded working directories,
 prompt start, command start/end and command exit status through fish events,
 without replacing prompt functions. Source only once per session; repeated

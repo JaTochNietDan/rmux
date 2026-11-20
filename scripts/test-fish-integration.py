@@ -50,4 +50,27 @@ with tempfile.TemporaryDirectory(prefix="rmux-fish-") as temporary:
     assert b"\x1b]133;D;1\x07" in output
     disabled = run("0")
     assert b"\x1b]133;" not in disabled and b"\x1b]7;" not in disabled
-print("fish hooks: cwd, user functions, idempotence, command status and opt-out passed")
+    # Exercise the startup ordering used by prepare_fish, including user hooks
+    # and opt-out set inside config.fish rather than only the parent environment.
+    config = Path(temporary) / "fish"
+    config.mkdir()
+    for enabled in (True, False):
+        (config / "config.fish").write_text(
+            "set -g RMUX_USER_CONFIG loaded\n"
+            "function fish_prompt; printf 'custom-prompt'; end\n"
+            + ("" if enabled else "set -gx RMUX_SHELL_INTEGRATION 0\n")
+        )
+        for login in (False, True):
+            env = dict(os.environ, HOME=temporary, TERM_PROGRAM="rmux",
+                       XDG_CONFIG_HOME=temporary, XDG_DATA_HOME=temporary,
+                       RMUX_SHELL_INTEGRATION="1", RMUX_FISH_WRAPPER=str(integration.parent))
+            result = subprocess.run(
+                [fish, "--interactive", *(["--login"] if login else []),
+                 "--init-command", 'source "$RMUX_FISH_WRAPPER/rmux.fish"; set -e RMUX_FISH_WRAPPER',
+                 "--command", "printf '%s|' $RMUX_USER_CONFIG; fish_prompt; "
+                 "emit fish_prompt; set -q RMUX_FISH_WRAPPER; and exit 9; exit 0"],
+                env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=10,
+            ).stdout
+            assert b"loaded|custom-prompt" in result
+            assert (b"\x1b]133;A\x07" in result) == enabled
+print("fish hooks and automatic startup: cwd, user configuration, login modes, idempotence, status and opt-out passed")

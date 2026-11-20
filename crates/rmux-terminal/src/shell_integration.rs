@@ -21,6 +21,17 @@ else
 fi
 "#;
 
+// Fish evaluates init commands after config.fish for both login modes. Pass the
+// private path through the environment so spaces or shell syntax are never code.
+pub(crate) fn prepare_fish(command: &mut CommandBuilder) -> Result<tempfile::TempDir> {
+    let directory = tempfile::Builder::new().prefix("rmux-fish-").tempdir()?;
+    std::fs::write(directory.path().join("rmux.fish"), include_str!("../../../shell-integration/fish/rmux.fish"))?;
+    command.env("RMUX_FISH_WRAPPER", directory.path());
+    command.arg("--init-command");
+    command.arg(r#"source "$RMUX_FISH_WRAPPER/rmux.fish"; set -e RMUX_FISH_WRAPPER"#);
+    Ok(directory)
+}
+
 pub(crate) fn prepare_bash(command: &mut CommandBuilder) -> Result<tempfile::TempDir> {
     let directory = tempfile::Builder::new().prefix("rmux-bash-").tempdir()?;
     std::fs::write(directory.path().join("bashrc"), r#"
