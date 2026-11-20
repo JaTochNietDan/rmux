@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Tab drops now consistently insert before the target tab within and across panes.
+A trailing 20 px drop area appends to the end, represented explicitly as an absent
+target rather than a fabricated tab identity. The moved tab remains selected;
+keyboard and drag reordering emit metadata updates for dependent window UI.
+The focused tab-order test passed for both directions, adjacency, self-drops and
+append. Native drag hit targets, overflow and metadata refresh remain unverified.
+
 Closing or moving out the active workspace now chooses its successor using
 pinned/grouped navigation order, falling back to the previous row at the end.
 The chosen identity survives storage removal and group-slot adjustment. Closing

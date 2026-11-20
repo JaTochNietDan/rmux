@@ -1,5 +1,31 @@
 use super::*;
 
+fn tab_drop_index(from: usize, target: usize) -> usize {
+    target.saturating_sub(usize::from(from < target))
+}
+
+#[cfg(test)]
+mod tab_order_tests {
+    use super::tab_drop_index;
+    #[test]
+    fn drops_insert_before_target_from_either_direction() {
+        for (from, target, expected) in [
+            (0, 3, vec![1, 2, 0, 3]),
+            (0, 4, vec![1, 2, 3, 0]),
+            (3, 1, vec![0, 3, 1, 2]),
+            (1, 2, vec![0, 1, 2, 3]),
+            (2, 2, vec![0, 1, 2, 3]),
+        ] {
+            let mut tabs = vec![0, 1, 2, 3];
+            let moved = tabs.remove(from);
+            let selected = tab_drop_index(from, target);
+            tabs.insert(selected, moved);
+            assert_eq!(tabs, expected);
+            assert_eq!(tabs[selected], from);
+        }
+    }
+}
+
 pub(super) struct ControlHint(pub(super) SharedString);
 impl Render for ControlHint {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
@@ -55,7 +81,7 @@ impl EventEmitter<PaneMetadataChanged> for PaneView {}
 pub(super) struct MoveTab {
     pub source: EntityId,
     pub terminal: EntityId,
-    pub target_tab: EntityId,
+    pub target_tab: Option<EntityId>,
 }
 impl EventEmitter<MoveTab> for PaneView {}
 pub(super) struct TabTransfer {
@@ -493,13 +519,14 @@ impl PaneView {
         self.labels.swap(self.active, next);
         self.active = next;
         self.tab_scroll.scroll_to_item(next);
+        cx.emit(PaneMetadataChanged);
         cx.notify();
     }
 
     fn drop_tab(
         &mut self,
         item: &drag_item::DragItem,
-        target: EntityId,
+        target: Option<EntityId>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -520,18 +547,20 @@ impl PaneView {
         else {
             return;
         };
-        let Some(to) = self
-            .terminals
-            .iter()
-            .position(|view| view.entity_id() == target)
-        else {
-            return;
+        let to = match target {
+            Some(target) => {
+                let Some(index) = self.terminals.iter().position(|view| view.entity_id() == target) else { return; };
+                index
+            }
+            None => self.terminals.len(),
         };
+        let to = tab_drop_index(from, to);
         if from != to {
             let terminal = self.terminals.remove(from);
             let label = self.labels.remove(from);
             self.terminals.insert(to, terminal);
             self.labels.insert(to, label);
+            cx.emit(PaneMetadataChanged);
         }
         self.select(to, window, cx);
     }
@@ -557,14 +586,14 @@ impl PaneView {
     pub fn insert_tab(
         &mut self,
         tab: TabTransfer,
-        target: EntityId,
+        target: Option<EntityId>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let index = self
             .terminals
             .iter()
-            .position(|view| view.entity_id() == target)
+            .position(|view| Some(view.entity_id()) == target)
             .unwrap_or(self.terminals.len());
         let title = cx.subscribe(&tab.terminal, |_, _, _: &TabMetadataChanged, cx| {
             cx.emit(PaneMetadataChanged);
@@ -730,7 +759,7 @@ impl Render for PaneView {
                                             .drag_over(move |style, item: &drag_item::DragItem, _, _| {
                                                 if item.scope == scope { style.bg(rgb(0x435a7b)) } else { style }
                                             })
-                                            .on_drop(cx.listener(move |this, item: &drag_item::DragItem, window, cx| this.drop_tab(item, target, window, cx)))
+                                            .on_drop(cx.listener(move |this, item: &drag_item::DragItem, window, cx| this.drop_tab(item, Some(target), window, cx)))
                                             .text_color(rgb(0x9b9b9b))
                                             .when(index == self.active, |tab| tab
                                                 .bg(rgb(if focused { 0x303030 } else { 0x292929 }))
@@ -814,7 +843,16 @@ impl Render for PaneView {
                                                     .child(icons::icon("close")),
                                             )
                                     },
-                                )),
+                                ))
+                                .child({
+                                    let scope = self.workspace;
+                                    div().id("tab-drop-end").w(px(20.)).h_full().flex_shrink_0()
+                                        .can_drop(move |item, _, _| item.downcast_ref::<drag_item::DragItem>().is_some_and(|item| item.scope == scope))
+                                        .drag_over(move |style, item: &drag_item::DragItem, _, _| {
+                                            if item.scope == scope { style.bg(rgb(0x435a7b)) } else { style }
+                                        })
+                                        .on_drop(cx.listener(|this, item: &drag_item::DragItem, window, cx| this.drop_tab(item, None, window, cx)))
+                                }),
                         )
                         .when(self.terminals.len() > 1, |header| header.child(
                             pane_control("tab-picker", if cfg!(target_os = "macos") { "Choose Terminal Tab  ⌘⇧T" } else { "Choose Terminal Tab  Ctrl+Alt+Shift+T" })
