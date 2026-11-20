@@ -9,7 +9,11 @@ signing, notarization/stapling and signed update archives. Local packaging passe
 Apple notarization and Gatekeeper, and the native updater menu appeared. Published
 binaries will be built on GitHub-hosted ARM64 runners through the new release
 workflow; its signing credentials are encrypted Actions secrets and imported into
-a temporary keychain only for signing. Initial CI release remains pending.
+a temporary keychain for Apple signing and a temporary file for Sparkle signing. Release v0.1.0 is now published from GitHub Actions run 44755158627. Its public
+ZIP passed checksum, pinned-public-key Sparkle signature, strict code signature,
+stapled-ticket and Gatekeeper verification. The raw-main update feed serves that
+exact archive. Final native update-dialog confirmation was blocked when the Mac
+locked; no end-to-end version upgrade has yet been exercised.
 
 Fixed invisible toolbar SVGs: GPUI requires explicit SVG text color instead of
 inherited parent text color. Real-window capture now shows sidebar, notification,
