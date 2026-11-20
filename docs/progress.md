@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Program Status now has a lazily created keyboard focus/selection/scroll state.
+Opening focuses the panel; arrows and Home/End navigate tasks, C or Copy copies
+the selected record, and Escape closes/cancels loading and returns focus when the
+panel owned it. Mouse selection and visible row highlighting share the same
+task-ID selection. Removed tasks fall back to the first row; insertion/reordering
+preserves the selected ID. A focused test passed selection reconciliation and
+complete Unicode/multiline copy formatting; desktop check/test compilation passed.
+Native keyboard, clipboard and focus-return acceptance remain pending.
+
 Reviewed the stored rmux screenshot and visual-reference notes, then aligned
 Program Status close/copy controls with the existing embedded monochrome icons
 and shared 28px hit areas. The shared control helper now accepts indexed IDs for

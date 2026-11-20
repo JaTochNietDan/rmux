@@ -477,6 +477,7 @@ struct TerminalView {
     program_status_revision: u64,
     status_details: Option<Vec<rmux_terminal::program_status::Record>>,
     status_load: Option<Task<()>>,
+    status_ui: Option<status_view::State>,
     ports: ports_view::State,
     copy_mode: Option<Entity<copy_mode::CopyMode>>,
     hidden_line_input: bool,
@@ -853,6 +854,7 @@ impl TerminalView {
             program_status_revision: 0,
             status_details: None,
             status_load: None,
+            status_ui: None,
             ports: Default::default(),
             copy_mode: None,
             hidden_line_input: false,
@@ -1019,10 +1021,15 @@ impl TerminalView {
         }
         cx.notify();
     }
-    fn toggle_status_details(&mut self, cx: &mut Context<Self>) {
-        if self.status_details.take().is_some() {
-            self.status_load = None;
-        } else if let Some(records) = self.session.try_program_status_records() {
+    fn toggle_status_details(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.status_details.is_some() {
+            self.close_status_details(window, cx);
+            return;
+        }
+        let focus = cx.focus_handle();
+        focus.focus(window);
+        self.status_ui = Some(status_view::State { focus, selected: None, scroll: ScrollHandle::new() });
+        if let Some(records) = self.session.try_program_status_records() {
             self.status_details = Some(records);
         } else {
             self.status_details = Some(Vec::new());
@@ -1790,8 +1797,8 @@ impl Render for TerminalView {
             .on_action(cx.listener(|this, _: &FindNewer, window, cx| {
                 this.navigate_find(rmux_terminal::search::Direction::Newer, window, cx)
             }))
-            .on_action(cx.listener(|view, _: &ToggleProgramStatus, _, cx| {
-                view.toggle_status_details(cx);
+            .on_action(cx.listener(|view, _: &ToggleProgramStatus, window, cx| {
+                view.toggle_status_details(window, cx);
             }))
             .on_action(cx.listener(|view, _: &IncreaseFontSize, _, cx| {
                 view.set_font_size(view.cells.font_size + 1., cx)
@@ -1865,8 +1872,8 @@ impl Render for TerminalView {
                 .size_full(),
             )
             .when_some(self.find.clone(), |root, find| root.child(find))
-            .when_some(self.status_details.as_ref(), |root, records| {
-                root.child(status_view::panel(records, self.status_load.is_some(), cx))
+            .when_some(self.status_details.as_ref().zip(self.status_ui.as_ref()), |root, (records, state)| {
+                root.child(status_view::panel(records, self.status_load.is_some(), state, window, cx))
             })
             .when(self.ports.visible, |root| root.child(ports_view::panel(&self.ports, window, cx)))
             .child(TerminalElement { view: cx.entity() })

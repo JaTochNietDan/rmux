@@ -1,8 +1,88 @@
 use super::*;
-use rmux_terminal::program_status::{Kind, Record, State};
+use rmux_terminal::program_status::{Kind, Record, State as TaskState};
 
-pub fn panel(records: &[Record], loading: bool, cx: &mut Context<TerminalView>) -> AnyElement {
-    div()
+#[derive(Clone)]
+pub struct State {
+    pub focus: FocusHandle,
+    pub selected: Option<String>,
+    pub scroll: ScrollHandle,
+}
+
+fn selected_index(records: &[Record], id: Option<&str>) -> Option<usize> {
+    if records.is_empty() { return None; }
+    Some(records.iter().position(|record| Some(record.id.as_str()) == id).unwrap_or(0))
+}
+
+fn report(record: &Record) -> String {
+    let id = if record.id.is_empty() { "Root" } else { &record.id };
+    let state = match record.kind { Kind::Permission => "Approval".into(), Kind::Question => "Question".into(),
+        Kind::Auth => "Login".into(), Kind::None => format!("{:?}", record.state) };
+    let progress = record.progress.map_or(String::new(), |value| format!(" · {value}%"));
+    let metadata = [&record.app, &record.title].into_iter().filter(|value| !value.is_empty())
+        .map(String::as_str).collect::<Vec<_>>().join(" · ");
+    [format!("{id} · {state}{progress}"), metadata, record.message.clone()].into_iter()
+        .filter(|line| !line.is_empty()).collect::<Vec<_>>().join("\n")
+}
+
+impl TerminalView {
+    pub(super) fn close_status_details(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let focused = self.status_ui.as_ref().is_some_and(|state| state.focus.contains_focused(window, cx));
+        self.status_ui = None;
+        self.status_details = None;
+        self.status_load = None;
+        if focused { self.focus.focus(window); }
+        cx.notify();
+    }
+    fn copy_status_record(&self, cx: &mut Context<Self>) {
+        let Some((records, state)) = self.status_details.as_ref().zip(self.status_ui.as_ref()) else { return; };
+        if let Some(index) = selected_index(records, state.selected.as_deref()) {
+            clipboard::write(ClipboardItem::new_string(report(&records[index])), cx);
+        }
+    }
+    fn status_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if event.keystroke.key == "escape" { self.close_status_details(window, cx); }
+        else if event.keystroke.key == "c" { self.copy_status_record(cx); }
+        else if let Some((records, state)) = self.status_details.as_ref().zip(self.status_ui.as_mut()) {
+            if let Some(current) = selected_index(records, state.selected.as_deref()) {
+                let next = match event.keystroke.key.as_str() {
+                    "home" => Some(0), "end" => Some(records.len() - 1),
+                    key => command_palette::navigated_result(current, records.len(), key),
+                };
+                if let Some(next) = next {
+                    state.selected = Some(records[next].id.clone());
+                    state.scroll.scroll_to_item(next);
+                    cx.notify();
+                }
+            }
+        }
+        cx.stop_propagation();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Record, TaskState, Kind, selected_index, report};
+    fn record(id: &str) -> Record {
+        Record { id: id.into(), state: TaskState::Blocked, kind: Kind::Permission,
+            progress: Some(42), app: "builder".into(), title: String::new(), message: "Review 世界\nnext line".into() }
+    }
+    #[test]
+    fn selected_task_survives_reordering_and_deleted_tasks_fall_back() {
+        let records = [record("a"), record("b")];
+        assert_eq!(selected_index(&records, Some("b")), Some(1));
+        assert_eq!(selected_index(&[record("b"), record("a")], Some("b")), Some(0));
+        assert_eq!(selected_index(&records, Some("removed")), Some(0));
+        assert_eq!(selected_index(&[], Some("b")), None);
+        assert_eq!(report(&record("")), "Root · Approval · 42%\nbuilder\nReview 世界\nnext line");
+    }
+}
+
+pub fn panel(records: &[Record], loading: bool, state: &State, window: &Window, cx: &mut Context<TerminalView>) -> AnyElement {
+    let selected = selected_index(records, state.selected.as_deref());
+    let focused = state.focus.is_focused(window);
+    div().track_focus(&state.focus).key_context("ProgramStatus")
+        .on_key_down(cx.listener(TerminalView::status_key))
+        .on_action(cx.listener(|view, _: &CopySelection, _, cx| { view.copy_status_record(cx); cx.stop_propagation(); }))
         .min_w_0()
         .overflow_hidden()
         .h(px(220.))
@@ -13,7 +93,10 @@ pub fn panel(records: &[Record], loading: bool, cx: &mut Context<TerminalView>) 
         .bg(rgb(0x222222))
         .border_b_1()
         .border_color(rgb(0x383838))
-        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .on_mouse_down(MouseButton::Left, cx.listener(|view, _, window, cx| {
+            if let Some(state) = &view.status_ui { state.focus.focus(window); }
+            cx.stop_propagation();
+        }))
         .on_mouse_down(MouseButton::Middle, |_, _, cx| cx.stop_propagation())
         .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
         .on_mouse_up(MouseButton::Left, |_, _, cx| cx.stop_propagation())
@@ -34,12 +117,10 @@ pub fn panel(records: &[Record], loading: bool, cx: &mut Context<TerminalView>) 
                 .child(div().flex_1().min_w_0().truncate().child(if loading { "Program status · Loading…".to_owned() } else { format!("Program status · {} records", records.len()) }))
                 .child(
                     pane_view::pane_control("close-program-status", "Close Program Status")
-                        .on_click(cx.listener(|view, event: &ClickEvent, _, cx| {
+                        .on_click(cx.listener(|view, event: &ClickEvent, window, cx| {
                             if !event.standard_click() { return; }
                             cx.stop_propagation();
-                            view.status_details = None;
-                            view.status_load = None;
-                            cx.notify();
+                            view.close_status_details(window, cx);
                         }))
                         .child(icons::icon("close")),
                 ),
@@ -50,18 +131,18 @@ pub fn panel(records: &[Record], loading: bool, cx: &mut Context<TerminalView>) 
                 .flex_1()
                 .min_h_0()
                 .min_w_0()
-                .overflow_y_scroll()
+                .overflow_y_scroll().track_scroll(&state.scroll)
                 .p_2()
                 .when(records.is_empty(), |list| {
                     list.child(div().p_2().text_sm().child(if loading { "Loading reported tasks…" } else { "No reported tasks" }))
                 })
                 .children(records.iter().enumerate().map(|(index, record)| {
                     let tint = match record.state {
-                        State::Blocked => 0xf0b85b,
-                        State::Error => 0xf18a8a,
-                        State::Done => 0x8dd6a1,
-                        State::Working => 0x86b8f5,
-                        State::Idle => 0x9ba6b8,
+                        TaskState::Blocked => 0xf0b85b,
+                        TaskState::Error => 0xf18a8a,
+                        TaskState::Done => 0x8dd6a1,
+                        TaskState::Working => 0x86b8f5,
+                        TaskState::Idle => 0x9ba6b8,
                     };
                     let state = match record.kind {
                         Kind::Permission => "Approval".to_owned(),
@@ -80,15 +161,19 @@ pub fn panel(records: &[Record], loading: bool, cx: &mut Context<TerminalView>) 
                     let heading: SharedString = format!("{id} · {state}{progress}").into();
                     let metadata = [&record.app, &record.title].into_iter().filter(|value| !value.is_empty())
                         .map(String::as_str).collect::<Vec<_>>().join(" · ");
-                    let report = [heading.as_ref(), metadata.as_str(), record.message.as_str()].into_iter()
-                        .filter(|line| !line.is_empty()).collect::<Vec<_>>().join("\n");
-                    div()
+                    let report = report(record);
+                    let record_id = record.id.clone();
+                    div().id(("status-record", index))
+                        .on_mouse_down(MouseButton::Left, cx.listener(move |view, _, window, cx| {
+                            if let Some(state) = &mut view.status_ui { state.selected = Some(record_id.clone()); state.focus.focus(window); }
+                            cx.notify(); cx.stop_propagation();
+                        }))
                         .min_w_0().overflow_hidden()
                         .mb_2()
                         .ml(px(record.id.matches('/').count().min(8) as f32 * 8.))
                         .p_2()
                         .rounded_sm()
-                        .bg(rgb(0x2b2b2b))
+                        .bg(rgb(if selected == Some(index) { if focused { 0x354969 } else { 0x333333 } } else { 0x2b2b2b }))
                         .text_sm()
                         .child(
                             div().flex().items_center().min_w_0().gap_2()
@@ -115,5 +200,6 @@ pub fn panel(records: &[Record], loading: bool, cx: &mut Context<TerminalView>) 
                         })
                 })),
         )
+        .child(div().flex_shrink_0().px_2().py_1().text_xs().text_color(rgb(0xaaaaaa)).child("↑↓ Select · C Copy · Esc Close"))
         .into_any_element()
 }

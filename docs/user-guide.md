@@ -1404,6 +1404,10 @@ If terminal output is busy, the panel opens with a Loading state and fills in
 automatically; closing it cancels the pending load.
 Hover a truncated task heading or app/title line for details. Each task's **Copy**
 control copies its heading, app/title and complete message to the clipboard.
+Opening Program Status focuses the panel. Use ↑/↓ or Home/End to select a task,
+then C or the Copy shortcut to copy its complete details. Escape closes the panel
+and returns to the terminal. Clicking a task also selects it; selection follows
+its task ID as reports update.
 View → Toggle Notifications (also in the palette) opens a panel with up to 32 recent
 messages per live terminal, with separate read state for each message. All and Unread
 filters show live counts; press U while the panel is focused to switch filters.
