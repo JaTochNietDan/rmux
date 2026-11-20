@@ -1,5 +1,11 @@
 # rmux performance acceptance plan
 
+New-tab PTY creation runs in a background task, with one pending launch per
+pane and cached directory inheritance. This removes synchronous process startup
+from the tab action, but initial terminal frame/color setup still runs on the
+UI thread. Splits/workspace startup paths remain separate work; native startup
+latency and rapid create/close acceptance are still pending.
+
 Find selection seeding uses a nonblocking parser-lock attempt and a streaming
 4 KB export. Oversized/truncated or multiline selections fall back to the
 remembered query. Streaming avoids the previous full-selection size probe

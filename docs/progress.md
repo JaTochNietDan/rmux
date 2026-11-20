@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+New Terminal Tab now launches its PTY in a background task using the cached
+working directory, inherited font settings and configured scrollback budget.
+Each pane permits one pending launch and shows Starting…; existing terminals
+remain usable. Completion selects the new tab only if the original focus is
+still focused. Launch failure preserves existing tabs. Pane destruction/window
+rebinding cancels pending UI work, and shutdown rejects late completions.
+Desktop compilation passed. Native pending-state/focus/failure acceptance and
+startup latency measurement remain pending. Initial frame/color setup still
+runs in TerminalView::new on the UI thread; splits/workspaces have separate
+startup paths that are not made asynchronous by this change.
+
 Repeated terminal Copy actions now replace pending copies rather than being
 ignored. The new generation invalidates earlier background work before its UI
 task is canceled, including transitions between ordinary Copy and Copy with

@@ -63,6 +63,7 @@ pub(super) struct PaneView {
     tab_scroll: ScrollHandle,
     tab_picker: Option<(Entity<text_field::TextField>, Option<EntityId>, ScrollHandle)>,
     tab_picker_blur: Option<Subscription>,
+    spawning_tab: Option<Task<()>>,
     workspace: EntityId,
     titles: std::collections::HashMap<EntityId, Subscription>,
     pub terminals: Vec<Entity<TerminalView>>,
@@ -156,7 +157,7 @@ impl PaneView {
     }
 
     pub(super) fn automation_busy(&self) -> bool {
-        self.rename.is_some() || self.close_prompt.is_some() || self.tab_picker.is_some()
+        self.rename.is_some() || self.close_prompt.is_some() || self.tab_picker.is_some() || self.spawning_tab.is_some()
     }
     pub(super) fn automation_surfaces(&self, window_id: &str, workspace_id: &str, pane_id: &str, history: bool, cx: &App) -> Vec<serde_json::Value> {
         self.terminals.iter().enumerate().map(|(index, entity)| {
@@ -179,6 +180,7 @@ impl PaneView {
         }).collect()
     }
     pub fn reset_window_editors(&mut self) {
+        self.spawning_tab = None;
         self.close_prompt = None;
         self.rename = None;
         self.tab_picker = None;
@@ -369,6 +371,7 @@ impl PaneView {
             tab_scroll,
             tab_picker: None,
             tab_picker_blur: None,
+            spawning_tab: None,
             workspace,
             titles,
             next_number: terminals.len() + 1,
@@ -417,6 +420,7 @@ impl PaneView {
             tab_scroll: ScrollHandle::new(),
             tab_picker: None,
             tab_picker_blur: None,
+            spawning_tab: None,
             workspace,
             titles: [(terminal.entity_id(), title)].into_iter().collect(),
             terminals: vec![terminal],
@@ -454,16 +458,6 @@ impl PaneView {
         self.terminals.get(self.active)?.read(cx).snapshot_directory.clone()
     }
 
-    pub fn current_directory(&self, cx: &App) -> Option<std::path::PathBuf> {
-        self.terminals
-            .get(self.active)?
-            .read(cx)
-            .session
-            .current_directory()
-            .ok()
-            .flatten()
-    }
-
     pub fn select(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
         if index >= self.terminals.len() {
             return;
@@ -489,44 +483,49 @@ impl PaneView {
     }
 
     fn add(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if cx.global::<Shutdowns>().quitting {
-            return;
-        }
-        let directory = self.current_directory(cx);
+        if cx.global::<Shutdowns>().quitting || self.spawning_tab.is_some() { return; }
+        let directory = self.cached_directory(cx).or_else(|| cx.global::<InitialDirectory>().0.clone());
         let cells = self.active_cell_metrics(cx);
         let family = self.active_font_family(cx);
-        match Session::shell_in_with_scrollback(
-            80,
-            24,
-            directory
-                .as_deref()
-                .or(cx.global::<InitialDirectory>().0.as_deref()),
-            cx.global::<Preferences>().scrollback_bytes(),
-        ) {
-            Ok(session) => {
-                let terminal = cx.new(|cx| {
-                    let mut terminal = TerminalView::new(session, window, cx);
-                    terminal.cells = cells;
-                    terminal.font_family = family;
-                    terminal
-                });
-                let title = cx.subscribe(&terminal, |this, _, _: &TabMetadataChanged, cx| {
-                    this.reconcile_tab_picker(cx);
-                    cx.emit(PaneMetadataChanged);
-                    cx.notify();
-                });
-                self.titles.insert(terminal.entity_id(), title);
-                self.terminals.push(terminal);
-                self.labels.push(format!("Terminal {}", self.next_number));
-                self.next_number += 1;
-                self.error = None;
-                self.select(self.terminals.len() - 1, window, cx);
-            }
-            Err(error) => {
-                self.error = Some(error.to_string());
+        let scrollback = cx.global::<Preferences>().scrollback_bytes();
+        let origin = window.focused(cx);
+        let executor = cx.background_executor().clone();
+        self.error = None;
+        self.spawning_tab = Some(cx.spawn_in(window, async move |entity, cx| {
+            let result = executor.spawn(async move {
+                Session::shell_in_with_scrollback(80, 24, directory.as_deref(), scrollback)
+            }).await;
+            let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
+                this.spawning_tab = None;
+                if cx.global::<Shutdowns>().quitting { return; }
+                match result {
+                    Ok(session) => {
+                        let terminal = cx.new(|cx| {
+                            let mut terminal = TerminalView::new(session, window, cx);
+                            terminal.cells = cells;
+                            terminal.font_family = family;
+                            terminal
+                        });
+                        let title = cx.subscribe(&terminal, |this, _, _: &TabMetadataChanged, cx| {
+                            this.reconcile_tab_picker(cx);
+                            cx.emit(PaneMetadataChanged);
+                            cx.notify();
+                        });
+                        this.titles.insert(terminal.entity_id(), title);
+                        this.terminals.push(terminal);
+                        this.labels.push(format!("Terminal {}", this.next_number));
+                        this.next_number += 1;
+                        if origin.as_ref().is_some_and(|focus| focus.is_focused(window)) {
+                            this.select(this.terminals.len() - 1, window, cx);
+                        }
+                        cx.emit(PaneMetadataChanged);
+                    }
+                    Err(error) => this.error = Some(error.to_string()),
+                }
                 cx.notify();
-            }
-        }
+            }));
+        }));
+        cx.notify();
     }
 
     fn reorder(&mut self, delta: isize, cx: &mut Context<Self>) {
@@ -882,8 +881,11 @@ impl Render for PaneView {
                                     this.show_tab_picker(window, cx);
                                 })).child(icons::icon("chevron-down"))
                         ))
+                        .when(self.spawning_tab.is_some(), |header| header.child(
+                            div().px_2().text_xs().text_color(rgb(0xaaaaaa)).child("Starting…")
+                        ))
                         .child(
-                            pane_control("new-tab", if cfg!(target_os = "macos") { "New Terminal Tab  ⌘T" } else { "New Terminal Tab  Ctrl+Shift+T" })
+                            pane_control("new-tab", if self.spawning_tab.is_some() { "Starting terminal…" } else if cfg!(target_os = "macos") { "New Terminal Tab  ⌘T" } else { "New Terminal Tab  Ctrl+Shift+T" })
                                 .on_click(cx.listener(|this, _, window, cx| this.add(window, cx)))
                                 .child(icons::icon("plus")),
                         )
