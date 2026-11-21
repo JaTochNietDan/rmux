@@ -31,7 +31,7 @@ pub const HELP: &str = "Commands (JSON output except pipe-pane; explicit opaque 
   send --surface ID [--paste] TEXT
   capture-pane --surface ID [--scrollback] [--lines N]
   read-screen --surface ID [--scrollback | --selection [--preserve-wraps]]
-  pipe-pane --surface ID [--lines N] [--command SHELL_COMMAND | SHELL_COMMAND]
+  pipe-pane --surface ID [--lines N | --selection [--preserve-wraps]] [--command SHELL_COMMAND | SHELL_COMMAND]
 Use -- before positional text beginning with a dash. List commands list the
 whole process unless narrowed with --window (workspaces/panes/panels) or
 --workspace (panes/panels). No implicit target, ref/index lookup or --force yet.
@@ -39,7 +39,7 @@ whole process unless narrowed with --window (workspaces/panes/panels) or
 
 pub fn help(command: &str) -> Result<String, String> {
     let (arguments, description) = match command {
-        "pipe-pane" => ("--surface ID [--lines N] [--command SHELL_COMMAND | SHELL_COMMAND]", "Capture retained history (up to 1 MiB), optionally its last 1–65536 logical lines with --lines N, and feed it once to a local /bin/sh command via stdin. Truncated captures are rejected. Runs in the CLI working directory, forwards command stdout/stderr and returns its exit status. The CLI waits for the command; use normal shell interruption for long-running commands. Does not stream future output."),
+        "pipe-pane" => ("--surface ID [--lines N | --selection [--preserve-wraps]] [--command SHELL_COMMAND | SHELL_COMMAND]", "Capture retained history (up to 1 MiB), optionally its last 1–65536 logical lines with --lines N or selected text with --selection, and feed it once to a local /bin/sh command via stdin. Truncated captures are rejected. Runs in the CLI working directory, forwards command stdout/stderr and returns its exit status. The CLI waits for the command; use normal shell interruption for long-running commands. Does not stream future output."),
         "paste-buffer" => ("--surface ID [--name NAME] [--bracketed]", "Queue a retained buffer to an explicit terminal without changing focus or scroll position. --bracketed uses terminal paste encoding. The buffer is retained; requests are never retried."),
         "rename-buffer" => ("[--name NAME] NEW_NAME", "Rename a retained buffer without copying its contents. Source defaults to default; an existing destination is never overwritten."),
         "set-buffer" => ("[--name NAME] [TEXT|-]", "Set a process-local copy buffer; name defaults to default. Omitted text or - reads UTF-8 stdin exactly, including trailing newlines. Storage and request size are bounded; buffers are not persisted or copied to the OS clipboard."),
@@ -308,8 +308,8 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
                     "--activate",
                 ) => ("activate", Value::Bool(true)),
                 ("read-screen" | "capture-pane", "--scrollback") => ("scope", Value::String("history".into())),
-                ("read-screen", "--selection") => ("scope", Value::String("selection".into())),
-                ("read-screen", "--preserve-wraps") => ("preserve_wraps", Value::Bool(true)),
+                ("read-screen" | "pipe-pane", "--selection") => ("scope", Value::String("selection".into())),
+                ("read-screen" | "pipe-pane", "--preserve-wraps") => ("preserve_wraps", Value::Bool(true)),
                 _ => return Err(format!("unsupported option for {command}: {arg}")),
             };
             if params.insert(key.into(), value).is_some() {
@@ -331,7 +331,7 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
         params.insert("max_bytes".into(), Value::from(1024 * 1024));
         if params.contains_key("lines") { params.insert("scope".into(), Value::String("history".into())); }
     }
-    if command == "read-screen" && params.contains_key("preserve_wraps")
+    if matches!(command, "read-screen" | "pipe-pane") && params.contains_key("preserve_wraps")
         && params.get("scope").and_then(Value::as_str) != Some("selection") {
         return Err("--preserve-wraps requires --selection".into());
     }
@@ -355,7 +355,10 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
     }
     if command == "pipe-pane" {
         if params["command"].as_str().is_none_or(|command| command.trim().is_empty()) { return Err("pipe-pane requires nonempty shell command text".into()); }
-        params.insert("scope".into(), Value::String("history".into()));
+        if params.get("scope").and_then(Value::as_str) == Some("selection") && params.contains_key("lines") {
+            return Err("--lines cannot be combined with --selection".into());
+        }
+        params.entry("scope").or_insert_with(|| Value::String("history".into()));
         params.insert("max_bytes".into(), Value::from(1024 * 1024));
     }
     if command == "send-key" {
@@ -461,6 +464,18 @@ mod tests {
         }
         assert!(expand("capture-pane", args(&["--lines", "2"])).is_err());
         assert!(expand("capture-pane", args(&["--surface", "7", "--lines", "2", "--lines", "3"])).is_err());
+    }
+
+    #[test]
+    fn pipe_pane_selection_preserves_scope_and_rejects_history_options() {
+        let (_, params) = expand("pipe-pane", args(&["--surface", "7", "--selection", "--preserve-wraps", "cat"])).unwrap();
+        assert_eq!(params, serde_json::json!({"surface_id":"7", "scope":"selection", "preserve_wraps":true, "max_bytes":1048576, "command":"cat"}));
+        for flags in [vec!["--selection", "--lines", "2"], vec!["--lines", "2", "--selection"], vec!["--selection", "--selection"], vec!["--preserve-wraps"]] {
+            let mut input = vec!["--surface", "7"];
+            input.extend(flags);
+            input.push("cat");
+            assert!(expand("pipe-pane", args(&input)).is_err());
+        }
     }
 
     #[test]

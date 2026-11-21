@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+`pipe-pane --selection` now feeds the existing bounded terminal selection export
+to its local consumer, with optional `--preserve-wraps`. It leaves focus and
+selection unchanged and rejects `--lines` conflicts in either option order.
+The same 1 MiB limit and truncation/error execution gate apply. Four focused
+CLI/pipe tests passed, including scope expansion, conflicting flags, history-tail
+validation and subprocess delivery/status. Help, completions and user guidance
+are updated; native clipboard/selection and cross-platform acceptance remain open.
+
 `pipe-pane --lines N` now captures only the requested tail of retained history
 before starting its local consumer. It reuses the existing logical-line RPC path,
 accepts 1–65536 lines and retains the 1 MiB cap and reject-truncated-before-execution

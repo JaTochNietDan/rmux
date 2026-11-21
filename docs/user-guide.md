@@ -179,7 +179,11 @@ the command as one argument; a trailing quoted command is also accepted. The
 command runs in the CLI's working directory and inherits its stdout/stderr.
 Unlike other rmuxctl commands, this returns command output and its exit status,
 not a JSON envelope. Capture is capped at 1 MiB; truncation or RPC failure prevents
-execution. The CLI waits for the command, with ordinary shell interruption for
+execution. Use `--selection` instead of `--lines` to send only the terminal
+selection; add `--preserve-wraps` to retain its displayed soft-wrap boundaries.
+These options use the same selection export as `read-screen`; they do not change
+selection or focus. `--selection` and `--lines` cannot be combined.
+The CLI waits for the command, with ordinary shell interruption for
 long-running consumers. There is no future-output stream or app-side subprocess.
 Windows shell execution, implicit workspace/window selectors and JSON-wrapped
 command output are not implemented.
