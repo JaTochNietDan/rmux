@@ -1,5 +1,15 @@
 # Trying rmux
 
+For packaged previews, visit [GitHub Releases](https://github.com/JaTochNietDan/rmux/releases).
+On Apple Silicon macOS, open the DMG and drag rmux.app into Applications. On Linux
+x86-64, extract the tar.gz and run `./rmux` from its directory (Ubuntu 24.04-compatible
+runtime libraries and a graphical session are required). On Windows x86-64, extract
+the ZIP completely and run `rmux.exe` with `ghostty-vt.dll` alongside it. Windows
+packages are unsigned; Linux/Windows native UI acceptance remains incomplete.
+Only macOS currently includes Sparkle automatic updates.
+
+The commands below are for building from source on macOS.
+
 From the project directory, run `mise run open-app`. This builds the optimized
 macOS bundle at `target/release/rmux.app` and opens it. You can also open that
 bundle directly in Finder after it has been built. It is locally ad-hoc signed,
@@ -36,7 +46,7 @@ palette's Open Settings File action provides access to all options.
 
 ## Current delivery state
 
-This is an internal terminal-workspace preview, not an accepted P0–P2 release.
+This is an early terminal-workspace preview, not an accepted P0–P2 milestone.
 There is substantial implementation beyond P1, but acceptance is separate.
 
 | Area | Implemented | Remaining milestone work |

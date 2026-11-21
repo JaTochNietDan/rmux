@@ -127,3 +127,18 @@ mise exec -- cargo test --manifest-path vendor/mac-usernotifications/Cargo.toml 
 
 The standalone dependency test package is excluded from workspace tests so Linux
 and Windows workspace commands do not attempt to compile Apple frameworks.
+
+## GitHub release packaging
+
+The Release workflow builds native macOS ARM64, Linux x86-64 (Ubuntu 24.04), and
+Windows x86-64 artifacts. Rust, Zig, Python and GitHub CLI are installed through
+mise; runner-provided SDKs/linkers are reused. Linux development-library packages
+are provisioned only on the ephemeral GitHub runner, never on the local Mac.
+Platform artifacts are staged first; publication waits for every platform job.
+
+macOS retains the signed/notarized ZIP for Sparkle and adds a signed/notarized,
+stapled DMG with an Applications link. Linux tar.gz and Windows ZIP include the
+GUI, CLI, shell scripts and target-specific dependency notices; Windows also carries
+Ghostty's DLL. The publishing job creates SHA256SUMS, uploads to a draft release,
+publishes it, then advances the Sparkle feed. Existing published assets are not
+overwritten. Linux/Windows automatic updates and native UI acceptance remain open.
