@@ -16,7 +16,8 @@ impl TerminalView {
     fn menu_enabled(&self) -> [bool; 10] {
         let selection = self.frame.selections.iter().any(Option::is_some);
         let link = self.terminal_menu.as_ref().and_then(|menu| menu.link.as_deref());
-        [selection, selection, !self.session.paste_pending(), true, true, true, true, true, link.is_some(), link.is_some_and(openable_uri)]
+        let local = self.session.remote_destination().is_none();
+        [selection, selection, !self.session.paste_pending(), true, true, local || self.remote_directory_label.is_some(), local, true, link.is_some(), link.is_some_and(openable_uri)]
     }
     pub(super) fn show_terminal_menu(&mut self, position: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
         self.selecting = false;

@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Copy Working Directory now copies the cached remote path for explicit SSH
+sessions, while their context menus disable local Reveal. The shared deferred
+directory lookup also checks remote identity: inspection found that it bypassed
+the earlier current-directory/metadata guard. A focused PTY regression now checks
+both synchronous and deferred lookup exclusion for localhost/hostless reports.
+That regression and desktop compilation passed. Native clipboard/menu acceptance
+remains pending; local directory-copy behavior retains its existing worker path.
+
 Explicit SSH sessions now expose shell-reported OSC 7 paths through a separate
 bounded remote-directory text channel. The sidebar context prefixes Remote, and
 surface JSON includes `remote_directory`; local PathBuf/cwd/git workflows remain

@@ -1669,6 +1669,20 @@ impl TerminalView {
     fn lookup_working_directory(&mut self, copy: bool, cx: &mut Context<Self>) {
         let generation = self.directory_generation.fetch_add(1, Ordering::Relaxed).wrapping_add(1);
         self.directory_task = None;
+        if self.session.remote_destination().is_some() {
+            if copy {
+                if let Some(path) = &self.remote_directory_label {
+                    clipboard::write(ClipboardItem::new_string(path.clone()), cx);
+                    self.error = None;
+                } else {
+                    self.error = Some("No remote working directory reported by this terminal.".into());
+                }
+            } else {
+                self.error = Some("Remote directories cannot be revealed in the local file manager.".into());
+            }
+            cx.notify();
+            return;
+        }
         let ticket = copy.then(clipboard::begin);
         let current = Arc::downgrade(&self.directory_generation);
         let lookup = self.session.directory_lookup(move || {

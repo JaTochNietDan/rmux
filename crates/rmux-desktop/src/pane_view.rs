@@ -274,7 +274,9 @@ impl PaneView {
     fn tab_menu_enabled(&self, target: EntityId, cx: &App) -> [bool; 9] {
         let Some(index) = self.terminals.iter().position(|terminal| terminal.entity_id() == target) else { return [false; 9]; };
         let batch_available = self.spawning_tab.is_none();
-        [true, true, true, index > 0, index + 1 < self.terminals.len(), true, batch_available && self.terminals.len() > 1, batch_available && index + 1 < self.terminals.len(), batch_available && self.finished_tab_count(target, cx) > 0]
+        let terminal = self.terminals[index].read(cx);
+        let local = terminal.session.remote_destination().is_none();
+        [true, local || terminal.remote_directory_label.is_some(), local, index > 0, index + 1 < self.terminals.len(), true, batch_available && self.terminals.len() > 1, batch_available && index + 1 < self.terminals.len(), batch_available && self.finished_tab_count(target, cx) > 0]
     }
 
     fn show_active_tab_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {

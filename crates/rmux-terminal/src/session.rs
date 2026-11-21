@@ -752,6 +752,7 @@ impl Session {
     }
     /// Deferred directory lookup without retaining the terminal while queued.
     pub fn directory_lookup(&self, current: impl Fn() -> bool + Send + 'static) -> Box<dyn FnOnce() -> Result<Option<std::path::PathBuf>> + Send> {
+        if self.remote_destination.is_some() { return Box::new(|| Ok(None)); }
         let terminal = Arc::downgrade(&self.terminal);
         Box::new(move || {
             if !current() { return Ok(None); }
@@ -1106,6 +1107,7 @@ mod tests {
         for report in [b"\x1b]7;file://localhost/tmp\x07".as_slice(), b"\x1b]7;file:///tmp\x07".as_slice()] {
             session.terminal.lock().unwrap().write(report);
             assert!(session.current_directory()?.is_none());
+            assert!(session.directory_lookup(|| true)()?.is_none());
             let metadata = session.try_metadata_since(0, 0, 0, 0, false).unwrap();
             assert!(metadata.directory?.is_none());
             let (revision, label) = metadata.remote_directory?.unwrap();
