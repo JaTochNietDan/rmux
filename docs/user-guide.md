@@ -1733,6 +1733,8 @@ query and submit; typing does not scan terminals. Matching follows Find's ASCII
 case-insensitive rules. A 64 KiB prefix supplies previews; a capped prefix without
 a match falls back to incremental search of the terminal's retained history.
 Results outside the preview identify the terminal without copying its full history.
+All selected terminals' previews are checked before deeper fallback scans begin;
+the completed batch retains terminal order rather than completion order.
 One worker scans at most 256 terminals, with the originating window first.
 Each fallback has a 250 ms work budget within a five-second batch budget, checked
 between incremental operations. Engine cleanup still serializes parser access,

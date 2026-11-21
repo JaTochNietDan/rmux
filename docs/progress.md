@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Global search now collects bounded preview matches across the selected terminals
+before starting deep-history fallbacks. A busy early terminal therefore cannot
+spend the deep-scan budget before later preview hits are collected. Deferred work
+retains identities and weak engine probes, not snapshot strings; result order
+still follows the original terminal order. Four focused scanner tests passed,
+including preview-first scheduling and stable result ordering. Results are still
+published as one completed batch; progressive UI delivery remains future work.
+
 Global terminal search now falls back to incremental retained-history probes
 when a capped preview has no match or its parser was busy. Probes stop at the
 first match without selecting it or exporting full history, using opportunistic

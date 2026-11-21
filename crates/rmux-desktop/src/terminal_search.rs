@@ -37,37 +37,70 @@ pub fn scan(jobs: Vec<Job>, query: &str, canceled: &AtomicBool) -> Report {
     let mut report = Report::default();
     let query = query.to_ascii_lowercase();
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-    for job in jobs.into_iter().take(MAX_TERMINALS) {
+    let mut pending = Vec::new();
+    let mut hits = Vec::new();
+    // Collect inexpensive snapshots before spending the shared budget on deep
+    // scans. Retain only identity and the weak engine probe, not snapshot text.
+    for (index, job) in jobs.into_iter().take(MAX_TERMINALS).enumerate() {
         if canceled.load(Ordering::Relaxed) { break; }
         if std::time::Instant::now() >= deadline { report.limited += 1; continue; }
-        let mut needs_probe = false;
-        let mut snippet = None;
-        match (job.read)() {
+        let Job { window, workspace, terminal, name, read, probe } = job;
+        let mut hit = Hit { window, workspace, terminal, name, snippet: String::new() };
+        match read() {
             Ok(Some((text, limited))) => {
                 report.scanned += 1;
-                snippet = matching_line(&text, &query);
-                needs_probe = limited && snippet.is_none();
+                if let Some(snippet) = matching_line(&text, &query) {
+                    hit.snippet = snippet;
+                    hits.push((index, hit));
+                } else if limited { pending.push((index, hit, probe)); }
             }
-            Ok(None) => { report.scanned += 1; needs_probe = true; }
+            Ok(None) => { report.scanned += 1; pending.push((index, hit, probe)); }
             _ => report.unavailable += 1,
         }
-        if needs_probe {
-            let terminal_deadline = deadline.min(std::time::Instant::now() + std::time::Duration::from_millis(250));
-            match (job.probe)(&query, canceled, terminal_deadline) {
-                Ok(Some(true)) => snippet = Some("Match in retained history · Enter opens Find".into()),
-                Ok(Some(false)) => {},
-                Ok(None) => report.limited += 1,
-                Err(_) => report.unavailable += 1,
+    }
+    for (index, mut hit, probe) in pending {
+        if canceled.load(Ordering::Relaxed) { break; }
+        if std::time::Instant::now() >= deadline { report.limited += 1; continue; }
+        let terminal_deadline = deadline.min(std::time::Instant::now() + std::time::Duration::from_millis(250));
+        match probe(&query, canceled, terminal_deadline) {
+            Ok(Some(true)) => {
+                hit.snippet = "Match in retained history · Enter opens Find".into();
+                hits.push((index, hit));
             }
-        }
-        if let Some(snippet) = snippet {
-            report.hits.push(Hit { window: job.window, workspace: job.workspace, terminal: job.terminal, name: job.name, snippet });
+            Ok(Some(false)) => {},
+            Ok(None) => report.limited += 1,
+            Err(_) => report.unavailable += 1,
         }
     }
+    hits.sort_unstable_by_key(|(index, _)| *index);
+    report.hits = hits.into_iter().map(|(_, hit)| hit).collect();
     report
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn quick_matches_precede_deep_work_but_results_keep_terminal_order() {
+        use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
+        let reads = Arc::new(AtomicUsize::new(0));
+        let jobs = (0..3).map(|index| {
+            let read_count = reads.clone();
+            let probe_count = reads.clone();
+            super::Job { window: None, workspace: gpui::EntityId::from(0x100000001), terminal: gpui::EntityId::from(0x100000002), name: index.to_string(),
+                read: Box::new(move || {
+                    read_count.fetch_add(1, Ordering::Relaxed);
+                    Ok(Some((if index == 2 { "needle" } else { "prefix" }.into(), true)))
+                }),
+                probe: Box::new(move |_, _, _| {
+                    assert_eq!(probe_count.load(Ordering::Relaxed), 3, "deep work must not delay later previews");
+                    assert_ne!(index, 2, "a preview hit needs no deep scan");
+                    Ok(Some(true))
+                }),
+            }
+        }).collect();
+        let report = super::scan(jobs, "needle", &super::AtomicBool::new(false));
+        assert_eq!(report.hits.iter().map(|hit| hit.name.as_str()).collect::<Vec<_>>(), ["0", "1", "2"]);
+        assert_eq!(report.limited, 0);
+    }
     #[test]
     fn truncated_misses_probe_history_and_report_unfinished_scans() {
         let jobs = (0..3).map(|index| super::Job {
