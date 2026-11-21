@@ -7,13 +7,13 @@ use crate::{CellMetrics, color};
 /// One shaped glyph for the block cursor; bounded independently of row caches.
 #[derive(Default)]
 pub struct CursorCache {
-    entry: Option<(Cell, CellMetrics, SharedString, f32, ShapedLine)>,
+    entry: Option<(Cell, CellMetrics, SharedString, f32, Color, ShapedLine)>,
 }
 impl CursorCache {
-    pub fn shape(&mut self, cell: &Cell, cells: CellMetrics, family: &SharedString, window: &Window, metrics: Option<&mut crate::diagnostics::Metrics>) -> ShapedLine {
-        if let Some((previous, cell_metrics, font_family, scale, line)) = &self.entry
+    pub fn shape(&mut self, cell: &Cell, foreground: Color, cells: CellMetrics, family: &SharedString, window: &Window, metrics: Option<&mut crate::diagnostics::Metrics>) -> ShapedLine {
+        if let Some((previous, cell_metrics, font_family, scale, previous_foreground, line)) = &self.entry
             && previous == cell && *cell_metrics == cells && font_family == family
-            && *scale == window.scale_factor()
+            && *scale == window.scale_factor() && *previous_foreground == foreground
         {
             if let Some(metrics) = metrics { metrics.cursor_glyphs_reused += 1; }
             return line.clone();
@@ -23,13 +23,13 @@ impl CursorCache {
         if cell.bold { cursor_font.weight = FontWeight::BOLD; }
         if cell.italic { cursor_font.style = FontStyle::Italic; }
         let run = TextRun {
-            len: cell.text.len(), font: cursor_font, color: color(cell.background),
+            len: cell.text.len(), font: cursor_font, color: color(foreground),
             background_color: None, underline: None, strikethrough: None,
         };
         let line = window.text_system().shape_line(
             cell.text.to_string().into(), px(cells.font_size), &[run], Some(px(cells.width)),
         );
-        self.entry = Some((cell.clone(), cells, family.clone(), window.scale_factor(), line.clone()));
+        self.entry = Some((cell.clone(), cells, family.clone(), window.scale_factor(), foreground, line.clone()));
         line
     }
 }

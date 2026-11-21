@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Added imported `cursor-text` and explicit JSON `cursor_text` for block-cursor
+glyphs. Explicit settings override imports; absent values preserve the cell's
+background fallback. The one-glyph cursor cache keys the effective color so reloads
+cannot reuse stale glyph colors; row shaping is unaffected. The focused import,
+override, serialization and preset-fallback test passed with desktop test
+compilation. Native block-cursor visuals and dynamic Ghostty color references
+remain pending.
+
 Added imported/explicit selection foreground colors. Prepaint lazily shapes one
 alternate text variant per selected row, reusing it across selection movement;
 changing/disabling the color clears variants, and row-cache release drops them.

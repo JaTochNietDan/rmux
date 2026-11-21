@@ -2370,8 +2370,9 @@ impl Element for TerminalElement {
                     && !cell.text.is_empty()
                     && !cell.hidden
                 {
+                    let foreground = cx.global::<Preferences>().cursor_text().unwrap_or(cell.background);
                     cursor_text = Some(PaintedText {
-                        line: self.view.update(cx, |view, _| view.cursor_cache.shape(cell, cells, &family, window, view.metrics.as_mut())),
+                        line: self.view.update(cx, |view, _| view.cursor_cache.shape(cell, foreground, cells, &family, window, view.metrics.as_mut())),
                         origin,
                     });
                 }

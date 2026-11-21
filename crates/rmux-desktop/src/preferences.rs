@@ -164,6 +164,7 @@ pub struct Preferences {
     pub background_opacity: u8,
     pub background_blur: bool,
     pub cursor_color: Option<HexColor>,
+    pub cursor_text: Option<HexColor>,
     pub selection_background: Option<HexColor>,
     pub selection_foreground: Option<HexColor>,
     pub ansi_palette: Option<[HexColor; 16]>,
@@ -203,6 +204,7 @@ impl Default for Preferences {
             background_opacity: 100,
             background_blur: false,
             cursor_color: None,
+            cursor_text: None,
             selection_background: None,
             selection_foreground: None,
             ansi_palette: None,
@@ -270,6 +272,9 @@ impl Preferences {
                 ].map(|value| HexColor(value).rgb())),
             }
         })
+    }
+    pub fn cursor_text(&self) -> Option<rmux_terminal::Color> {
+        self.cursor_text.or_else(|| self.imported_theme.as_ref().and_then(|theme| theme.cursor_text)).map(HexColor::rgb)
     }
     pub fn selection_foreground(&self) -> Option<rmux_terminal::Color> {
         self.selection_foreground.or_else(|| self.imported_theme.as_ref().and_then(|theme| theme.selection_foreground)).map(HexColor::rgb)
@@ -500,6 +505,22 @@ impl Preferences {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn cursor_text_import_override_and_preset_fallback() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        let path = directory.path().join("theme");
+        std::fs::write(&path, "cursor-text=112233\n")?;
+        assert_eq!(Preferences::default().cursor_text(), None);
+        let mut imported = Preferences::default().import_theme(path.clone())?;
+        assert_eq!(imported.cursor_text(), Some(rmux_terminal::Color(17,34,51)));
+        imported.select_theme(TerminalTheme::Dark);
+        assert_eq!(imported.cursor_text(), None);
+        let explicit = Preferences::decode(br##"{"cursor_text":"#abcdef"}"##)?.import_theme(path)?;
+        assert_eq!(explicit.cursor_text(), Some(rmux_terminal::Color(171,205,239)));
+        assert_eq!(serde_json::to_value(&explicit)?["cursor_text"], "#abcdef");
+        Ok(())
+    }
+
     #[test]
     fn selection_colors_import_override_and_preset_fallback() -> Result<()> {
         let directory = tempfile::tempdir()?;

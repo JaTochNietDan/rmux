@@ -9,6 +9,7 @@ pub struct Theme {
     pub palette: Option<[HexColor; 16]>,
     pub selection_background: Option<HexColor>,
     pub selection_foreground: Option<HexColor>,
+    pub cursor_text: Option<HexColor>,
 }
 
 pub fn read(path: &Path) -> Result<Theme> {
@@ -37,7 +38,7 @@ fn parse(text: &str) -> Result<Theme> {
         let parse_line = || -> Result<(&str, HexColor, Option<usize>)> {
             let (key, value) = line.split_once('=').context("expected key = value")?;
             let key = key.trim();
-            ensure!(matches!(key, "foreground" | "background" | "cursor-color" | "selection-background" | "selection-foreground" | "palette"), "unsupported theme setting: {key}");
+            ensure!(matches!(key, "foreground" | "background" | "cursor-color" | "cursor-text" | "selection-background" | "selection-foreground" | "palette"), "unsupported theme setting: {key}");
             let (value, slot) = if key == "palette" {
                 let (slot, color) = value.split_once('=').context("expected palette = N=RRGGBB")?;
                 let slot = slot.trim();
@@ -54,6 +55,7 @@ fn parse(text: &str) -> Result<Theme> {
         };
         let (key, color, slot) = parse_line().with_context(|| format!("theme line {}", index + 1))?;
         if let Some(slot) = slot { palette[slot] = Some(color); }
+        else if key == "cursor-text" { theme.cursor_text = Some(color); }
         else if key == "selection-foreground" { theme.selection_foreground = Some(color); }
         else if key == "selection-background" { theme.selection_background = Some(color); }
         else { theme.colors[match key { "foreground" => 0, "background" => 1, _ => 2 }] = Some(color); }
@@ -62,7 +64,7 @@ fn parse(text: &str) -> Result<Theme> {
         ensure!(palette.iter().all(Option::is_some), "theme palette must define all 16 ANSI entries");
         theme.palette = Some(palette.map(Option::unwrap));
     }
-    ensure!(theme.palette.is_some() || theme.selection_background.is_some() || theme.selection_foreground.is_some() || theme.colors.iter().any(Option::is_some), "theme contains no supported colors");
+    ensure!(theme.palette.is_some() || theme.selection_background.is_some() || theme.selection_foreground.is_some() || theme.cursor_text.is_some() || theme.colors.iter().any(Option::is_some), "theme contains no supported colors");
     Ok(theme)
 }
 
