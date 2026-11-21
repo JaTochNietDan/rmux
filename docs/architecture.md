@@ -39,6 +39,31 @@ The UI thread owns layout, focus and platform GUI operations. Background work se
 
 Prototype terminal/browser composition, focus, clipping, drag overlays, resizing, screenshots, accessibility, profiles and remote proxying before selecting the backend. Browser automation method declarations must be tested against each actual engine. Browser processes count in product memory measurements.
 
+## Native browser composition probe
+
+`mise run browser-probe` builds and opens the optional macOS GPUI/WRY example.
+The normal app has no WRY dependency enabled. The probe starts without a webview;
+Create allocates an ephemeral WKWebView containing a local HTML input/click
+fixture, Release drops it, and Change sidebar width moves/resizes its child-view
+bounds. Window resizing also updates bounds in the GPUI layout pass. External
+navigation is rejected in this fixture. Closing the window drops the host.
+
+The macOS debug example builds successfully with pinned WRY 0.57.3. Default
+`cargo tree` excludes WRY. Runtime composition, focus/IME, coordinate correctness,
+helper-process reclamation, accessibility and concurrent-terminal performance
+are **not verified**: the desktop was locked during implementation. This probe
+is not a browser pane, an omnibar, a profile implementation or backend acceptance.
+
+The next decision gate is to exercise this fixture alongside busy rmux terminals,
+then embed a child in the actual split tree and test clipping, overlays and focus.
+Record process memory before Create, after Create, after Release and after closing;
+dropping the Rust handle alone does not prove that OS helpers release memory.
+WRY's child-window API supports macOS/Windows/X11, but not Wayland directly;
+its Linux GTK composition path requires separate investigation with GPUI. Do not
+ship a macOS-only result as cross-platform browser parity. Windows validation
+remains deferred per the user's instruction.
+[WRY child-webview API](https://docs.rs/wry/0.57.3/wry/struct.WebViewBuilder.html#method.build_as_child)
+
 ## Cross platform obligations
 
 | Area | macOS | Linux | Windows |

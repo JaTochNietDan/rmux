@@ -2,6 +2,18 @@
 
 ## Current implementation focus
 
+Started the P3 browser backend composition work with an opt-in macOS GPUI/WRY
+example, launched through `mise run browser-probe`. WRY 0.57.3 is pinned behind
+`browser-probe`; default dependency-tree inspection confirms it is absent from
+normal builds. The example lazily creates an ephemeral local HTML webview,
+positions/resizes it from GPUI bounds, and offers explicit release/recreation and
+sidebar-width controls. The macOS debug example compiled and linked successfully.
+No interactive/native, helper-RSS or busy-terminal performance claim is made: the
+Mac remains locked. Actual pane integration and cross-platform backend acceptance,
+especially Wayland composition, are open. Architecture notes record the prototype
+and concrete next gate. The previous turn made progress with committed/pushed
+Markdown table alignment.
+
 Markdown table headers/body cells now honor left, center and right column markers.
 Only the eight visible columns retain alignment metadata in each row; the total
 column count and complete row/source text remain intact. Alignment resets for each
