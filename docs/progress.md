@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Snapshot cell construction now reuses an existing heap-backed grapheme string when
+its text is identical, including style-only row changes. Inline strings retain
+their normal construction path, and changed text gets independent storage. The
+Unicode regression verifies shared text pointers across a foreground-color change,
+distinct storage after changed combining text, and old-frame preservation; all
+four focused snapshot tests passed. Per-frame oversized-glyph scratch allocation
+still exists. No measured latency/throughput or whole-process memory claim is made.
+
 Dirty-row extraction now defers its cell-vector allocation until the first cell
 that differs from the retained row. Identical rewrites retain the original row
 and outer-vector identities without a temporary cell Vec; changed rows clone only

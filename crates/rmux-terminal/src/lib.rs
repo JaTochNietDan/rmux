@@ -1027,8 +1027,14 @@ impl Terminal {
                         underline_color = bg;
                     }
                     let glyph_bytes = if overflow_glyph.is_empty() { &inline_glyph[..] } else { &overflow_glyph[..] };
+                    let text = String::from_utf8_lossy(&glyph_bytes[..buf.len]);
+                    let previous_cell = previous.get(x as usize);
+                    let text = match previous_cell {
+                        Some(cell) if cell.text.is_heap_allocated() && cell.text.as_str() == text.as_ref() => cell.text.clone(),
+                        _ => smol_str::SmolStr::new(text),
+                    };
                     let cell = Cell {
-                        text: smol_str::SmolStr::new(String::from_utf8_lossy(&glyph_bytes[..buf.len])),
+                        text,
                         column: x,
                         width,
                         foreground: fg.into(),
@@ -1043,7 +1049,7 @@ impl Terminal {
                         overline: style.flags & 128 != 0,
                         hidden: style.flags & 32 != 0,
                     };
-                    if row.is_none() && previous.get(x as usize) != Some(&cell) {
+                    if row.is_none() && previous_cell != Some(&cell) {
                         let mut changed = Vec::with_capacity(self.frame.columns as usize);
                         changed.extend_from_slice(&previous[..(x as usize).min(previous.len())]);
                         row = Some(changed);
@@ -1723,6 +1729,17 @@ mod tests {
         assert_eq!(frame.rows[0][0].text.as_str(), "x");
         assert_eq!(frame.rows[0][1].text.as_str(), long);
         assert_eq!(frame.rows[0][2].text.as_str(), "z");
+        assert!(frame.rows[0][1].text.is_heap_allocated());
+        terminal.write(format!("\r\x1b[31mx{long}z").as_bytes());
+        let styled = terminal.frame()?;
+        assert!(!Arc::ptr_eq(&frame.rows[0], &styled.rows[0]));
+        assert_ne!(frame.rows[0][1].foreground, styled.rows[0][1].foreground);
+        assert_eq!(frame.rows[0][1].text.as_str().as_ptr(), styled.rows[0][1].text.as_str().as_ptr());
+        let different = format!("b{}", "\u{302}".repeat(40));
+        terminal.write(format!("\rx{different}z").as_bytes());
+        let changed = terminal.frame()?;
+        assert_eq!(changed.rows[0][1].text.as_str(), different);
+        assert_ne!(styled.rows[0][1].text.as_str().as_ptr(), changed.rows[0][1].text.as_str().as_ptr());
         terminal.write(b"\rshort\x1b[K");
         assert!(terminal.frame()?.text().starts_with("short"));
         assert_eq!(frame.rows[0][1].text.as_str(), long);

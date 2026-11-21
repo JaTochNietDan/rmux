@@ -8,7 +8,10 @@ not a measured throughput, latency or process-memory improvement.
 Dirty-row extraction also delays cell-vector allocation until the first changed
 cell. Identical dirty rewrites keep their existing row allocation; changed rows
 copy the unchanged prefix. Snapshot, resize, selection and style-identity tests
-cover this path. Long grapheme text may still allocate while cells are compared.
+cover this path. Identical heap-backed grapheme strings are reused from the previous cell, including
+style-only changes; changed text still allocates. An oversized-glyph scratch buffer
+may also allocate per frame. Pointer-sharing and changed-text ownership are covered
+by the Unicode snapshot test.
 
 Native RPC split baseline (`4642803` plus harness, macOS arm64 debug, locked desktop):
 three fresh app instances per target size, with idle fixture shells and breadth-first
