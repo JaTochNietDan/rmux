@@ -1202,6 +1202,13 @@ impl WorkspaceWindow {
         }
         Ok(())
     }
+    pub(super) fn automation_focus_history(&mut self, navigation: &automation::FocusHistory, window: &mut Window, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
+        self.automation_available(cx)?;
+        let target = self.navigate_focus(matches!(navigation.direction, automation::FocusDirection::Forward), window, cx);
+        if target.is_some() && navigation.activate { window.activate_window(); }
+        Ok(serde_json::json!({"window_id": navigation.window_id, "moved": target.is_some(),
+            "surface_id": target.map(|id| id.as_u64().to_string())}))
+    }
     pub(super) fn automation_select(&mut self, selection: &automation::Selection, target: EntityId, window: &mut Window, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
         self.automation_available(cx)?;
         let Some(index) = self.entries.iter().position(|entry| entry.workspace.entity_id() == target) else {
@@ -1601,7 +1608,7 @@ impl WorkspaceWindow {
         }
     }
 
-    fn navigate_focus(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
+    fn navigate_focus(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) -> Option<EntityId> {
         self.record_terminal_focus(window, cx);
         let mut live = Vec::new();
         for (index, entry) in self.entries.iter().enumerate() {
@@ -1611,8 +1618,8 @@ impl WorkspaceWindow {
                 }
             }
         }
-        let Some(target) = self.focus_trail.step(forward, |id| live.iter().any(|(candidate, ..)| *candidate == id)) else { return; };
-        let Some((_, index, pane, tab)) = live.into_iter().find(|(id, ..)| *id == target) else { return; };
+        let Some(target) = self.focus_trail.step(forward, |id| live.iter().any(|(candidate, ..)| *candidate == id)) else { return None; };
+        let Some((_, index, pane, tab)) = live.into_iter().find(|(id, ..)| *id == target) else { return None; };
         self.remember_focus(window, cx);
         self.entries[index].last_pane = Some(pane.entity_id());
         self.entries[index].workspace.update(cx, |workspace, cx| {
@@ -1622,6 +1629,7 @@ impl WorkspaceWindow {
         pane.update(cx, |pane, cx| pane.select(tab, window, cx));
         self.select(index, window, cx);
         self.record_terminal_focus(window, cx);
+        Some(target)
     }
 
     fn last_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -4432,8 +4440,8 @@ impl Render for WorkspaceWindow {
             .on_action(cx.listener(|this, _: &NextWorkspace, window, cx| this.cycle(1, window, cx)))
             .on_action(cx.listener(|this, _: &LastWorkspace, window, cx| this.last_workspace(window, cx)))
             .on_action(cx.listener(|this, _: &LastTerminal, window, cx| this.last_terminal(window, cx)))
-            .on_action(cx.listener(|this, _: &FocusBack, window, cx| this.navigate_focus(false, window, cx)))
-            .on_action(cx.listener(|this, _: &FocusForward, window, cx| this.navigate_focus(true, window, cx)))
+            .on_action(cx.listener(|this, _: &FocusBack, window, cx| { this.navigate_focus(false, window, cx); }))
+            .on_action(cx.listener(|this, _: &FocusForward, window, cx| { this.navigate_focus(true, window, cx); }))
             .on_action(cx.listener(|this, _: &DetachTab, window, cx| this.detach_tab(window, cx)))
             .on_action(cx.listener(|this, _: &DetachWorkspace, window, cx| this.detach_workspace(window, cx)))
             .on_action(cx.listener(|this, _: &ShowWorkspaceMergePicker, window, cx| this.show_workspace_merge_picker(window, cx)))

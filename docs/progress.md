@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Exposed focus history as explicit-window `window.focus_history` RPC with
+`back`/`forward`, opt-in activation and moved/destination results. It shares the
+native history path and existing busy-window guard; exhausted history is a
+successful no-op. Strict parameter validation rejects invalid IDs, directions,
+types and extra fields. Focused RPC validation/routing test and desktop compile
+pass. Live socket/GUI acceptance is pending; no broad automation parity claim.
+
 Built the current debug app for focus-history integration review. Inspected the
 existing terminal focus → pane metadata → workspace metadata notification path,
 which records terminal visits after focus changes. Prepared isolated Back/Forward

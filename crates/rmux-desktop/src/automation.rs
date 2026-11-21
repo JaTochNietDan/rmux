@@ -15,6 +15,7 @@ const LIVE_METHODS: &[&str] = &[
     "system.ping",
     "system.capabilities",
     "window.list",
+    "window.focus_history",
     "window.create",
     "workspace.list",
     "workspace.create",
@@ -124,6 +125,18 @@ pub(super) fn layout_snapshot<T>(
 #[serde(deny_unknown_fields)]
 pub(super) struct Selection {
     pub workspace_id: String,
+    #[serde(default)]
+    pub activate: bool,
+}
+
+#[derive(serde::Deserialize, Debug)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum FocusDirection { Back, Forward }
+#[derive(serde::Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
+pub(super) struct FocusHistory {
+    pub window_id: String,
+    pub direction: FocusDirection,
     #[serde(default)]
     pub activate: bool,
 }
@@ -357,6 +370,7 @@ struct LiveRequest {
     workspace_equalize: Option<WorkspaceTarget>,
     method: String,
     selection: Option<Selection>,
+    focus_history: Option<FocusHistory>,
     surface_focus: Option<SurfaceFocus>,
     surface_text: Option<SurfaceText>,
     surface_read: Option<SurfaceRead>,
@@ -752,6 +766,18 @@ pub fn attach_live(cx: &mut gpui::App, stdio: bool, socket_directory: Option<std
                         message: "Workspace not found",
                     });
                 }
+                if let Some(navigation) = &request.focus_history {
+                    let target = target_id(&navigation.window_id)?;
+                    for handle in cx.windows() {
+                        let Some(handle) = handle.downcast::<super::window_view::WorkspaceWindow>() else { continue; };
+                        let any: gpui::AnyWindowHandle = handle.into();
+                        if any.read::<super::window_view::WorkspaceWindow, _, _>(cx, |entity, _| entity.entity_id() == target).unwrap_or(false) {
+                            return handle.update(cx, |view, window, cx| view.automation_focus_history(navigation, window, cx))
+                                .map_err(|_| Failure { code: -32004, message: "Window closed" })?;
+                        }
+                    }
+                    return Err(Failure { code: -32004, message: "Window not found" });
+                }
                 if let Some(selection) = &request.selection {
                     let target = target_id(&selection.workspace_id)?;
                     for handle in cx.windows() {
@@ -966,6 +992,7 @@ fn dispatch_inner(
         && !matches!(
             method,
             "buffer.set" | "buffer.delete" | "buffer.paste" | "buffer.rename" | "workspace.select"
+                | "window.focus_history"
                 | "surface.focus"
                 | "surface.send_text"
                 | "surface.send_key"
@@ -1022,6 +1049,12 @@ fn dispatch_inner(
             _ => return respond(error(id, -32602, "Expected optional window_id and, for pane/surface lists, workspace_id")),
         }
     } else { ListFilter::default() };
+    let focus_history = if method == "window.focus_history" {
+        match serde_json::from_value::<FocusHistory>(request.get("params").cloned().unwrap_or(Value::Null)) {
+            Ok(navigation) if target_id(&navigation.window_id).is_ok() => Some(navigation),
+            _ => return respond(error(id, -32602, "Expected window_id, direction back|forward and optional activate boolean")),
+        }
+    } else { None };
     let selection = if method == "workspace.select" {
         match request
             .get("params")
@@ -1349,6 +1382,7 @@ fn dispatch_inner(
         && pane_split.is_none()
         && pane_resize.is_none()
         && pane_swap.is_none()
+        && focus_history.is_none()
         && surface_focus.is_none()
         && !is_filtered_list
         && request.get("params").is_some_and(|params| {
@@ -1380,6 +1414,7 @@ fn dispatch_inner(
                     workspace_close,
                     workspace_equalize,
                     selection,
+                    focus_history,
                     surface_focus,
                     surface_text,
                     surface_read,
@@ -1738,6 +1773,31 @@ mod tests {
         assert!(receiver.try_recv().is_err());
     }
     #[test]
+    fn focus_history_validates_and_routes() {
+        let (sender, receiver) = async_channel::bounded::<LiveRequest>(1);
+        for params in [json!({}), json!({"window_id":"0","direction":"back"}),
+            json!({"window_id":"4294967297","direction":"sideways"}),
+            json!({"window_id":"4294967297","direction":"back","activate":"yes"}),
+            json!({"window_id":"4294967297","direction":"back","extra":true})] {
+            let bytes = serde_json::to_vec(&json!({"jsonrpc":"2.0","id":1,"method":"window.focus_history","params":params})).unwrap();
+            assert_eq!(dispatch_inner(&bytes, Some(&sender)).unwrap()["error"]["code"], -32602);
+        }
+        assert!(receiver.try_recv().is_err());
+        let worker = std::thread::spawn(move || {
+            let request = receiver.recv_blocking().unwrap();
+            assert!(request.pending.start());
+            let navigation = request.focus_history.unwrap();
+            assert_eq!(navigation.window_id, "4294967297");
+            assert!(matches!(navigation.direction, FocusDirection::Back));
+            assert!(!navigation.activate);
+            request.reply.send(Ok(json!({"window_id":"4294967297","moved":false,"surface_id":null}))).unwrap();
+        });
+        let response = dispatch_inner(br#"{"jsonrpc":"2.0","id":"back","method":"window.focus_history","params":{"window_id":"4294967297","direction":"back"}}"#, Some(&sender)).unwrap();
+        assert_eq!(response["id"], "back");
+        assert_eq!(response["result"]["moved"], false);
+        worker.join().unwrap();
+    }
+    #[test]
     fn selection_notifications_execute_and_ui_errors_preserve_request_ids() {
         let (sender, receiver) = async_channel::bounded::<LiveRequest>(1);
         let worker = std::thread::spawn(move || {
@@ -1818,6 +1878,7 @@ mod tests {
                 workspace_close: None,
                 workspace_equalize: None,
                 selection: None,
+                focus_history: None,
                 surface_focus: None,
                 surface_text: None,
                 surface_read: None,

@@ -226,6 +226,22 @@ selects that pane's terminal within its window without requesting OS activation.
 Busy, missing and invalid destinations retain the RPC error behavior. These are
 rmux command forms, not a claim of complete cmux CLI compatibility.
 
+## Focus history (next release)
+
+`window.focus_history` takes an explicit `window_id`, a `direction` of `back`
+or `forward`, and optional `activate: true`. It navigates the same per-window
+terminal history as the menu actions, skipping closed terminals. Example:
+
+```sh
+rmuxctl window.focus_history '{"window_id":"4294967297","direction":"back"}'
+```
+
+The result contains `window_id`, `moved`, and the destination `surface_id`.
+At the history boundary, `moved` is false and `surface_id` is null; no focus or
+OS activation changes. Busy windows return `-32003`, missing windows `-32004`,
+and invalid IDs/directions/fields `-32602`. Activation is opt-in and only occurs
+when navigation moves. This changes focus, not the terminal's shell history.
+
 ## Send keys and pasted text
 
 `send-key --surface ID KEY` sends one symbolic press/release tap, for example
