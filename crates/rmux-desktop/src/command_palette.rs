@@ -13,6 +13,7 @@ fn literal_highlights(text: &str, query: &str) -> Vec<std::ops::Range<usize>> {
     text.to_ascii_lowercase().match_indices(&query.to_ascii_lowercase())
         .map(|(start, matched)| start..start + matched.len()).collect()
 }
+#[cfg(test)]
 fn result_area_height(rows: impl IntoIterator<Item = bool>) -> f32 {
     let mut height = 0.;
     for subtitle in rows {
@@ -159,6 +160,7 @@ pub struct CommandPalette {
     terminal_search_input: bool,
     ssh_input: bool,
     hex_preview: bool,
+    wrap_preview: bool,
     folder_navigation: Option<(bool, bool, std::path::PathBuf)>,
     preview_navigation: Option<(std::path::PathBuf, bool)>,
     input: Entity<text_field::TextField>,
@@ -678,7 +680,7 @@ impl CommandPalette {
         )
         .detach();
         Self {
-            input, heading, empty_message, buffer_rename: None, feedback: None, directory_input: false, terminal_search_input: false, ssh_input: false, hex_preview: false, folder_navigation: None, preview_navigation: None, location: None,
+            input, heading, empty_message, buffer_rename: None, feedback: None, directory_input: false, terminal_search_input: false, ssh_input: false, hex_preview: false, wrap_preview: false, folder_navigation: None, preview_navigation: None, location: None,
             search: palette_match::RankedSearch::new(commands
                 .iter()
                 .map(Command::search_text)
@@ -688,9 +690,21 @@ impl CommandPalette {
             selected: 0,
         }
     }
+    fn command_height(&self, command: usize) -> f32 {
+        if self.wrap_preview && self.commands[command].preview_line().is_some() { 116. }
+        else { result_row_height(self.commands[command].subtitle.is_some()) }
+    }
+    fn toggle_preview_wrap(&mut self, cx: &mut Context<Self>) {
+        if self.preview_navigation.is_none() || self.hex_preview || self.input.read(cx).is_composing() { return; }
+        self.wrap_preview = !self.wrap_preview;
+        self.scroll.reset(self.search.matches.len());
+        crate::list_navigation::reveal(&self.scroll, self.selected);
+        cx.notify();
+    }
     fn render_result(&mut self, row: usize, cx: &mut Context<Self>) -> AnyElement {
         let Some(&command) = self.search.matches.get(row) else { return div().into_any_element(); };
         let selected = row == self.selected;
+        let wrapped = self.wrap_preview && self.commands[command].preview_line().is_some();
         let title = self.commands[command].preview_line()
             .map(|text| file_browser::preview_line_title(text, self.input.read(cx).value()))
             .unwrap_or_else(|| self.commands[command].title.clone());
@@ -710,7 +724,7 @@ impl CommandPalette {
         div()
             .id(("command", command))
             .px_3()
-            .h(px(result_row_height(self.commands[command].subtitle.is_some())))
+            .h(px(self.command_height(command)))
             .text_sm().line_height(px(20.))
             .when(self.hex_preview && self.commands[command].preview_line().is_some(), |row| row.font_family(FONT_FAMILY))
             .flex()
@@ -730,10 +744,10 @@ impl CommandPalette {
                     .id(("command-title", command))
                     .flex_1()
                     .min_w_0()
-                    .truncate()
+                    .when(!wrapped, |title| title.truncate())
                     .tooltip(move |_, cx| cx.new(|_| pane_view::ControlHint(title_hint.clone())).into())
                     .child(div().flex().flex_col().gap_1()
-                        .child(div().truncate().child(title))
+                        .child(div().when(wrapped, |title| title.whitespace_normal().line_clamp(4).text_ellipsis()).when(!wrapped, |title| title.truncate()).child(title))
                         .when_some(subtitle, |column, subtitle| column.child(div().truncate().text_xs().line_height(px(16.)).text_color(rgb(0xa0a0a0)).child(subtitle)))),
             )
             .when_some(self.commands[command].shortcut.clone(), |row, shortcut| {
@@ -944,10 +958,18 @@ impl Render for CommandPalette {
                     return;
                 }
                 let key = event.keystroke.key.as_str();
+                let modifiers = event.keystroke.modifiers;
+                if key == "w" && modifiers.control && modifiers.alt && !modifiers.platform && !modifiers.shift
+                    && this.preview_navigation.is_some() && !this.hex_preview {
+                    this.toggle_preview_wrap(cx);
+                    cx.stop_propagation();
+                    return;
+                }
+
                 let selected = if matches!(key, "pageup" | "pagedown") {
                     paged_result(this.selected, this.search.matches.len(), key == "pageup",
                         f32::from(this.scroll.viewport_bounds().size.height),
-                        |row| result_row_height(this.commands[this.search.matches[row]].subtitle.is_some()))
+                        |row| this.command_height(this.search.matches[row]))
                 } else {
                     navigated_result(this.selected, this.search.matches.len(), key)
                 };
@@ -990,6 +1012,18 @@ impl Render for CommandPalette {
                     .child(self.file_navigation_button("preview-refresh", "Refresh",
                         Some(if *hex { Box::new(PreviewHexFile { path: path.clone() }) } else { Box::new(PreviewLocalFile { path: path.clone() }) }), cx))
             ))
+            .when(self.preview_navigation.is_some() && !self.hex_preview, |palette| palette.child(
+                div().px_3().pt_2().flex_shrink_0().flex().items_center().gap_2()
+                    .child(div().id("preview-wrap").px_2().py_1().rounded_sm().text_xs().cursor_pointer()
+                        .bg(rgb(if self.wrap_preview { 0x354969 } else { 0x303030 }))
+                        .hover(|style| style.bg(rgb(0x454545)))
+                        .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
+                            if event.standard_click() { this.toggle_preview_wrap(cx); }
+                        }))
+                        .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("Toggle wrapped excerpts · Ctrl+Alt+W · Copy retains the full captured line".into())).into())
+                        .child(if self.wrap_preview { "Single-line excerpts" } else { "Wrap excerpts" }))
+                    .when(self.wrap_preview, |bar| bar.child(div().text_xs().text_color(rgb(0xa0a0a0)).child("4-line excerpts · Ctrl+Alt+W toggles")))
+            ))
             .child(div().flex_shrink_0().p_3().child(self.input.clone()))
             .child(if self.search.matches.is_empty() {
                 div().p_3().text_sm().child(self.empty_message).into_any_element()
@@ -1000,7 +1034,7 @@ impl Render for CommandPalette {
                 })
                 .with_sizing_behavior(ListSizingBehavior::Auto)
                 .w_full().min_h_0()
-                .h(px(result_area_height(self.search.matches.iter().map(|index| self.commands[*index].subtitle.is_some()))))
+                .h(px(self.search.matches.iter().map(|index| self.command_height(*index)).sum::<f32>().min(320.)))
                 .into_any_element()
             })
             .when(self.buffer_rename.is_some() || self.directory_input || self.terminal_search_input || self.ssh_input, |palette| palette.child(

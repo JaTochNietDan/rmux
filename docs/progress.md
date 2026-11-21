@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Text previews now offer wrapped excerpts through a persistent control and
+Ctrl+Alt+W. Up to four visual lines per row improve readability while retaining
+bounded excerpts and virtualized rendering. Toggling resets measured row sizes,
+keeps selection/search and updates paging distances; copying retains original
+captured text. Hex rows keep their fixed layout. Desktop compilation passed;
+native wrapping/keyboard/scroll acceptance remains pending. This is preview
+readability work, not completion of the F02 file editor.
+
 Imported palettes now cover all 256 indexed colors. Terminal creation, async
 preparation/stale-settings checks and live reloads use the complete palette;
 ANSI JSON overrides retain priority for slots 0–15 without erasing imported

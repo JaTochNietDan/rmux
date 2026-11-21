@@ -339,7 +339,10 @@ the preview (a confirmation appears in its footer), or choose
 Back, Refresh, or Copy File Path. Search covers the full retained line. Display
 excerpts stay capped at 1,024 characters and move near the earliest contiguous
 query-word match; fuzzy-only matches retain the opening excerpt. Copying includes
-the whole retained line. Preview never executes files
+the whole retained line. **Wrap excerpts** (Ctrl+Alt+W) shows up to four visual
+lines per text row; toggle again for single-line excerpts. This changes only the
+current preview display, preserves search/selection and leaves copying unchanged.
+Hex rows retain their fixed layout. Preview never executes files
 or interprets escape sequences. UTF-8 (with or without a BOM) and BOM-marked
 UTF-16 little/big endian are supported. BOMs are omitted from display and copy;
 line separators are preserved. UTF-16 decoding can expand the captured text to
