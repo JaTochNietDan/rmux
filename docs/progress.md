@@ -2,6 +2,12 @@
 
 ## Current implementation focus
 
+Release caching now includes Zig's global cache (`~/.cache/zig`) alongside the
+existing source/local-cache and Rust artifacts. The pinned Zig reports that
+directory separately from `.deps`, which the previous portable cache covered.
+This targets future Linux dependency rebuilds; no speedup is claimed until a
+subsequent runner restores it. The in-flight v0.1.3 run is unchanged.
+
 Prepared v0.1.3 with the requested first-impression fixes and dispatched GitHub
 Release run 44868403072 (macOS, Linux, Windows). Publication and Sparkle feed
 advancement remain pending that run. The local-only Cloudflare site now has a

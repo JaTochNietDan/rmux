@@ -110,6 +110,7 @@ jobs:
             ~/.cargo/git
             target/release
             .deps
+            ~/.cache/zig
           key: ${{ matrix.platform }}-release-${{ hashFiles('Cargo.lock', 'mise.toml') }}-${{ github.sha }}
           restore-keys: |
             ${{ matrix.platform }}-release-${{ hashFiles('Cargo.lock', 'mise.toml') }}-
@@ -131,6 +132,7 @@ jobs:
             ~/.cargo/git
             target/release
             .deps
+            ~/.cache/zig
           key: ${{ matrix.platform }}-release-${{ hashFiles('Cargo.lock', 'mise.toml') }}-${{ github.sha }}
       - name: Package native release
         run: mise exec -- python scripts/package-portable.py ${{ matrix.platform }}
