@@ -497,6 +497,7 @@ impl PaneView {
                     "revision":record.message.revision,"title":record.message.title,"body":record.message.body,"unread":record.unread
                 })).collect::<Vec<_>>(),
                 "process_id":terminal.session.process_id(),
+                "ssh_destination":terminal.session.remote_destination(),
                 "process_exited":terminal.session.process_exited(),
             })
         }).collect()
@@ -523,7 +524,12 @@ impl PaneView {
     }
     pub fn terminal_search_title(&self, index: usize, cx: &App) -> String {
         let title = self.tab_title(index, cx);
-        match &self.terminals[index].read(cx).process_exit {
+        let terminal = self.terminals[index].read(cx);
+        let title = match terminal.session.remote_destination() {
+            Some(destination) if title != format!("SSH · {destination}") => format!("{title} · SSH · {destination}"),
+            _ => title,
+        };
+        match &terminal.process_exit {
             Some(status) => format!("{title} · Finished · {status}"),
             None => title,
         }

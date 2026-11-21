@@ -1185,9 +1185,9 @@ impl WorkspaceWindow {
         let Some(command) = cx.global::<Preferences>().commands.iter().find(|command| command.name == name).cloned() else {
             self.notice = Some("Custom command is no longer configured".into()); cx.notify(); return;
         };
-        self.launch_command(command, false, window, cx);
+        self.launch_command(command, None, window, cx);
     }
-    fn launch_command(&mut self, command: preferences::CustomCommand, remote: bool, window: &mut Window, cx: &mut Context<Self>) {
+    fn launch_command(&mut self, command: preferences::CustomCommand, remote: Option<String>, window: &mut Window, cx: &mut Context<Self>) {
         if self.command_launching { self.notice = Some("A command is already starting in this window".into()); cx.notify(); return; }
         if self.automation_available(cx).is_err() || self.entries.len() >= 64 { self.notice = Some("Window is busy or has reached its workspace limit".into()); cx.notify(); return; }
         let directory = command.cwd.clone().or_else(|| self.entries.get(self.active).and_then(|entry| {
@@ -1206,7 +1206,7 @@ impl WorkspaceWindow {
                 let argv: Vec<_> = command.argv.into_iter().map(std::ffi::OsString::from).collect();
                 let environment: Vec<_> = command.env.into_iter().map(|(name, value)| (name.into(), value.into())).collect();
                 let mut session = Session::command_in_with_environment(&argv, 80, 24, directory.as_deref(), scrollback, &environment)?;
-                if remote { session.suppress_local_directory_metadata(); }
+                if let Some(destination) = remote { session.set_remote_destination(&destination)?; }
                 Ok::<_, anyhow::Error>(session)
             }).await;
             let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
@@ -3873,7 +3873,7 @@ impl Render for WorkspaceWindow {
             }))
             .on_action(cx.listener(|this, action: &ConnectSsh, window, cx| {
                 match ssh::command(&action.destination) {
-                    Ok(command) => this.launch_command(command, true, window, cx),
+                    Ok(command) => this.launch_command(command, Some(action.destination.clone()), window, cx),
                     Err(error) => { this.notice = Some(error.into()); cx.notify(); }
                 }
             }))

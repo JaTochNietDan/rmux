@@ -19,6 +19,10 @@ or automatically reconnect. Live authentication/platform acceptance is pending.
 Sessions launched by this SSH action do not expose a local working directory:
 remote shell directory reports cannot drive local file browsing, git metadata,
 or new-shell directory inheritance. Remote directory display is not implemented.
+The requested SSH destination remains available in tab tooltips and terminal
+switcher search after renaming a tab. Surface JSON includes `ssh_destination`
+(null for local terminals). It identifies the launch target, not a confirmed
+connection or authentication result, and does not enable automatic reconnect.
 
 **Merge Workspace into…** in the menu or command palette searches other
 workspaces across this app’s windows, labeled by window. Enter moves the source's existing panes into

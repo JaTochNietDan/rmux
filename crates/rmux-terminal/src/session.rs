@@ -14,7 +14,7 @@ use std::{
 
 pub struct Session {
     initial_directory: Option<std::path::PathBuf>,
-    local_directory_metadata: bool,
+    remote_destination: Option<String>,
     child_pid: Option<u32>,
     direct_command: bool,
     _shell_integration: Option<tempfile::TempDir>,
@@ -279,7 +279,7 @@ impl Session {
         let reply_writer = writer.clone();
         let session = Self {
             initial_directory,
-            local_directory_metadata: true,
+            remote_destination: None,
             child_pid,
             direct_command: false,
             _shell_integration: None,
@@ -474,7 +474,7 @@ impl Session {
         Ok(session)
     }
     pub fn current_directory(&self) -> Result<Option<std::path::PathBuf>> {
-        if !self.local_directory_metadata { return Ok(None); }
+        if self.remote_destination.is_some() { return Ok(None); }
         self.terminal
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -486,10 +486,14 @@ impl Session {
     }
     /// Mark an explicitly remote process before handing it to a UI view.
     /// Its OSC paths must never drive local filesystem access or shell cwd.
-    pub fn suppress_local_directory_metadata(&mut self) {
-        self.local_directory_metadata = false;
+    pub fn set_remote_destination(&mut self, destination: &str) -> Result<()> {
+        anyhow::ensure!(!destination.is_empty() && destination.len() <= 255 && !destination.chars().any(char::is_control), "Invalid remote destination label");
+        self.remote_destination = Some(destination.to_owned());
         self.initial_directory = None;
+        Ok(())
     }
+    /// Launch identity only; does not imply successful remote authentication.
+    pub fn remote_destination(&self) -> Option<&str> { self.remote_destination.as_deref() }
     /// A predictable idle workload, used only by the opt-in performance harness.
     pub fn benchmark_shell(columns: u16, rows: u16) -> Result<Self> {
         #[cfg(unix)]
@@ -979,7 +983,7 @@ impl Session {
             bell_revision: terminal.bell_revision(),
             notifications: terminal.notifications_since(notification_revision),
             title: terminal.title_since(title_revision),
-            directory: if self.local_directory_metadata { terminal.directory_since(directory_revision) } else { Ok(None) },
+            directory: if self.remote_destination.is_none() { terminal.directory_since(directory_revision) } else { Ok(None) },
         })
     }
     pub fn try_render_delay(&self) -> Option<Option<std::time::Duration>> {
@@ -1094,7 +1098,8 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(5));
         }
         assert!(session.initial_directory().is_some());
-        session.suppress_local_directory_metadata();
+        session.set_remote_destination("user@example.invalid")?;
+        assert_eq!(session.remote_destination(), Some("user@example.invalid"));
         assert!(session.initial_directory().is_none());
         for report in [b"\x1b]7;file://localhost/tmp\x07".as_slice(), b"\x1b]7;file:///tmp\x07".as_slice()] {
             session.terminal.lock().unwrap().write(report);

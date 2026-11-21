@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+SSH launch destinations now live on the session independently of editable tab
+titles. Tab tooltips and terminal switcher search retain the destination after
+renaming; surface snapshots expose `ssh_destination` (null for local sessions).
+Session ownership naturally carries this identity across live tab/workspace moves.
+The field describes the requested destination, not authenticated connection state,
+and is not yet persisted for reconnect. The PTY metadata regression and desktop
+compilation passed; native move/tooltip acceptance remains pending.
+
 SSH destination entry now accepts ssh:// URLs with explicit ports and bracketed
 IPv6, validating port range, address syntax and username-only user information.
 URLs are normalized to separate -l/-p/host arguments rather than relying on the
