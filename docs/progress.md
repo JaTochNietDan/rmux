@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Fixed Markdown block-cap reporting: documents containing exactly 512 reading
+blocks no longer become partial solely because closing parser events remain.
+The cap is enforced when another nonempty block would be emitted, including
+horizontal rules, without exceeding retained block bounds. The focused regression
+passed for exact-cap headings, list items and quotes, and overflowing text/code/
+rules. Source-byte/source-line truncation remains independently reported. Native
+reading-view acceptance and richer document rendering remain pending.
+
 Markdown task-list parsing is now explicitly enabled. List metadata preserves
 checked state independently of body text, including nested/ordered tasks and
 loose continuations. Rows show read-only checkbox markers plus searchable

@@ -362,7 +362,9 @@ its query, wrap setting and selected block number when still present.
 
 This initial viewer uses [pulldown-cmark](https://docs.rs/pulldown-cmark/0.13.6/pulldown_cmark/)
 on the background file worker. It reads the existing 64 KiB / 512-source-line
-prefix and retains at most 512 reading blocks; partial documents are labeled.
+prefix and retains at most 512 reading blocks; partial documents are labeled
+when source content or an additional reading block is omitted. Exactly 512 blocks
+with no omitted content remain complete.
 Displayed excerpts remain bounded and default to four visual lines. Links display
 their label, images display alt text, and raw HTML displays as literal text: no
 assets load and no HTML or scripts execute. Inline emphasis styling, tables,
