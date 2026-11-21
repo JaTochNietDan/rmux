@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Published v0.1.3 with all six assets from GitHub run 44868403072: macOS DMG
+and ZIP, Linux tar.gz, Windows ZIP, appcast and checksums. Native build jobs
+succeeded; the publish job failed twice with GitHub-token 403 responses. Recovered
+using the authenticated local GitHub client to upload the unchanged runner
+artifacts, then committed the generated Sparkle feed. Confirmed the published
+asset inventory and feed enclosure URL/size. The release tag points to cef7bdd,
+the built revision. CI publication permissions still need investigation; no
+native release was built locally.
+
 Release caching now includes Zig's global cache (`~/.cache/zig`) alongside the
 existing source/local-cache and Rust artifacts. The pinned Zig reports that
 directory separately from `.deps`, which the previous portable cache covered.
