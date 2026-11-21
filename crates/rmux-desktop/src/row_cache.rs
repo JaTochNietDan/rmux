@@ -4,6 +4,16 @@ use std::{cell::RefCell, sync::{Arc, Weak}};
 
 use crate::{CellMetrics, color, preferences::CellColor};
 
+/// Drop desktop-owned cell snapshots for an unmounted terminal. Keep viewport
+/// dimensions for input/navigation metadata; the next prepaint fetches a fresh
+/// engine frame. If the engine is busy, this placeholder paints background only.
+pub fn release_frame_cells(frame: &mut Frame) {
+    let rows = frame.rows.len();
+    frame.rows = Arc::new(vec![Arc::new(Vec::new()); rows]);
+    frame.selections = Arc::new(vec![None; rows]);
+    frame.cursor = None;
+}
+
 /// One shaped glyph for the block cursor; bounded independently of row caches.
 #[derive(Default)]
 pub struct CursorCache {
@@ -373,6 +383,29 @@ mod tests {
         let cache = RowCache { rows: Arc::new(vec![make_row()]), ..Default::default() };
         cache.release_unused_selection(&[None], Some(setting));
         assert!(cache.rows[0].selected_texts.borrow().is_none());
+    }
+
+    #[test]
+    fn hidden_frame_releases_cells_without_changing_engine_state() -> anyhow::Result<()> {
+        use super::*;
+        let mut terminal = rmux_terminal::Terminal::new(40, 3)?;
+        terminal.write("retained 世界\r\nsecond line".as_bytes());
+        let mut frame = terminal.frame()?;
+        let original = frame.text();
+        let revision = frame.revision;
+        let row = Arc::downgrade(&frame.rows[0]);
+        release_frame_cells(&mut frame);
+        assert_eq!(frame.rows.len(), 3);
+        assert_eq!(frame.columns, 40);
+        assert_eq!(frame.revision, revision);
+        assert!(frame.rows.iter().all(|row| row.is_empty()));
+        assert!(frame.selections.iter().all(Option::is_none));
+        assert!(frame.cursor.is_none());
+        assert!(Arc::ptr_eq(&frame.rows[0], &frame.rows[1]));
+        assert_eq!(terminal.frame()?.text(), original);
+        drop(terminal);
+        assert!(row.upgrade().is_none(), "desktop placeholder must not retain engine cells");
+        Ok(())
     }
 
     #[test]

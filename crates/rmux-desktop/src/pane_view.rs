@@ -612,7 +612,7 @@ impl PaneView {
 
     pub fn release_render_caches(&mut self, cx: &mut Context<Self>) {
         for terminal in &self.terminals {
-            if !terminal.read(cx).row_cache.is_empty() {
+            if terminal.read(cx).has_render_cache() {
                 terminal.update(cx, |terminal, _| terminal.release_render_cache());
             }
         }
@@ -1186,7 +1186,7 @@ impl Render for PaneView {
         // Hidden tabs keep their engines, but need not retain shaped glyph rows.
         // Do not notify: releasing a cache cannot change visible output.
         for (index, terminal) in self.terminals.iter().enumerate() {
-            if index != self.active && !terminal.read(cx).row_cache.is_empty() {
+            if index != self.active && terminal.read(cx).has_render_cache() {
                 terminal.update(cx, |terminal, _| terminal.release_render_cache());
             }
         }

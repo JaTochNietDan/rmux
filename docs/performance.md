@@ -1,5 +1,13 @@
 # rmux performance acceptance plan
 
+Unmounted terminal views release both shaped glyph caches and their desktop-owned
+cell snapshots. A shared empty-row placeholder retains viewport dimensions; engine
+contents, scrollback and processes are unchanged. The next prepaint requests a
+fresh engine frame. If that nonblocking request is busy, only the background is
+shown until the scheduled retry succeeds. Focused ownership tests prove old cells
+are no longer retained by the placeholder and engine text survives. Native refocus
+latency/blank-frame behavior and RSS impact remain unmeasured acceptance work.
+
 Experimental browser metadata uses one queued wakeup, independently coalesced
 load/title/process state, a 100 ms minimum interval between UI publications, and
 change-only redraw notification. Timers are event-driven and stop at idle. This

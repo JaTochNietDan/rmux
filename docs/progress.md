@@ -2,6 +2,18 @@
 
 ## Current implementation focus
 
+Hidden terminal cache cleanup now also releases desktop-owned frame cell snapshots,
+using shared empty-row placeholders that preserve viewport dimensions. A retained
+snapshot flag makes cleanup idempotent even when shaping never occurred; successful
+prepaint snapshots restore the flag. Engine contents/scrollback/processes remain
+untouched. Eight focused row-cache tests passed, including engine-text continuity,
+dimension preservation and weak-reference proof that placeholder rows do not hold
+old cells. Desktop compilation passed. A busy engine on refocus can briefly paint
+background until the existing nonblocking retry obtains a frame; native refocus,
+blank-frame UX and RSS measurements remain acceptance work. The previous turn made
+progress with committed/pushed compact browser controls. GitHub's f6ba628 browser
+run completed successfully; subsequent source revisions continue through CI.
+
 The experimental browser toolbar now shares rmux's compact 28-pixel navigation
 controls and shortcut-aware tooltips. A bordered address field, 44-pixel toolbar
 and 24-pixel status row leave more room for page content; the separate zoom label

@@ -600,6 +600,7 @@ struct TerminalView {
     compression_task: Option<Task<()>>,
     compression_activity: std::time::Instant,
     row_cache: row_cache::RowCache,
+    render_snapshot_released: bool,
     cursor_cache: row_cache::CursorCache,
     scroll_remainder: f32,
     mouse_button: Option<MouseButton>,
@@ -979,6 +980,7 @@ impl TerminalView {
             mouse_button: None,
             scroll_remainder: 0.,
             row_cache: row_cache::RowCache::default(),
+            render_snapshot_released: false,
             cursor_cache: row_cache::CursorCache::default(),
             session,
             applied_colors,
@@ -1046,7 +1048,14 @@ impl TerminalView {
             });
         }));
     }
+    fn has_render_cache(&self) -> bool {
+        !self.render_snapshot_released || !self.row_cache.is_empty()
+    }
     fn release_render_cache(&mut self) {
+        if !self.render_snapshot_released {
+            row_cache::release_frame_cells(&mut self.frame);
+            self.render_snapshot_released = true;
+        }
         self.cursor_cache = row_cache::CursorCache::default();
         let released = self.row_cache.release();
         if released > 0
@@ -2322,6 +2331,7 @@ impl Element for TerminalElement {
                     Ok(Some(frame)) => {
                         if frame.revision != view.frame.revision { view.clear_link_hover(cx); }
                         view.frame = frame;
+                        view.render_snapshot_released = false;
                     },
                     Ok(None) => {
                         // Keep the last coherent frame instead of waiting behind output

@@ -672,8 +672,8 @@
       ],
       "acceptance": "Release inactive GPU surfaces without killing shells or losing terminal state; recreate correctly on focus.",
       "rmux_status": "in_progress",
-      "implementation": "Inactive tabs are unmounted while sessions remain retained. Row and cursor caches are explicitly released for hidden panes/tabs. Selection-specific shaped glyph and decoration variants are also dropped when their row is deselected or the foreground setting changes; active variants remain cached. Focused row-cache ownership regressions pass.",
-      "remaining": "Demonstrated renderer resource reclamation and memory budgets.",
+      "implementation": "Inactive tabs are unmounted while sessions remain retained. Row and cursor caches are explicitly released for hidden panes/tabs. Desktop-owned cell snapshots are replaced with shared empty-row placeholders preserving dimensions, with a fresh engine frame fetched on next prepaint; engine state is retained. Selection-specific shaped glyph and decoration variants are also dropped when their row is deselected or the foreground setting changes; active variants remain cached. Focused row-cache ownership regressions pass.",
+      "remaining": "Native refocus/engine-busy placeholder acceptance, demonstrated renderer resource reclamation and memory budgets.",
       "implementation_sources": [
         "crates/rmux-desktop/src/pane_view.rs"
       ],
