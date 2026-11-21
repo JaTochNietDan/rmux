@@ -497,6 +497,7 @@ actions!(
         FileBrowserLocation,
         PreviewDirectory,
         SwitchPreviewMode,
+        ToggleMarkdownPreview,
         EditSelectedFile,
         OpenFolderBrowser,
         FileBrowserBack,
@@ -3811,6 +3812,7 @@ fn main() {
             KeyBinding::new("f5", RefreshFilePreview, Some("FilePreview")),
             KeyBinding::new("alt-up", PreviewDirectory, Some("FilePreview")),
             KeyBinding::new("ctrl-alt-m", SwitchPreviewMode, Some("FilePreview")),
+            KeyBinding::new("ctrl-alt-v", ToggleMarkdownPreview, Some("FilePreview")),
         ]);
         cx.bind_keys([
             KeyBinding::new("alt-left", FileBrowserBack, Some("FileBrowser")),

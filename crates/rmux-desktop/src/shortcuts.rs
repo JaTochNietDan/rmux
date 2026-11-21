@@ -135,6 +135,7 @@ fn action(name: &str) -> Option<Box<dyn Action>> {
         "refresh_preview" => Box::new(RefreshFilePreview),
         "preview_directory" => Box::new(PreviewDirectory),
         "edit_selected_file" => Box::new(EditSelectedFile),
+        "toggle_markdown_preview" => Box::new(ToggleMarkdownPreview),
         "switch_preview_mode" => Box::new(SwitchPreviewMode),
         "toggle_preview_wrap" => Box::new(TogglePreviewWrap),
         "cancel_file_loading" => Box::new(CancelFileLoading),
@@ -289,6 +290,24 @@ mod tests {
     use crate::{preferences::Preferences, ShowCommandPalette, ToggleSettings};
     use gpui::{KeyBinding, KeyContext, Keymap, Keystroke};
     fn settings(value: serde_json::Value) -> Preferences { serde_json::from_value(value).unwrap() }
+    #[test]
+    fn markdown_toggle_binding_can_be_remapped_in_previews_only() {
+        let mut map = Keymap::new(vec![KeyBinding::new("ctrl-alt-v", crate::ToggleMarkdownPreview, Some("FilePreview"))]);
+        map.add_bindings(compile(&settings(serde_json::json!({"keybindings":[
+            {"key":"ctrl-alt-v","action":"disabled","context":"file_preview"},
+            {"key":"ctrl-alt-d","action":"toggle_markdown_preview","context":"file_preview"}
+        ]}))).unwrap());
+        let original = [Keystroke::parse("ctrl-alt-v").unwrap()];
+        let replacement = [Keystroke::parse("ctrl-alt-d").unwrap()];
+        for context in ["CommandPalette FilePreview", "CommandPalette FilePreview TextPreview"] {
+            let contexts = [KeyContext::parse(context).unwrap()];
+            assert!(map.bindings_for_input(&original, &contexts).0.is_empty());
+            assert!(map.bindings_for_input(&replacement, &contexts).0[0].action().as_any().is::<crate::ToggleMarkdownPreview>());
+        }
+        for context in ["Terminal", "CommandPalette FileBrowser", "Settings"] {
+            assert!(map.bindings_for_input(&replacement, &[KeyContext::parse(context).unwrap()]).0.is_empty());
+        }
+    }
     #[test]
     fn external_edit_shortcut_is_scoped_to_file_views() {
         let mut map = Keymap::new(vec![

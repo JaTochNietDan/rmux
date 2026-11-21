@@ -357,7 +357,10 @@ indentation, and expand tabs at four-column stops. Long lines and omitted code
 receive clipping markers; copying retains the entire captured block.
 Search and highlight operate on reading text; Enter copies a block, while
 **Copy Markdown Source** keeps the captured original Markdown. **View Source**
-returns to the ordinary text preview. Refresh/F5 keeps Markdown mode and restores
+returns to the ordinary text preview. Ctrl+Alt+V toggles reading/source mode and
+can be remapped as `toggle_markdown_preview` under `context: "file_preview"`.
+Read Markdown / View Markdown Source also appear in the searchable preview
+commands; IME composition suspends switching. Refresh/F5 keeps Markdown mode and restores
 its query, wrap setting and selected block number when still present.
 
 This initial viewer uses [pulldown-cmark](https://docs.rs/pulldown-cmark/0.13.6/pulldown_cmark/)

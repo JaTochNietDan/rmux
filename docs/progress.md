@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Markdown/source switching now has the configurable `toggle_markdown_preview`
+action with Ctrl+Alt+V in file previews. Active-key hints reflect overrides, and
+searchable Read Markdown / View Markdown Source commands complement the toolbar.
+The handler respects IME composition and reuses bounded asynchronous loads and
+mode-specific refresh-state rules. The focused keymap test passed for disable/
+remap and exclusion from terminals, file browsers and Settings, with desktop
+compilation. Native switching/focus/compact-layout acceptance remains pending.
+
 Fixed Markdown block-cap reporting: documents containing exactly 512 reading
 blocks no longer become partial solely because closing parser events remain.
 The cap is enforced when another nonempty block would be emitted, including

@@ -561,6 +561,8 @@ impl CommandPalette {
         commands.push(Command { title: "Copy file path".into(), subtitle: Some(preview.path.display().to_string()), shortcut: None,
             target: PaletteEvent::Run(Box::new(CopyLocalPath { path: preview.path.clone() })) });
         commands.push(reveal_local_path(&preview.path));
+        commands.push(Command { title: "Read Markdown".into(), subtitle: Some("Bounded reading view · No active content".into()), shortcut: None,
+            target: PaletteEvent::Run(Box::new(PreviewMarkdownFile { path: preview.path.clone() })) });
         commands.push(Command { title: "Open in External Editor".into(), subtitle: Some("Uses file_editor from Settings".into()), shortcut: None,
             target: PaletteEvent::Run(Box::new(EditLocalFile { path: preview.path.clone() })) });
         commands.push(Command { title: if preview.hex { "Copy Hex Dump" } else { "Copy Preview Text" }.into(),
@@ -602,6 +604,10 @@ impl CommandPalette {
                         _ => "Block".into(),
                     };
                     command.subtitle = Some(format!("{label} {block_number} · Enter copies reading text"));
+                } else if let Some(action) = action.as_any().downcast_ref::<PreviewMarkdownFile>() {
+                    command.title = "View Markdown Source".into();
+                    command.subtitle = Some("Read-only text preview".into());
+                    command.target = PaletteEvent::Run(Box::new(PreviewLocalFile { path: action.path.clone() }));
                 } else if let Some(action) = action.as_any().downcast_ref::<PreviewLocalFile>() {
                     command.target = PaletteEvent::Run(Box::new(PreviewMarkdownFile { path: action.path.clone() }));
                 } else if action.as_any().is::<CopyPreviewText>() {
@@ -827,6 +833,13 @@ impl CommandPalette {
         } else if action.as_any().is::<FileBrowserLocation>() {
             Box::new(EnterDirectory { path: path.clone() })
         } else { Box::new(BrowseDirectory { path: path.clone() }) };
+        cx.emit(PaletteEvent::Run(action));
+    }
+    fn toggle_markdown_preview(&mut self, cx: &mut Context<Self>) {
+        if self.input.read(cx).is_composing() { return; }
+        let Some((path, _)) = self.preview_navigation.as_ref() else { return; };
+        let action: Box<dyn Action> = if self.markdown_preview { Box::new(PreviewLocalFile { path: path.clone() }) }
+            else { Box::new(PreviewMarkdownFile { path: path.clone() }) };
         cx.emit(PaletteEvent::Run(action));
     }
     fn navigate_preview(&mut self, directory: bool, switch_mode: bool, cx: &mut Context<Self>) {
@@ -1116,7 +1129,7 @@ impl Render for CommandPalette {
         let has_ssh_destination = self.selected_ssh_destination().is_some();
         let has_preview_file = self.selected_preview_file().is_some();
         let preview_shortcuts = if self.preview_navigation.is_some() {
-            [(&RefreshFilePreview as &dyn Action, "refresh"), (&PreviewDirectory as &dyn Action, "directory"), (&SwitchPreviewMode as &dyn Action, "text/hex"), (&EditSelectedFile as &dyn Action, "edit")]
+            [(&RefreshFilePreview as &dyn Action, "refresh"), (&PreviewDirectory as &dyn Action, "directory"), (&SwitchPreviewMode as &dyn Action, "text/hex"), (&ToggleMarkdownPreview as &dyn Action, "Markdown/source"), (&EditSelectedFile as &dyn Action, "edit")]
                 .into_iter().filter_map(|(action, label)| shortcuts::hint(action, &self.input.read(cx).focus, window).map(|key| format!("{key} {label}")))
                 .collect::<Vec<_>>().join(" · ")
         } else if self.folder_navigation.is_some() {
@@ -1138,6 +1151,7 @@ impl Render for CommandPalette {
             .on_action(cx.listener(|this, _: &RefreshFilePreview, _, cx| this.navigate_preview(false, false, cx)))
             .on_action(cx.listener(|this, _: &PreviewDirectory, _, cx| this.navigate_preview(true, false, cx)))
             .on_action(cx.listener(|this, _: &SwitchPreviewMode, _, cx| this.navigate_preview(false, true, cx)))
+            .on_action(cx.listener(|this, _: &ToggleMarkdownPreview, _, cx| this.toggle_markdown_preview(cx)))
             .on_action(cx.listener(|this, _: &EditSelectedFile, _, cx| this.edit_selected_file(cx)))
             .on_action(cx.listener(|this, _: &CopySearchExcerpt, _, cx| this.copy_search_excerpt(cx)))
             .w(px(520.))
