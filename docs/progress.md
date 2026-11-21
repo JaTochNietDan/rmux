@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Task-manager snapshots now retain their background sampling completion time.
+The panel shows a fixed UTC clock time, and copied JSON includes
+`sample_completed_at_unix_ms`. Refresh keeps the prior timestamp attached to
+the prior rows until replacement; closing clears it. Sorting/copying does not
+change the capture time, and no periodic redraw or sampling timer was added.
+Desktop compilation passed; native presentation acceptance remains pending.
+
 The task manager's sort control and S key now open a searchable seven-mode picker,
 with the current mode marked and selected. Users can jump directly to shell-tree
 RSS/CPU instead of cycling every mode. Applying keeps the same terminal selected

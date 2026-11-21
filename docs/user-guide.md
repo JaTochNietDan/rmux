@@ -1129,6 +1129,10 @@ search and choose screen storage, shell, foreground or shell-tree RSS/CPU. The
 current mode is marked; Enter applies and Escape cancels. The command palette's
 Cycle Terminal Memory Sort remains available. All modes sort descending with missing
 samples last. Sorting reuses existing samples without another process scan.
+The sort row shows when background sampling finished, in UTC. Copied reports
+include `sample_completed_at_unix_ms` (milliseconds since the Unix epoch).
+This timestamp describes the captured batch, not the time you copied it; the
+previous snapshot and timestamp remain visible while a refresh runs.
 Click a row to focus its terminal. Copy exports the last sample as JSON in the
 displayed order, with raw byte counts and explicit unavailable values.
 The panel also samples each terminal's root shell RSS and CPU on the background

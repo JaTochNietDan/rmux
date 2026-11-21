@@ -133,6 +133,7 @@ pub(super) struct WorkspaceWindow {
     memory_previous_focus: Option<FocusHandle>,
     memory_selected: usize,
     memory_application: Option<process_metrics::Sample>,
+    memory_sampled_at: Option<u64>,
     memory_sort: memory_view::Sort,
     memory_loading: bool,
     memory_generation: u64,
@@ -319,7 +320,7 @@ impl WorkspaceWindow {
             "escape" => self.close_memory(window, cx),
             "r" => self.refresh_memory(window, cx),
             "s" => self.show_memory_sort(window, cx),
-            "c" => { if let Some(rows) = &self.memory_rows { clipboard::write(ClipboardItem::new_string(memory_view::report(rows, self.memory_application, self.memory_sort)), cx); } },
+            "c" => { if let Some(rows) = &self.memory_rows { clipboard::write(ClipboardItem::new_string(memory_view::report(rows, self.memory_application, self.memory_sort, self.memory_sampled_at)), cx); } },
             "up" if count > 0 => self.memory_selected = (self.memory_selected + count - 1) % count,
             "down" if count > 0 => self.memory_selected = (self.memory_selected + 1) % count,
             "home" => self.memory_selected = 0,
@@ -367,6 +368,7 @@ impl WorkspaceWindow {
         self.memory_rows = None;
         self.memory_scroll.reset(0);
         self.memory_application = None;
+        self.memory_sampled_at = None;
         self.memory_loading = false;
         self.memory_generation = self.memory_generation.wrapping_add(1);
         if self.memory_focus.as_ref().is_some_and(|focus| focus.is_focused(window)) {
@@ -404,10 +406,10 @@ impl WorkspaceWindow {
         self.memory_canceled = Some(canceled.clone());
         cx.spawn(async move |entity, cx| {
             let mut rows = executor.spawn(async move {
-                if canceled.load(Ordering::Relaxed) { return (Vec::new(), None); }
+                if canceled.load(Ordering::Relaxed) { return (Vec::new(), None, None); }
                 let (processes, trees) = {
                     let mut sampler = process_sampler.lock().unwrap_or_else(|error| error.into_inner());
-                    if canceled.load(Ordering::Relaxed) { return (Vec::new(), None); }
+                    if canceled.load(Ordering::Relaxed) { return (Vec::new(), None, None); }
                     sampler.sample_with_trees(std::iter::once(std::process::id()).chain(jobs.iter().flat_map(|(_, _, _, pid, foreground_pid, _)| [*pid, *foreground_pid].into_iter().flatten())), jobs.iter().filter_map(|(_, _, _, pid, _, _)| *pid), &canceled)
                 };
                 let application = processes.get(&std::process::id()).copied();
@@ -420,7 +422,7 @@ impl WorkspaceWindow {
                     let process = pid.and_then(|pid| processes.get(&pid).copied());
                     memory_view::Row { workspace_id, surface_id, name, pid, process, tree: pid.and_then(|pid| trees.get(&pid).copied()), foreground_pid, foreground: foreground_pid.and_then(|pid| processes.get(&pid).copied()), usage, status }
                 }).collect();
-                (rows, application)
+                (rows, application, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).ok().map(|time| time.as_millis().min(u64::MAX as u128) as u64))
             }).await;
             let _ = entity.update(cx, |this, cx| {
                 if this.memory_generation != generation || this.memory_rows.is_none() { return; }
@@ -455,6 +457,7 @@ impl WorkspaceWindow {
                 if !rows.0.is_empty() { crate::list_navigation::reveal(&this.memory_scroll, this.memory_selected); }
                 this.memory_rows = Some(rows.0);
                 this.memory_application = rows.1;
+                this.memory_sampled_at = rows.2;
                 this.memory_loading = false;
                 this.memory_canceled = None;
                 cx.notify();
@@ -2983,6 +2986,7 @@ impl WorkspaceWindow {
             memory_previous_focus: None,
             memory_selected: 0,
             memory_application: None,
+            memory_sampled_at: None,
             memory_sort: Default::default(),
             memory_loading: false,
             memory_generation: 0,
@@ -3192,6 +3196,7 @@ impl WorkspaceWindow {
             memory_previous_focus: None,
             memory_selected: 0,
             memory_application: None,
+            memory_sampled_at: None,
             memory_sort: Default::default(),
             memory_loading: false,
             memory_generation: 0,
@@ -3960,7 +3965,7 @@ impl Render for WorkspaceWindow {
             .on_action(cx.listener(|this, _: &ShowTerminalMemorySort, window, cx| this.show_memory_sort(window, cx)))
             .on_action(cx.listener(|this, action: &SetTerminalMemorySort, _, cx| this.set_memory_sort(action.sort, cx)))
             .on_action(cx.listener(|this, _: &CopyTerminalMemory, _, cx| {
-                if let Some(rows) = &this.memory_rows { clipboard::write(ClipboardItem::new_string(memory_view::report(rows, this.memory_application, this.memory_sort)), cx); }
+                if let Some(rows) = &this.memory_rows { clipboard::write(ClipboardItem::new_string(memory_view::report(rows, this.memory_application, this.memory_sort, this.memory_sampled_at)), cx); }
             }))
             .on_action(cx.listener(|this, _: &CloseTerminalMemory, window, cx| this.close_memory(window, cx)))
             .on_action(cx.listener(|this, _: &NewWorkspaceGroup, window, cx| this.create_group(true, window, cx)))
@@ -4269,7 +4274,7 @@ impl Render for WorkspaceWindow {
                                     .child(icons::icon("bell")))
                         ).child(gpui::div().flex_1().min_h_0().child(entry.workspace.clone()))
                     })
-                    .when_some(self.memory_rows.as_ref(), |div, rows| div.child(memory_view::panel(rows, self.memory_application, self.memory_sort, self.memory_loading, self.memory_scroll.clone(), self.memory_focus.as_ref(), self.memory_selected, cx)))
+                    .when_some(self.memory_rows.as_ref(), |div, rows| div.child(memory_view::panel(rows, self.memory_application, self.memory_sampled_at, self.memory_sort, self.memory_loading, self.memory_scroll.clone(), self.memory_focus.as_ref(), self.memory_selected, cx)))
                     .when_some(self.notice.clone(), |div, notice| div.child(gpui::div().flex().items_start().flex_shrink_0().min_w_0()
                         .gap_2().px_3().py_2().text_xs().bg(rgb(0x292929)).border_t_1().border_color(rgb(0x3b4557))
                         .child(gpui::div().id("window-notice-text").flex_1().min_w_0().max_h(px(96.)).overflow_scroll().whitespace_normal()

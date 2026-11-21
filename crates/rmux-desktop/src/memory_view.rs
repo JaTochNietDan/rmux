@@ -57,7 +57,7 @@ pub struct Row {
 
 fn mib(bytes: u64) -> String { format!("{:.2} MiB", bytes as f64 / 1_048_576.) }
 
-pub fn report(rows: &[Row], application: Option<process_metrics::Sample>, sort: Sort) -> String {
+pub fn report(rows: &[Row], application: Option<process_metrics::Sample>, sort: Sort, sampled_at: Option<u64>) -> String {
     let rows: Vec<_> = sort.rows(rows).into_iter().map(|row| serde_json::json!({
         "workspace_id":row.workspace_id.to_string(), "surface_id":row.surface_id.to_string(),
         "name":row.name,"process_id":row.pid,"status":row.status,
@@ -70,10 +70,10 @@ pub fn report(rows: &[Row], application: Option<process_metrics::Sample>, sort: 
             "virtual_bytes":usage.virtual_bytes,"compression_supported":usage.compression_supported,
         }))
     })).collect();
-    serde_json::to_string_pretty(&serde_json::json!({"scope":"ghostty_screen_storage","sample_mode":"manual","application":{"process_id":std::process::id(),"scope":"application_process","sample":application},"surfaces":rows})).expect("JSON memory report")
+    serde_json::to_string_pretty(&serde_json::json!({"scope":"ghostty_screen_storage","sample_mode":"manual","sample_completed_at_unix_ms":sampled_at,"application":{"process_id":std::process::id(),"scope":"application_process","sample":application},"surfaces":rows})).expect("JSON memory report")
 }
 
-pub fn panel(rows: &[Row], application: Option<process_metrics::Sample>, sort: Sort, loading: bool, scroll: ListState, focus: Option<&FocusHandle>, selected: usize, cx: &mut Context<window_view::WorkspaceWindow>) -> AnyElement {
+pub fn panel(rows: &[Row], application: Option<process_metrics::Sample>, sampled_at: Option<u64>, sort: Sort, loading: bool, scroll: ListState, focus: Option<&FocusHandle>, selected: usize, cx: &mut Context<window_view::WorkspaceWindow>) -> AnyElement {
     let indices = sort.indices(rows);
     let entity = cx.entity();
     let sampled = rows.iter().filter(|row| row.usage.is_some()).count();
@@ -100,7 +100,10 @@ pub fn panel(rows: &[Row], application: Option<process_metrics::Sample>, sort: S
             .text_color(rgb(0xb4c7ef)).hover(|style| style.text_color(rgb(0xffffff)))
             .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("Choose memory sort order".into())).into())
             .on_click(|event, window, cx| { if event.standard_click() { window.dispatch_action(Box::new(ShowTerminalMemorySort), cx); } })
-            .child(format!("{} · Choose…", sort.label())))
+            .child(format!("{} · Choose…{}", sort.label(), sampled_at.map(|ms| {
+                let seconds = ms / 1000;
+                format!(" · Sampled {:02}:{:02}:{:02} UTC", seconds / 3600 % 24, seconds / 60 % 60, seconds % 60)
+            }).unwrap_or_default())))
         .child(div().px_3().pb_2().text_xs().text_color(rgb(0xa0a0a0))
             .child("Shell tree includes descendants; RSS may count shared pages more than once · up to 256 terminals / 4,096 processes · manual refresh"))
         .child(list(scroll, move |index, _, cx| {
