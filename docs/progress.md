@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Browser address entry now defaults bare localhost/subdomain-localhost and IPv4/IPv6
+loopback addresses to HTTP, while retaining HTTPS for other hosts and preserving
+explicit schemes. Reparsing the original authority retains explicit port 443 when
+switching the implicit scheme; URLs inside query/path text no longer confuse scheme
+detection. Two focused address tests passed, covering local ports, IPv6, numeric
+IPv4 normalization, trailing-dot localhost, mixed-case explicit HTTPS, lookalike
+hosts, LAN defaults, embedded URL queries and malformed/credentialed addresses.
+This verifies normalization and feature compilation, not native HTTP navigation.
+The prior goal turn made progress with committed/pushed browser keyboard/history
+controls. Native/browser-pane/cross-platform acceptance remains open.
+
 The experimental browser now exposes scoped Cmd+L/Cmd+R/Alt+Left/Alt+Right bindings
 and native Browser menu actions routed only to the active browser window. Address
 focus selects the page-load URL; Escape restores that address and returns focus to

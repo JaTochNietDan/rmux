@@ -10,9 +10,28 @@ enum Navigation { Back, Forward, Reload }
 fn address(text: &str) -> anyhow::Result<String> {
     let text = text.trim();
     anyhow::ensure!(!text.is_empty() && text.len() <= 4096 && !text.chars().any(char::is_control), "Enter an HTTP or HTTPS address");
-    let value = if text.contains("://") || text.starts_with("about:") { text.to_owned() }
-        else { format!("https://{text}") };
-    let url = url::Url::parse(&value)?;
+    // A URL embedded in a query/path must not make a bare hostname look like
+    // an explicitly schemed address. Preserve explicit HTTP/HTTPS choices.
+    let explicit = text.find("://").is_some_and(|index| !text[..index].contains(['/', '?', '#']))
+        || text.get(..6).is_some_and(|prefix| prefix.eq_ignore_ascii_case("about:"));
+    let value = if explicit { text.to_owned() } else { format!("https://{text}") };
+    let mut url = url::Url::parse(&value)?;
+    if !explicit {
+        let loopback = match url.host() {
+            Some(url::Host::Domain(host)) => {
+                let host = host.trim_end_matches('.');
+                host == "localhost" || host.ends_with(".localhost")
+            }
+            Some(url::Host::Ipv4(host)) => host.is_loopback(),
+            Some(url::Host::Ipv6(host)) => host.is_loopback(),
+            None => false,
+        };
+        if loopback {
+            // Reparse rather than set_scheme: HTTPS parsing can discard an
+            // explicit :443, which must stay a port when choosing HTTP.
+            url = url::Url::parse(&format!("http://{text}"))?;
+        }
+    }
     anyhow::ensure!(matches!(url.scheme(), "http" | "https") && url.host_str().is_some() || value == "about:blank", "Only HTTP, HTTPS and about:blank are supported");
     anyhow::ensure!(url.username().is_empty() && url.password().is_none(), "Use a URL without embedded credentials");
     Ok(url.into())
@@ -184,6 +203,26 @@ pub fn open(cx: &mut App) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{address, allowed};
+    #[test]
+    fn browser_addresses_choose_http_only_for_implicit_loopback() {
+        for (input, expected) in [
+            ("localhost:3000", "http://localhost:3000/"),
+            ("LOCALHOST.:443/path", "http://localhost.:443/path"),
+            ("app.localhost:8080", "http://app.localhost:8080/"),
+            ("127.0.0.1:8000/?next=https://example.com", "http://127.0.0.1:8000/?next=https://example.com"),
+            ("127.1:443", "http://127.0.0.1:443/"),
+            ("[::1]:3000", "http://[::1]:3000/"),
+            ("https://localhost:3000", "https://localhost:3000/"),
+            ("HTTPS://localhost:3000", "https://localhost:3000/"),
+            ("example.com:3000", "https://example.com:3000/"),
+            ("192.168.1.2:3000", "https://192.168.1.2:3000/"),
+            ("localhost.example.com", "https://localhost.example.com/"),
+            ("example.com/path?next=http://localhost", "https://example.com/path?next=http://localhost"),
+        ] { assert_eq!(address(input).unwrap(), expected, "{input}"); }
+        for input in ["localhost:65536", "[::1", "https://example.com/a\nb", "localhost:3000@evil.example"] {
+            assert!(address(input).is_err(), "{input}");
+        }
+    }
     #[test]
     fn browser_addresses_normalize_and_restrict_navigation() {
         assert_eq!(address(" example.com ").unwrap(), "https://example.com/");

@@ -44,8 +44,10 @@ Prototype terminal/browser composition, focus, clipping, drag overlays, resizing
 `mise run browser` enables the optional macOS `browser` feature in rmux. File →
 New Browser Window (Experimental), also in the command palette, opens a separate
 native window with an address field, Back/Forward/Reload/Go controls and a committed
-URL/loading status line. Enter submits the address. Bare hostnames default to
-HTTPS; explicit HTTP supports local development servers. The address field retains
+URL/loading status line. Enter submits the address. Bare localhost names (including `.localhost`) and IPv4/IPv6
+loopback addresses default to HTTP, including explicit ports. Other bare hosts
+default to HTTPS. Explicit HTTP/HTTPS schemes remain unchanged; private LAN
+addresses require an explicit HTTP scheme if their server does not support HTTPS. The address field retains
 the navigation draft; the status line reports the page-load URL after redirects.
 Browser-context defaults are Cmd+L (select the loaded address), Cmd+R (reload),
 Alt+Left/Right (history). The native Browser menu routes the same actions to the
