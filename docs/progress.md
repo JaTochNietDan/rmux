@@ -2,6 +2,12 @@
 
 ## Current implementation focus
 
+Global terminal-output search now has a default window shortcut: Cmd+Shift+F
+on macOS and Ctrl+Alt+Shift+F elsewhere, preserving Ctrl+Shift+F for terminal
+Find on Linux/Windows. Its menu entry now lives beside Find in Edit. Existing
+shortcut resolution supplies palette hints and custom overrides. Desktop
+compilation passed; native shortcut dispatch remains pending.
+
 Reopening global terminal-output search now restores and selects the originating
 window's last accepted query, allowing Enter to rerun or typing to replace it.
 The query is bounded by existing validation and retained only in window memory;

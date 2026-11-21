@@ -1727,8 +1727,10 @@ regex and case-sensitive modes are not yet available.
 Invoke Find again while it is open to focus and select the query for replacement.
 Active IME composition is preserved rather than selecting over marked text.
 
-**Search Terminal Output…** in the menu or palette (`search_terminal_output` in
-custom bindings) searches across terminals in all rmux windows. Enter a literal
+**Edit → Search Terminal Output…** or the command palette searches across terminals
+in all rmux windows. The default shortcut is **Cmd+Shift+F** on macOS and
+**Ctrl+Alt+Shift+F** on Linux/Windows; terminal Find retains **Ctrl+Shift+F** there.
+Customize it with `search_terminal_output` in key bindings. Enter a literal
 query and submit; typing does not scan terminals. Reopening the editor selects
 the last submitted query from that window, ready to replace or rerun with Enter.
 This query stays in memory only and is forgotten when the window closes.

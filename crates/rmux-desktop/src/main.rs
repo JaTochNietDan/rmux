@@ -3575,6 +3575,7 @@ fn main() {
             cx.bind_keys([
                 KeyBinding::new("cmd-q", Quit, None),
                 KeyBinding::new("cmd-shift-p", ShowCommandPalette, None),
+                KeyBinding::new("cmd-shift-f", ShowTerminalSearch, None),
                 KeyBinding::new("cmd-ctrl-left", FocusLeft, None),
                 KeyBinding::new("cmd-ctrl-right", FocusRight, None),
                 KeyBinding::new("cmd-ctrl-up", FocusUp, None),
@@ -3629,6 +3630,7 @@ fn main() {
             cx.bind_keys([
                 KeyBinding::new("ctrl-shift-q", Quit, None),
                 KeyBinding::new("ctrl-shift-p", ShowCommandPalette, None),
+                KeyBinding::new("ctrl-alt-shift-f", ShowTerminalSearch, None),
                 KeyBinding::new("alt-shift-left", FocusLeft, None),
                 KeyBinding::new("alt-shift-right", FocusRight, None),
                 KeyBinding::new("alt-shift-up", FocusUp, None),
@@ -3772,7 +3774,6 @@ fn main() {
                     MenuItem::action("Open Settings File", OpenSettingsFile),
                     MenuItem::action("Open Layout in New Window…", OpenLayout),
                     MenuItem::action("Open Text Preview…", OpenTextPreview),
-                    MenuItem::action("Search Terminal Output…", ShowTerminalSearch),
                     MenuItem::action("Open Folder…", OpenFolderBrowser),
                     MenuItem::action("New Tab", NewTab),
                     MenuItem::action("Cancel New Terminal Tab", CancelNewTab),
@@ -3801,6 +3802,7 @@ fn main() {
                     MenuItem::action("Clear Scrollback", ClearScrollback),
                     MenuItem::action("Paste", Paste),
                     MenuItem::action("Find", Find),
+                    MenuItem::action("Search Terminal Output…", ShowTerminalSearch),
                     MenuItem::action("Find Older Match", FindOlder),
                     MenuItem::action("Find Newer Match", FindNewer),
                     MenuItem::action("Increase Font Size", IncreaseFontSize),
