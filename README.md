@@ -2,11 +2,15 @@
 
 <img src="docs/brand/rmux.svg" width="72" height="72" alt="rmux: split panes and a terminal prompt">
 
-**A native terminal workspace for keeping your projects, shells, and coding agents together.**
+**A native terminal workspace built for responsiveness.**
 
-rmux combines a fast terminal powered by Ghostty with a sidebar for your projects,
-split panes, and keyboard-first navigation. Built in Rust with a GPU-rendered
-interface, it aims to stay responsive as your workspace grows.
+rmux combines Ghostty terminals with project workspaces, split panes, and
+keyboard-first navigation. Built in Rust with a GPU-rendered interface, it puts
+input latency, idle CPU, and memory use at the center of development.
+
+Keep your shells and coding agents together without losing sight of what is
+running. See the [performance measurements and remaining work](docs/performance.md)
+for the current evidence; cross-platform performance acceptance is still in progress.
 
 ![rmux with project workspaces and split terminals](docs/images/rmux.png)
 
