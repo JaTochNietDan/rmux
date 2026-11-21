@@ -229,6 +229,20 @@ fn parse_aliases(text: &str) -> Aliases {
     Aliases { names: names.into_values().collect(), limited }
 }
 
+/// Start a sibling terminal without treating a remote OSC directory as a local cwd.
+/// Callers supply only a session's explicit launch identity, never its saved target.
+pub fn launch_sibling(destination: Option<&str>, directory: Option<&std::path::Path>, scrollback: usize) -> anyhow::Result<crate::Session> {
+    use crate::Session;
+    let Some(destination) = destination else {
+        return Session::shell_in_with_scrollback(80, 24, directory, scrollback);
+    };
+    let command = command(destination).map_err(anyhow::Error::msg)?;
+    let argv = command.argv.iter().map(std::ffi::OsString::from).collect::<Vec<_>>();
+    let mut session = Session::command_in_with_scrollback(&argv, 80, 24, directory, scrollback)?;
+    session.set_remote_destination(destination)?;
+    Ok(session)
+}
+
 pub fn command(destination: &str) -> Result<crate::preferences::CustomCommand, &'static str> {
     let authority = destination.strip_prefix("ssh://").unwrap_or(destination);
     if destination.is_empty() || destination.len() > 255 || destination.starts_with('-')

@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Interactive split/new-tab creation now snapshots the source session's explicit
+SSH destination and launches a separate client in the existing background startup
+pipeline. Remote siblings carry SSH labels and session identity, retaining remote
+metadata isolation and saved-target persistence. Saved disconnected targets are
+not inherited, so restored local shells cannot silently reconnect. Existing focus,
+cancellation, color/font refresh and failed-start ownership remain in the shared
+startup paths. RPC pane.split retains its documented local-shell contract. Desktop
+test compilation and all eight SSH tests passed; native interactive split/tab,
+authentication and focus acceptance for this new path remain pending.
+
 SSH Hosts now merges current-window session targets and restored saved targets
 with discovered config aliases. Session/saved targets sort first; restored targets
 are labelled Not connected, and all selections explicitly open a new workspace.

@@ -808,6 +808,9 @@ impl PaneView {
     pub fn cached_directory(&self, cx: &App) -> Option<std::path::PathBuf> {
         self.terminals.get(self.active)?.read(cx).snapshot_directory.clone()
     }
+    pub fn live_ssh_destination(&self, cx: &App) -> Option<String> {
+        self.terminals.get(self.active)?.read(cx).session.remote_destination().map(str::to_owned)
+    }
     pub fn ssh_destination(&self, cx: &App) -> Option<String> {
         let terminal = self.terminals.get(self.active)?.read(cx);
         terminal.session.remote_destination().map(str::to_owned).or_else(|| terminal.saved_ssh_destination.clone())
@@ -849,6 +852,8 @@ impl PaneView {
     fn add(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if cx.global::<Shutdowns>().quitting || self.spawning_tab.is_some() { return; }
         let directory = self.cached_directory(cx).or_else(|| cx.global::<InitialDirectory>().0.clone());
+        let destination = self.live_ssh_destination(cx);
+        let label = destination.as_ref().map(|destination| format!("SSH · {destination}"));
         let cells = self.active_cell_metrics(cx);
         let family = self.active_font_family(cx);
         let previous_default_size = cx.global::<Preferences>().font_size;
@@ -865,7 +870,7 @@ impl PaneView {
         self.spawning_tab = Some(cx.spawn_in(window, async move |entity, cx| {
             let mut result = executor.spawn(async move {
                 prepare_terminal_launch(&launch_canceled, || {
-                    Session::shell_in_with_scrollback(80, 24, directory.as_deref(), scrollback)
+                    ssh::launch_sibling(destination.as_deref(), directory.as_deref(), scrollback)
                 }, colors, palette)
             }).await;
             loop {
@@ -904,7 +909,7 @@ impl PaneView {
                         });
                         this.titles.insert(terminal.entity_id(), title);
                         this.terminals.push(terminal);
-                        this.labels.push(format!("Terminal {}", this.next_number));
+                        this.labels.push(label.unwrap_or_else(|| format!("Terminal {}", this.next_number)));
                         this.next_number += 1;
                         if origin.as_ref().is_some_and(|focus| focus.is_focused(window)) {
                             this.select(this.terminals.len() - 1, window, cx);

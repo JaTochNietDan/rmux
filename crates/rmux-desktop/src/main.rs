@@ -2999,6 +2999,8 @@ impl Workspace {
             cx.notify();
             return;
         }
+        let destination = pane.read(cx).live_ssh_destination(cx);
+        let label = destination.as_ref().map(|destination| format!("SSH · {destination}"));
         let target = pane.entity_id();
         let cells = pane.read(cx).active_cell_metrics(cx);
         let family = pane.read(cx).active_font_family(cx);
@@ -3018,7 +3020,7 @@ impl Workspace {
         self.spawning_split = Some(cx.spawn_in(window, async move |entity, cx| {
             let mut result = executor.spawn(async move {
                 pane_view::prepare_terminal_launch(&launch_canceled, || {
-                    Session::shell_in_with_scrollback(80, 24, directory.as_deref(), scrollback)
+                    ssh::launch_sibling(destination.as_deref(), directory.as_deref(), scrollback)
                 }, colors, palette)
             }).await;
             loop {
@@ -3044,7 +3046,7 @@ impl Workspace {
                         let (size, family) = preferences::updated_font(cells.font_size, &family,
                             previous_default_size, &previous_default_family, cx.global::<Preferences>());
                         let cells = if size == cells.font_size { cells } else { CellMetrics::new(size) };
-                        this.add_seed_at(Some(target), axis, before, None, focus, Some((TerminalSeed::Ready(prepared, cells, family.into()), None)), window, cx);
+                        this.add_seed_at(Some(target), axis, before, None, focus, Some((TerminalSeed::Ready(prepared, cells, family.into()), label)), window, cx);
                     }
                     Err(error) => this.error = Some(format!("Start split terminal: {error}")),
                 }
