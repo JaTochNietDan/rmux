@@ -1729,7 +1729,10 @@ Active IME composition is preserved rather than selecting over marked text.
 
 **Search Terminal Output…** in the menu or palette (`search_terminal_output` in
 custom bindings) searches across terminals in all rmux windows. Enter a literal
-query and submit; typing does not scan terminals. Matching follows Find's ASCII
+query and submit; typing does not scan terminals. Reopening the editor selects
+the last submitted query from that window, ready to replace or rerun with Enter.
+This query stays in memory only and is forgotten when the window closes.
+Matching follows Find's ASCII
 case-insensitive rules. A 64 KiB prefix supplies previews; a capped prefix without
 a match falls back to incremental search of the terminal's retained history.
 Results outside the preview identify the terminal without copying its full history.

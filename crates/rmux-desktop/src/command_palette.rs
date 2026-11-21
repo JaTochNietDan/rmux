@@ -495,9 +495,13 @@ impl CommandPalette {
         palette.location = Some(location);
         palette
     }
-    pub fn terminal_search(window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn terminal_search(query: &str, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let mut palette = Self::with_commands(Vec::new(), "Search terminal output · All windows", "Enter submits a literal search · Retained history · Up to 256 terminals", window, cx);
         palette.terminal_search_input = true;
+        palette.input.update(cx, |input, cx| {
+            input.replace_draft(query, cx);
+            input.select_all_text(cx);
+        });
         palette
     }
     pub fn terminal_search_results(report: terminal_search::Report, query: String, extra: usize, window: &mut Window, cx: &mut Context<Self>) -> Self {

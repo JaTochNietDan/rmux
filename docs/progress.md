@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Reopening global terminal-output search now restores and selects the originating
+window's last accepted query, allowing Enter to rerun or typing to replace it.
+The query is bounded by existing validation and retained only in window memory;
+invalid submissions and attempts rejected by the worker limit do not replace it.
+Desktop compilation passed. Native keyboard/presentation verification remains
+pending.
+
 Added `mise run bench-history-search` and recorded 1/8/32-engine retained-history
 probe timings with five samples per match/miss case. The 32-engine debug median
 was 5.048 ms for a newest-line match and 26.331 ms for a full fixture miss;

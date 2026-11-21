@@ -122,6 +122,7 @@ pub(super) struct WorkspaceWindow {
     file_browser_job: Option<Task<()>>,
     file_browser_cancel: Option<file_browser::Cancellation>,
     terminal_search_job: Option<Task<()>>,
+    terminal_search_query: String,
     terminal_search_cancel: Option<file_browser::Cancellation>,
     restore_job: Option<restore::Job>,
     workspace_scroll: ScrollHandle,
@@ -2543,6 +2544,7 @@ impl WorkspaceWindow {
         let Some(permit) = terminal_search::Permit::acquire() else {
             self.notice = Some("Another terminal search is running; retry shortly.".into()); cx.notify(); return;
         };
+        self.terminal_search_query.clone_from(&query);
         let mut jobs = Vec::new();
         let mut extra = 0;
         self.collect_terminal_search_jobs(None, "This window", &mut jobs, &mut extra, cx);
@@ -2961,6 +2963,7 @@ impl WorkspaceWindow {
             file_browser_job: None,
             file_browser_cancel: None,
             terminal_search_job: None,
+            terminal_search_query: String::new(),
             terminal_search_cancel: None,
             restore_job: None,
             workspace_scroll: ScrollHandle::new(),
@@ -3169,6 +3172,7 @@ impl WorkspaceWindow {
             file_browser_job: None,
             file_browser_cancel: None,
             terminal_search_job: None,
+            terminal_search_query: String::new(),
             terminal_search_cancel: None,
             restore_job: None,
             workspace_scroll: ScrollHandle::new(),
@@ -3839,7 +3843,7 @@ impl Render for WorkspaceWindow {
             .on_action(cx.listener(|this, _: &ShowTerminalSearch, window, cx| {
                 if this.automation_available(cx).is_err() || this.terminal_search_job.is_some() { return; }
                 let focus = window.focused(cx);
-                let palette = cx.new(|cx| command_palette::CommandPalette::terminal_search(window, cx));
+                let palette = cx.new(|cx| command_palette::CommandPalette::terminal_search(&this.terminal_search_query, window, cx));
                 this.install_palette(palette, focus, window, cx);
             }))
             .on_action(cx.listener(|this, action: &SearchTerminalOutput, window, cx| this.search_terminal_output(action.query.clone(), window, cx)))
