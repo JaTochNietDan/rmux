@@ -723,6 +723,21 @@ impl CommandPalette {
         if self.wrap_preview && self.commands[command].preview_line().is_some() { 116. }
         else { result_row_height(self.commands[command].subtitle.is_some()) }
     }
+    fn navigate_folder(&mut self, action: &dyn Action, cx: &mut Context<Self>) {
+        if self.input.read(cx).is_composing() { return; }
+        let Some((back, forward, path)) = self.folder_navigation.as_ref() else { return; };
+        let action: Box<dyn Action> = if action.as_any().is::<FileBrowserBack>() {
+            if !back { return; } Box::new(FileBrowserBack)
+        } else if action.as_any().is::<FileBrowserForward>() {
+            if !forward { return; } Box::new(FileBrowserForward)
+        } else if action.as_any().is::<FileBrowserParent>() {
+            let Some(parent) = path.parent() else { return; };
+            Box::new(BrowseDirectory { path: parent.to_owned() })
+        } else if action.as_any().is::<FileBrowserLocation>() {
+            Box::new(EnterDirectory { path: path.clone() })
+        } else { Box::new(BrowseDirectory { path: path.clone() }) };
+        cx.emit(PaletteEvent::Run(action));
+    }
     fn navigate_preview(&mut self, directory: bool, switch_mode: bool, cx: &mut Context<Self>) {
         if self.input.read(cx).is_composing() { return; }
         let Some((path, hex)) = self.preview_navigation.as_ref() else { return; };
@@ -987,13 +1002,22 @@ impl Render for CommandPalette {
             [(&RefreshFilePreview as &dyn Action, "refresh"), (&PreviewDirectory as &dyn Action, "directory"), (&SwitchPreviewMode as &dyn Action, "text/hex")]
                 .into_iter().filter_map(|(action, label)| shortcuts::hint(action, &self.input.read(cx).focus, window).map(|key| format!("{key} {label}")))
                 .collect::<Vec<_>>().join(" · ")
+        } else if self.folder_navigation.is_some() {
+            [(&FileBrowserBack as &dyn Action, "back"), (&FileBrowserForward as &dyn Action, "forward"), (&FileBrowserParent as &dyn Action, "parent"), (&RefreshFileBrowser as &dyn Action, "refresh"), (&FileBrowserLocation as &dyn Action, "location")]
+                .into_iter().filter_map(|(action, label)| shortcuts::hint(action, &self.input.read(cx).focus, window).map(|key| format!("{key} {label}")))
+                .collect::<Vec<_>>().join(" · ")
         } else { String::new() };
         let wrap_hint = shortcuts::hint(&TogglePreviewWrap, &self.input.read(cx).focus, window);
         let copy_hint = shortcuts::hint(&CopySearchExcerpt, &self.input.read(cx).focus, window);
         div()
             .id("command-palette")
-            .key_context(if self.preview_navigation.is_some() { if self.hex_preview { "CommandPalette FilePreview" } else { "CommandPalette FilePreview TextPreview" } } else { "CommandPalette" })
+            .key_context(if self.preview_navigation.is_some() { if self.hex_preview { "CommandPalette FilePreview" } else { "CommandPalette FilePreview TextPreview" } } else if self.folder_navigation.is_some() { "CommandPalette FileBrowser" } else { "CommandPalette" })
             .on_action(cx.listener(|this, _: &TogglePreviewWrap, _, cx| this.toggle_preview_wrap(cx)))
+            .on_action(cx.listener(|this, action: &FileBrowserBack, _, cx| this.navigate_folder(action, cx)))
+            .on_action(cx.listener(|this, action: &FileBrowserForward, _, cx| this.navigate_folder(action, cx)))
+            .on_action(cx.listener(|this, action: &FileBrowserParent, _, cx| this.navigate_folder(action, cx)))
+            .on_action(cx.listener(|this, action: &FileBrowserLocation, _, cx| this.navigate_folder(action, cx)))
+            .on_action(cx.listener(|this, action: &RefreshFileBrowser, _, cx| this.navigate_folder(action, cx)))
             .on_action(cx.listener(|this, _: &RefreshFilePreview, _, cx| this.navigate_preview(false, false, cx)))
             .on_action(cx.listener(|this, _: &PreviewDirectory, _, cx| this.navigate_preview(true, false, cx)))
             .on_action(cx.listener(|this, _: &SwitchPreviewMode, _, cx| this.navigate_preview(false, true, cx)))

@@ -581,6 +581,12 @@ These controls work while filtering; their visible hints follow the active keyma
 For example, `{"key":"ctrl-alt-r","action":"refresh_preview","context":"file_preview"}`
 adds a refresh shortcut without consuming terminal keys. Disable a default with
 `action: "disabled"` in the same context. IME composition suspends these actions.
+Use `files` for the directory browser: `file_back` (Alt+Left), `file_forward`
+(Alt+Right), `file_parent` (Alt+Up), `refresh_files` (F5), and `file_location`
+(Cmd+L on macOS, Ctrl+L elsewhere). These bindings work while filtering; unavailable
+history/root destinations do nothing. The location action opens the existing
+literal path field. Bindings and displayed hints can be customized independently
+of terminal and file-preview shortcuts; IME composition suspends navigation.
 The first stroke must use Ctrl/Cmd/Alt or F1–F24; one- and two-stroke bindings are
 supported. The second stroke may be unmodified, for example
 `{"key":"ctrl-k t","action":"new_tab"}`. Bare `t` remains normal typing.

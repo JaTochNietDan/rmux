@@ -480,6 +480,9 @@ actions!(
         CopySearchExcerpt,
         TogglePreviewWrap,
         RefreshFilePreview,
+        RefreshFileBrowser,
+        FileBrowserParent,
+        FileBrowserLocation,
         PreviewDirectory,
         SwitchPreviewMode,
         OpenFolderBrowser,
@@ -3795,6 +3798,13 @@ fn main() {
             KeyBinding::new("f5", RefreshFilePreview, Some("FilePreview")),
             KeyBinding::new("alt-up", PreviewDirectory, Some("FilePreview")),
             KeyBinding::new("ctrl-alt-m", SwitchPreviewMode, Some("FilePreview")),
+        ]);
+        cx.bind_keys([
+            KeyBinding::new("alt-left", FileBrowserBack, Some("FileBrowser")),
+            KeyBinding::new("alt-right", FileBrowserForward, Some("FileBrowser")),
+            KeyBinding::new("alt-up", FileBrowserParent, Some("FileBrowser")),
+            KeyBinding::new("f5", RefreshFileBrowser, Some("FileBrowser")),
+            KeyBinding::new(if cfg!(target_os = "macos") { "cmd-l" } else { "ctrl-l" }, FileBrowserLocation, Some("FileBrowser")),
         ]);
         shortcuts::initialize(cx);
         cx.on_action(|_: &Quit, cx| request_quit(cx));

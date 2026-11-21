@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Directory browsing now has configurable `files`-scoped defaults for Back/Forward,
+Parent, Refresh and location entry. Navigation works independently of list
+filtering, follows existing asynchronous/history paths and ignores unavailable
+history, root-parent requests and IME composition. Visible hints resolve the
+active keymap. The focused remap/scope test passed with desktop test compilation;
+native text-field dispatch, focus and compact navigation layout remain pending.
+
 File previews now have scoped keyboard refresh (F5), directory return (Alt+Up)
 and text/hex switching (Ctrl+Alt+M), available even with a filtered list. The
 `file_preview` shortcut context supports remapping/disabling all three in text
