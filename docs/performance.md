@@ -1,12 +1,22 @@
 # rmux performance acceptance plan
 
-Browser reclamation is an unresolved dependency gate: WRY 0.57.3's macOS
-`InnerWebView::drop` removes the view but explicitly retains the native webview
-and manager. Dropping rmux's Rust host is therefore not evidence of native-object
-reclamation. Before enabling browser panes by default, measure repeated create/
-close cycles including inspector windows and WebKit helper processes, and resolve
-upstream lifetime constraints without reintroducing callback crashes. Inspector
-closure is requested before host release, but its memory effect is unmeasured.
+Browser reclamation remains an unmeasured acceptance gate. Inspection of WRY
+0.57.3 and objc2 0.6.5 clarified that `InnerWebView::drop`'s standalone `retain()`
+calls return temporary `Retained` guards, immediately released at the semicolon.
+Those lines do **not** prove a permanent native retain; the earlier concern based
+on their spelling alone was incorrect. Before enabling browser panes by default,
+measure repeated create/close cycles including inspector windows and WebKit helper
+processes. Inspector closure is requested before host release, but its memory
+effect remains unmeasured.
+
+The browser composition probe now records weak Objective-C references on creation.
+**Sample native lifetime** reports cumulative created/reclaimed views and currently
+live native views without keeping them alive. Release a view, let pending native
+callbacks settle, then sample again. Dead weak entries are pruned; creation stops
+at 64 still-live tracked views to bound diagnostic bookkeeping. Sampling is manual,
+with no idle timer. Native-object death is distinct from process RSS, WebKit helper
+termination, allocator reuse or GPU memory release; capture OS metrics alongside
+these counters. The probe's weak handles include a currently mounted view.
 
 Unmounted terminal views release both shaped glyph caches and their desktop-owned
 cell snapshots. A shared empty-row placeholder retains viewport dimensions; engine

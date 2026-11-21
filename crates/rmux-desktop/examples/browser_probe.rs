@@ -9,6 +9,8 @@ fn main() {
 mod native {
     use gpui::{prelude::*, *};
     use std::{cell::RefCell, rc::Rc};
+    use wry::WebViewExtMacOS;
+    use objc2::rc::Weak;
 
     const PAGE: &str = r#"<!doctype html><meta charset="utf-8">
 <style>body{font:16px system-ui;background:#18202c;color:#e8edf5;padding:24px}
@@ -28,6 +30,9 @@ Release and recreate the webview to inspect helper-process lifetime.</p>"#;
         host: Rc<RefCell<Host>>,
         sidebar: f32,
         status: String,
+        lifetimes: Vec<Weak<wry::WryWebView>>,
+        created: u64,
+        reclaimed: u64,
     }
     fn rect(bounds: Bounds<Pixels>) -> wry::Rect {
         wry::Rect {
@@ -36,7 +41,24 @@ Release and recreate the webview to inspect helper-process lifetime.</p>"#;
         }
     }
     impl Probe {
+        fn sample_lifetimes(&mut self) -> usize {
+            let before = self.lifetimes.len();
+            self.lifetimes.retain(|reference| reference.load().is_some());
+            self.reclaimed += (before - self.lifetimes.len()) as u64;
+            self.lifetimes.len()
+        }
+        fn inspect_lifetimes(&mut self) {
+            let alive = self.sample_lifetimes();
+            self.status = format!("Created: {} · native alive: {alive} · reclaimed: {}", self.created, self.reclaimed);
+            eprintln!("browser-lifetime: created={} native_alive={alive} native_reclaimed={}", self.created, self.reclaimed);
+        }
         fn create(&mut self, window: &Window) {
+            // The observation itself must not retain native views. Bound weak
+            // bookkeeping if the platform keeps every released view alive.
+            if self.sample_lifetimes() >= 64 {
+                self.status = "64 native views remain alive; inspect before creating more.".into();
+                return;
+            }
             let mut host = self.host.borrow_mut();
             if host.webview.is_some() { return; }
             let Some(bounds) = host.bounds else { self.status = "Wait for the first layout, then create.".into(); return; };
@@ -47,7 +69,12 @@ Release and recreate the webview to inspect helper-process lifetime.</p>"#;
                 .with_bounds(rect(bounds))
                 .build_as_child(window)
             {
-                Ok(view) => { host.webview = Some(view); self.status = "Webview alive · ephemeral profile".into(); }
+                Ok(view) => {
+                    self.lifetimes.push(Weak::from_retained(&view.webview()));
+                    self.created += 1;
+                    host.webview = Some(view);
+                    self.status = "Webview alive · ephemeral profile".into();
+                }
                 Err(error) => self.status = format!("Creation failed: {error}"),
             }
         }
@@ -62,7 +89,10 @@ Release and recreate the webview to inspect helper-process lifetime.</p>"#;
                     .child(button("create", "Create webview").on_click(cx.listener(|this, _, window, cx| { this.create(window); cx.notify(); })))
                     .child(button("release", "Release webview").on_click(cx.listener(|this, _, _, cx| {
                         this.host.borrow_mut().webview.take();
-                        this.status = "Webview dropped; inspect OS helper reclamation.".into(); cx.notify();
+                        this.status = "Rust host released. Sample native lifetime after pending callbacks settle.".into(); cx.notify();
+                    })))
+                    .child(button("lifetime", "Sample native lifetime").on_click(cx.listener(|this, _, _, cx| {
+                        this.inspect_lifetimes(); cx.notify();
                     })))
                     .child(button("width", "Change sidebar width").on_click(cx.listener(|this, _, _, cx| {
                         this.sidebar = if this.sidebar == 260. { 360. } else { 260. }; cx.notify();
@@ -87,7 +117,7 @@ Release and recreate the webview to inspect helper-process lifetime.</p>"#;
                 ..Default::default()
             }, |window, cx| {
                 window.set_window_title("rmux · browser composition probe");
-                cx.new(|_| Probe { host: Rc::default(), sidebar: 260., status: "No webview created yet.".into() })
+                cx.new(|_| Probe { host: Rc::default(), sidebar: 260., lifetimes: Vec::new(), created: 0, reclaimed: 0, status: "No webview created yet.".into() })
             }).expect("open browser composition probe");
             cx.activate(true);
         });

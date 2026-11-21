@@ -2,6 +2,20 @@
 
 ## Current implementation focus
 
+Corrected the previous turn's native-retention concern after tracing objc2 0.6.5:
+Message::retain returns a Retained guard, whose destructor releases the object.
+WRY's standalone retain expressions therefore balance immediately and do not
+establish a leak. No dependency patch is justified by those expressions. Added
+weak native-view lifetime tracking to the composition probe: create/release cycles
+can now be sampled manually for total created, still alive and reclaimed objects,
+without keeping the objects alive. Dead entries are pruned and 64 still-live
+entries cap further creation. This supplies native lifetime evidence alongside OS
+memory measurements. The probe builds and links; runtime reclamation remains
+unmeasured while the Mac is locked. GitHub browser run 44862240579 passed for the
+Find-controls commit; inspector run 44862384089 is still in progress.
+The preceding turn made progress by adding Web Inspector controls, but its initial
+retention interpretation was incomplete and is superseded by this correction.
+
 Added native Web Inspector toggle controls to the optional macOS browser: toolbar,
 Browser menu and Cmd+Option+I target the active browser window, with a status hint
 before page creation. WRY devtools support is explicit for browser-enabled release
