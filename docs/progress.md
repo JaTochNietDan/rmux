@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Terminal search excerpts now start near the actual literal phrase instead of
+using file-preview word matching. Long lines with an earlier unrelated query word
+therefore show the matching phrase; ASCII case folding preserves original Unicode
+byte boundaries. Excerpts remain capped at 1,024 characters plus ellipses and
+sanitize control characters. All five focused scanner tests passed, including
+the new repeated-word/multibyte regression.
+
 Global terminal-output search now has a default window shortcut: Cmd+Shift+F
 on macOS and Ctrl+Alt+Shift+F elsewhere, preserving Ctrl+Shift+F for terminal
 Find on Linux/Windows. Its menu entry now lives beside Find in Edit. Existing

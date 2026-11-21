@@ -32,8 +32,18 @@ pub fn validate(query: &str) -> Result<(), &'static str> {
 }
 fn matching_line(text: &str, query: &str) -> Option<String> {
     // Match Ghostty Find: ASCII case-insensitive, other Unicode bytes exact.
-    text.lines().find(|line| line.to_ascii_lowercase().contains(query))
-        .map(|line| crate::file_browser::preview_line_title(line, query))
+    text.lines().find_map(|line| {
+        let offset = line.to_ascii_lowercase().find(query)?;
+        // ASCII folding preserves byte offsets. Keep context before the literal
+        // match, rather than before an unrelated occurrence of its first word.
+        let start = line[..offset].char_indices().rev().nth(31).map_or(0, |(index, _)| index);
+        let mut chars = line[start..].chars();
+        let mut snippet = String::new();
+        if start > 0 { snippet.push('…'); }
+        snippet.extend(chars.by_ref().take(1024).map(|ch| if ch.is_control() { ' ' } else { ch }));
+        if chars.next().is_some() { snippet.push('…'); }
+        Some(snippet)
+    })
 }
 #[cfg(test)]
 fn scan(jobs: Vec<Job>, query: &str, canceled: &AtomicBool) -> Report {
@@ -93,6 +103,19 @@ pub fn scan_with_progress(jobs: Vec<Job>, query: &str, canceled: &AtomicBool, mu
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn excerpts_center_on_literal_phrase_with_ascii_case_rules() {
+        let line = format!("needle unrelated {} NEEDLE 世界 tail", "x".repeat(1500));
+        let excerpt = super::matching_line(&line, "needle 世界").unwrap();
+        assert!(excerpt.starts_with('…'));
+        assert!(excerpt.contains("NEEDLE 世界 tail"));
+        assert!(!excerpt.contains("unrelated"));
+        let line = format!("é {} É needle\tend", "界".repeat(1500));
+        let excerpt = super::matching_line(&line, "É needle").unwrap();
+        assert!(excerpt.contains("É needle end"));
+        assert!(excerpt.chars().count() <= 1026);
+        assert_eq!(super::matching_line("é needle", "É needle"), None);
+    }
     #[test]
     fn quick_matches_precede_deep_work_but_results_keep_terminal_order() {
         use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
