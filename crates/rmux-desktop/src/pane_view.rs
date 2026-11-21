@@ -1406,6 +1406,15 @@ impl Render for PaneView {
                                     window.dispatch_action(Box::new(SplitBelow), cx);
                                 }))
                                 .child(icons::icon("split-down")),
+                        )
+                        .child(
+                            action_control("pane-zoom", "Toggle Pane Zoom", TogglePaneZoom, control_focus.clone())
+                                .on_click(cx.listener(|this, event: &ClickEvent, window, cx| {
+                                    if !event.standard_click() { return; }
+                                    this.focus(window, cx);
+                                    window.dispatch_action(Box::new(TogglePaneZoom), cx);
+                                }))
+                                .child(icons::icon("expand")),
                         ),
                 )
             })

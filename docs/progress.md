@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Added a pane-toolbar zoom control using an embedded expand SVG, existing 28px
+control hit area, and shortcut-aware tooltip. Clicking focuses that pane before
+dispatching the existing zoom action; nonstandard clicks are ignored. The existing
+restore-layout strip still provides the zoomed-state exit. Focused desktop check
+passes; rendered compact-layout acceptance remains pending. This is on main after
+the v0.1.2 release commit, so it is not part of that in-flight release. Windows
+v0.1.2 packaging has succeeded; macOS is notarizing and Linux is compiling.
+The preceding turn added close-workspace release memory evidence.
+
 Extended the release split harness with optional workspace-close sampling. Nine
 fresh-instance runs verified that closing the measured workspace leaves only one
 survivor surface. For the 32-pane cases, median app RSS fell from 147.16 to 126.77
