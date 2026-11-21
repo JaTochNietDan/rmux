@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Prepared v0.1.3 with the requested first-impression fixes and dispatched GitHub
+Release run 44868403072 (macOS, Linux, Windows). Publication and Sparkle feed
+advancement remain pending that run. The local-only Cloudflare site now has a
+searchable palette with Cmd/Ctrl+P, arrow/Enter navigation and bracket pane
+cycling. Verified filtering and Enter-to-zoom on rmux.app. Content-hashed CSS/JS
+prevent old browser assets from mixing with newly deployed markup. Download
+links remain on v0.1.2 until the new release exists.
+
 Native palette review passed on the current debug build: Cmd+P opened the
 palette, selection spans the panel, shortcuts align on the right, and the
 padded search field/footer render without clipping. Everyday actions lead the
