@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Hardened release publication after the v0.1.3 recovery: explicitly create or
+verify the release tag against the built SHA, reject mismatched existing tags,
+then invoke release creation with `--verify-tag` and no `--target`. GitHub's
+release API documents workflow-write checks when target_commitish differs from
+main's workflow files; that matches the observed contents-write token and 403.
+The exact built source stays pinned without adding token privileges. Syntax
+validation passes; CI acceptance awaits the next actual release.
+
 Published v0.1.3 with all six assets from GitHub run 44868403072: macOS DMG
 and ZIP, Linux tar.gz, Windows ZIP, appcast and checksums. Native build jobs
 succeeded; the publish job failed twice with GitHub-token 403 responses. Recovered
