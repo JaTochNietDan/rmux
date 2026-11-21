@@ -133,17 +133,16 @@ impl PageState {
 }
 #[derive(Default)]
 struct Host { view: Option<wry::WebView>, bounds: Option<Bounds<Pixels>>, pending_url: Option<String> }
-struct BrowserWindow {
+struct BrowserView {
     host: Rc<RefCell<Host>>,
     input: Entity<TextField>,
     page: PageState,
-    displayed_title: String,
     zoom_percent: u16,
     latest: Arc<std::sync::Mutex<PageUpdates>>,
     wake: async_channel::Sender<()>,
     _updates: Task<()>,
 }
-impl BrowserWindow {
+impl BrowserView {
     fn new(initial: Option<String>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let input = cx.new(|cx| TextField::new(initial.as_deref().unwrap_or("about:blank"), cx));
         cx.subscribe_in(&input, window, |this, _, event: &text_field::EditEvent, window, cx| {
@@ -174,13 +173,13 @@ impl BrowserWindow {
                 if let Some(update) = update {
                     if update.load.is_none() && update.title.is_none() && update.process_alive.is_none() && update.notice.is_none() { continue; }
                     if entity.update(cx, |this: &mut Self, cx| {
-                        if this.page.apply(update) { cx.notify(); }
+                        if this.page.apply(update) { cx.emit(BrowserMetadataChanged); cx.notify(); }
                     }).is_err() { break; }
                     next_update = std::time::Instant::now() + interval;
                 }
             }
         });
-        Self { host: Rc::new(RefCell::new(Host { pending_url: initial, ..Default::default() })), input, page: PageState { status: "Enter an address to create an ephemeral browser.".into(), ..Default::default() }, displayed_title: String::new(), zoom_percent: 100, latest, wake, _updates: task }
+        Self { host: Rc::new(RefCell::new(Host { pending_url: initial, ..Default::default() })), input, page: PageState { status: "Enter an address to create an ephemeral browser.".into(), ..Default::default() }, zoom_percent: 100, latest, wake, _updates: task }
     }
     fn navigate(&mut self, url: &str, window: &Window) -> anyhow::Result<()> {
         let mut host = self.host.borrow_mut();
@@ -268,14 +267,11 @@ impl BrowserWindow {
         }
     }
 }
-impl Render for BrowserWindow {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let title = if self.page.title.is_empty() { "rmux · Browser (Experimental)".to_owned() }
-            else { format!("{} — rmux Browser (Experimental)", self.page.title) };
-        if self.displayed_title != title {
-            window.set_window_title(&title);
-            self.displayed_title = title;
-        }
+struct BrowserMetadataChanged;
+impl EventEmitter<BrowserMetadataChanged> for BrowserView {}
+
+impl Render for BrowserView {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let host = self.host.clone();
         let entity = cx.weak_entity();
         let (back, forward, loaded) = self.host.borrow().view.as_ref().map(|view|
@@ -283,7 +279,6 @@ impl Render for BrowserWindow {
         ).unwrap_or((false, false, false));
         let button = |id, label| div().id(id).px_3().py_2().rounded_md().bg(rgb(0x354969)).cursor_pointer().child(label);
         div().size_full().flex().flex_col().key_context("Browser")
-            .on_action(cx.listener(|_, _: &CloseWindow, window, _| window.remove_window()))
             .bg(rgb(0x202733)).text_color(rgb(0xe8edf5)).text_size(px(14.))
             .child(div().h(px(52.)).flex_shrink_0().px_3().flex().items_center().gap_2()
                 .child(button("back", "Back").when(!back, |button| button.opacity(0.4).cursor_default()).when(back, |button| button.on_click(cx.listener(|this, _, _, cx| { this.navigation(Navigation::Back); cx.notify(); }))))
@@ -321,10 +316,40 @@ impl Render for BrowserWindow {
             }, |_, _, _, _| {}).size_full()))
     }
 }
-fn with_active(cx: &mut App, update: impl FnOnce(&mut BrowserWindow, &mut Window, &mut Context<BrowserWindow>)) {
+// A window owns one browser view today. Keeping window title/close policy here
+// lets a future pane own the same view without closing or renaming its workspace.
+struct BrowserWindow {
+    browser: Entity<BrowserView>,
+    displayed_title: String,
+    _metadata: Subscription,
+}
+impl BrowserWindow {
+    fn new(initial: Option<String>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let browser = cx.new(|cx| BrowserView::new(initial, window, cx));
+        let metadata = cx.subscribe(&browser, |_, _, _: &BrowserMetadataChanged, cx| cx.notify());
+        Self { browser, displayed_title: String::new(), _metadata: metadata }
+    }
+}
+impl Render for BrowserWindow {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let page_title = &self.browser.read(cx).page.title;
+        let title = if page_title.is_empty() { "rmux · Browser (Experimental)".to_owned() }
+            else { format!("{page_title} — rmux Browser (Experimental)") };
+        if self.displayed_title != title {
+            window.set_window_title(&title);
+            self.displayed_title = title;
+        }
+        div().size_full()
+            .on_action(cx.listener(|_, _: &CloseWindow, window, _| window.remove_window()))
+            .child(self.browser.clone())
+    }
+}
+fn with_active(cx: &mut App, update: impl FnOnce(&mut BrowserView, &mut Window, &mut Context<BrowserView>)) {
     if let Some(handle) = cx.active_window().and_then(|window| window.downcast::<BrowserWindow>()) {
-        let _ = handle.update(cx, |this, window, cx| {
-            if !this.input.read(cx).is_composing() { update(this, window, cx); }
+        let _ = handle.update(cx, |root, window, cx| {
+            root.browser.update(cx, |browser, cx| {
+                if !browser.input.read(cx).is_composing() { update(browser, window, cx); }
+            });
         });
     }
 }

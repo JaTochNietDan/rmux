@@ -78,6 +78,12 @@ control **Reload Page**. Recovery requires a new load-start event; late completi
 callbacks cannot clear the failure state. There is no automatic reload loop.
 Native process termination/reload behavior still requires runtime acceptance.
 
+The browser content now lives in its own GPUI entity; the standalone window wrapper
+owns window title/close policy and subscribes to content metadata. This separates
+view ownership from window policy for future pane integration. The current pane
+model still stores terminal entities directly, so mixed surface tabs, focus routing,
+native-view visibility/clipping and transfer/restore semantics remain to be implemented.
+
 This remains experimental: native interaction is unverified, windows are not yet
 workspace surfaces, and browser windows are omitted from session snapshots.
 Only HTTP/HTTPS and about:blank navigation are allowed; embedded URL credentials,

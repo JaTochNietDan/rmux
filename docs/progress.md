@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Separated browser content into a BrowserView GPUI entity owned by a small standalone
+BrowserWindow wrapper. Native webview/control/metadata ownership stays with the
+view; window title and close policy stay with the wrapper, which subscribes to
+metadata updates. This is groundwork for pane ownership, not a claim of mixed
+surface tabs: PaneView still stores terminal entities, and browser focus/visibility/
+transfer/restore integration remains open. Nine focused browser tests and feature
+compilation passed. GitHub run 44859718234 has reached cache saving after its test,
+probe-link and default-dependency checks; final run completion is still pending.
+The prior goal turn made progress with committed/pushed blocked-navigation feedback.
+
 Experimental browser navigation now applies URL length/control/credential policy
 to page-initiated requests as well as explicit input. Blocked navigation, popups
 and downloads show concise static feedback rather than silently doing nothing or
