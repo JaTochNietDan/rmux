@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Integrated the new mark into macOS packaging via a multi-resolution ICNS and
+CFBundleIconFile, copied before signing for both development and distribution
+bundles. An AppKit renderer reproduces the SVG geometry using the existing SDK;
+its output was generated successfully and visually inspected. The prebuilt icon
+avoids adding release build work. Finder/Dock appearance awaits the next bundle;
+Windows executable icon integration remains pending. The preceding turn made
+progress by deploying the website and introducing vector branding.
+
 The root-domain Cloudflare site is deployed and its WASM sample terminals were
 verified in the browser. Website and Terraform sources remain in separate local
 repositories with no GitHub remotes. Added a vector pane-and-prompt logo, a live

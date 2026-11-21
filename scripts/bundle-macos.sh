@@ -17,6 +17,7 @@ mkdir -p "$bundle/Contents/Resources/shell-integration/zsh"
 mkdir -p "$bundle/Contents/Resources/shell-integration/bash"
 mkdir -p "$bundle/Contents/Resources/shell-integration/fish"
 mkdir -p "$bundle/Contents/Resources/shell-integration/powershell"
+cp docs/brand/rmux.icns "$bundle/Contents/Resources/rmux.icns"
 cp shell-integration/powershell/rmux.ps1 "$bundle/Contents/Resources/shell-integration/powershell/rmux.ps1"
 cp shell-integration/fish/rmux.fish "$bundle/Contents/Resources/shell-integration/fish/rmux.fish"
 cp shell-integration/bash/rmux.bash "$bundle/Contents/Resources/shell-integration/bash/rmux.bash"
@@ -31,6 +32,7 @@ cat > "$bundle/Contents/Info.plist" <<'PLIST'
 <key>CFBundleIdentifier</key><string>dev.rmux.prototype</string>
 <key>CFBundleName</key><string>rmux</string>
 <key>CFBundleDisplayName</key><string>rmux</string>
+<key>CFBundleIconFile</key><string>rmux.icns</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleVersion</key><string>0.1.0</string>
 <key>NSHighResolutionCapable</key><true/>
