@@ -2,6 +2,19 @@
 
 ## Current implementation focus
 
+PowerShell now emits command-start (OSC 133 C) after its existing console reader
+returns nonempty input, and a single completion (D) at the next prompt. The wrapper
+delegates editing/history to the original PSConsoleHostReadLine function, following
+the host integration point also used by
+[VS Code](https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration.ps1).
+Completion intentionally omits an exit code rather than reusing stale LASTEXITCODE;
+the original prompt still runs first to preserve its view of $?. Focused runtime
+checks pass for reader delegation, one-time start/completion, empty/canceled reads
+and failed-command prompt status. The real macOS PTY fixture also confirms the
+wrapper executes before a command while directory/prompt navigation still works.
+Windows, complex themes and native history/completion interaction remain pending.
+The preceding goal turn made progress by shipping automatic PowerShell startup.
+
 PowerShell tabs now load prompt/directory hooks automatically after ordinary
 profiles using a private temporary script retained for the session lifetime.
 The script path is passed as environment data, never interpolated as code;

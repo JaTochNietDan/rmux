@@ -1681,8 +1681,11 @@ loads the hook and keeps the shell interactive. `RMUX_SHELL_INTEGRATION=0` opts 
 For existing shells, dot-source `shell-integration/powershell/rmux.ps1` after defining
 your prompt. The macOS bundle includes it under
 `Contents/Resources/shell-integration/powershell/`.
-The wrapper preserves prompt output and emits OSC 7 plus OSC 133 A/B; it does not
-yet emit command-start/completion markers. A real macOS PowerShell PTY fixture
+The wrapper preserves prompt output and emits OSC 7 plus OSC 133 A/B. When an
+existing console line reader is available, it delegates to that reader and emits
+OSC 133 C for nonempty commands, then D at the next prompt. Completion has no exit
+code: LASTEXITCODE can be stale after PowerShell commands. Empty or thrown/canceled
+reads emit no command markers. Existing PSReadLine bindings remain in charge. A real macOS PowerShell PTY fixture
 covers profile loading, Unicode directory changes and prompt navigation. Windows,
 complex prompt themes and native PSReadLine interaction remain unvalidated.
 Run `mise run test-powershell-integration` for prompt semantics and

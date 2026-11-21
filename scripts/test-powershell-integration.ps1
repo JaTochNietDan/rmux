@@ -3,6 +3,9 @@ $env:TERM_PROGRAM = 'rmux'
 $env:RMUX_SHELL_INTEGRATION = '1'
 $script:promptCalls = 0
 function global:prompt { $script:promptSawSuccess = $?; $script:promptCalls++; return 'fixture> ' }
+$script:readCalls = 0
+$script:nextLine = 'echo fixture'
+function global:PSConsoleHostReadLine { $script:readCalls++; return $script:nextLine }
 $integration = Join-Path $PSScriptRoot '../shell-integration/powershell/rmux.ps1'
 $root = Join-Path ([IO.Path]::GetTempPath()) ([Guid]::NewGuid().ToString())
 $directory = Join-Path $root 'project 世界 % space'
@@ -31,7 +34,30 @@ try {
     Set-Location Env:
     $result = prompt
     if ($result.Contains("]7;")) { throw 'Non-filesystem provider emitted a file URI' }
-    'PowerShell prompt integration checks passed'
+    $consoleOut = [Console]::Out
+    $capture = [IO.StringWriter]::new()
+    try {
+        [Console]::SetOut($capture)
+        $line = PSConsoleHostReadLine
+        if ($line -cne $script:nextLine -or $script:readCalls -ne 1) { throw 'Original reader was not preserved' }
+        if ($capture.ToString() -cne "$escape]133;C$bell") { throw 'Command start was not emitted exactly once' }
+        Get-Item -LiteralPath (Join-Path $root 'missing') -ErrorAction SilentlyContinue
+        $result = prompt
+        if ($script:promptSawSuccess) { throw 'Completion marker changed prompt status' }
+        if (!$result.StartsWith("$escape]133;D$bell")) { throw 'Command completion missing' }
+        if ((prompt).Contains("]133;D")) { throw 'Completion was emitted twice' }
+        $capture.GetStringBuilder().Clear() | Out-Null
+        $script:nextLine = '   '
+        $null = PSConsoleHostReadLine
+        if ($capture.ToString() -ne '' -or (prompt).Contains("]133;D")) { throw 'Empty input started a command' }
+        $global:_rmux_original_readline = { throw 'fixture canceled read' }
+        try { $null = PSConsoleHostReadLine } catch { }
+        if ($capture.ToString() -ne '' -or (prompt).Contains("]133;D")) { throw 'Canceled read started a command' }
+    } finally {
+        [Console]::SetOut($consoleOut)
+        $capture.Dispose()
+    }
+    'PowerShell prompt and command-boundary integration checks passed'
 } finally {
     Set-Location -LiteralPath $original.ProviderPath
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue

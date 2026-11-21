@@ -208,7 +208,7 @@ mod tests {
         };
         wait(&|| Ok(session.current_directory()?.as_deref() == Some(home_path.as_path())))?;
         if shell == "pwsh" {
-            session.input(b"Set-Location -LiteralPath $env:RMUX_TEST_DESTINATION; if ($env:RMUX_TEST_USER_RC -eq 'loaded' -and !$env:RMUX_POWERSHELL_WRAPPER) { Write-Output ('changed-okay' + '-done') }\r")?;
+            session.input(b"Set-Location -LiteralPath $env:RMUX_TEST_DESTINATION; if ($env:RMUX_TEST_USER_RC -eq 'loaded' -and !$env:RMUX_POWERSHELL_WRAPPER -and $global:_rmux_command_running) { Write-Output ('changed-okay' + '-done') }\r")?;
         } else {
             session.input(
                 b"cd -- \"$RMUX_TEST_DESTINATION\"; printf '%s%s\\n' changed-okay -done\r",
