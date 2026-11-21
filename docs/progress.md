@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+External-editor reaping now reports unsuccessful exits and status-collection
+errors to the originating window, instead of silently treating every spawned
+process as successful. Reaping remains asynchronous and independent of preview
+closure. Two focused tests passed, including real Unix child-process execution
+with literal space/quote/shell-punctuation filenames, success/nonzero exit and
+directory/symlink rejection. These are launcher-path checks, not native GUI editor
+focus/file-loading acceptance; successful detached launchers cannot prove that
+another application opened the document.
+
 Started F02 external-editor integration. Directory selection and text/hex previews
 now expose External Editor using explicit file_editor program/argv configuration.
 Paths remain one OS argument (including non-UTF-8 paths); no shell interpolation

@@ -359,7 +359,9 @@ Paths with spaces, quotes or shell punctuation remain data. Directories and
 symbolic links are rejected. The configured program controls editing and saving;
 rmux does not yet provide an embedded editor, save-conflict detection, or automatic
 preview refresh after external edits. Use Refresh to reload the preview.
-Launch errors appear in the window notice. Up to eight launched editor processes
+Launch errors and unsuccessful editor/launcher exits appear in the originating
+window notice if that window is still open. A successful launcher exit does not
+prove that a separate GUI application loaded the file. Up to eight launched editor processes
 may remain active; they are reaped asynchronously without blocking a UI or worker
 thread. Editors are independent applications and are not closed with the preview.
 

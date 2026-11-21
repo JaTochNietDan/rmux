@@ -2861,10 +2861,12 @@ impl WorkspaceWindow {
         };
         let executor = cx.background_executor().clone();
         cx.spawn(async move |entity, cx| {
-            let result = executor.spawn(async move { editor.launch(&path) }).await;
-            match result {
-                Ok(child) => { executor.spawn(child.reap()).detach(); },
-                Err(error) => { let _ = entity.update(cx, |this, cx| { this.notice = Some(format!("External editor: {error:#}")); cx.notify(); }); }
+            let result = match executor.spawn(async move { editor.launch(&path) }).await {
+                Ok(child) => executor.spawn(child.reap()).await,
+                Err(error) => Err(error),
+            };
+            if let Err(error) = result {
+                let _ = entity.update(cx, |this, cx| { this.notice = Some(format!("External editor: {error:#}")); cx.notify(); });
             }
         }).detach();
     }

@@ -1,5 +1,5 @@
 //! Explicit external-editor argv; file paths are data, never shell source.
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result, ensure};
 use std::{path::{Path, PathBuf}, process::{Child, Command, Stdio}, sync::atomic::{AtomicUsize, Ordering}};
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -43,9 +43,12 @@ impl Permit {
 impl Drop for Permit { fn drop(&mut self) { ACTIVE.fetch_sub(1, Ordering::AcqRel); } }
 pub struct RunningEditor { child: Child, _permit: Permit }
 impl RunningEditor {
-    pub async fn reap(mut self) {
+    pub async fn reap(mut self) -> Result<()> {
         loop {
-            match self.child.try_wait() { Ok(None) => {}, _ => return }
+            if let Some(status) = self.child.try_wait().context("Could not collect editor exit status")? {
+                ensure!(status.success(), "Editor exited unsuccessfully ({status})");
+                return Ok(());
+            }
             gpui::Timer::after(std::time::Duration::from_secs(1)).await;
         }
     }
@@ -53,6 +56,29 @@ impl RunningEditor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
+    #[test]
+    fn launched_editor_exit_status_and_literal_path_are_observed() -> Result<()> {
+        let root = tempfile::tempdir()?;
+        let path = root.path().join("spaces 'quotes' $(exit 99).sh");
+        std::fs::write(&path, "This file is data, not an executable script")?;
+        for code in [0, 7] {
+            let editor = Editor { program: "/bin/sh".into(), args: vec![
+                "-c".into(), format!("[ \"$1\" = \"$2\" ] || exit 99; exit {code}"), "fixture".into(), "{file}".into(), path.to_str().unwrap().into()
+            ] };
+            let mut running = editor.launch(&path)?;
+            // Waiting here is test-only; production reaping uses a timer.
+            running.child.wait()?;
+            let outcome = futures_lite::future::block_on(running.reap());
+            if code == 0 { outcome?; } else { assert!(outcome.unwrap_err().to_string().contains('7')); }
+        }
+        let editor = Editor { program: "/bin/sh".into(), args: vec!["{file}".into()] };
+        assert!(editor.launch(root.path()).is_err());
+        let link = root.path().join("link");
+        std::os::unix::fs::symlink(&path, &link)?;
+        assert!(editor.launch(&link).is_err());
+        Ok(())
+    }
     #[test]
     fn editor_paths_remain_single_literal_arguments() -> Result<()> {
         let editor = Editor { program: std::env::current_exe()?, args: vec!["--".into(), "{file}".into()] };
