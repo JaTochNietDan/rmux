@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Inline Markdown code now uses the terminal's monospace family within otherwise
+proportional text. A render-time text component resolves inherited row styling
+before creating byte-aligned runs, preserving heading weight/size, nested emphasis,
+strikes and search colors without changing excerpt bounds or copying. Four focused
+inline tests passed, including Unicode run coverage, surrounding-font restoration,
+heading-weight retention and search/strike composition. Native font shaping and
+visual/clipping acceptance remain pending. The previous goal turn made progress
+with the committed and pushed inline-code/strikethrough implementation.
+
 Markdown inline code now receives a shaded background, and the parser enables
 strikethrough with nested span retention. Search colors override code shading
 without discarding strike/bold/italic attributes. Code delimiter contents remain

@@ -1,5 +1,66 @@
 use super::*;
 
+// Resolve the inherited row style at render time so headings retain their
+// size/weight and only inline-code runs switch to the terminal's monospace font.
+#[derive(IntoElement)]
+struct PreviewStyledText {
+    text: String,
+    styles: Vec<(std::ops::Range<usize>, markdown_preview::InlineStyle, bool)>,
+}
+impl PreviewStyledText {
+    fn runs(&self, base: &TextStyle) -> Vec<TextRun> {
+        let mut runs = Vec::with_capacity(self.styles.len() * 2 + 1);
+        let mut offset = 0;
+        for (range, style, matched) in &self.styles {
+            if offset < range.start { runs.push(base.to_run(range.start - offset)); }
+            let mut styled = base.clone().highlight(HighlightStyle {
+                font_weight: style.bold.then_some(FontWeight::BOLD),
+                font_style: style.italic.then_some(FontStyle::Italic),
+                color: matched.then(|| rgb(0xffffff).into()),
+                background_color: if *matched { Some(rgb(0x41638c).into()) } else { style.code.then(|| rgb(0x363b46).into()) },
+                strikethrough: style.strike.then_some(StrikethroughStyle { thickness: px(1.), color: None }),
+                ..Default::default()
+            });
+            if style.code { styled.font_family = FONT_FAMILY.into(); }
+            runs.push(styled.to_run(range.len()));
+            offset = range.end;
+        }
+        if offset < self.text.len() { runs.push(base.to_run(self.text.len() - offset)); }
+        runs
+    }
+}
+impl RenderOnce for PreviewStyledText {
+    fn render(self, window: &mut Window, _: &mut App) -> impl IntoElement {
+        let runs = self.runs(&window.text_style());
+        StyledText::new(self.text).with_runs(runs)
+    }
+}
+#[cfg(test)]
+mod preview_typography_tests {
+    use super::{PreviewStyledText, markdown_preview, TextStyle, FontWeight, SharedString, FONT_FAMILY, rgb};
+    #[test]
+    fn inline_code_font_preserves_heading_and_search_attributes() {
+        let text = "before 界 after";
+        let start = text.find('界').unwrap();
+        let element = PreviewStyledText {
+            text: text.into(),
+            styles: vec![(start..start + '界'.len_utf8(), markdown_preview::InlineStyle { code: true, strike: true, ..Default::default() }, true)],
+        };
+        let mut base = TextStyle::default();
+        base.font_family = "UI font".into();
+        base.font_weight = FontWeight::BOLD;
+        let runs = element.runs(&base);
+        assert_eq!(runs.len(), 3);
+        assert_eq!(runs.iter().map(|run| run.len).sum::<usize>(), text.len());
+        assert_eq!(runs[0].font.family, base.font_family);
+        assert_eq!(runs[2].font.family, base.font_family);
+        assert_eq!(runs[1].font.family, SharedString::from(FONT_FAMILY));
+        assert_eq!(runs[1].font.weight, FontWeight::BOLD);
+        assert!(runs[1].strikethrough.is_some());
+        assert_eq!(runs[1].background_color, Some(rgb(0x41638c).into()));
+    }
+}
+
 pub(super) fn top_inset(height: f32) -> f32 {
     if height >= 480. { 48. } else { 8. }
 }
@@ -903,12 +964,7 @@ impl CommandPalette {
                 range, HighlightStyle { color: Some(rgb(0xffffff).into()), background_color: Some(rgb(0x41638c).into()), ..Default::default() }
             )))
         }).collect::<Vec<_>>());
-        let title = StyledText::new(title).with_highlights(markdown_preview::merge_highlights(&inline, &title_ranges).into_iter().map(|(range, style, matched)| (
-            range, HighlightStyle { font_weight: style.bold.then_some(FontWeight::BOLD), font_style: style.italic.then_some(FontStyle::Italic),
-                color: matched.then(|| rgb(0xffffff).into()),
-                background_color: if matched { Some(rgb(0x41638c).into()) } else { style.code.then(|| rgb(0x363b46).into()) },
-                strikethrough: style.strike.then_some(StrikethroughStyle { thickness: px(1.), color: None }), ..Default::default() }
-        )));
+        let title = PreviewStyledText { text: title, styles: markdown_preview::merge_highlights(&inline, &title_ranges) };
         let subtitle = self.commands[command].subtitle.as_ref().map(|text| {
             let ranges = match &self.commands[command].target {
                 PaletteEvent::SearchTerminal { query, preview: true, .. } => literal_highlights(text, query),
