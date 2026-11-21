@@ -3,6 +3,10 @@ use super::*;
 use crate::text_field::TextField;
 use std::{cell::RefCell, rc::Rc};
 
+actions!(browser, [FocusAddress, Back, Forward, Reload]);
+#[derive(Clone, Copy)]
+enum Navigation { Back, Forward, Reload }
+
 fn address(text: &str) -> anyhow::Result<String> {
     let text = text.trim();
     anyhow::ensure!(!text.is_empty() && text.len() <= 4096 && !text.chars().any(char::is_control), "Enter an HTTP or HTTPS address");
@@ -43,6 +47,11 @@ impl BrowserWindow {
                     Err(error) => this.status = error.to_string(),
                 }
                 cx.notify();
+            } else if matches!(event, text_field::EditEvent::Cancelled) {
+                if !this.committed.is_empty() {
+                    this.input.update(cx, |input, cx| input.replace_draft(&this.committed, cx));
+                }
+                if let Some(view) = &this.host.borrow().view { let _ = view.focus(); }
             }
         }).detach();
         input.read(cx).focus.focus(window);
@@ -65,7 +74,7 @@ impl BrowserWindow {
     }
     fn navigate(&mut self, url: &str, window: &Window) -> anyhow::Result<()> {
         let mut host = self.host.borrow_mut();
-        if let Some(view) = &host.view { view.load_url(url)?; return Ok(()); }
+        if let Some(view) = &host.view { view.load_url(url)?; view.focus()?; return Ok(()); }
         let bounds = host.bounds.ok_or_else(|| anyhow::anyhow!("Browser layout is not ready"))?;
         let latest = self.latest.clone();
         let wake = self.wake.clone();
@@ -82,10 +91,24 @@ impl BrowserWindow {
             }).build_as_child(window)?);
         Ok(())
     }
-    fn navigation(&mut self, operation: u8) {
+    fn focus_address(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.input.read(cx).is_composing() { return; }
+        if let Some(view) = &self.host.borrow().view { let _ = view.focus_parent(); }
+        self.input.update(cx, |input, cx| {
+            if !self.committed.is_empty() { input.replace_draft(&self.committed, cx); }
+            input.select_all_text(cx);
+        });
+        self.input.read(cx).focus.focus(window);
+    }
+    fn navigation(&mut self, operation: Navigation) {
         let host = self.host.borrow();
         if let Some(view) = &host.view {
-            let result = match operation { 0 => view.go_back(), 1 => view.go_forward(), _ => view.reload() };
+            let result = match operation {
+                Navigation::Back if view.can_go_back().unwrap_or(false) => view.go_back(),
+                Navigation::Forward if view.can_go_forward().unwrap_or(false) => view.go_forward(),
+                Navigation::Reload => view.reload(),
+                _ => return,
+            };
             if let Err(error) = result { self.status = error.to_string(); }
         }
     }
@@ -93,14 +116,17 @@ impl BrowserWindow {
 impl Render for BrowserWindow {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let host = self.host.clone();
+        let (back, forward, loaded) = self.host.borrow().view.as_ref().map(|view|
+            (view.can_go_back().unwrap_or(false), view.can_go_forward().unwrap_or(false), true)
+        ).unwrap_or((false, false, false));
         let button = |id, label| div().id(id).px_3().py_2().rounded_md().bg(rgb(0x354969)).cursor_pointer().child(label);
-        div().size_full().flex().flex_col()
+        div().size_full().flex().flex_col().key_context("Browser")
             .on_action(cx.listener(|_, _: &CloseWindow, window, _| window.remove_window()))
             .bg(rgb(0x202733)).text_color(rgb(0xe8edf5)).text_size(px(14.))
             .child(div().h(px(52.)).flex_shrink_0().px_3().flex().items_center().gap_2()
-                .child(button("back", "Back").on_click(cx.listener(|this, _, _, cx| { this.navigation(0); cx.notify(); })))
-                .child(button("forward", "Forward").on_click(cx.listener(|this, _, _, cx| { this.navigation(1); cx.notify(); })))
-                .child(button("reload", "Reload").on_click(cx.listener(|this, _, _, cx| { this.navigation(2); cx.notify(); })))
+                .child(button("back", "Back").when(!back, |button| button.opacity(0.4).cursor_default()).when(back, |button| button.on_click(cx.listener(|this, _, _, cx| { this.navigation(Navigation::Back); cx.notify(); }))))
+                .child(button("forward", "Forward").when(!forward, |button| button.opacity(0.4).cursor_default()).when(forward, |button| button.on_click(cx.listener(|this, _, _, cx| { this.navigation(Navigation::Forward); cx.notify(); }))))
+                .child(button("reload", "Reload").when(!loaded, |button| button.opacity(0.4).cursor_default()).when(loaded, |button| button.on_click(cx.listener(|this, _, _, cx| { this.navigation(Navigation::Reload); cx.notify(); }))))
                 .child(div().flex_1().min_w_0().child(self.input.clone()))
                 .child(button("go", "Go").on_click(cx.listener(|this, _, window, cx| {
                     if this.input.read(cx).is_composing() { return; }
@@ -118,6 +144,34 @@ impl Render for BrowserWindow {
             }, |_, _, _, _| {}).size_full()))
     }
 }
+fn with_active(cx: &mut App, update: impl FnOnce(&mut BrowserWindow, &mut Window, &mut Context<BrowserWindow>)) {
+    if let Some(handle) = cx.active_window().and_then(|window| window.downcast::<BrowserWindow>()) {
+        let _ = handle.update(cx, |this, window, cx| {
+            if !this.input.read(cx).is_composing() { update(this, window, cx); }
+        });
+    }
+}
+pub fn initialize(cx: &mut App) {
+    cx.bind_keys([
+        KeyBinding::new("cmd-l", FocusAddress, Some("Browser")),
+        KeyBinding::new("cmd-r", Reload, Some("Browser")),
+        KeyBinding::new("alt-left", Back, Some("Browser")),
+        KeyBinding::new("alt-right", Forward, Some("Browser")),
+    ]);
+    cx.on_action(|_: &FocusAddress, cx| with_active(cx, |this, window, cx| this.focus_address(window, cx)));
+    cx.on_action(|_: &Back, cx| with_active(cx, |this, _, cx| { this.navigation(Navigation::Back); cx.notify(); }));
+    cx.on_action(|_: &Forward, cx| with_active(cx, |this, _, cx| { this.navigation(Navigation::Forward); cx.notify(); }));
+    cx.on_action(|_: &Reload, cx| with_active(cx, |this, _, cx| { this.navigation(Navigation::Reload); cx.notify(); }));
+}
+pub fn menu() -> Menu {
+    Menu { name: "Browser".into(), items: vec![
+        MenuItem::action("Focus Address", FocusAddress),
+        MenuItem::action("Back", Back),
+        MenuItem::action("Forward", Forward),
+        MenuItem::action("Reload", Reload),
+    ] }
+}
+
 pub fn open(cx: &mut App) -> anyhow::Result<()> {
     anyhow::ensure!(!cx.global::<Shutdowns>().quitting, "application is quitting");
     cx.open_window(WindowOptions { window_bounds: Some(WindowBounds::centered(size(px(1000.), px(680.)), cx)), ..Default::default() }, |window, cx| {

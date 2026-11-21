@@ -47,6 +47,13 @@ native window with an address field, Back/Forward/Reload/Go controls and a commi
 URL/loading status line. Enter submits the address. Bare hostnames default to
 HTTPS; explicit HTTP supports local development servers. The address field retains
 the navigation draft; the status line reports the page-load URL after redirects.
+Browser-context defaults are Cmd+L (select the loaded address), Cmd+R (reload),
+Alt+Left/Right (history). The native Browser menu routes the same actions to the
+active browser window; other window types are unaffected by those menu actions.
+Escape in the address field restores the loaded URL and returns native focus to
+the page. Back/Forward buttons dim and no-op when history is unavailable. Reload
+is disabled before the webview exists. Shortcut dispatch from a focused WKWebView
+and native focus transfer remain unverified.
 The webview is created on first navigation and uses an ephemeral profile. Closing
 the window drops its owner. Page-load callbacks coalesce through one queued wakeup.
 
@@ -54,7 +61,7 @@ This remains experimental: native interaction is unverified, windows are not yet
 workspace surfaces, and browser windows are omitted from session snapshots.
 Only HTTP/HTTPS and about:blank navigation are allowed; embedded URL credentials,
 external protocol launches, popups and downloads are unsupported. Persistent
-profiles, authentication workflows, permissions, error-page UX, address shortcuts,
+profiles, authentication workflows, permissions, error-page UX, native shortcut acceptance,
 search-engine queries, split integration and automation remain work items. No
 browser code or runtime is enabled in a default build. The macOS feature build and
 focused URL policy test pass; that does not prove interactive browsing acceptance.

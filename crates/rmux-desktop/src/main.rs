@@ -3828,6 +3828,8 @@ fn main() {
             KeyBinding::new("ctrl-alt-e", EditSelectedFile, Some("FileBrowser")),
             KeyBinding::new("ctrl-alt-e", EditSelectedFile, Some("FilePreview")),
         ]);
+        #[cfg(all(target_os = "macos", feature = "browser"))]
+        browser_window::initialize(cx);
         shortcuts::initialize(cx);
         cx.on_action(|_: &Quit, cx| request_quit(cx));
         cx.on_action(|_: &NewWindow, cx| {
@@ -3846,6 +3848,8 @@ fn main() {
                 name: "rmux".into(),
                 items: app_menu::items(updater_available),
             },
+            #[cfg(all(target_os = "macos", feature = "browser"))]
+            browser_window::menu(),
             Menu {
                 name: "File".into(),
                 items: vec![

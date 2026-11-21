@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+The experimental browser now exposes scoped Cmd+L/Cmd+R/Alt+Left/Alt+Right bindings
+and native Browser menu actions routed only to the active browser window. Address
+focus selects the page-load URL; Escape restores that address and returns focus to
+the webview. Back/Forward query native history availability and dim/no-op when
+unavailable; Reload is disabled before webview creation. Native parent focus is
+requested before focusing the GPUI address field. Action routing preserves active
+address IME composition. The browser-enabled desktop test compilation and existing
+URL policy regression passed; native keyboard/menu/focus/history interaction is
+not verified while the Mac remains locked. The previous goal turn made progress
+with committed/pushed experimental browser-window navigation.
+
 The optional macOS `browser` feature now exposes an experimental browser window
 inside rmux via File and the command palette (`mise run browser`). It has a native
 GPUI address field and Back/Forward/Reload/Go controls, creates an ephemeral WRY
