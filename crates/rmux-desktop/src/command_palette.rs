@@ -556,6 +556,8 @@ impl CommandPalette {
         commands.push(Command { title: "Copy file path".into(), subtitle: Some(preview.path.display().to_string()), shortcut: None,
             target: PaletteEvent::Run(Box::new(CopyLocalPath { path: preview.path.clone() })) });
         commands.push(reveal_local_path(&preview.path));
+        commands.push(Command { title: "Open in External Editor".into(), subtitle: Some("Uses file_editor from Settings".into()), shortcut: None,
+            target: PaletteEvent::Run(Box::new(EditLocalFile { path: preview.path.clone() })) });
         commands.push(Command { title: if preview.hex { "Copy Hex Dump" } else { "Copy Preview Text" }.into(),
             subtitle: Some(if preview.truncated { "Copies captured text only · Preview is incomplete" } else if preview.hex { "Copies the formatted hex dump, not raw bytes" } else { "Preserves original line endings" }.into()), shortcut: None,
             target: PaletteEvent::Run(Box::new(CopyPreviewText { text: preview.contents })) });
@@ -1127,6 +1129,7 @@ impl Render for CommandPalette {
                         Box::new(BrowseDirectory { path: parent.to_owned() }) as Box<dyn Action>), cx))
                     .child(self.file_navigation_button("preview-mode", if *hex { "View as Text" } else { "View as Hex" },
                         Some(if *hex { Box::new(PreviewLocalFile { path: path.clone() }) } else { Box::new(PreviewHexFile { path: path.clone() }) }), cx))
+                    .child(self.file_navigation_button("preview-editor", "External Editor", Some(Box::new(EditLocalFile { path: path.clone() })), cx))
                     .child(self.file_navigation_button("preview-refresh", "Refresh",
                         Some(if *hex { Box::new(PreviewHexFile { path: path.clone() }) } else { Box::new(PreviewLocalFile { path: path.clone() }) }), cx))
             ))
@@ -1192,6 +1195,16 @@ impl Render for CommandPalette {
                                 this.preview_selected_hex(cx);
                                 cx.stop_propagation();
                             })).child("Preview as Hex · Shift+Enter")
+                    ))
+                    .when(has_preview_file, |footer| footer.child(
+                        div().id("edit-selected-file").px_2().py_1().rounded_sm().cursor_pointer().text_color(rgb(0xffffff)).bg(rgb(0x353535))
+                            .hover(|style| style.bg(rgb(0x454545)))
+                            .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
+                                if !event.standard_click() || this.input.read(cx).is_composing() { return; }
+                                if let Some(path) = this.selected_preview_file().map(std::path::Path::to_owned) {
+                                    cx.emit(PaletteEvent::Run(Box::new(EditLocalFile { path })));
+                                }
+                            })).child("External Editor")
                     ))
                     .when(has_ssh_destination, |footer| footer.child(
                         div().id("edit-ssh-destination").px_2().py_1().rounded_sm()

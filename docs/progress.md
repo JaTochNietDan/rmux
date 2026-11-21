@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Started F02 external-editor integration. Directory selection and text/hex previews
+now expose External Editor using explicit file_editor program/argv configuration.
+Paths remain one OS argument (including non-UTF-8 paths); no shell interpolation
+or file-association execution is introduced. Regular-file checks and spawning run
+off the UI thread. Eight active launches are permitted; asynchronous timer-based
+reaping avoids a blocked worker per editor. Argument/validation regression passed
+with desktop test compilation. Native launch/focus acceptance, embedded editing,
+safe saves and external-change conflict handling remain pending.
+
 Same-directory refresh now retains the filter and selected entry by path/type,
 rather than unstable row position. Ranking updates before deferred selection
 restoration; removed, type-changed or nonmatching entries fall back to the first

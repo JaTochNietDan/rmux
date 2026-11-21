@@ -11,6 +11,7 @@ mod icons;
 #[cfg(unix)]
 mod file_drop;
 mod file_browser;
+mod external_editor;
 mod terminal_search;
 #[cfg(unix)]
 mod image_paste;
@@ -121,6 +122,10 @@ struct RevealLocalPath { path: std::path::PathBuf }
 #[derive(Clone, Debug, Default, PartialEq, Action)]
 #[action(namespace = rmux, no_json)]
 struct PreviewLocalFile { path: std::path::PathBuf }
+
+#[derive(Clone, Debug, Default, PartialEq, Action)]
+#[action(namespace = rmux, no_json)]
+struct EditLocalFile { path: std::path::PathBuf }
 
 #[derive(Clone, Debug, Default, PartialEq, Action)]
 #[action(namespace = rmux, no_json)]

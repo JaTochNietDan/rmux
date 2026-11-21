@@ -341,6 +341,28 @@ path and entry type, even if entries reorder. If the entry disappears or no
 longer matches, the first result is selected. Navigating to another directory
 starts a fresh filter.
 
+**External Editor** opens the selected regular file from the directory browser
+or text/hex preview. Configure the editor explicitly in Settings JSON, then reload:
+
+```json
+"file_editor": {
+  "program": "/absolute/path/to/editor",
+  "args": ["--", "{file}"]
+}
+```
+
+Use arguments supported by your editor (`--` is an example argument, not added
+by rmux). Exactly one argument must be the literal `{file}` placeholder; rmux
+replaces it with the absolute file path as one argument. It does not interpolate
+shell expressions, expand environment variables, or choose a file association.
+Paths with spaces, quotes or shell punctuation remain data. Directories and
+symbolic links are rejected. The configured program controls editing and saving;
+rmux does not yet provide an embedded editor, save-conflict detection, or automatic
+preview refresh after external edits. Use Refresh to reload the preview.
+Launch errors appear in the window notice. Up to eight launched editor processes
+may remain active; they are reaped asynchronously without blocking a UI or worker
+thread. Editors are independent applications and are not closed with the preview.
+
 Directory reads run in the background and retain at most 2,048 entries per
 snapshot, sorted directories-first within that subset. A limit notice identifies
 partial listings. Entries that disappear or cannot be read are omitted with an explicit

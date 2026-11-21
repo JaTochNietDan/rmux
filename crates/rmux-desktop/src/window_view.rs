@@ -2855,6 +2855,19 @@ impl WorkspaceWindow {
             }));
         }).detach();
     }
+    fn edit_local_file(&mut self, path: std::path::PathBuf, cx: &mut Context<Self>) {
+        let Some(editor) = cx.global::<Preferences>().file_editor.clone() else {
+            self.notice = Some("Configure file_editor.program and file_editor.args in Settings first".into()); cx.notify(); return;
+        };
+        let executor = cx.background_executor().clone();
+        cx.spawn(async move |entity, cx| {
+            let result = executor.spawn(async move { editor.launch(&path) }).await;
+            match result {
+                Ok(child) => { executor.spawn(child.reap()).detach(); },
+                Err(error) => { let _ = entity.update(cx, |this, cx| { this.notice = Some(format!("External editor: {error:#}")); cx.notify(); }); }
+            }
+        }).detach();
+    }
     fn preview_local_file(&mut self, path: std::path::PathBuf, window: &mut Window, cx: &mut Context<Self>) {
         self.preview_file_mode(path, false, window, cx);
     }
@@ -4181,6 +4194,7 @@ impl Render for WorkspaceWindow {
                 }
                 this.start_workspace(Some(action.path.clone()), window, cx);
             }))
+            .on_action(cx.listener(|this, action: &EditLocalFile, _, cx| this.edit_local_file(action.path.clone(), cx)))
             .on_action(cx.listener(|this, action: &PreviewHexFile, window, cx| this.preview_file_mode(action.path.clone(), true, window, cx)))
             .on_action(cx.listener(|this, action: &PreviewLocalFile, window, cx| this.preview_local_file(action.path.clone(), window, cx)))
             .on_action(cx.listener(|this, _: &OpenTextPreview, window, cx| this.choose_local_path(false, window, cx)))

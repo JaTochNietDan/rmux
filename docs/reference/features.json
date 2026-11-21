@@ -1563,7 +1563,15 @@
         "SCHEMA"
       ],
       "acceptance": "Save safely, detect external changes and open scripts as data rather than execute them.",
-      "rmux_status": "not_started"
+      "rmux_status": "in_progress",
+      "implementation": "External Editor controls in directory selection and text/hex previews launch an explicitly configured absolute executable and argv. Exactly one standalone {file} placeholder receives the absolute OS path without shell interpolation. Regular files only; launching runs off the UI thread with an eight-active-process cap and asynchronous reaping. Focused literal-path and argument validation regression passes.",
+      "remaining": "Embedded editor, word-wrap editing, safe save/conflict detection, native external-editor launch/focus acceptance and cross-platform validation.",
+      "implementation_sources": [
+        "crates/rmux-desktop/src/external_editor.rs",
+        "crates/rmux-desktop/src/command_palette.rs",
+        "crates/rmux-desktop/src/window_view.rs"
+      ],
+      "progress_record": "docs/progress.md"
     },
     {
       "id": "F03",

@@ -210,6 +210,7 @@ pub struct Preferences {
     pub ansi_palette: Option<[HexColor; 16]>,
     pub terminal_theme: TerminalTheme,
     pub theme_file: Option<std::path::PathBuf>,
+    pub file_editor: Option<crate::external_editor::Editor>,
     #[serde(skip)]
     imported_theme: Option<crate::theme_file::Theme>,
     pub confirm_close: ClosePolicy,
@@ -250,6 +251,7 @@ impl Default for Preferences {
             ansi_palette: None,
             terminal_theme: TerminalTheme::default(),
             theme_file: None,
+            file_editor: None,
             imported_theme: None,
             confirm_close: ClosePolicy::Active,
             source: None,
@@ -516,6 +518,7 @@ impl Preferences {
             }
             ensure!(command.cwd.as_ref().is_none_or(|path| path.is_absolute() && path.as_os_str().len() <= 8192), "command cwd must be an absolute path up to 8192 bytes");
         }
+        if let Some(editor) = &value.file_editor { editor.validate()?; }
         ensure!(value.theme_file.as_ref().is_none_or(|path| path.is_absolute() && path.as_os_str().len() <= 8192), "theme_file must be an absolute path up to 8192 bytes");
         ensure!(value.terminal_padding <= 32, "terminal_padding must be between 0 and 32");
         ensure!(value.session_file.as_ref().is_none_or(|path| path.is_absolute() && path.as_os_str().len() <= 8192), "session_file must be an absolute path up to 8192 bytes");
