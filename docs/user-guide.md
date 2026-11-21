@@ -12,6 +12,9 @@ The SSH client must already be available on PATH; launch errors appear in rmux,
 and connection/authentication errors appear in the terminal. This first remote
 slice does not install a relay, resume disconnected sessions, browse remote files,
 or automatically reconnect. Live authentication/platform acceptance is pending.
+Sessions launched by this SSH action do not expose a local working directory:
+remote shell directory reports cannot drive local file browsing, git metadata,
+or new-shell directory inheritance. Remote directory display is not implemented.
 
 **Merge Workspace into…** in the menu or command palette searches other
 workspaces across this app’s windows, labeled by window. Enter moves the source's existing panes into

@@ -14,6 +14,7 @@ use std::{
 
 pub struct Session {
     initial_directory: Option<std::path::PathBuf>,
+    local_directory_metadata: bool,
     child_pid: Option<u32>,
     direct_command: bool,
     _shell_integration: Option<tempfile::TempDir>,
@@ -278,6 +279,7 @@ impl Session {
         let reply_writer = writer.clone();
         let session = Self {
             initial_directory,
+            local_directory_metadata: true,
             child_pid,
             direct_command: false,
             _shell_integration: None,
@@ -472,6 +474,7 @@ impl Session {
         Ok(session)
     }
     pub fn current_directory(&self) -> Result<Option<std::path::PathBuf>> {
+        if !self.local_directory_metadata { return Ok(None); }
         self.terminal
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -480,6 +483,12 @@ impl Session {
     /// Explicit spawn directory, without consulting the terminal parser.
     pub fn initial_directory(&self) -> Option<&std::path::Path> {
         self.initial_directory.as_deref()
+    }
+    /// Mark an explicitly remote process before handing it to a UI view.
+    /// Its OSC paths must never drive local filesystem access or shell cwd.
+    pub fn suppress_local_directory_metadata(&mut self) {
+        self.local_directory_metadata = false;
+        self.initial_directory = None;
     }
     /// A predictable idle workload, used only by the opt-in performance harness.
     pub fn benchmark_shell(columns: u16, rows: u16) -> Result<Self> {
@@ -970,7 +979,7 @@ impl Session {
             bell_revision: terminal.bell_revision(),
             notifications: terminal.notifications_since(notification_revision),
             title: terminal.title_since(title_revision),
-            directory: terminal.directory_since(directory_revision),
+            directory: if self.local_directory_metadata { terminal.directory_since(directory_revision) } else { Ok(None) },
         })
     }
     pub fn try_render_delay(&self) -> Option<Option<std::time::Duration>> {
@@ -1074,6 +1083,26 @@ fn select_shell(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    #[cfg(unix)]
+    fn explicit_remote_sessions_do_not_export_local_directory_metadata() -> anyhow::Result<()> {
+        let directory = tempfile::tempdir()?;
+        let mut session = super::Session::command_in(&["/bin/sh".into(), "-c".into(), "exit 0".into()], 80, 24, Some(directory.path()))?;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while session.exit_status().is_none() {
+            anyhow::ensure!(std::time::Instant::now() < deadline, "fixture process did not exit");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(session.initial_directory().is_some());
+        session.suppress_local_directory_metadata();
+        assert!(session.initial_directory().is_none());
+        for report in [b"\x1b]7;file://localhost/tmp\x07".as_slice(), b"\x1b]7;file:///tmp\x07".as_slice()] {
+            session.terminal.lock().unwrap().write(report);
+            assert!(session.current_directory()?.is_none());
+            assert!(session.try_metadata_since(0, 0, 0, 0, false).unwrap().directory?.is_none());
+        }
+        Ok(())
+    }
     #[test]
     fn shell_override_preserves_literal_paths_and_rejects_empty_override() -> anyhow::Result<()> {
         use super::select_shell;

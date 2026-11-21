@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Explicit SSH workspaces now suppress local-directory metadata before their view
+is created. Both initial cwd fallback and OSC-derived local paths are excluded,
+including remote reports using localhost or an empty hostname. This prevents
+local git/file browsing and new-shell cwd inheritance from treating remote paths
+as local. Ordinary/custom local command sessions retain their existing behavior.
+A real PTY fixture verified hostless/localhost suppression; desktop compilation
+passed. Remote directory identity/display remain future R01/R02 work.
+
 R01 now has a first interactive SSH workspace path: File/palette Connect via
 SSH… and custom action `connect_ssh` open a validated alias/user@host editor.
 Submission launches the existing SSH client with a literal argv through the same
