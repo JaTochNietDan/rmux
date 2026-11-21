@@ -795,9 +795,10 @@ overrides take precedence; setting `ansi_palette` to `null` restores the selecte
 terminal theme's default palette.
 
 `terminal_theme` accepts `"dark"` (the existing default), `"light"` (white
-background with a darker ANSI palette), `"solarized_dark"`, or `"solarized_light"`.
+background with a darker ANSI palette), `"solarized_dark"`, `"solarized_light"`, or `"nord"`.
 The Solarized presets use [Ethan Schoonover's published palette](https://ethanschoonover.com/solarized/).
-Settings shows all four presets as direct choices, highlighting the selected one;
+Nord uses the [official Nord terminal palette](https://github.com/nordtheme/alacritty/blob/main/src/nord.yaml).
+Settings shows all five presets as direct choices, highlighting the selected one;
 Left/Right still cycles when the theme control is selected. The palette offers
 Terminal Theme commands for direct keyboard selection. Use Save these settings
 to persist a session choice. It reloads live; explicit color and

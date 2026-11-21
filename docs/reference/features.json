@@ -375,7 +375,7 @@
       ],
       "acceptance": "Apply supported settings live; explicitly report unsupported Ghostty settings.",
       "rmux_status": "in_progress",
-      "implementation": "Bounded per-terminal font zoom/reset and configured font family with shared cell metrics, font-sensitive row cache and saved-layout fonts. Live-reloaded hollow/hidden unfocused cursor, default foreground/background/cursor colors and 16-color ANSI palette. Application cursor shapes and OSC color overrides remain honored. Unchanged configured colors/palettes skip engine updates. Built-in Solarized Dark/Light presets are selectable in Settings and configuration, with explicit color/palette override precedence.",
+      "implementation": "Bounded per-terminal font zoom/reset and configured font family with shared cell metrics, font-sensitive row cache and saved-layout fonts. Live-reloaded hollow/hidden unfocused cursor, default foreground/background/cursor colors and 16-color ANSI palette. Application cursor shapes and OSC color overrides remain honored. Unchanged configured colors/palettes skip engine updates. Built-in Solarized Dark/Light and Nord presets are selectable in Settings and configuration, with explicit color/palette override precedence.",
       "remaining": "Broader named-theme catalog/import, additional cursor/background settings, native color reload, font/zoom/restore and focus-transition acceptance, and complete configuration acceptance.",
       "implementation_sources": [
         "crates/rmux-desktop/src/cell_metrics.rs",

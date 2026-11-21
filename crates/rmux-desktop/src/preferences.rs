@@ -34,13 +34,15 @@ pub enum TerminalTheme {
     Light,
     SolarizedDark,
     SolarizedLight,
+    Nord,
 }
 impl TerminalTheme {
-    pub const ALL: [Self; 4] = [Self::Dark, Self::Light, Self::SolarizedDark, Self::SolarizedLight];
+    pub const ALL: [Self; 5] = [Self::Dark, Self::Light, Self::SolarizedDark, Self::SolarizedLight, Self::Nord];
     pub fn label(self) -> &'static str {
         match self {
             Self::Dark => "Dark", Self::Light => "Light",
             Self::SolarizedDark => "Solarized Dark", Self::SolarizedLight => "Solarized Light",
+            Self::Nord => "Nord",
         }
     }
     pub fn cycle(self, delta: i32) -> Self {
@@ -231,6 +233,13 @@ impl Preferences {
                     0x626b75, 0xc12c2c, 0x24833f, 0x916a00,
                     0x1669bf, 0x9047b5, 0x147e84, 0x6e7781,
                 ].map(|value| HexColor(value).rgb())),
+                // https://github.com/nordtheme/alacritty/blob/main/src/nord.yaml
+                TerminalTheme::Nord => Some([
+                    0x3b4252, 0xbf616a, 0xa3be8c, 0xebcb8b,
+                    0x81a1c1, 0xb48ead, 0x88c0d0, 0xe5e9f0,
+                    0x4c566a, 0xbf616a, 0xa3be8c, 0xebcb8b,
+                    0x81a1c1, 0xb48ead, 0x8fbcbb, 0xeceff4,
+                ].map(|value| HexColor(value).rgb())),
                 // Canonical ANSI slot mapping: https://ethanschoonover.com/solarized/#the-values
                 TerminalTheme::SolarizedDark | TerminalTheme::SolarizedLight => Some([
                     0x073642, 0xdc322f, 0x859900, 0xb58900,
@@ -244,6 +253,7 @@ impl Preferences {
     pub fn terminal_colors(&self) -> [Option<rmux_terminal::Color>; 3] {
         let defaults = match self.terminal_theme {
             TerminalTheme::Dark => [None; 3],
+            TerminalTheme::Nord => [Some(HexColor(0xd8dee9)), Some(HexColor(0x2e3440)), Some(HexColor(0xd8dee9))],
             TerminalTheme::Light => [Some(HexColor(0x24292f)), Some(HexColor(0xffffff)), Some(HexColor(0x0755a8))],
             TerminalTheme::SolarizedDark => [Some(HexColor(0x839496)), Some(HexColor(0x002b36)), Some(HexColor(0x839496))],
             TerminalTheme::SolarizedLight => [Some(HexColor(0x657b83)), Some(HexColor(0xfdf6e3)), Some(HexColor(0x657b83))],
@@ -551,6 +561,18 @@ mod tests {
             assert_eq!(overridden.terminal_colors()[1], Some(rmux_terminal::Color(1, 2, 3)));
             assert_eq!(overridden.terminal_palette(), Some([rmux_terminal::Color(17, 34, 51); 16]));
         }
+        let nord = Preferences::decode(br#"{"terminal_theme":"nord"}"#)?;
+        assert_eq!(nord.terminal_colors(), [Some(rmux_terminal::Color(216, 222, 233)), Some(rmux_terminal::Color(46, 52, 64)), Some(rmux_terminal::Color(216, 222, 233))]);
+        assert_eq!(nord.terminal_palette().unwrap()[14], rmux_terminal::Color(143, 188, 187));
+        assert_eq!(serde_json::to_value(&nord)?["terminal_theme"], "nord");
+        let overridden = serde_json::json!({"terminal_theme":"nord", "foreground_color":"#010203", "background_color":"#040506", "cursor_color":"#070809", "ansi_palette": vec!["#112233"; 16]});
+        let overridden = Preferences::decode(&serde_json::to_vec(&overridden)?)?;
+        assert_eq!(overridden.terminal_colors(), [Some(rmux_terminal::Color(1, 2, 3)), Some(rmux_terminal::Color(4, 5, 6)), Some(rmux_terminal::Color(7, 8, 9))]);
+        assert_eq!(overridden.terminal_palette(), Some([rmux_terminal::Color(17, 34, 51); 16]));
+        for theme in TerminalTheme::ALL {
+            assert_eq!(theme.cycle(1).cycle(-1), theme);
+        }
+        assert_eq!(TerminalTheme::Nord.cycle(1), TerminalTheme::Dark);
         assert!(Preferences::decode(br#"{"terminal_theme":"unknown"}"#).is_err());
         Ok(())
     }

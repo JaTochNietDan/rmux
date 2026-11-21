@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Added Nord as a fifth built-in terminal theme, using the official Nord terminal
+ANSI palette, foreground, background and cursor colors. Existing shared theme
+choices expose it in Settings and the command palette without new runtime work.
+Explicit color/palette overrides retain precedence. The focused preferences test
+passed, including serialization, theme cycling and overrides. Native visual/live
+reload acceptance and broader theme import remain pending.
+
 Regular-file selections now expose direct hex preview through Shift+Enter and a
 compact-compatible footer button. The row hint distinguishes Enter for text from
 Shift+Enter for hex, avoiding a failed 64 KiB text read before an 8 KiB byte preview.
