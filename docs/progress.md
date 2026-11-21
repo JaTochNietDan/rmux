@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+File previews now have scoped keyboard refresh (F5), directory return (Alt+Up)
+and text/hex switching (Ctrl+Alt+M), available even with a filtered list. The
+`file_preview` shortcut context supports remapping/disabling all three in text
+and hex modes; current keymap hints appear alongside the persistent navigation.
+Actions share existing async preview requests and refresh-state preservation,
+with IME guards. The focused scope/remap test and desktop compilation passed.
+Native keyboard/focus/compact-layout acceptance remains pending.
+
 Replaced the hardcoded wrap-excerpts key handler with a registered action and
 text-preview-only shortcut scope. `toggle_preview_wrap` accepts custom bindings
 under `context: preview`; Ctrl+Alt+W remains the default and can be disabled.

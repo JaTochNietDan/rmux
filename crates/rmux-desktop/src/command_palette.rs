@@ -723,6 +723,19 @@ impl CommandPalette {
         if self.wrap_preview && self.commands[command].preview_line().is_some() { 116. }
         else { result_row_height(self.commands[command].subtitle.is_some()) }
     }
+    fn navigate_preview(&mut self, directory: bool, switch_mode: bool, cx: &mut Context<Self>) {
+        if self.input.read(cx).is_composing() { return; }
+        let Some((path, hex)) = self.preview_navigation.as_ref() else { return; };
+        let action: Box<dyn Action> = if directory {
+            let Some(parent) = path.parent() else { return; };
+            Box::new(BrowseDirectory { path: parent.to_owned() })
+        } else if *hex != switch_mode {
+            Box::new(PreviewHexFile { path: path.clone() })
+        } else {
+            Box::new(PreviewLocalFile { path: path.clone() })
+        };
+        cx.emit(PaletteEvent::Run(action));
+    }
     fn toggle_preview_wrap(&mut self, cx: &mut Context<Self>) {
         if self.preview_navigation.is_none() || self.hex_preview || self.input.read(cx).is_composing() { return; }
         self.wrap_preview = !self.wrap_preview;
@@ -970,12 +983,20 @@ impl Render for CommandPalette {
         let has_search_excerpt = self.selected_search_excerpt().is_some();
         let has_ssh_destination = self.selected_ssh_destination().is_some();
         let has_preview_file = self.selected_preview_file().is_some();
+        let preview_shortcuts = if self.preview_navigation.is_some() {
+            [(&RefreshFilePreview as &dyn Action, "refresh"), (&PreviewDirectory as &dyn Action, "directory"), (&SwitchPreviewMode as &dyn Action, "text/hex")]
+                .into_iter().filter_map(|(action, label)| shortcuts::hint(action, &self.input.read(cx).focus, window).map(|key| format!("{key} {label}")))
+                .collect::<Vec<_>>().join(" · ")
+        } else { String::new() };
         let wrap_hint = shortcuts::hint(&TogglePreviewWrap, &self.input.read(cx).focus, window);
         let copy_hint = shortcuts::hint(&CopySearchExcerpt, &self.input.read(cx).focus, window);
         div()
             .id("command-palette")
-            .key_context(if self.preview_navigation.is_some() && !self.hex_preview { "CommandPalette TextPreview" } else { "CommandPalette" })
+            .key_context(if self.preview_navigation.is_some() { if self.hex_preview { "CommandPalette FilePreview" } else { "CommandPalette FilePreview TextPreview" } } else { "CommandPalette" })
             .on_action(cx.listener(|this, _: &TogglePreviewWrap, _, cx| this.toggle_preview_wrap(cx)))
+            .on_action(cx.listener(|this, _: &RefreshFilePreview, _, cx| this.navigate_preview(false, false, cx)))
+            .on_action(cx.listener(|this, _: &PreviewDirectory, _, cx| this.navigate_preview(true, false, cx)))
+            .on_action(cx.listener(|this, _: &SwitchPreviewMode, _, cx| this.navigate_preview(false, true, cx)))
             .on_action(cx.listener(|this, _: &CopySearchExcerpt, _, cx| this.copy_search_excerpt(cx)))
             .w(px(520.))
             .max_w(relative(0.9))
@@ -1040,6 +1061,9 @@ impl Render for CommandPalette {
                         Some(if *hex { Box::new(PreviewLocalFile { path: path.clone() }) } else { Box::new(PreviewHexFile { path: path.clone() }) }), cx))
                     .child(self.file_navigation_button("preview-refresh", "Refresh",
                         Some(if *hex { Box::new(PreviewHexFile { path: path.clone() }) } else { Box::new(PreviewLocalFile { path: path.clone() }) }), cx))
+            ))
+            .when(!preview_shortcuts.is_empty(), |palette| palette.child(
+                div().flex_shrink_0().px_3().pt_2().text_xs().text_color(rgb(0xa0a0a0)).child(preview_shortcuts)
             ))
             .when(self.preview_navigation.is_some() && !self.hex_preview, |palette| palette.child(
                 div().px_3().pt_2().flex_shrink_0().flex().items_center().gap_2()

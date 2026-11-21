@@ -575,6 +575,12 @@ Ctrl+Alt+W and can be remapped with
 Disable the original key separately with `action: "disabled"` in that context.
 The button tooltip reflects the active binding. This scope excludes hex previews,
 ordinary command palettes, terminal input and Settings.
+Use `file_preview` for bindings shared by text and hex previews: `refresh_preview`
+(default F5), `preview_directory` (Alt+Up), and `switch_preview_mode` (Ctrl+Alt+M).
+These controls work while filtering; their visible hints follow the active keymap.
+For example, `{"key":"ctrl-alt-r","action":"refresh_preview","context":"file_preview"}`
+adds a refresh shortcut without consuming terminal keys. Disable a default with
+`action: "disabled"` in the same context. IME composition suspends these actions.
 The first stroke must use Ctrl/Cmd/Alt or F1–F24; one- and two-stroke bindings are
 supported. The second stroke may be unmodified, for example
 `{"key":"ctrl-k t","action":"new_tab"}`. Bare `t` remains normal typing.

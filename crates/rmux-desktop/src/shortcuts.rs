@@ -62,8 +62,8 @@ pub struct Binding {
 }
 #[derive(Clone, Copy, Default, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Scope { #[default] Terminal, Window, Settings, Find, Preview }
-impl Scope { fn context(self) -> Option<&'static str> { match self { Self::Terminal => Some("Terminal"), Self::Window => None, Self::Settings => Some("Settings"), Self::Find => Some("FindInput"), Self::Preview => Some("TextPreview") } } }
+pub enum Scope { #[default] Terminal, Window, Settings, Find, Preview, FilePreview }
+impl Scope { fn context(self) -> Option<&'static str> { match self { Self::Terminal => Some("Terminal"), Self::Window => None, Self::Settings => Some("Settings"), Self::Find => Some("FindInput"), Self::Preview => Some("TextPreview"), Self::FilePreview => Some("FilePreview") } } }
 struct Defaults(Vec<KeyBinding>);
 impl Global for Defaults {}
 fn action(name: &str) -> Option<Box<dyn Action>> {
@@ -129,6 +129,9 @@ fn action(name: &str) -> Option<Box<dyn Action>> {
         "rename_buffer" => Box::new(ShowRenameBufferPicker),
         "copy_buffer" => Box::new(ShowCopyBufferPicker),
         "browse_files" => Box::new(BrowseTerminalFiles),
+        "refresh_preview" => Box::new(RefreshFilePreview),
+        "preview_directory" => Box::new(PreviewDirectory),
+        "switch_preview_mode" => Box::new(SwitchPreviewMode),
         "toggle_preview_wrap" => Box::new(TogglePreviewWrap),
         "open_text_preview" => Box::new(OpenTextPreview),
         "search_terminal_output" => Box::new(ShowTerminalSearch),
@@ -281,6 +284,27 @@ mod tests {
     use crate::{preferences::Preferences, ShowCommandPalette, ToggleSettings};
     use gpui::{KeyBinding, KeyContext, Keymap, Keystroke};
     fn settings(value: serde_json::Value) -> Preferences { serde_json::from_value(value).unwrap() }
+    #[test]
+    fn file_preview_navigation_bindings_cover_text_and_hex_only() {
+        let mut map = Keymap::new(vec![KeyBinding::new("f5", crate::RefreshFilePreview, Some("FilePreview"))]);
+        let prefs = settings(serde_json::json!({"keybindings":[
+            {"key":"f5","action":"disabled","context":"file_preview"},
+            {"key":"ctrl-alt-r","action":"refresh_preview","context":"file_preview"},
+            {"key":"alt-up","action":"preview_directory","context":"file_preview"},
+            {"key":"ctrl-alt-m","action":"switch_preview_mode","context":"file_preview"}
+        ]}));
+        map.add_bindings(compile(&prefs).unwrap());
+        for context in ["CommandPalette FilePreview TextPreview", "CommandPalette FilePreview"] {
+            let contexts = [KeyContext::parse(context).unwrap()];
+            assert!(map.bindings_for_input(&[Keystroke::parse("f5").unwrap()], &contexts).0.is_empty());
+            assert!(map.bindings_for_input(&[Keystroke::parse("ctrl-alt-r").unwrap()], &contexts).0[0].action().as_any().is::<crate::RefreshFilePreview>());
+            assert!(map.bindings_for_input(&[Keystroke::parse("alt-up").unwrap()], &contexts).0[0].action().as_any().is::<crate::PreviewDirectory>());
+            assert!(map.bindings_for_input(&[Keystroke::parse("ctrl-alt-m").unwrap()], &contexts).0[0].action().as_any().is::<crate::SwitchPreviewMode>());
+        }
+        for context in ["Terminal", "CommandPalette", "Settings"] {
+            assert!(map.bindings_for_input(&[Keystroke::parse("alt-up").unwrap()], &[KeyContext::parse(context).unwrap()]).0.is_empty());
+        }
+    }
     #[test]
     fn preview_wrap_bindings_are_scoped_and_remappable() {
         let mut map = Keymap::new(vec![KeyBinding::new("ctrl-alt-w", crate::TogglePreviewWrap, Some("TextPreview"))]);
