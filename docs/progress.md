@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+External-editor invocation now preserves the originating file browser/preview
+instead of closing its palette and restoring terminal focus. The existing view
+retains query, selected entry/line, wrap mode and scroll state across editor
+launch, including failed/missing-editor requests; Refresh remains available on
+return. All external-edit entry points share this event path. Desktop compilation
+passed. Native UI access was rechecked and the Mac remains locked, so actual
+editor activation/return-focus and visual acceptance remain pending.
+
 Settings now exposes a keyboard-navigable External Editor configuration row,
 with configured executable summary/full-path tooltip and direct Settings JSON
 access. Executable paths containing NULs fail configuration validation before

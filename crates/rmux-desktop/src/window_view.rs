@@ -2944,6 +2944,14 @@ impl WorkspaceWindow {
             &palette,
             window,
             |this, _, event: &command_palette::PaletteEvent, window, cx| {
+                // External editing does not navigate the rmux file view. Keep
+                // its query, selection, wrapping, scroll and focus owner intact
+                // so returning from the editor can refresh the same document.
+                if let command_palette::PaletteEvent::Run(action) = event
+                    && let Some(action) = action.as_any().downcast_ref::<EditLocalFile>() {
+                    this.edit_local_file(action.path.clone(), cx);
+                    return;
+                }
                 this.folder_restore = match event {
                     command_palette::PaletteEvent::Run(action) if action.as_any().is::<BrowseDirectory>() =>
                         this.palette.as_ref().and_then(|(palette, _)| palette.read(cx).folder_state(cx)),
