@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Tab-picker keyboard handling now skips ranking for non-navigation keys and IME
+composition before inspecting titles/directories. Exact displayed tab-number
+matching parses canonical decimal tokens without allocating a number string per
+candidate. Ranking uses an in-place unstable sort with the tab index as a unique
+tie-breaker, preserving deterministic order without stable-sort scratch storage.
+All five palette-matching tests passed, including numeric bounds, leading-zero,
+sign and non-ASCII rejection, literal title fallback and Unicode search behavior.
+These remove known work; no end-to-end latency improvement is claimed without a
+new measurement. Native tab-picker interaction acceptance remains pending.
+
 Local folder browsing now has a persistent Back/Forward/Parent/Refresh navigation
 bar above the search field, so filtering cannot hide navigation actions. History
 availability disables Back/Forward, root directories disable Parent, and IME

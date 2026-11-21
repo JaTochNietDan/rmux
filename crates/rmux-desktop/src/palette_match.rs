@@ -29,11 +29,12 @@ pub fn score(title: &str, words: &[&str]) -> Option<(usize, usize, usize)> {
 /// matches of equal quality, without allowing a fuzzy word to cross fields.
 pub fn tab_score(number: usize, title: &str, directory: &str, words: &[&str]) -> Option<(usize, usize, usize, usize)> {
     let mut total = (0, 0, 0, 0);
-    let number = number.to_string();
     for word in words {
         // Displayed tab numbers are exact tokens, not fuzzy substrings: 3
         // should target tab 3, rather than also matching tab 13 or tab 30.
-        if *word == number { continue; }
+        if !word.is_empty() && word.bytes().all(|byte| byte.is_ascii_digit())
+            && (word.len() == 1 || !word.starts_with('0'))
+            && word.parse::<usize>().ok() == Some(number) { continue; }
         let title_score = score(title, &[*word]).map(|(fuzzy, gaps, start)| (fuzzy, gaps, 1, start));
         let directory_score = score(directory, &[*word]).map(|(fuzzy, gaps, start)| (fuzzy, gaps, 2, start));
         let best = match (title_score, directory_score) {
@@ -108,6 +109,13 @@ mod tests {
         assert!(tab_score(3, "server", "/work", &["3", "srv"]).is_some());
         assert!(tab_score(13, "server", "/work", &["3"]).is_none());
         assert!(tab_score(3, "server", "/work", &["03"]).is_none());
+        for word in ["+3", "٣", "３", "0003", "184467440737095516160"] {
+            assert!(tab_score(3, "server", "/work", &[word]).is_none(), "{word}");
+        }
+        assert_eq!(tab_score(usize::MAX, "", "", &[&usize::MAX.to_string()]), Some((0, 0, 0, 0)));
+        assert_eq!(tab_score(0, "", "", &["0"]), Some((0, 0, 0, 0)));
+        // Noncanonical numbers can still match literal title text.
+        assert!(tab_score(3, "server03", "", &["03"]).is_some());
         assert!(tab_score(3, "server", "/work", &["3"]) < tab_score(1, "server3", "", &["3"]));
         assert!(tab_score(1, "server3", "", &["3"]).is_some());
     }

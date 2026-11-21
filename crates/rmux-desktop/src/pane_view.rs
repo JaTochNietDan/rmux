@@ -451,7 +451,7 @@ impl PaneView {
                 .map(|path| path.to_string_lossy().to_lowercase()).unwrap_or_default();
             palette_match::tab_score(index + 1, &title, &directory, &words).map(|score| (score, index))
         }).collect();
-        matches.sort_by_key(|(score, index)| (*score, *index));
+        matches.sort_unstable_by_key(|(score, index)| (*score, *index));
         matches.into_iter().map(|(_, index)| index).collect()
     }
 
@@ -1448,11 +1448,13 @@ impl Render for PaneView {
                     .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
                     .on_mouse_down_out(cx.listener(|this, _, window, cx| { this.tab_picker = None; this.tab_picker_blur = None; this.focus(window, cx); cx.notify(); }))
                     .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                        let matches = this.matching_tabs(cx);
-                        let Some((input, selected, scroll)) = &mut this.tab_picker else { return; };
-                        if input.read(cx).is_composing() { return; }
-                        let current = matches.iter().position(|index| Some(this.terminals[*index].entity_id()) == *selected).unwrap_or(0);
                         let key = event.keystroke.key.as_str();
+                        if !matches!(key, "up" | "down" | "pageup" | "pagedown") { return; }
+                        let Some((input, _, _)) = &this.tab_picker else { return; };
+                        if input.read(cx).is_composing() { return; }
+                        let matches = this.matching_tabs(cx);
+                        let Some((_, selected, scroll)) = &mut this.tab_picker else { return; };
+                        let current = matches.iter().position(|index| Some(this.terminals[*index].entity_id()) == *selected).unwrap_or(0);
                         let destination = if matches!(key, "pageup" | "pagedown") {
                             command_palette::paged_result(current, matches.len(), key == "pageup",
                                 f32::from(scroll.viewport_bounds().size.height), |_| 52.)
