@@ -19,6 +19,6 @@ for package in sorted(metadata['packages'], key=lambda p: (p['name'], p['version
         files.add(root / package['license_file'])
     for path in sorted(files):
         if path.is_file():
-            parts.append('\n' + path.name + '\n' + path.read_text(errors='replace') + '\n')
-parts.append('\nGhostty notices\n' + Path('release/ghostty-notices.txt').read_text())
-Path(sys.argv[1]).write_text(''.join(parts))
+            parts.append('\n' + path.name + '\n' + path.read_text(encoding='utf-8', errors='replace') + '\n')
+parts.append('\nGhostty notices\n' + Path('release/ghostty-notices.txt').read_text(encoding='utf-8'))
+Path(sys.argv[1]).write_text(''.join(parts), encoding='utf-8')

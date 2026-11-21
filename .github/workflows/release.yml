@@ -1,13 +1,20 @@
 name: Release
 on:
   workflow_dispatch:
+    inputs:
+      reuse_run:
+        description: 'Optional prior run with successful macOS/Linux artifacts (packaging recovery only)'
+        required: false
+        type: string
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: release
   cancel-in-progress: false
 jobs:
   macos:
+    if: inputs.reuse_run == ''
     runs-on: macos-15
     timeout-minutes: 90
     env:
@@ -68,14 +75,7 @@ jobs:
   portable:
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-24.04
-            platform: linux
-            target: x86_64-unknown-linux-gnu
-          - os: windows-2025
-            platform: windows
-            target: x86_64-pc-windows-msvc
+      matrix: ${{ fromJSON(inputs.reuse_run != '' && '{"include":[{"os":"windows-2025","platform":"windows","target":"x86_64-pc-windows-msvc"}]}' || '{"include":[{"os":"ubuntu-24.04","platform":"linux","target":"x86_64-unknown-linux-gnu"},{"os":"windows-2025","platform":"windows","target":"x86_64-pc-windows-msvc"}]}') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     env:
@@ -135,8 +135,41 @@ jobs:
           path: target/releases/
           if-no-files-found: error
 
+  reuse:
+    if: inputs.reuse_run != ''
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - name: Verify reused executable sources are identical
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REUSE_RUN: ${{ inputs.reuse_run }}
+        run: |
+          source_sha=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$REUSE_RUN" --jq .head_sha)
+          git diff --exit-code "$source_sha" HEAD -- crates vendor Cargo.toml Cargo.lock
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: macos-release
+          run-id: ${{ inputs.reuse_run }}
+          github-token: ${{ github.token }}
+          path: reused/
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: linux-release
+          run-id: ${{ inputs.reuse_run }}
+          github-token: ${{ github.token }}
+          path: reused/
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: reused-release
+          path: reused/
+          if-no-files-found: error
+
   publish:
-    needs: [macos, portable]
+    needs: [macos, portable, reuse]
+    if: always() && needs.portable.result == 'success' && (needs.macos.result == 'success' || needs.reuse.result == 'success')
     runs-on: ubuntu-24.04
     permissions:
       contents: write
