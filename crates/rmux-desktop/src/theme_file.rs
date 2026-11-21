@@ -1,5 +1,5 @@
 //! Bounded, inert import of Ghostty-style terminal color assignments.
-use crate::preferences::{HexColor, CursorTextColor};
+use crate::preferences::{HexColor, CellColor};
 use anyhow::{Context, Result, ensure};
 use std::{io::Read, path::Path};
 
@@ -10,7 +10,8 @@ pub struct Theme {
     pub palette_entries: [Option<HexColor>; 16],
     pub selection_background: Option<HexColor>,
     pub selection_foreground: Option<HexColor>,
-    pub cursor_text: Option<CursorTextColor>,
+    pub cursor_text: Option<CellColor>,
+    pub cursor_color: Option<CellColor>,
 }
 
 pub fn read(path: &Path) -> Result<Theme> {
@@ -36,14 +37,15 @@ fn parse(text: &str) -> Result<Theme> {
     for (index, line) in text.trim_start_matches('\u{feff}').lines().enumerate() {
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') { continue; }
-        if let Some((key, value)) = line.split_once('=') && key.trim() == "cursor-text" {
-            theme.cursor_text = Some(CursorTextColor::parse_theme(value.trim()).with_context(|| format!("theme line {}", index + 1))?);
+        if let Some((key, value)) = line.split_once('=') && matches!(key.trim(), "cursor-text" | "cursor-color") {
+            let parsed = Some(CellColor::parse_theme(value.trim()).with_context(|| format!("theme line {}", index + 1))?);
+            if key.trim() == "cursor-text" { theme.cursor_text = parsed; } else { theme.cursor_color = parsed; }
             continue;
         }
         let parse_line = || -> Result<(&str, HexColor, Option<usize>)> {
             let (key, value) = line.split_once('=').context("expected key = value")?;
             let key = key.trim();
-            ensure!(matches!(key, "foreground" | "background" | "cursor-color" | "selection-background" | "selection-foreground" | "palette"), "unsupported theme setting: {key}");
+            ensure!(matches!(key, "foreground" | "background" | "selection-background" | "selection-foreground" | "palette"), "unsupported theme setting: {key}");
             if key == "palette" {
                 let (slot, color) = rmux_terminal::parse_palette_entry(value.trim())?;
                 ensure!(slot < 16, "only ANSI palette indices 0–15 are supported");
@@ -62,7 +64,7 @@ fn parse(text: &str) -> Result<Theme> {
     if palette.iter().all(Option::is_some) {
         theme.palette = Some(palette.map(Option::unwrap));
     }
-    ensure!(theme.palette_entries.iter().any(Option::is_some) || theme.selection_background.is_some() || theme.selection_foreground.is_some() || theme.cursor_text.is_some() || theme.colors.iter().any(Option::is_some), "theme contains no supported colors");
+    ensure!(theme.palette_entries.iter().any(Option::is_some) || theme.selection_background.is_some() || theme.selection_foreground.is_some() || theme.cursor_text.is_some() || theme.cursor_color.is_some() || theme.colors.iter().any(Option::is_some), "theme contains no supported colors");
     Ok(theme)
 }
 

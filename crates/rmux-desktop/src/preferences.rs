@@ -33,8 +33,8 @@ impl HexColor {
 
 #[derive(Clone, Copy, Deserialize, Serialize)]
 #[serde(try_from = "String", into = "String")]
-pub enum CursorTextColor { Literal(HexColor), CellForeground, CellBackground }
-impl TryFrom<String> for CursorTextColor {
+pub enum CellColor { Literal(HexColor), CellForeground, CellBackground }
+impl TryFrom<String> for CellColor {
     type Error = &'static str;
     fn try_from(value: String) -> std::result::Result<Self, Self::Error> {
         match value.as_str() {
@@ -44,16 +44,16 @@ impl TryFrom<String> for CursorTextColor {
         }
     }
 }
-impl From<CursorTextColor> for String {
-    fn from(value: CursorTextColor) -> Self {
+impl From<CellColor> for String {
+    fn from(value: CellColor) -> Self {
         match value {
-            CursorTextColor::Literal(color) => color.into(),
-            CursorTextColor::CellForeground => "cell-foreground".into(),
-            CursorTextColor::CellBackground => "cell-background".into(),
+            CellColor::Literal(color) => color.into(),
+            CellColor::CellForeground => "cell-foreground".into(),
+            CellColor::CellBackground => "cell-background".into(),
         }
     }
 }
-impl CursorTextColor {
+impl CellColor {
     pub fn parse_theme(value: &str) -> Result<Self> {
         match value {
             "cell-foreground" => Ok(Self::CellForeground),
@@ -203,8 +203,8 @@ pub struct Preferences {
     pub background_color: Option<HexColor>,
     pub background_opacity: u8,
     pub background_blur: bool,
-    pub cursor_color: Option<HexColor>,
-    pub cursor_text: Option<CursorTextColor>,
+    pub cursor_color: Option<CellColor>,
+    pub cursor_text: Option<CellColor>,
     pub selection_background: Option<HexColor>,
     pub selection_foreground: Option<HexColor>,
     pub ansi_palette: Option<[HexColor; 16]>,
@@ -324,9 +324,16 @@ impl Preferences {
             }
         })
     }
+    fn cursor_color_setting(&self) -> Option<CellColor> {
+        self.cursor_color.or_else(|| self.imported_theme.as_ref().and_then(|theme| theme.cursor_color))
+    }
+    pub fn cursor_fill(&self, foreground: rmux_terminal::Color, background: rmux_terminal::Color, engine_color: rmux_terminal::Color, engine_explicit: bool) -> rmux_terminal::Color {
+        if engine_explicit { return engine_color; }
+        self.cursor_color_setting().map(|setting| setting.resolve(foreground, background)).unwrap_or(engine_color)
+    }
     pub fn cursor_text(&self, foreground: rmux_terminal::Color, background: rmux_terminal::Color) -> rmux_terminal::Color {
         self.cursor_text.or_else(|| self.imported_theme.as_ref().and_then(|theme| theme.cursor_text))
-            .unwrap_or(CursorTextColor::CellBackground).resolve(foreground, background)
+            .unwrap_or(CellColor::CellBackground).resolve(foreground, background)
     }
     pub fn selection_foreground(&self) -> Option<rmux_terminal::Color> {
         self.selection_foreground.or_else(|| self.imported_theme.as_ref().and_then(|theme| theme.selection_foreground)).map(HexColor::rgb)
@@ -345,8 +352,14 @@ impl Preferences {
             TerminalTheme::SolarizedDark => [Some(HexColor(0x839496)), Some(HexColor(0x002b36)), Some(HexColor(0x839496))],
             TerminalTheme::SolarizedLight => [Some(HexColor(0x657b83)), Some(HexColor(0xfdf6e3)), Some(HexColor(0x657b83))],
         };
-        let overrides = [self.foreground_color, self.background_color, self.cursor_color];
-        std::array::from_fn(|index| overrides[index].or_else(|| self.imported_theme.as_ref().and_then(|theme| theme.colors[index])).or(defaults[index]).map(HexColor::rgb))
+        let overrides = [self.foreground_color, self.background_color, None];
+        let mut colors = std::array::from_fn(|index| overrides[index].or_else(|| self.imported_theme.as_ref().and_then(|theme| theme.colors[index])).or(defaults[index]).map(HexColor::rgb));
+        if let Some(setting) = self.cursor_color_setting() {
+            // Dynamic colors resolve in the renderer; leave the engine default
+            // unset so its explicit-color flag identifies application OSC colors.
+            colors[2] = match setting { CellColor::Literal(color) => Some(color.rgb()), _ => None };
+        }
+        colors
     }
     /// Called only by the explicit Open Settings File UI action.
     pub fn prepare_file(&self) -> Result<std::path::PathBuf> {
@@ -575,6 +588,25 @@ mod tests {
             assert_eq!(second.terminal_palette().unwrap()[2], rmux_terminal::Color(4,5,6));
             std::fs::write(&path, "palette=1=010203\n")?;
         }
+        Ok(())
+    }
+
+    #[test]
+    fn dynamic_cursor_fill_preserves_application_color_priority() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        let path = directory.path().join("theme");
+        std::fs::write(&path, "cursor-color=cell-background\n")?;
+        let imported = Preferences::default().import_theme(path.clone())?;
+        let fg = rmux_terminal::Color(1,2,3);
+        let bg = rmux_terminal::Color(4,5,6);
+        let app = rmux_terminal::Color(7,8,9);
+        assert_eq!(imported.terminal_colors()[2], None);
+        assert_eq!(imported.cursor_fill(fg, bg, app, false), bg);
+        assert_eq!(imported.cursor_fill(fg, bg, app, true), app);
+        let explicit = Preferences::decode(br#"{"cursor_color":"cell-foreground","terminal_theme":"nord"}"#)?.import_theme(path)?;
+        assert_eq!(explicit.terminal_colors()[2], None);
+        assert_eq!(explicit.cursor_fill(fg, bg, app, false), fg);
+        assert_eq!(serde_json::to_value(&explicit)?["cursor_color"], "cell-foreground");
         Ok(())
     }
 

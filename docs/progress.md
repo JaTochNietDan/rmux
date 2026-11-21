@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Cursor fill now supports dynamic cell-foreground/cell-background references in
+JSON and imported themes. Dynamic settings clear the engine's configured cursor
+default; snapshots expose whether an explicit engine color is present so
+application OSC cursor overrides retain priority until reset. Rendering and
+Settings preview resolve references against their current cell colors. Five
+focused tests passed for source flags/OSC reset, dynamic fill/text precedence,
+literal color round-trips and import/reload/save behavior. Native cursor visuals
+and dynamic selection-color references remain pending.
+
 Block-cursor text now supports `cell-foreground` and `cell-background` in imported
 themes and JSON settings. References resolve against the current engine cell,
 including application color changes, and the single-glyph cache still keys the

@@ -2376,10 +2376,11 @@ impl Element for TerminalElement {
                         origin,
                     });
                 }
+                let cursor_fill = cell.map(|cell| cx.global::<Preferences>().cursor_fill(cell.foreground, cell.background, frame.cursor_color, frame.cursor_color_explicit)).unwrap_or(frame.cursor_color);
                 let paint = |offset, dimensions| {
                     fill(
                         Bounds::new(origin + offset, dimensions),
-                        color(frame.cursor_color),
+                        color(cursor_fill),
                     )
                 };
                 match shape {

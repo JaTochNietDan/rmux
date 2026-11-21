@@ -858,8 +858,12 @@ configuration importer. No files are watched or downloaded.
 same two dynamic references alongside literal theme colors. References resolve
 against the actual cursor cell each frame, following application color changes.
 Without either setting, the glyph uses its cell background color. Bar, underline
-and hollow cursor shapes are unaffected. Dynamic references for the cursor fill
-or selection colors are not yet supported.
+and hollow cursor shapes are unaffected by cursor-text settings.
+
+Cursor fill also accepts `cell-foreground`/`cell-background` via `cursor_color`
+in JSON or `cursor-color` in themes. Application OSC cursor colors take precedence;
+resetting them restores the configured dynamic reference. Dynamic selection-color
+references are not yet supported.
 
 `selection_background` in rmux JSON also accepts `"#RRGGBB"` and overrides the
 imported selection background. Configured selection backgrounds are opaque; with

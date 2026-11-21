@@ -266,6 +266,8 @@ pub struct Frame {
     pub cursor: Option<(u16, u16)>,
     pub cursor_shape: CursorShape,
     pub cursor_color: Color,
+    /// True when the engine has a configured or application-provided cursor color.
+    pub cursor_color_explicit: bool,
     pub scrollback_lines: u64,
     pub scrollback_offset: u64,
 }
@@ -544,6 +546,7 @@ impl Terminal {
                 cursor: None,
                 cursor_shape: CursorShape::Block,
                 cursor_color: DEFAULT_CURSOR,
+                cursor_color_explicit: false,
                 scrollback_lines: 0,
                 scrollback_offset: 0,
             },
@@ -944,6 +947,7 @@ impl Terminal {
                 out(&mut colors),
             ))?;
             self.frame.background = colors.background.into();
+            self.frame.cursor_color_explicit = colors.cursor_has_value;
             self.frame.cursor_color = if colors.cursor_has_value {
                 colors.cursor.into()
             } else {
@@ -1858,6 +1862,23 @@ mod tests {
             assert!(parse_palette_entry(value).is_err(), "{value:?}");
         }
         assert!(parse_palette_entry(&"x".repeat(273)).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn cursor_color_source_tracks_application_override_and_reset() -> Result<()> {
+        let mut terminal = Terminal::new(4, 2)?;
+        assert!(!terminal.frame()?.cursor_color_explicit);
+        terminal.write(b"\x1b]12;#112233\x07");
+        let frame = terminal.frame()?;
+        assert!(frame.cursor_color_explicit);
+        assert_eq!(frame.cursor_color, Color(17,34,51));
+        terminal.write(b"\x1b]112\x07");
+        assert!(!terminal.frame()?.cursor_color_explicit);
+        terminal.set_default_colors([None, None, Some(Color(4,5,6))])?;
+        assert!(terminal.frame()?.cursor_color_explicit);
+        terminal.set_default_colors([None; 3])?;
+        assert!(!terminal.frame()?.cursor_color_explicit);
         Ok(())
     }
 
