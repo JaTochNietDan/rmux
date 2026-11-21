@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Finished SSH terminals now label the inherited launch action Reconnect SSH and
+offer a separate Local shell action. Both open a new tab and retain the finished
+terminal's output; local terminals keep New shell. Existing focus routing and
+async sibling-launch paths are reused. Desktop compilation passes; native SSH
+interaction acceptance remains pending. The preceding turn prepared organization
+avatar/social-preview images; the user chose to upload those personally.
+
 Organized the tab context menu into creation, details, movement and close sections
 with thin separators. Separators remain part of action rows, preserving keyboard
 selection and scroll indices. New Tab is labeled New SSH Tab for a targeted remote

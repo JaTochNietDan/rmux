@@ -1865,6 +1865,7 @@ impl Focusable for TerminalView {
 }
 impl Render for TerminalView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let ended_ssh = self.session.remote_destination().is_some();
         let entity = cx.weak_entity();
         self.rendered_paste_pending = self.session.paste_pending();
         div().id("terminal-interaction")
@@ -2048,14 +2049,30 @@ impl Render for TerminalView {
                         .child(status))
                     .child(div().id("new-shell-after-exit").px_2().py_1().rounded_sm().bg(rgb(0x383838))
                         .cursor_pointer().hover(|style| style.bg(rgb(0x484848)))
-                        .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("Open a fresh shell in a new tab, keeping this terminal's output".into())).into())
+                        .tooltip(move |_, cx| cx.new(|_| pane_view::ControlHint(if ended_ssh {
+                            "Reconnect to the same SSH destination in a new tab, keeping this terminal's output"
+                        } else {
+                            "Open a fresh shell in a new tab, keeping this terminal's output"
+                        }.into())).into())
                         .on_click(cx.listener(|this, event: &ClickEvent, window, cx| {
                             if event.standard_click() {
                                 this.focus.focus(window);
                                 window.dispatch_action(Box::new(NewTab), cx);
                             }
                             cx.stop_propagation();
-                        })).child("New shell"))
+                        })).child(if ended_ssh { "Reconnect SSH" } else { "New shell" }))
+                    .when(ended_ssh, |row| row.child(
+                        div().id("local-shell-after-ssh-exit").px_2().py_1().rounded_sm()
+                            .cursor_pointer().hover(|style| style.bg(rgb(0x383838)))
+                            .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("Open a local shell in a new tab without reconnecting SSH".into())).into())
+                            .on_click(cx.listener(|this, event: &ClickEvent, window, cx| {
+                                if event.standard_click() {
+                                    this.focus.focus(window);
+                                    window.dispatch_action(Box::new(NewLocalTab), cx);
+                                }
+                                cx.stop_propagation();
+                            })).child("Local shell")
+                    ))
                     .child(pane_view::pane_control("close-exited-terminal", "Close finished terminal")
                         .on_click(cx.listener(|this, event: &ClickEvent, window, cx| {
                             if event.standard_click() {

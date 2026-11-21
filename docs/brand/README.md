@@ -20,3 +20,8 @@ the SVG in its separate repository.
 Windows embeds `rmux.ico` as resource 1, the icon GPUI loads for its windows.
 Linux packages include the SVG and a matching `rmux.desktop` launcher; native
 windows use `rmux` as their application ID for desktop grouping.
+
+`github-avatar.png` is the 1024px mark for the organization avatar.
+`github-social.png` is the 1280×640 repository link preview, generated with
+`mise exec -- swift scripts/make-github-social.swift`. GitHub settings uploads
+are handled by the user; these files alone do not change those settings.
