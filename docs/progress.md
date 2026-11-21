@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Organized the tab context menu into creation, details, movement and close sections
+with thin separators. Separators remain part of action rows, preserving keyboard
+selection and scroll indices. New Tab is labeled New SSH Tab for a targeted remote
+session, matching the existing inheritance behavior. Focused compilation passes;
+the installed release predates these changes, so visual acceptance remains pending.
+The preceding turn added bounded CPU sampling rather than changing idle scheduling
+without evidence of an unconditional repaint loop.
+
 Inspected terminal redraw scheduling: output waits on channel notifications,
 animation-frame retries occur on parser contention, and compression scheduling
 stops when complete. No unconditional terminal idle repaint loop was found in
