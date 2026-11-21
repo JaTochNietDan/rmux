@@ -1,5 +1,11 @@
 # rmux performance acceptance plan
 
+Snapshot glyph extraction uses a 64-byte stack buffer for the common case instead
+of a scratch heap allocation per dirty frame. Larger graphemes use a per-frame
+reusable overflow allocation; it is not retained by hidden terminals. Focused
+Unicode/snapshot ownership coverage passes. This is an allocation-path change,
+not a measured throughput, latency or process-memory improvement.
+
 Native RPC split baseline (`4642803` plus harness, macOS arm64 debug, locked desktop):
 three fresh app instances per target size, with idle fixture shells and breadth-first
 alternating splits. Across the 7 creation requests per 8-pane run, median/max were

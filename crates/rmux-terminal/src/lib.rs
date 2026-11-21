@@ -937,11 +937,9 @@ impl Terminal {
                 out(&mut self.iterator),
             ))?;
             let mut y = 0;
-            let mut glyph_bytes = Vec::new();
+            let mut inline_glyph = [0u8; 64];
+            let mut overflow_glyph = Vec::new();
             while ghostty_render_state_row_iterator_next_dirty(self.iterator, &mut y) {
-                if glyph_bytes.is_empty() {
-                    glyph_bytes.resize(64, 0u8);
-                }
                 let mut selection = GhosttyRenderStateRowSelection {
                     size: size_of::<GhosttyRenderStateRowSelection>(),
                     ..Default::default()
@@ -990,9 +988,10 @@ impl Terminal {
                         GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_STYLE,
                         out(&mut style),
                     ))?;
+                    let scratch = if overflow_glyph.is_empty() { &mut inline_glyph[..] } else { &mut overflow_glyph[..] };
                     let mut buf = GhosttyBuffer {
-                        ptr: glyph_bytes.as_mut_ptr(),
-                        cap: glyph_bytes.len(),
+                        ptr: scratch.as_mut_ptr(),
+                        cap: scratch.len(),
                         len: 0,
                     };
                     let result = ghostty_render_state_row_cells_get(
@@ -1001,9 +1000,9 @@ impl Terminal {
                         out(&mut buf),
                     );
                     if result == GHOSTTY_OUT_OF_SPACE {
-                        glyph_bytes.resize(buf.len, 0);
-                        buf.ptr = glyph_bytes.as_mut_ptr();
-                        buf.cap = glyph_bytes.len();
+                        overflow_glyph.resize(buf.len, 0);
+                        buf.ptr = overflow_glyph.as_mut_ptr();
+                        buf.cap = overflow_glyph.len();
                         check(ghostty_render_state_row_cells_get(
                             self.cells,
                             GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_GRAPHEMES_UTF8,
@@ -1026,6 +1025,7 @@ impl Terminal {
                         fg = bg;
                         underline_color = bg;
                     }
+                    let glyph_bytes = if overflow_glyph.is_empty() { &inline_glyph[..] } else { &overflow_glyph[..] };
                     row.push(Cell {
                         text: smol_str::SmolStr::new(String::from_utf8_lossy(&glyph_bytes[..buf.len])),
                         column: x,
@@ -1687,6 +1687,21 @@ mod tests {
         }
         Ok(())
     }
+    #[test]
+    fn snapshot_handles_inline_and_overflow_graphemes_across_frames() -> Result<()> {
+        let mut terminal = Terminal::new(20, 3)?;
+        let long = format!("a{}", "\u{301}".repeat(40));
+        terminal.write(format!("x{long}z").as_bytes());
+        let frame = terminal.frame()?;
+        assert_eq!(frame.rows[0][0].text.as_str(), "x");
+        assert_eq!(frame.rows[0][1].text.as_str(), long);
+        assert_eq!(frame.rows[0][2].text.as_str(), "z");
+        terminal.write(b"\rshort\x1b[K");
+        assert!(terminal.frame()?.text().starts_with("short"));
+        assert_eq!(frame.rows[0][1].text.as_str(), long);
+        Ok(())
+    }
+
     #[test]
     fn completed_snapshot_consumes_row_dirtiness() -> Result<()> {
         let mut terminal = Terminal::new(40, 4)?;

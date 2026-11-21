@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Terminal snapshot extraction now uses a 64-byte stack scratch buffer for ordinary
+glyph text instead of allocating a Vec for every dirty frame. Oversized graphemes
+allocate an overflow buffer, reused for the remaining cells in that frame and freed
+after extraction; no per-terminal scratch retention is added. A focused engine
+test passed mixed ASCII / 81-byte combining graphemes, subsequent shorter output
+and preservation of the earlier owned snapshot. Existing hidden-tab shaped-row
+release remains unchanged; coherent frame/history data is retained. This removes
+one common scratch allocation, with no measured latency/RSS improvement claimed.
+
 Pending interactive workspace startup now supports cancellation through its notice,
 File menu, palette and custom `cancel_new_workspace` action. A cancellation owner
 also signals when the window drops. The shared launch helper checks before spawn
