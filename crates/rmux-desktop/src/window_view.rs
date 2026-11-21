@@ -580,27 +580,31 @@ impl WorkspaceWindow {
     pub(super) fn automation_create_workspace(&mut self, create: &automation::WorkspaceCreate, window: &mut Window, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
         self.automation_publish_workspace(create, None, window, cx)
     }
-    pub(super) fn automation_prepare_ssh(&mut self, create: &automation::WorkspaceCreate, cx: &mut Context<Self>) -> Result<Box<dyn FnOnce() -> Result<Session> + Send>, automation::Failure> {
+    pub(super) fn automation_prepare_ssh(&mut self, create: &automation::WorkspaceCreate, cx: &mut Context<Self>) -> Result<Box<dyn FnOnce() -> Result<PreparedTerminal> + Send>, automation::Failure> {
         self.automation_available(cx)?;
         if self.command_launching || self.entries.len() >= 64 { return Err(automation::Failure { code: -32005, message: "Command startup busy or workspace limit reached" }); }
         let destination = create.ssh_destination.clone().ok_or(automation::Failure { code: -32602, message: "SSH destination required" })?;
         let command = ssh::command(&destination).map_err(|message| automation::Failure { code: -32602, message })?;
         let directory = create.cwd.clone();
         let scrollback = cx.global::<Preferences>().scrollback_bytes();
+        let colors = cx.global::<Preferences>().terminal_colors();
+        let palette = cx.global::<Preferences>().terminal_palette();
         self.command_launching = true;
         Ok(Box::new(move || {
             let argv: Vec<_> = command.argv.into_iter().map(std::ffi::OsString::from).collect();
             let mut session = Session::command_in_with_scrollback(&argv, 80, 24, directory.as_deref(), scrollback)?;
             session.set_remote_destination(&destination)?;
-            Ok(session)
+            TerminalView::prepare(session, colors, palette)
         }))
     }
-    pub(super) fn automation_finish_ssh(&mut self, create: &automation::WorkspaceCreate, session: Result<Session>, window: &mut Window, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
+    pub(super) fn automation_finish_ssh(&mut self, create: &automation::WorkspaceCreate, prepared: Result<PreparedTerminal>, window: &mut Window, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
         self.command_launching = false;
-        let session = session.map_err(|_| automation::Failure { code: -32005, message: "Could not start SSH; check the SSH executable and launch directory" })?;
-        self.automation_publish_workspace(create, Some((session, create.ssh_destination.as_ref().map(|destination| format!("SSH · {destination}")))), window, cx)
+        let prepared = prepared.map_err(|_| automation::Failure { code: -32005, message: "Could not start SSH; check the SSH executable and launch directory" })?;
+        let settings = cx.global::<Preferences>();
+        let seed = TerminalSeed::Ready(prepared, CellMetrics::new(settings.font_size), settings.font_family.clone().into());
+        self.automation_publish_workspace(create, Some((seed, create.ssh_destination.as_ref().map(|destination| format!("SSH · {destination}")))), window, cx)
     }
-    fn automation_publish_workspace(&mut self, create: &automation::WorkspaceCreate, prepared: Option<(Session, Option<String>)>, window: &mut Window, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
+    fn automation_publish_workspace(&mut self, create: &automation::WorkspaceCreate, prepared: Option<(TerminalSeed, Option<String>)>, window: &mut Window, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
         self.automation_available(cx)?;
         if self.entries.len() >= 64 { return Err(automation::Failure { code: -32005, message: "Window workspace limit reached" }); }
         let next_number = self.next_number;
@@ -1254,24 +1258,39 @@ impl WorkspaceWindow {
                 .and_then(|pane| pane.read(cx).cached_directory(cx))
         }));
         let scrollback = cx.global::<Preferences>().scrollback_bytes();
+        let colors = cx.global::<Preferences>().terminal_colors();
+        let palette = cx.global::<Preferences>().terminal_palette();
         let executor = cx.background_executor().clone();
         self.command_launching = true;
         self.notice = Some(format!("Starting {}…", command.name));
         cx.notify();
         cx.spawn_in(window, async move |entity, cx| {
             let name = command.name;
-            let result = executor.spawn(async move {
+            let mut result = executor.spawn(async move {
                 let argv: Vec<_> = command.argv.into_iter().map(std::ffi::OsString::from).collect();
                 let environment: Vec<_> = command.env.into_iter().map(|(name, value)| (name.into(), value.into())).collect();
                 let mut session = Session::command_in_with_environment(&argv, 80, 24, directory.as_deref(), scrollback, &environment)?;
                 if let Some(destination) = remote { session.set_remote_destination(&destination)?; }
-                Ok::<_, anyhow::Error>(session)
+                TerminalView::prepare(session, colors, palette)
             }).await;
+            loop {
+                let refresh = cx.update(|_, cx| {
+                    let prepared = result.as_ref().ok()?;
+                    let settings = cx.global::<Preferences>();
+                    let current = (settings.terminal_colors(), settings.terminal_palette());
+                    ((prepared.colors, prepared.palette) != current).then_some(current)
+                }).ok().flatten();
+                let Some((colors, palette)) = refresh else { break; };
+                let session = result.expect("successful preparation checked above").session;
+                result = executor.spawn(async move { TerminalView::prepare(session, colors, palette) }).await;
+            }
             let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
                 this.command_launching = false;
                 match result {
-                    Ok(session) if this.automation_available(cx).is_ok() && this.entries.len() < 64 => {
-                        let Some(index) = this.add_configured(1, false, None, None, false, Some((session, Some(name.clone()))), window, cx) else { return; };
+                    Ok(prepared) if this.automation_available(cx).is_ok() && this.entries.len() < 64 => {
+                        let settings = cx.global::<Preferences>();
+                        let seed = TerminalSeed::Ready(prepared, CellMetrics::new(settings.font_size), settings.font_family.clone().into());
+                        let Some(index) = this.add_configured(1, false, None, None, false, Some((seed, Some(name.clone()))), window, cx) else { return; };
                         this.entries[index].name = name;
                         this.select(index, window, cx);
                         this.notice = None;
@@ -3510,7 +3529,7 @@ impl WorkspaceWindow {
         self.add_configured(panes, inherit_group, placement, directory_override, true, None, window, cx);
     }
 
-    fn add_configured(&mut self, panes: usize, inherit_group: bool, placement: Option<workspace_groups::Placement>, directory_override: Option<std::path::PathBuf>, focus: bool, mut prepared: Option<(Session, Option<String>)>, window: &mut Window, cx: &mut Context<Self>) -> Option<usize> {
+    fn add_configured(&mut self, panes: usize, inherit_group: bool, placement: Option<workspace_groups::Placement>, directory_override: Option<std::path::PathBuf>, focus: bool, mut prepared: Option<(TerminalSeed, Option<String>)>, window: &mut Window, cx: &mut Context<Self>) -> Option<usize> {
         if cx.global::<Shutdowns>().quitting {
             return None;
         }
@@ -3544,7 +3563,7 @@ impl WorkspaceWindow {
                 benchmark: self.benchmark,
             };
             for _ in 0..panes {
-                workspace.add_prepared(SplitAxis::Columns, directory.clone(), focus, prepared.take(), window, cx);
+                workspace.add_seed_at(None, SplitAxis::Columns, false, directory.clone(), focus, prepared.take(), window, cx);
             }
             workspace
         });

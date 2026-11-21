@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+SSH RPC workspace creation now prepares its first frame/colors in the worker and
+passes a Ready terminal through workspace insertion. Interactive Connect via SSH
+and custom-command launches use the same ready insertion boundary, with background
+re-preparation if colors change during startup and current default fonts on attach.
+The native SSH/local-split fixture passed workspace creation, metadata, process
+preservation, rollback, teardown and recovery after the RPC change; final desktop
+compilation also covers the interactive command change. Ordinary workspace creation
+and initial app launch remain separate paths. Native menu/theme/focus and startup
+latency acceptance remain pending; no broad nonblocking-startup claim is made.
+
 Added `mise run bench-rpc-splits` and recorded a native debug baseline at 1/8/32
 panes, three fresh isolated app instances each. Pooled split request medians were
 5.620 ms for runs growing to eight panes and 5.292 ms for runs growing to 32; app
