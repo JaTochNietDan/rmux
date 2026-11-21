@@ -650,7 +650,10 @@ impl CommandPalette {
                     this.scroll.reset(this.search.matches.len());
                     cx.notify();
                 }
-                text_field::EditEvent::Submitted { .. } => this.run(cx),
+                text_field::EditEvent::Submitted { reverse, .. } => {
+                    if *reverse && this.selected_ssh_destination().is_some() { this.edit_selected_ssh(cx); }
+                    else { this.run(cx); }
+                },
                 text_field::EditEvent::Cancelled => cx.emit(PaletteEvent::Close),
             },
         )
@@ -735,6 +738,29 @@ impl CommandPalette {
         let Some(excerpt) = self.selected_search_excerpt() else { return; };
         clipboard::write(ClipboardItem::new_string(excerpt.to_owned()), cx);
         self.feedback = Some("Copied displayed excerpt");
+        cx.notify();
+    }
+    fn selected_ssh_destination(&self) -> Option<&str> {
+        if self.ssh_input { return None; }
+        let command = self.commands.get(*self.search.matches.get(self.selected)?)?;
+        match &command.target {
+            PaletteEvent::Run(action) => action.as_any().downcast_ref::<ConnectSsh>().map(|action| action.destination.as_str()),
+            _ => None,
+        }
+    }
+    fn edit_selected_ssh(&mut self, cx: &mut Context<Self>) {
+        if self.input.read(cx).is_composing() { return; }
+        let Some(destination) = self.selected_ssh_destination().map(str::to_owned) else { return; };
+        self.ssh_input = true;
+        self.heading = "Connect via SSH";
+        self.empty_message = ssh::INPUT_HINT;
+        self.location = None;
+        self.feedback = None;
+        self.commands.clear();
+        self.search.matches.clear();
+        self.selected = 0;
+        self.scroll.reset(0);
+        self.input.update(cx, |input, cx| { input.replace_draft(&destination, cx); input.select_all_text(cx); });
         cx.notify();
     }
     fn run(&mut self, cx: &mut Context<Self>) {
@@ -847,6 +873,7 @@ impl Render for CommandPalette {
         let height = f32::from(window.viewport_size().height);
         let compact = height < 300.;
         let has_search_excerpt = self.selected_search_excerpt().is_some();
+        let has_ssh_destination = self.selected_ssh_destination().is_some();
         let copy_hint = shortcuts::hint(&CopySearchExcerpt, &self.input.read(cx).focus, window);
         div()
             .id("command-palette")
@@ -928,7 +955,7 @@ impl Render for CommandPalette {
                             if event.standard_click() { this.run(cx); }
                         })).child(if self.ssh_input { "Connect" } else if self.terminal_search_input { "Search" } else if self.directory_input { "Open" } else { "Save" }))
             ))
-            .when((!compact || self.feedback.is_some() || has_search_excerpt) && self.buffer_rename.is_none() && !self.directory_input && !self.terminal_search_input && !self.ssh_input, |palette| palette.child(
+            .when((!compact || self.feedback.is_some() || has_search_excerpt || has_ssh_destination) && self.buffer_rename.is_none() && !self.directory_input && !self.terminal_search_input && !self.ssh_input, |palette| palette.child(
                 div()
                     .flex_shrink_0()
                     .px_3()
@@ -937,6 +964,16 @@ impl Render for CommandPalette {
                     .text_xs()
                     .text_color(rgb(0xa0a0a0))
                     .child(div().flex_1().min_w_0().child(self.feedback.unwrap_or("↑↓ select · PgUp/PgDn jump · Enter run · Esc close")))
+                    .when(has_ssh_destination, |footer| footer.child(
+                        div().id("edit-ssh-destination").px_2().py_1().rounded_sm()
+                            .cursor_pointer().text_color(rgb(0xffffff)).bg(rgb(0x353535))
+                            .hover(|style| style.bg(rgb(0x454545)))
+                            .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
+                                if !event.standard_click() { return; }
+                                this.edit_selected_ssh(cx);
+                                cx.stop_propagation();
+                            })).child("Edit destination · Shift+Enter")
+                    ))
                     .when(has_search_excerpt, |footer| footer.child(
                         div().id("copy-search-excerpt").px_2().py_1().rounded_sm()
                             .cursor_pointer().text_color(rgb(0xffffff)).bg(rgb(0x353535))

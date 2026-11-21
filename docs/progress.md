@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+SSH host picker rows now offer Edit destination and Shift+Enter, opening the
+existing validated destination editor with the selected alias/session/saved target
+prefilled and selected. Plain Enter retains direct connection. The transition
+clears list state and respects IME composition; it neither changes config/history
+nor starts a client until submission. The button remains available in compact
+palettes. Desktop compilation passed. A fresh desktop availability check still
+reports the Mac locked; keyboard/focus/visual acceptance and screenshots remain
+pending, while implementation work can continue.
+
 Added `mise run bench-snapshot-allocations` with a scoped Rust global allocator
 counter around snapshot extraction only. At 1/8/32 engines and 200 iterations per
 scenario, identical ASCII rewrites recorded zero Rust allocation calls; late ASCII

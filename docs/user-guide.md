@@ -18,7 +18,10 @@ window, ahead of config aliases. Saved targets are labelled **Not connected**;
 session targets describe the launched destination, not verified authentication.
 Exact duplicates are merged while username case is preserved. These targets remain
 available if the config cannot be read; no separate connection-history file is kept.
-Enter always opens a new SSH workspace;
+Enter opens a new SSH workspace directly. **Shift+Enter** or **Edit destination**
+opens the selected target in the destination editor with its text selected, so you
+can change the user/host/port before connecting. Editing does not alter your SSH
+config or saved target. Escape closes the picker/editor without connecting;
 Refresh rereads the configuration, and Enter SSH destination opens the direct editor.
 Discovery follows Include paths (absolute, relative to `~/.ssh`, and `~/`) and
 filename wildcards in lexical order. Nested includes and symlink cycles are handled.
