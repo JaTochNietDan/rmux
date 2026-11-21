@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+v0.1.2 is published under rmuxapp/rmux after all native GitHub build and publish
+jobs succeeded. Direct artifact inspection confirmed the macOS icon/plist, Windows
+PE icon resource group 1 at four sizes, and Linux SVG/desktop entry and executable
+permissions. Sparkle feed was updated by CI; website download links now target
+v0.1.2. See releases/v0.1.2-verification.md for evidence and runtime limits.
+The preceding turn added the post-release pane-zoom toolbar control.
+
 Added a pane-toolbar zoom control using an embedded expand SVG, existing 28px
 control hit area, and shortcut-aware tooltip. Clicking focuses that pane before
 dispatching the existing zoom action; nonstandard clicks are ignored. The existing
