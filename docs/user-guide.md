@@ -216,7 +216,9 @@ directory. It follows normal workspace placement and group membership, while
 the browsed path takes precedence over the group's default directory.
 Directory reads run in the background and retain at most 2,048 entries per
 snapshot, sorted directories-first within that subset. A limit notice identifies
-partial listings. Switching focus during loading prevents the result from taking
+partial listings. Entries that disappear or cannot be read are omitted with an explicit
+unavailable count in the path summary; Refresh retries. These entries still
+consume the scan limit. Switching focus during loading prevents the result from taking
 focus. Text previews read up to 64 KiB of source text and retain up to 512 lines, with explicit truncation
 labels. A final line cut by the byte limit is labeled partial; copying it includes
 only the captured text. Search numbered lines, press Enter to copy a preview line without closing

@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Directory browsing now keeps readable entries when individual entries disappear
+or fail metadata reads. The location summary reports the omitted count and offers
+Refresh as recovery. Failed entries consume the existing 2,048-entry scan budget,
+so repeated filesystem errors cannot extend enumeration indefinitely. Opening an
+inaccessible directory still returns the existing error view. Eight file-loader
+tests passed, including mixed success/failure and an infinite-error iterator.
+
 File previews now accept BOM-marked UTF-16 LE/BE and strip UTF-8 BOMs. Decoding
 runs in the existing background loader under its 64 KiB source-read/512-line
 bounds; UTF-16 may expand to at most 96 KiB of UTF-8 before line clipping.

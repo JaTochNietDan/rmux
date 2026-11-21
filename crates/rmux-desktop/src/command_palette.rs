@@ -433,7 +433,9 @@ impl CommandPalette {
         Self::with_commands(commands, match mode { BufferMode::Paste => "Paste named buffer", BufferMode::Delete => "Delete named buffer", BufferMode::Rename => "Rename named buffer", BufferMode::Copy => "Copy buffer to clipboard" }, "No matching buffers · Save a selection in Copy Mode first", window, cx)
     }
     pub fn files(listing: file_browser::Listing, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let location: SharedString = listing.path.display().to_string().into();
+        let location: SharedString = if listing.unavailable > 0 {
+            format!("{} · {} unavailable entries · Refresh to retry", listing.path.display(), listing.unavailable).into()
+        } else { listing.path.display().to_string().into() };
         let mut commands = Vec::new();
         commands.push(Command { title: "Open Folder…".into(), subtitle: Some("Choose a local folder".into()), shortcut: None,
             target: PaletteEvent::Run(Box::new(OpenFolderBrowser)) });

@@ -66,7 +66,7 @@ pub fn entered_directory(text: &str) -> Result<PathBuf, &'static str> {
     Ok(path)
 }
 pub struct Entry { pub path: PathBuf, pub directory: bool, pub symlink: bool }
-pub struct Listing { pub path: PathBuf, pub entries: Vec<Entry>, pub truncated: bool }
+pub struct Listing { pub path: PathBuf, pub entries: Vec<Entry>, pub truncated: bool, pub unavailable: usize }
 pub struct Preview { pub path: PathBuf, pub lines: Vec<String>, pub contents: String, pub truncated: bool, pub partial_line: Option<usize> }
 fn decode_preview(bytes: &[u8], truncated: bool) -> anyhow::Result<std::borrow::Cow<'_, str>> {
     use std::borrow::Cow;
@@ -140,22 +140,53 @@ fn list(path: PathBuf) -> anyhow::Result<Listing> { list_cancellable(path, &Atom
 pub fn list_cancellable(path: PathBuf, canceled: &AtomicBool) -> anyhow::Result<Listing> {
     check_cancel(canceled)?;
     anyhow::ensure!(path.is_absolute(), "File browser requires an absolute directory");
+    let source = std::fs::read_dir(&path)?.map(|entry| {
+        let entry = entry?;
+        let kind = entry.file_type()?;
+        Ok(Entry { path: entry.path(), directory: kind.is_dir(), symlink: kind.is_symlink() })
+    });
+    collect_listing(path, source, canceled)
+}
+fn collect_listing(path: PathBuf, source: impl Iterator<Item = std::io::Result<Entry>>, canceled: &AtomicBool) -> anyhow::Result<Listing> {
     let mut entries = Vec::new();
     let mut truncated = false;
-    for entry in std::fs::read_dir(&path)? {
+    let mut unavailable = 0;
+    for (index, entry) in source.enumerate() {
         check_cancel(canceled)?;
-        let entry = entry?;
-        if entries.len() == MAX_ENTRIES { truncated = true; break; }
-        let kind = entry.file_type()?;
-        entries.push(Entry { path: entry.path(), directory: kind.is_dir(), symlink: kind.is_symlink() });
+        // Failed entries consume the same budget as successful ones, so a
+        // changing directory or failing iterator cannot cause unbounded work.
+        if index == MAX_ENTRIES { truncated = true; break; }
+        match entry { Ok(entry) => entries.push(entry), Err(_) => unavailable += 1 }
     }
     check_cancel(canceled)?;
     entries.sort_by_cached_key(|entry| (!entry.directory, entry.path.file_name().unwrap_or_default().to_string_lossy().to_lowercase(), entry.path.clone()));
-    Ok(Listing { path, entries, truncated })
+    Ok(Listing { path, entries, truncated, unavailable })
 }
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn directory_entry_failures_preserve_results_and_consume_scan_budget() -> anyhow::Result<()> {
+        use std::io::{Error, ErrorKind};
+        let root = tempfile::tempdir()?;
+        let source = [
+            Err(Error::from(ErrorKind::NotFound)),
+            Ok(super::Entry { path: root.path().join("available"), directory: false, symlink: false }),
+            Err(Error::from(ErrorKind::PermissionDenied)),
+        ];
+        let listing = super::collect_listing(root.path().to_owned(), source.into_iter(), &super::AtomicBool::new(false))?;
+        assert_eq!(listing.entries.len(), 1);
+        assert_eq!(listing.unavailable, 2);
+        assert!(!listing.truncated);
+        let mut reads = 0;
+        let source = std::iter::from_fn(|| { reads += 1; Some(Err(Error::from(ErrorKind::NotFound))) });
+        let listing = super::collect_listing(root.path().to_owned(), source, &super::AtomicBool::new(false))?;
+        assert!(listing.truncated);
+        assert!(listing.entries.is_empty());
+        assert_eq!(listing.unavailable, super::MAX_ENTRIES);
+        assert_eq!(reads, super::MAX_ENTRIES + 1);
+        Ok(())
+    }
     #[test]
     fn bom_previews_decode_unicode_and_preserve_copy_separators() -> anyhow::Result<()> {
         let file = tempfile::NamedTempFile::new()?;
