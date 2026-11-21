@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Restored SSH tabs now show a compact Not connected banner with a Connect SSH
+action. It opens the saved destination in a new workspace through the existing
+guarded asynchronous launch path and preserves the restored local shell. Long
+destinations truncate with a full tooltip; non-primary clicks do not launch.
+Focused desktop compilation passes; native interaction acceptance remains pending.
+Added the requested MIT license
+for rmux, inherited Cargo metadata, and license copies in future release bundles.
+
 Finished SSH terminals now label the inherited launch action Reconnect SSH and
 offer a separate Local shell action. Both open a new tab and retain the finished
 terminal's output; local terminals keep New shell. Existing focus routing and

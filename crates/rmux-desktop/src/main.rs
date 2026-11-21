@@ -2036,6 +2036,30 @@ impl Render for TerminalView {
                             cx.stop_propagation();
                         })).child(icons::icon("close")))
             ))
+            .when_some(self.saved_ssh_destination.clone().filter(|_| !ended_ssh), |root, destination| root.child(
+                div().id("saved-ssh-notice").flex().flex_wrap().items_center().gap_2()
+                    .px_2().py_1().flex_shrink_0().min_w_0().bg(rgb(0x292929))
+                    .border_t_1().border_color(rgb(0x414141)).text_xs().text_color(rgb(0xb8b8b8))
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .on_mouse_down(MouseButton::Middle, |_, _, cx| cx.stop_propagation())
+                    .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
+                    .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
+                    .child(div().id("saved-ssh-message").flex_1().min_w_0().truncate()
+                        .tooltip({ let destination = destination.clone(); move |_, cx| {
+                            cx.new(|_| pane_view::ControlHint(format!("Local shell. Saved SSH destination: {destination}. Not connected.").into())).into()
+                        }})
+                        .child(format!("Local shell · SSH not connected: {destination}")))
+                    .child(div().id("connect-saved-ssh").px_2().py_1().rounded_sm().bg(rgb(0x383838))
+                        .cursor_pointer().hover(|style| style.bg(rgb(0x484848)))
+                        .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("Connect to the saved SSH host in a new workspace; keep this local shell".into())).into())
+                        .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+                            if event.standard_click() {
+                                this.focus.focus(window);
+                                window.dispatch_action(Box::new(ConnectSsh { destination: destination.clone() }), cx);
+                            }
+                            cx.stop_propagation();
+                        })).child("Connect SSH"))
+            ))
             .when_some(self.process_exit.clone(), |root, status| root.child(
                 div().id("process-exit-status").flex().flex_wrap().items_center().gap_2()
                     .px_2().py_1().flex_shrink_0().min_w_0().bg(rgb(0x292929))

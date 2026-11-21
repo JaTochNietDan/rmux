@@ -85,7 +85,9 @@ Newly saved layouts, sessions and recovery checkpoints retain the SSH destinatio
 Restoration still starts a fresh **Local** shell; its tooltip identifies the saved
 SSH target as **Not connected**. Surface JSON exposes that target separately as
 `saved_ssh_destination`. Open **Connect via SSH…** from that tab to pre-fill the
-target, then press Connect to start a new SSH workspace. Re-saving retains the
+target, then press Connect to start a new SSH workspace. In the next release,
+a **Connect SSH** banner also offers this action directly, keeping the restored
+local shell open. No connection starts until you choose it. Re-saving retains the
 target. Older snapshots without this field cannot recover an SSH destination
 from an arbitrary tab title.
 
