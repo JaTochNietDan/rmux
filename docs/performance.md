@@ -13,6 +13,20 @@ style-only changes; changed text still allocates. An oversized-glyph scratch buf
 may also allocate per frame. Pointer-sharing and changed-text ownership are covered
 by the Unicode snapshot test.
 
+Snapshot allocation baseline (`366e06d` plus harness, macOS arm64 debug): 200
+iterations at each of 1/8/32 engines, 120×24 cells, retaining an external frame as
+the UI does. Identical ASCII rewrites incurred **zero Rust allocation calls** in
+snapshot extraction across every size. Late ASCII edits used four calls / 6,032
+requested bytes per frame; style changes to an 81-byte grapheme used five calls /
+6,113 requested bytes. [Raw data](benchmarks/snapshot-allocations-debug.jsonl).
+Repeat with `mise run bench-snapshot-allocations`. The global allocator counts Rust
+alloc/alloc_zeroed/realloc traffic only while extracting snapshots; setup, parsing
+and validation are outside the interval. Realloc counts the full requested size,
+not the growth delta. Requested bytes are allocation traffic, not retained memory;
+Ghostty's internal allocator, PTYs, UI/GPU work and process RSS are excluded.
+Instrumented debug timings are included in the raw data but do not establish
+release latency, frame pacing or a before/after speedup.
+
 Native RPC split baseline (`4642803` plus harness, macOS arm64 debug, locked desktop):
 three fresh app instances per target size, with idle fixture shells and breadth-first
 alternating splits. Across the 7 creation requests per 8-pane run, median/max were

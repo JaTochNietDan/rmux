@@ -129,6 +129,10 @@ run = "cargo test -p rmux-desktop process_metrics::tests::tree_sampling_scaling 
 description = "Manual incremental history-search baseline for 1/8/32 terminals"
 run = "cargo test -p rmux-terminal history_probe_scaling -- --ignored --nocapture"
 
+[tasks.bench-snapshot-allocations]
+description = "Count Rust allocation traffic during 1/8/32 terminal snapshots"
+run = "cargo run -p rmux-terminal --example snapshot_alloc_bench"
+
 [tasks.smoke-session-restore]
 description = "Native Unix multi-window session restore with isolated fixture shells"
 run = ["cargo build -p rmux-desktop", "python3 scripts/smoke-session-restore.py"]

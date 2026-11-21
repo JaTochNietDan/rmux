@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Added `mise run bench-snapshot-allocations` with a scoped Rust global allocator
+counter around snapshot extraction only. At 1/8/32 engines and 200 iterations per
+scenario, identical ASCII rewrites recorded zero Rust allocation calls; late ASCII
+edits used four calls per frame and oversized-grapheme style changes used five.
+The harness retains previous frames to exercise copy-on-write and validates output.
+Raw counts/traffic/timings are recorded in snapshot-allocations-debug.jsonl, with
+scope in performance.md. Parsing, Ghostty internal allocation, PTYs and UI/GPU are
+excluded; these counts do not establish retained-memory or rendering-latency gates.
+
 Snapshot cell construction now reuses an existing heap-backed grapheme string when
 its text is identical, including style-only row changes. Inline strings retain
 their normal construction path, and changed text gets independent storage. The
