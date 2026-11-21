@@ -336,6 +336,11 @@ notices. An OS read already in progress cannot be interrupted; its worker slot
 remains occupied until it returns. Native file-picker cancellation stays in the
 picker itself.
 
+Refreshing the same directory retains its filter and selected file/directory by
+path and entry type, even if entries reorder. If the entry disappears or no
+longer matches, the first result is selected. Navigating to another directory
+starts a fresh filter.
+
 Directory reads run in the background and retain at most 2,048 entries per
 snapshot, sorted directories-first within that subset. A limit notice identifies
 partial listings. Entries that disappear or cannot be read are omitted with an explicit

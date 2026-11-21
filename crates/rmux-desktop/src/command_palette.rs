@@ -56,6 +56,17 @@ pub(super) fn paged_result(selected: usize, count: usize, backwards: bool, viewp
 mod navigation_tests {
     use super::{navigated_result, paged_result, result_area_height};
     #[test]
+    fn folder_selection_identity_survives_order_changes() {
+        use super::*;
+        let make = |path: &str, directory: bool| Command { title: path.into(), subtitle: None, shortcut: None,
+            target: PaletteEvent::Run(if directory { Box::new(BrowseDirectory { path: path.into() }) } else { Box::new(PreviewLocalFile { path: path.into() }) }) };
+        let old = [make("/tmp/a", false), make("/tmp/b", false)];
+        let selected = folder_target(&old[1]).unwrap();
+        let changed = [make("/tmp/b", true), make("/tmp/new", false), make("/tmp/b", false)];
+        assert_eq!(changed.iter().position(|entry| folder_target(entry) == Some(selected)), Some(2));
+        assert!([make("/tmp/c", false)].iter().all(|entry| folder_target(entry) != Some(selected)));
+    }
+    #[test]
     fn literal_excerpt_highlights_preserve_unicode_boundaries() {
         let text = "…界 NEEDLE 世界 needle 世界 é É";
         let ranges = super::literal_highlights(text, "needle 世界");
@@ -151,6 +162,21 @@ pub enum PaletteEvent {
 }
 #[derive(Clone, Copy, PartialEq)]
 pub enum BufferMode { Paste, Delete, Rename, Copy }
+
+pub struct FolderState {
+    path: std::path::PathBuf,
+    query: String,
+    target: Option<(std::path::PathBuf, u8)>,
+}
+impl FolderState {
+    pub fn matches(&self, path: &std::path::Path) -> bool { self.path == path }
+}
+fn folder_target(command: &Command) -> Option<(&std::path::Path, u8)> {
+    let PaletteEvent::Run(action) = &command.target else { return None; };
+    if let Some(action) = action.as_any().downcast_ref::<BrowseDirectory>() { Some((action.path.as_path(), 0)) }
+    else if let Some(action) = action.as_any().downcast_ref::<PreviewLocalFile>() { Some((action.path.as_path(), 1)) }
+    else { action.as_any().downcast_ref::<CopyLocalPath>().map(|action| (action.path.as_path(), 2)) }
+}
 
 pub struct PreviewState {
     path: std::path::PathBuf,
@@ -701,6 +727,23 @@ impl CommandPalette {
             commands,
             selected: 0,
         }
+    }
+    pub fn folder_state(&self, cx: &App) -> Option<FolderState> {
+        let (_, _, path) = self.folder_navigation.as_ref()?;
+        let target = self.search.matches.get(self.selected).and_then(|index| folder_target(&self.commands[*index])).map(|(path, kind)| (path.to_owned(), kind));
+        Some(FolderState { path: path.clone(), query: self.input.read(cx).value().to_owned(), target })
+    }
+    pub fn restore_folder(&mut self, state: FolderState, cx: &mut Context<Self>) {
+        if !self.folder_navigation.as_ref().is_some_and(|(_, _, path)| state.matches(path)) { return; }
+        self.input.update(cx, |input, cx| input.replace_draft(&state.query, cx));
+        let entity = cx.entity();
+        cx.defer(move |cx| entity.update(cx, |this, cx| {
+            this.search.update(&state.query);
+            this.selected = state.target.and_then(|target| this.search.matches.iter().position(|index| folder_target(&this.commands[*index]) == Some((target.0.as_path(), target.1)))).unwrap_or(0);
+            this.scroll.reset(this.search.matches.len());
+            crate::list_navigation::reveal(&this.scroll, this.selected);
+            cx.notify();
+        }));
     }
     pub fn preview_state(&self, cx: &App) -> Option<PreviewState> {
         let (path, hex) = self.preview_navigation.as_ref()?;

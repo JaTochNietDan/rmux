@@ -121,6 +121,7 @@ pub(super) struct WorkspaceWindow {
     font_picker_job: Option<Task<()>>,
     file_browser_job: Option<Task<()>>,
     preview_restore: Option<command_palette::PreviewState>,
+    folder_restore: Option<command_palette::FolderState>,
     file_history: file_browser::History,
     file_browser_cancel: Option<file_browser::Cancellation>,
     terminal_search_job: Option<Task<()>>,
@@ -2627,6 +2628,7 @@ impl WorkspaceWindow {
         self.file_browser_cancel = None;
         self.file_browser_job = None;
         self.preview_restore = None;
+        self.folder_restore = None;
         if self.notice.as_deref().is_some_and(file_browser::is_loading_notice) { self.notice = None; }
         cx.notify();
     }
@@ -2639,6 +2641,7 @@ impl WorkspaceWindow {
         }
     }
     fn browse_directory_at(&mut self, path: std::path::PathBuf, navigation: Option<usize>, window: &mut Window, cx: &mut Context<Self>) {
+        let restore = self.folder_restore.take().filter(|state| navigation.is_none() && state.matches(&path));
         if self.file_browser_job.is_some() || self.automation_available(cx).is_err() { return; }
         let Some(focus) = window.focused(cx) else { return; };
         let permit = match file_browser::Permit::acquire() {
@@ -2663,7 +2666,11 @@ impl WorkspaceWindow {
                             this.file_history.commit(listing.path.clone(), navigation);
                             let back = this.file_history.adjacent(false).is_some();
                             let forward = this.file_history.adjacent(true).is_some();
-                            let palette = cx.new(|cx| command_palette::CommandPalette::files(listing, back, forward, window, cx));
+                            let palette = cx.new(|cx| {
+                                let mut palette = command_palette::CommandPalette::files(listing, back, forward, window, cx);
+                                if let Some(state) = restore { palette.restore_folder(state, cx); }
+                                palette
+                            });
                             this.install_palette(palette, Some(focus), window, cx);
                         }
                         Err(error) => {
@@ -2917,6 +2924,11 @@ impl WorkspaceWindow {
             &palette,
             window,
             |this, _, event: &command_palette::PaletteEvent, window, cx| {
+                this.folder_restore = match event {
+                    command_palette::PaletteEvent::Run(action) if action.as_any().is::<BrowseDirectory>() =>
+                        this.palette.as_ref().and_then(|(palette, _)| palette.read(cx).folder_state(cx)),
+                    _ => None,
+                };
                 this.preview_restore = match event {
                     command_palette::PaletteEvent::Run(action) if action.as_any().is::<PreviewLocalFile>() || action.as_any().is::<PreviewHexFile>() =>
                         this.palette.as_ref().and_then(|(palette, _)| palette.read(cx).preview_state(cx)),
@@ -3199,6 +3211,7 @@ impl WorkspaceWindow {
             font_picker_job: None,
             file_browser_job: None,
             preview_restore: None,
+            folder_restore: None,
             file_history: Default::default(),
             file_browser_cancel: None,
             terminal_search_job: None,
@@ -3412,6 +3425,7 @@ impl WorkspaceWindow {
             font_picker_job: None,
             file_browser_job: None,
             preview_restore: None,
+            folder_restore: None,
             file_history: Default::default(),
             file_browser_cancel: None,
             terminal_search_job: None,

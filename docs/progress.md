@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Same-directory refresh now retains the filter and selected entry by path/type,
+rather than unstable row position. Ranking updates before deferred selection
+restoration; removed, type-changed or nonmatching entries fall back to the first
+result. Different-directory/history navigation starts fresh, and cancellation
+clears retained refresh state. Selection lookup borrows paths instead of cloning
+one per candidate. The focused reorder/removal/type-identity regression passed
+with desktop test compilation; native refresh/focus/scroll acceptance is pending.
+
 Pending file/directory/SSH-host loads can now be canceled through File, the
 command palette or a custom `cancel_file_loading` shortcut. The notice button
 shares the same handler: signal the worker, discard the UI task and preview
