@@ -1,0 +1,33 @@
+name: Shell integration
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - shell-integration/bash/**
+      - scripts/test-bash-integration.py
+      - .github/workflows/shell-integration.yml
+  pull_request:
+    paths:
+      - shell-integration/bash/**
+      - scripts/test-bash-integration.py
+      - .github/workflows/shell-integration.yml
+permissions:
+  contents: read
+jobs:
+  bash:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db
+        with:
+          version: 2026.11.8
+          # This shell-only job needs Python, not the desktop build toolchain.
+          mise_toml: |
+            [tools]
+            python = "3.13.15"
+      - name: Verify runner Bash and shell integration
+        run: |
+          bash --version
+          mise exec -- python scripts/test-bash-integration.py
