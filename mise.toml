@@ -189,3 +189,7 @@ run = "cargo test -p rmux-desktop file_loader_baseline -- --ignored --nocapture"
 [tasks.browser-probe]
 description = "Opt-in macOS GPUI/native-webview composition probe"
 run = "cargo run -p rmux-desktop --features browser-probe --example browser-probe"
+
+[tasks.browser]
+description = "Run rmux with experimental macOS browser windows enabled"
+run = "cargo run -p rmux-desktop --features browser --bin rmux"

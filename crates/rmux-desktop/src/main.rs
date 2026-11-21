@@ -59,6 +59,8 @@ mod snapshot;
 mod startup;
 mod ssh;
 mod status_view;
+#[cfg(all(target_os = "macos", feature = "browser"))]
+mod browser_window;
 mod text_field;
 mod terminal_menu;
 use pane_view::{PaneEmpty, PaneView};
@@ -500,6 +502,7 @@ actions!(
         ToggleMarkdownPreview,
         EditSelectedFile,
         OpenFolderBrowser,
+        NewBrowserWindow,
         FileBrowserBack,
         FileBrowserForward,
         ShowTerminalMenu,
@@ -3832,6 +3835,10 @@ fn main() {
                 eprintln!("open rmux window: {error:#}");
             }
         });
+        #[cfg(all(target_os = "macos", feature = "browser"))]
+        cx.on_action(|_: &NewBrowserWindow, cx| {
+            if let Err(error) = browser_window::open(cx) { eprintln!("open browser: {error:#}"); }
+        });
         let updater_available = updater::initialize();
         if updater_available { cx.on_action(|_: &CheckForUpdates, _| updater::check()); }
         cx.set_menus(vec![
@@ -3843,6 +3850,8 @@ fn main() {
                 name: "File".into(),
                 items: vec![
                     MenuItem::action("New Window", NewWindow),
+                    #[cfg(all(target_os = "macos", feature = "browser"))]
+                    MenuItem::action("New Browser Window (Experimental)", NewBrowserWindow),
                     MenuItem::action("New Workspace", NewWorkspace),
                     MenuItem::action("Cancel New Workspace", CancelNewWorkspace),
                     MenuItem::action("Connect via SSH…", ShowSshConnection),

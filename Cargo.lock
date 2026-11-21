@@ -5423,6 +5423,7 @@ dependencies = [
  "tempfile",
  "unicode-segmentation",
  "unicode-width",
+ "url",
  "wry",
 ]
 

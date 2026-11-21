@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+The optional macOS `browser` feature now exposes an experimental browser window
+inside rmux via File and the command palette (`mise run browser`). It has a native
+GPUI address field and Back/Forward/Reload/Go controls, creates an ephemeral WRY
+webview on first navigation, and updates a committed-URL/load status through a
+single coalesced wakeup. URL parsing accepts HTTP/HTTPS/about:blank, defaults bare
+hosts to HTTPS, and rejects embedded credentials; popup/download/external-scheme
+flows await implementation. A focused URL policy test and feature compilation
+passed. Native runtime acceptance is pending while the Mac is locked. These are
+separate windows, not workspace surfaces, and are not restored in session snapshots.
+The previous goal turn made progress with the committed/pushed composition probe.
+
 Started the P3 browser backend composition work with an opt-in macOS GPUI/WRY
 example, launched through `mise run browser-probe`. WRY 0.57.3 is pinned behind
 `browser-probe`; default dependency-tree inspection confirms it is absent from

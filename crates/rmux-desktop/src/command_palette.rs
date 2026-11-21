@@ -359,6 +359,8 @@ impl CommandPalette {
         command!("Merge Workspace into…", ShowWorkspaceMergePicker);
         command!("Move Workspace to Window…", ShowWorkspaceWindowPicker);
         command!("Move Workspace to Next Window", MoveWorkspaceToNextWindow);
+        #[cfg(all(target_os = "macos", feature = "browser"))]
+        command!("New Browser Window (Experimental)", NewBrowserWindow);
         command!("Toggle Sidebar", ToggleSidebar);
         command!("Rename Workspace", RenameWorkspace);
         command!("Edit Workspace Icon", EditWorkspaceIcon);

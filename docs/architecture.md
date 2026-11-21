@@ -39,6 +39,26 @@ The UI thread owns layout, focus and platform GUI operations. Background work se
 
 Prototype terminal/browser composition, focus, clipping, drag overlays, resizing, screenshots, accessibility, profiles and remote proxying before selecting the backend. Browser automation method declarations must be tested against each actual engine. Browser processes count in product memory measurements.
 
+## Experimental browser window
+
+`mise run browser` enables the optional macOS `browser` feature in rmux. File →
+New Browser Window (Experimental), also in the command palette, opens a separate
+native window with an address field, Back/Forward/Reload/Go controls and a committed
+URL/loading status line. Enter submits the address. Bare hostnames default to
+HTTPS; explicit HTTP supports local development servers. The address field retains
+the navigation draft; the status line reports the page-load URL after redirects.
+The webview is created on first navigation and uses an ephemeral profile. Closing
+the window drops its owner. Page-load callbacks coalesce through one queued wakeup.
+
+This remains experimental: native interaction is unverified, windows are not yet
+workspace surfaces, and browser windows are omitted from session snapshots.
+Only HTTP/HTTPS and about:blank navigation are allowed; embedded URL credentials,
+external protocol launches, popups and downloads are unsupported. Persistent
+profiles, authentication workflows, permissions, error-page UX, address shortcuts,
+search-engine queries, split integration and automation remain work items. No
+browser code or runtime is enabled in a default build. The macOS feature build and
+focused URL policy test pass; that does not prove interactive browsing acceptance.
+
 ## Native browser composition probe
 
 `mise run browser-probe` builds and opens the optional macOS GPUI/WRY example.
