@@ -31,6 +31,41 @@ impl HexColor {
     }
 }
 
+#[derive(Clone, Copy, Deserialize, Serialize)]
+#[serde(try_from = "String", into = "String")]
+pub enum CursorTextColor { Literal(HexColor), CellForeground, CellBackground }
+impl TryFrom<String> for CursorTextColor {
+    type Error = &'static str;
+    fn try_from(value: String) -> std::result::Result<Self, Self::Error> {
+        match value.as_str() {
+            "cell-foreground" => Ok(Self::CellForeground),
+            "cell-background" => Ok(Self::CellBackground),
+            _ => HexColor::try_from(value).map(Self::Literal),
+        }
+    }
+}
+impl From<CursorTextColor> for String {
+    fn from(value: CursorTextColor) -> Self {
+        match value {
+            CursorTextColor::Literal(color) => color.into(),
+            CursorTextColor::CellForeground => "cell-foreground".into(),
+            CursorTextColor::CellBackground => "cell-background".into(),
+        }
+    }
+}
+impl CursorTextColor {
+    pub fn parse_theme(value: &str) -> Result<Self> {
+        match value {
+            "cell-foreground" => Ok(Self::CellForeground),
+            "cell-background" => Ok(Self::CellBackground),
+            _ => Ok(Self::Literal(rmux_terminal::parse_color(value)?.into())),
+        }
+    }
+    fn resolve(self, foreground: rmux_terminal::Color, background: rmux_terminal::Color) -> rmux_terminal::Color {
+        match self { Self::Literal(color) => color.rgb(), Self::CellForeground => foreground, Self::CellBackground => background }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum TerminalTheme {
@@ -169,7 +204,7 @@ pub struct Preferences {
     pub background_opacity: u8,
     pub background_blur: bool,
     pub cursor_color: Option<HexColor>,
-    pub cursor_text: Option<HexColor>,
+    pub cursor_text: Option<CursorTextColor>,
     pub selection_background: Option<HexColor>,
     pub selection_foreground: Option<HexColor>,
     pub ansi_palette: Option<[HexColor; 16]>,
@@ -289,8 +324,9 @@ impl Preferences {
             }
         })
     }
-    pub fn cursor_text(&self) -> Option<rmux_terminal::Color> {
-        self.cursor_text.or_else(|| self.imported_theme.as_ref().and_then(|theme| theme.cursor_text)).map(HexColor::rgb)
+    pub fn cursor_text(&self, foreground: rmux_terminal::Color, background: rmux_terminal::Color) -> rmux_terminal::Color {
+        self.cursor_text.or_else(|| self.imported_theme.as_ref().and_then(|theme| theme.cursor_text))
+            .unwrap_or(CursorTextColor::CellBackground).resolve(foreground, background)
     }
     pub fn selection_foreground(&self) -> Option<rmux_terminal::Color> {
         self.selection_foreground.or_else(|| self.imported_theme.as_ref().and_then(|theme| theme.selection_foreground)).map(HexColor::rgb)
@@ -543,17 +579,36 @@ mod tests {
     }
 
     #[test]
+    fn dynamic_cursor_text_tracks_cells_and_explicit_override() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        let path = directory.path().join("theme");
+        std::fs::write(&path, "cursor-text=cell-foreground\n")?;
+        let imported = Preferences::default().import_theme(path.clone())?;
+        for fg in [rmux_terminal::Color(1,2,3), rmux_terminal::Color(7,8,9)] {
+            let bg = rmux_terminal::Color(4,5,6);
+            assert_eq!(imported.cursor_text(fg, bg), fg);
+            let explicit = Preferences::decode(br#"{"cursor_text":"cell-background"}"#)?.import_theme(path.clone())?;
+            assert_eq!(explicit.cursor_text(fg, bg), bg);
+            assert_eq!(serde_json::to_value(&explicit)?["cursor_text"], "cell-background");
+        }
+        assert!(Preferences::decode(br#"{"cursor_text":"unknown-reference"}"#).is_err());
+        Ok(())
+    }
+
+    #[test]
     fn cursor_text_import_override_and_preset_fallback() -> Result<()> {
         let directory = tempfile::tempdir()?;
         let path = directory.path().join("theme");
         std::fs::write(&path, "cursor-text=112233\n")?;
-        assert_eq!(Preferences::default().cursor_text(), None);
+        let fg = rmux_terminal::Color(1,2,3);
+        let bg = rmux_terminal::Color(4,5,6);
+        assert_eq!(Preferences::default().cursor_text(fg, bg), bg);
         let mut imported = Preferences::default().import_theme(path.clone())?;
-        assert_eq!(imported.cursor_text(), Some(rmux_terminal::Color(17,34,51)));
+        assert_eq!(imported.cursor_text(fg, bg), rmux_terminal::Color(17,34,51));
         imported.select_theme(TerminalTheme::Dark);
-        assert_eq!(imported.cursor_text(), None);
+        assert_eq!(imported.cursor_text(fg, bg), bg);
         let explicit = Preferences::decode(br##"{"cursor_text":"#abcdef"}"##)?.import_theme(path)?;
-        assert_eq!(explicit.cursor_text(), Some(rmux_terminal::Color(171,205,239)));
+        assert_eq!(explicit.cursor_text(fg, bg), rmux_terminal::Color(171,205,239));
         assert_eq!(serde_json::to_value(&explicit)?["cursor_text"], "#abcdef");
         Ok(())
     }

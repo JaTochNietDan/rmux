@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Block-cursor text now supports `cell-foreground` and `cell-background` in imported
+themes and JSON settings. References resolve against the current engine cell,
+including application color changes, and the single-glyph cache still keys the
+effective result. Settings preview shares this resolution. Two focused tests
+passed for literal/import fallback, dynamic cell changes, explicit precedence,
+serialization and invalid references, with desktop test compilation. Native cursor
+visuals and dynamic cursor-fill/selection references remain pending.
+
 Settings now previews block-cursor glyph color and selected text alongside terminal
 colors and ANSI swatches. Selection fill resolution is shared with actual terminal
 painting, retaining the same translucent default. Override messaging includes the

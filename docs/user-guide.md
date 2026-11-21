@@ -853,11 +853,13 @@ are rejected with a line-specific error rather than silently ignored. Files must
 be regular UTF-8 files, not symlinks, and at most 64 KiB. This is not a full Ghostty
 configuration importer. No files are watched or downloaded.
 
-`cursor_text` in rmux JSON accepts `"#RRGGBB"` and overrides imported
-`cursor-text`. It colors the glyph inside a block cursor; without either setting,
-the glyph uses its cell background color. Bar, underline and hollow cursor shapes
-are unaffected. Dynamic `cell-foreground`/`cell-background` theme values are not
-yet supported.
+`cursor_text` in rmux JSON accepts `"#RRGGBB"`, `"cell-foreground"`, or
+`"cell-background"` and overrides imported `cursor-text`. Theme files accept the
+same two dynamic references alongside literal theme colors. References resolve
+against the actual cursor cell each frame, following application color changes.
+Without either setting, the glyph uses its cell background color. Bar, underline
+and hollow cursor shapes are unaffected. Dynamic references for the cursor fill
+or selection colors are not yet supported.
 
 `selection_background` in rmux JSON also accepts `"#RRGGBB"` and overrides the
 imported selection background. Configured selection backgrounds are opaque; with

@@ -1,5 +1,5 @@
 //! Bounded, inert import of Ghostty-style terminal color assignments.
-use crate::preferences::HexColor;
+use crate::preferences::{HexColor, CursorTextColor};
 use anyhow::{Context, Result, ensure};
 use std::{io::Read, path::Path};
 
@@ -10,7 +10,7 @@ pub struct Theme {
     pub palette_entries: [Option<HexColor>; 16],
     pub selection_background: Option<HexColor>,
     pub selection_foreground: Option<HexColor>,
-    pub cursor_text: Option<HexColor>,
+    pub cursor_text: Option<CursorTextColor>,
 }
 
 pub fn read(path: &Path) -> Result<Theme> {
@@ -36,10 +36,14 @@ fn parse(text: &str) -> Result<Theme> {
     for (index, line) in text.trim_start_matches('\u{feff}').lines().enumerate() {
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') { continue; }
+        if let Some((key, value)) = line.split_once('=') && key.trim() == "cursor-text" {
+            theme.cursor_text = Some(CursorTextColor::parse_theme(value.trim()).with_context(|| format!("theme line {}", index + 1))?);
+            continue;
+        }
         let parse_line = || -> Result<(&str, HexColor, Option<usize>)> {
             let (key, value) = line.split_once('=').context("expected key = value")?;
             let key = key.trim();
-            ensure!(matches!(key, "foreground" | "background" | "cursor-color" | "cursor-text" | "selection-background" | "selection-foreground" | "palette"), "unsupported theme setting: {key}");
+            ensure!(matches!(key, "foreground" | "background" | "cursor-color" | "selection-background" | "selection-foreground" | "palette"), "unsupported theme setting: {key}");
             if key == "palette" {
                 let (slot, color) = rmux_terminal::parse_palette_entry(value.trim())?;
                 ensure!(slot < 16, "only ANSI palette indices 0–15 are supported");
@@ -50,7 +54,6 @@ fn parse(text: &str) -> Result<Theme> {
         };
         let (key, color, slot) = parse_line().with_context(|| format!("theme line {}", index + 1))?;
         if let Some(slot) = slot { palette[slot] = Some(color); }
-        else if key == "cursor-text" { theme.cursor_text = Some(color); }
         else if key == "selection-foreground" { theme.selection_foreground = Some(color); }
         else if key == "selection-background" { theme.selection_background = Some(color); }
         else { theme.colors[match key { "foreground" => 0, "background" => 1, _ => 2 }] = Some(color); }

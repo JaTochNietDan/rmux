@@ -111,7 +111,7 @@ fn theme_preview(settings: &Preferences) -> impl IntoElement {
                 .child(div().min_w_0().truncate().child("❯ echo hell"))
                 .child(div().id("theme-cursor-sample").w(px(8.)).h(px(16.)).flex_shrink_0().text_center()
                     .bg(rgb_color(colors[2].unwrap_or(DEFAULT_CURSOR)))
-                    .text_color(rgb_color(settings.cursor_text().unwrap_or(colors[1].unwrap_or(DEFAULT_BACKGROUND))))
+                    .text_color(rgb_color(settings.cursor_text(colors[0].unwrap_or(DEFAULT_FOREGROUND), colors[1].unwrap_or(DEFAULT_BACKGROUND))))
                     .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("Block cursor text".into())).into())
                     .child("o")))
             .child(div().mt_1().flex().min_w_0()
