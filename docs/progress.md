@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+The shaped-row cache now recognizes the identical immutable outer row snapshot
+before walking per-row identities. Repaints with unchanged rows reuse the cached
+paint snapshot in constant time; environment changes (font, metrics, scale or
+background) invalidate identity first. A weak reference prevents pointer-address
+reuse without retaining prior row data. Different snapshots still use existing
+per-row reuse and shaping. Desktop compilation and four terminal snapshot tests
+passed; native rendering/performance acceptance remains pending, and no measured
+latency or RSS improvement is claimed.
+
 Text and hex previews now retain Directory, View as Text/Hex and Refresh buttons
 above search results, including zero-match searches. Refresh preserves the current
 mode; switching modes uses the existing bounded asynchronous readers. The shared

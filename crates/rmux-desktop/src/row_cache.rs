@@ -1,6 +1,6 @@
 use gpui::*;
 use rmux_terminal::{Cell, Color, Frame};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use crate::{CellMetrics, color};
 
@@ -53,6 +53,7 @@ pub struct ShapedRow {
 #[derive(Default)]
 pub struct RowCache {
     rows: Arc<Vec<Arc<ShapedRow>>>,
+    source: Weak<Vec<Arc<Vec<Cell>>>>,
     environment: Option<(Color, f32, CellMetrics, SharedString)>,
 }
 impl RowCache {
@@ -82,8 +83,17 @@ impl RowCache {
         );
         if self.environment.as_ref() != Some(&environment) {
             self.rows = Arc::default();
+            self.source = Weak::new();
             self.environment = Some(environment);
         }
+        // The immutable outer snapshot also identifies all row identities.
+        // A weak reference prevents address reuse without retaining old row data
+        // or forcing extra strong-reference COW when the engine publishes output.
+        if self.source.as_ptr() == Arc::as_ptr(&frame.rows) {
+            if let Some(metrics) = metrics { metrics.rows_reused += self.rows.len() as u64; }
+            return self.rows.clone();
+        }
+        self.source = Arc::downgrade(&frame.rows);
         if self.rows.len() == frame.rows.len()
             && self
                 .rows

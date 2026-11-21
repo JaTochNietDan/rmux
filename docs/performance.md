@@ -1,5 +1,11 @@
 # rmux performance acceptance plan
 
+The desktop shaped-row cache checks immutable outer snapshot identity before
+scanning row identities. Unchanged snapshots take a constant-time reuse path after
+font/scale/metrics/background validation. A weak identity reference avoids retaining
+old row data; changed snapshots retain per-row reuse. Desktop compilation and engine
+snapshot tests pass; native repaint timing remains unmeasured.
+
 Snapshot glyph extraction uses a 64-byte stack buffer for the common case instead
 of a scratch heap allocation per dirty frame. Larger graphemes use a per-frame
 reusable overflow allocation; it is not retained by hidden terminals. Focused
