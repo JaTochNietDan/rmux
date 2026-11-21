@@ -39,7 +39,9 @@ parameters. SSH process startup runs off the UI thread, with window/busy/capacit
 checks before preparation and publication. Success returns the created workspace,
 not confirmation of remote authentication; interact with its terminal for prompts.
 This is an rmux extension to workspace creation, not cmux `workspace.ssh.open`
-compatibility. Native end-to-end CLI connection acceptance remains pending.
+compatibility. A native macOS no-network fixture verifies CLI/RPC startup,
+argument delivery, rollback, teardown and saved-target recovery (`mise run smoke-ssh`).
+Real-server authentication and visual/platform acceptance remain pending.
 
 **Merge Workspace into…** in the menu or command palette searches other
 workspaces across this app’s windows, labeled by window. Enter moves the source's existing panes into

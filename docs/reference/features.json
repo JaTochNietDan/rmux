@@ -1326,7 +1326,7 @@
       ],
       "acceptance": "Support aliases, keys, proxy settings, host-key verification and interactive authentication.",
       "rmux_status": "in_progress",
-      "implementation": "File/palette Connect via SSH editor launches an existing SSH client with a bounded literal destination argv through background PTY workspace creation. Configuration, host-key verification and interactive authentication are delegated to the client. Destination validation tests and a no-network OpenSSH configuration dry run passed.",
+      "implementation": "File/palette Connect via SSH and CLI new-workspace --ssh launch an existing client through background PTY creation. Aliases and SSH URLs support explicit user/port/IPv6 arguments. Configuration, host-key verification and authentication are client-owned. Session identity prevents remote directories from driving local filesystem workflows and persists as an explicitly disconnected target on local-shell recovery. Validation/configuration checks and a native macOS no-network CLI/RPC fixture passed startup, argv, metadata, rollback, teardown and recovery.",
       "remaining": "Live authentication/configuration acceptance, native UI and cross-platform validation, remote workspace identity/metadata and full remote lifecycle integration.",
       "implementation_sources": ["crates/rmux-desktop/src/ssh.rs", "crates/rmux-desktop/src/window_view.rs", "crates/rmux-desktop/src/command_palette.rs"],
       "progress_record": "docs/progress.md"

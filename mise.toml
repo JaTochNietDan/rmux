@@ -46,6 +46,10 @@ run = "cargo check -p rmux-desktop --target aarch64-unknown-linux-gnu"
 [tasks.test]
 run = "cargo test --workspace"
 
+[tasks.smoke-ssh]
+description = "Build and exercise isolated native SSH lifecycle with a local no-network fixture"
+run = "cargo build -p rmux-desktop -p rmux-cli && python scripts/smoke-ssh.py"
+
 [tasks.test-zsh-integration]
 description = "Check shell integration with an existing zsh, without user rc files"
 run = "python3 scripts/test-zsh-integration.py"

@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Added and passed the native macOS `scripts/smoke-ssh.py` fixture (available as
+`mise run smoke-ssh`). A private PATH contains only the fixture SSH executable,
+so it cannot fall through to a real client. The real rmuxctl→RPC→background PTY
+path passed exact IPv6/user/port argv delivery, launch identity, local-directory
+isolation, background-selection preservation, missing-executable rollback,
+child teardown on quit and saved-target recovery as a Local shell. Config,
+recovery and sockets were isolated in a temporary directory. This validates
+native lifecycle plumbing, not visual presentation or real SSH authentication.
+
 SSH workspace creation is now available through `new-workspace --ssh DESTINATION`
 and optional `workspace.create.ssh_destination`. Validation happens before queueing;
 the UI reserves command startup, prepares the PTY on a background executor, then
