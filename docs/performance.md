@@ -1,5 +1,26 @@
 # rmux performance acceptance plan
 
+## Published v0.1.1 macOS split baseline
+
+Measured the GitHub-built, signed macOS ARM64 v0.1.1 executable installed through
+mise, with three fresh app instances per pane count and a one-second settling
+interval before sampling app RSS. Median RSS was **115.11 / 123.91 / 150.78 MiB**
+at **1 / 8 / 32 panes**. Pooled split-request median/max were **8.71 / 20.98 ms**
+while growing to 8 panes and **12.75 / 23.34 ms** while growing to 32 panes.
+[Raw samples and binary SHA-256](benchmarks/rpc-splits-release-v0.1.1.jsonl).
+
+These are app-only RSS samples, excluding child shells and unattributed GPU
+resources. Timings include CLI startup, RPC and pane creation; they do not measure
+input-to-pixel latency or frame pacing. The signed release includes its updater;
+this differs from the earlier debug fixture and is not a before/after comparison.
+Fixture shells are idle, so these results do not establish active-output memory
+or cross-platform performance acceptance.
+
+The existing split harness now accepts `--binary`, `--cli`, `--label` and
+`--settle-seconds`, so release measurements can use downloaded GitHub artifacts
+without local compilation. Results identify the executable by SHA-256 and keep
+the harness revision separate from the binary label.
+
 Browser reclamation remains an unmeasured acceptance gate. Inspection of WRY
 0.57.3 and objc2 0.6.5 clarified that `InnerWebView::drop`'s standalone `retain()`
 calls return temporary `Retained` guards, immediately released at the semicolon.

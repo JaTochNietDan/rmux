@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Added release-artifact inputs and binary hashing to the split/RSS harness, then
+measured the GitHub-built macOS v0.1.1 app through isolated mise installation.
+Median app RSS at 1/8/32 idle panes was 115.11/123.91/150.78 MiB after one second;
+raw samples and scope limitations are recorded in performance.md. This provides
+release-build evidence without claiming frame pacing or zero input lag. The
+v0.1.2 native icon release is running on GitHub (44865848547). The preceding turn
+made progress by completing the organization transfer and starting that release.
+
 Prepared v0.1.2 with Windows executable icon resource 1 (the ID GPUI loads),
 multi-resolution ICO generation, and matching Linux window application IDs.
 macOS cargo check passed; native release jobs will verify platform linking.
