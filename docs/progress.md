@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Native palette review passed on the current debug build: Cmd+P opened the
+palette, selection spans the panel, shortcuts align on the right, and the
+padded search field/footer render without clipping. Everyday actions lead the
+list and idle workspace cancellation is absent. Captured the actual window at
+`target/palette-review/palette.png` using an isolated configuration; this is
+not a release build or proof of full keyboard/layout acceptance.
+
 The command palette now opens with workspace/tab creation, splitting, zoom,
 Find, SSH and Settings before diagnostic and group-management commands.
 Cancel New Workspace is included only when a workspace launch is pending at
