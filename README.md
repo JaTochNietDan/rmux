@@ -1,5 +1,7 @@
 # rmux
 
+<img src="docs/brand/rmux.svg" width="72" height="72" alt="rmux: split panes and a terminal prompt">
+
 **A native terminal workspace for keeping your projects, shells, and coding agents together.**
 
 rmux combines a fast terminal powered by Ghostty with a sidebar for your projects,

@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+The root-domain Cloudflare site is deployed and its WASM sample terminals were
+verified in the browser. Website and Terraform sources remain in separate local
+repositories with no GitHub remotes. Added a vector pane-and-prompt logo, a live
+demo headline, concise app descriptions, and direct v0.1.1 OS downloads with icons;
+download filenames were checked against published release assets. The logo is
+used on the website and README; native bundle icon integration remains pending.
+Confirmed the existing macOS rmux menu includes Check for Updates when Sparkle
+initializes in a configured release bundle; plain cargo builds omit it.
+
 Published v0.1.1 with signed/notarized macOS DMG and Sparkle ZIP, plus Linux
 and Windows archives built on GitHub. Reorganized the user guide into a short
 task guide and linked topic references. Release caches now use matching
