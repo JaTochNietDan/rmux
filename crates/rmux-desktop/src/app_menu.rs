@@ -15,8 +15,6 @@ struct HideOtherApps;
 struct ShowAllApps;
 
 pub fn initialize(cx: &mut App) {
-    #[cfg(target_os = "macos")]
-    set_application_icon();
     if cfg!(target_os = "macos") {
         cx.bind_keys([
             KeyBinding::new("cmd-h", HideRmux, None),
@@ -26,30 +24,6 @@ pub fn initialize(cx: &mut App) {
         cx.on_action(|_: &HideRmux, cx| cx.hide());
         cx.on_action(|_: &HideOtherApps, cx| cx.hide_other_apps());
         cx.on_action(|_: &ShowAllApps, cx| cx.unhide_other_apps());
-    }
-}
-
-/// Set the running application's icon as well as shipping CFBundleIconFile.
-/// This also covers direct executable launches and stale Launch Services icons
-/// after an update that introduces or changes the bundle icon.
-#[cfg(target_os = "macos")]
-#[allow(unexpected_cfgs)]
-fn set_application_icon() {
-    use objc::{class, msg_send, sel, sel_impl, runtime::{Object, BOOL, YES}};
-    const ICON: &[u8] = include_bytes!("../../../docs/brand/rmux.icns");
-    unsafe {
-        let main: BOOL = msg_send![class!(NSThread), isMainThread];
-        assert_eq!(main, YES);
-        let data: *mut Object = msg_send![class!(NSData), dataWithBytes:ICON.as_ptr() length:ICON.len()];
-        let image: *mut Object = msg_send![class!(NSImage), alloc];
-        let image: *mut Object = msg_send![image, initWithData:data];
-        if image.is_null() {
-            eprintln!("rmux: could not decode application icon");
-            return;
-        }
-        let app: *mut Object = msg_send![class!(NSApplication), sharedApplication];
-        let _: () = msg_send![app, setApplicationIconImage:image];
-        let _: () = msg_send![image, release];
     }
 }
 

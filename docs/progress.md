@@ -2,15 +2,12 @@
 
 ## Current implementation focus
 
-Investigated a user-reported missing Dock/Cmd+Tab icon in the installed v0.1.2
-app: the running executable was /Applications/rmux.app, its plist named the icon,
-and the ICNS was present. AppKit decoded the asset as a valid image with ten
-representations. Added startup setApplicationIconImage using embedded ICNS bytes,
-with balanced NSImage ownership and a main-thread assertion, to avoid depending
-solely on bundle icon discovery/cache. Preparing v0.1.3; compile passed, but native
-Dock inspection timed out, so runtime visual acceptance is still pending. Also
-standardized new-tab/split toolbar handlers on primary clicks, matching zoom.
-The preceding turn completed v0.1.2 publication and website download updates.
+The user confirmed v0.1.2's Dock and Cmd+Tab icon appears after a full restart
+following the update. Removed the unnecessary explicit AppKit icon workaround,
+restored version 0.1.2, and canceled the proposed v0.1.3 release run. The bundled
+icon remains unchanged. Primary-click guards for the new-tab and split toolbar
+controls are retained as an independent interaction fix; focused compilation had
+passed. The preceding turn completed v0.1.2 publication and website updates.
 
 v0.1.2 is published under rmuxapp/rmux after all native GitHub build and publish
 jobs succeeded. Direct artifact inspection confirmed the macOS icon/plist, Windows
