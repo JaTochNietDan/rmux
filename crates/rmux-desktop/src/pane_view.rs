@@ -850,9 +850,13 @@ impl PaneView {
     }
 
     fn add(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.add_terminal(true, window, cx);
+    }
+
+    fn add_terminal(&mut self, inherit_ssh: bool, window: &mut Window, cx: &mut Context<Self>) {
         if cx.global::<Shutdowns>().quitting || self.spawning_tab.is_some() { return; }
         let directory = self.cached_directory(cx).or_else(|| cx.global::<InitialDirectory>().0.clone());
-        let destination = self.live_ssh_destination(cx);
+        let destination = inherit_ssh.then(|| self.live_ssh_destination(cx)).flatten();
         let label = destination.as_ref().map(|destination| format!("SSH · {destination}"));
         let cells = self.active_cell_metrics(cx);
         let family = self.active_font_family(cx);
@@ -1183,6 +1187,7 @@ impl Render for PaneView {
             .min_h_0()
             .when(!self.benchmark, |pane| pane.border_1().border_color(if attention { rgb(0xf0b85b).into() } else { gpui::transparent_black() }))
             .on_action(cx.listener(|this, _: &NewTab, window, cx| this.add(window, cx)))
+            .on_action(cx.listener(|this, _: &NewLocalTab, window, cx| this.add_terminal(false, window, cx)))
             .on_action(cx.listener(|this, _: &CloseOtherTabs, window, cx| this.close_tabs(TabCloseScope::Others, window, cx)))
             .on_action(cx.listener(|this, _: &CloseTabsToRight, window, cx| this.close_tabs(TabCloseScope::Right, window, cx)))
             .on_action(cx.listener(|this, _: &CloseFinishedTabs, window, cx| this.close_tabs(TabCloseScope::Finished, window, cx)))
@@ -1368,7 +1373,7 @@ impl Render for PaneView {
                                     })).child(icons::icon("close")))
                         ))
                         .child(
-                            action_control("new-tab", if self.spawning_tab.is_some() { "Starting terminal…" } else { "New Terminal Tab" }, NewTab, control_focus.clone())
+                            action_control("new-tab", if self.spawning_tab.is_some() { "Starting terminal…" } else if self.terminals.get(self.active).is_some_and(|terminal| terminal.read(cx).session.remote_destination().is_some()) { "New SSH Tab" } else { "New Terminal Tab" }, NewTab, control_focus.clone())
                                 .on_click(cx.listener(|this, _, window, cx| this.add(window, cx)))
                                 .child(icons::icon("plus")),
                         )

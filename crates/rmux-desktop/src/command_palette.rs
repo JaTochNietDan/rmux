@@ -215,6 +215,7 @@ impl CommandPalette {
             });
         }
         command!("New Terminal Tab", NewTab);
+        command!("New Local Tab", NewLocalTab);
         command!("Cancel New Terminal Tab", CancelNewTab);
         command!("Cancel Queued Paste", CancelQueuedPaste);
         command!("Cancel Split Terminal", CancelSplit);

@@ -584,7 +584,7 @@ save behavior. Diagnostics actions include `terminal_memory`,
 Use `"context":"window"` for a binding that should also work while a window panel
 has focus; bindings otherwise require terminal context. No new defaults are added.
 
-Supported action names: `new_workspace`, `new_window`, `new_tab`, `split_right`,
+Supported action names: `new_workspace`, `new_window`, `new_tab`, `new_local_tab`, `split_right`,
 `split_down`, `split_left`, `split_up`, `focus_left`, `focus_right`, `focus_up`, `focus_down`,
 `next_workspace`, `previous_workspace`, `last_workspace`, `last_terminal`,
 `next_pane`, `previous_pane`, `next_tab`, `previous_tab`, `tab_picker`,
@@ -844,7 +844,12 @@ Interactive splits and new tabs inherit the active tab's explicit SSH destinatio
 starting a separate SSH client with its own authentication and an SSH-labelled tab.
 They do not reuse remote working directories as local paths or resume remote processes.
 A restored **Local / Not connected** tab starts local siblings until explicitly
-reconnected. Use New Workspace to start a local shell alongside remote work.
+reconnected. Use **File → New Local Tab** (also in the palette, custom action `new_local_tab`)
+to start a local shell in the same pane, or New Workspace for a separate workspace.
+New Local Tab uses the local cached directory when available, otherwise the app's
+initial directory; it never inherits a remote path or saved SSH destination.
+It shares the normal background startup/cancel controls and has no default shortcut.
+The tab-bar plus tooltip says New SSH Tab when the active tab supplies an SSH target.
 The RPC `pane.split` shell-creation contract remains local;
 automation can explicitly create an SSH workspace with `workspace.create`.
 Interactive split commands prepare the terminal and its first frame in the background and show

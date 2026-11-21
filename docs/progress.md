@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Added New Local Tab to the File menu, command palette and custom `new_local_tab`
+action so remote panes can host an explicit local shell without another workspace.
+It shares normal background tab preparation, cancellation and focus preservation,
+but bypasses SSH inheritance; local cwd falls back to the app's initial directory.
+The standard plus tooltip now says New SSH Tab when it inherits a session target,
+using a borrowed identity check without allocating on render. No default shortcut
+was added. Desktop compilation passed; native menu/tooltip/focus acceptance remains
+pending while the desktop is locked.
+
 Interactive split/new-tab creation now snapshots the source session's explicit
 SSH destination and launches a separate client in the existing background startup
 pipeline. Remote siblings carry SSH labels and session identity, retaining remote

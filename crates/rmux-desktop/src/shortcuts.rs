@@ -104,7 +104,7 @@ fn action(name: &str) -> Option<Box<dyn Action>> {
         "close_other_tabs" => Box::new(CloseOtherTabs),
         "close_tabs_to_right" => Box::new(CloseTabsToRight),
         "close_finished_tabs" => Box::new(CloseFinishedTabs),
-        "new_tab" => Box::new(NewTab), "split_right" => Box::new(Split), "split_down" => Box::new(SplitBelow),
+        "new_tab" => Box::new(NewTab), "new_local_tab" => Box::new(NewLocalTab), "split_right" => Box::new(Split), "split_down" => Box::new(SplitBelow),
         "split_left" => Box::new(SplitLeft), "split_up" => Box::new(SplitAbove),
         "focus_left" => Box::new(FocusLeft), "focus_right" => Box::new(FocusRight),
         "focus_up" => Box::new(FocusUp), "focus_down" => Box::new(FocusDown),
