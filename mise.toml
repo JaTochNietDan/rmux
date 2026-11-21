@@ -50,6 +50,10 @@ run = "cargo test --workspace"
 description = "Build and exercise isolated native SSH lifecycle with a local no-network fixture"
 run = "cargo build -p rmux-desktop -p rmux-cli && python scripts/smoke-ssh.py"
 
+[tasks.bench-rpc-splits]
+description = "Measure native macOS debug RPC split creation and app RSS at 1/8/32 panes"
+run = "cargo build -p rmux-desktop -p rmux-cli && python scripts/bench-rpc-splits.py"
+
 [tasks.smoke-ssh-loopback]
 description = "Check native SSH authentication using existing macOS OpenSSH and temporary loopback keys"
 run = "cargo build -p rmux-desktop -p rmux-cli && python scripts/smoke-ssh-loopback.py"

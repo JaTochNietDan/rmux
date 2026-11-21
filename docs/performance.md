@@ -1,5 +1,21 @@
 # rmux performance acceptance plan
 
+Native RPC split baseline (`4642803` plus harness, macOS arm64 debug, locked desktop):
+three fresh app instances per target size, with idle fixture shells and breadth-first
+alternating splits. Across the 7 creation requests per 8-pane run, median/max were
+5.620/7.379 ms; across 31 requests per 32-pane run, 5.292/7.196 ms. These are pooled
+creation requests while growing toward each target, not repeated measurements at
+fixed final pane counts. Median app RSS after 1/8/32 panes was
+102,240/104,896/113,888 KiB (99.84/102.44/111.22 MiB).
+[Raw samples](benchmarks/rpc-splits-debug.jsonl); repeat with `mise run bench-rpc-splits`.
+Timings include a fresh rmuxctl process, socket RPC, PTY/first-frame preparation and
+UI insertion, and exclude initial app/workspace startup. RSS is an immediate `ps`
+sample of the app only; it excludes child-shell RSS and does not attribute GPU or
+allocator resources. No steady-state settling interval is imposed. The desktop
+was locked, so visible rendering, frame pacing and input-to-pixel latency were not
+measured. This is neither a release/platform acceptance result nor a before/after
+speedup claim. All fixture processes/apps are scoped to temporary configurations.
+
 Incremental history-probe baseline (`9aa6f0f` plus harness, macOS arm64 debug):
 five batches at each of 1/8/32 terminal engines, each containing 2,000 fixture
 lines and a final Unicode needle. Match medians were 0.307/1.882/5.048 ms;

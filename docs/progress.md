@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Added `mise run bench-rpc-splits` and recorded a native debug baseline at 1/8/32
+panes, three fresh isolated app instances each. Pooled split request medians were
+5.620 ms for runs growing to eight panes and 5.292 ms for runs growing to 32; app
+RSS medians were 99.84/102.44/111.22 MiB. The harness checks unique live child PIDs,
+uses balanced splits and quits only its own apps. Raw per-request times and RSS
+samples are in `docs/benchmarks/rpc-splits-debug.jsonl`. Scope and limitations are
+recorded in performance.md: CLI/IPC included, idle fixtures, immediate app-only RSS,
+locked desktop, no release/render-latency or before/after improvement claim.
+
 Ordinary RPC splits now share the background PTY/first-frame preparation pipeline
 with SSH splits. Removed the synchronous fallback dispatcher and made publication
 require a prepared terminal, preventing accidental UI-thread shell startup. Local
