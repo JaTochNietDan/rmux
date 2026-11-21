@@ -77,8 +77,9 @@ background re-preparation if colors change during startup. The native SSH fixtur
 covers source preservation, failure rollback and teardown, not latency or visual
 acceptance. All RPC workspaces and interactive SSH/custom-command workspaces now also prepare
 first frames and colors off-thread, with a ready-terminal insertion path and settings
-refresh before attachment. Interactive New Workspace/initial app startup paths remain
-separate work; native
+refresh before attachment. Interactive New Workspace now also prepares off-thread and inserts relative to its
+captured origin without stealing newer focus. Initial app and group-mutation startup
+paths remain separate work; native
 startup latency and rapid create/close acceptance are still pending.
 
 Find selection seeding uses a nonblocking parser-lock attempt and a streaming

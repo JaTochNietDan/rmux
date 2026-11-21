@@ -3529,16 +3529,83 @@ impl WorkspaceWindow {
         self.add_with_directory(panes, inherit_group, placement, None, window, cx);
     }
 
+    fn start_workspace(&mut self, directory: Option<std::path::PathBuf>, window: &mut Window, cx: &mut Context<Self>) {
+        if self.command_launching || self.automation_available(cx).is_err() || self.entries.len() >= 64 { return; }
+        let Some(entry) = self.entries.get(self.active) else { return; };
+        let origin = entry.workspace.entity_id();
+        let group = self.groups.containing(origin);
+        let group_id = group.map(|group| group.id);
+        let placement = if group.is_some() { cx.global::<Preferences>().group_new_workspace_placement }
+            else { cx.global::<Preferences>().new_workspace_placement };
+        let directory_entry = group.and_then(|group| group.members.first())
+            .and_then(|id| self.entries.iter().find(|entry| entry.workspace.entity_id() == *id)).unwrap_or(entry);
+        let directory = directory.or_else(|| group.and_then(|group| group.cwd.clone())).or_else(|| {
+            let workspace = directory_entry.workspace.read(cx);
+            workspace.panes.iter().find(|pane| Some(pane.entity_id()) == directory_entry.last_pane)
+                .or_else(|| workspace.panes.first()).and_then(|pane| pane.read(cx).cached_directory(cx))
+        }).or_else(|| cx.global::<InitialDirectory>().0.clone());
+        let focus = window.focused(cx);
+        let settings = cx.global::<Preferences>();
+        let scrollback = settings.scrollback_bytes();
+        let colors = settings.terminal_colors();
+        let palette = settings.terminal_palette();
+        let executor = cx.background_executor().clone();
+        self.command_launching = true;
+        self.notice = Some("Starting workspace…".into());
+        cx.notify();
+        cx.spawn_in(window, async move |entity, cx| {
+            let mut result = executor.spawn(async move {
+                let session = Session::shell_in_with_scrollback(80, 24, directory.as_deref(), scrollback)?;
+                TerminalView::prepare(session, colors, palette)
+            }).await;
+            loop {
+                let refresh = cx.update(|_, cx| {
+                    let prepared = result.as_ref().ok()?;
+                    let settings = cx.global::<Preferences>();
+                    let current = (settings.terminal_colors(), settings.terminal_palette());
+                    ((prepared.colors, prepared.palette) != current).then_some(current)
+                }).ok().flatten();
+                let Some((colors, palette)) = refresh else { break; };
+                let session = result.expect("successful preparation checked above").session;
+                result = executor.spawn(async move { TerminalView::prepare(session, colors, palette) }).await;
+            }
+            let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
+                this.command_launching = false;
+                if this.notice.as_deref() == Some("Starting workspace…") { this.notice = None; }
+                match result {
+                    Ok(prepared) if this.automation_available(cx).is_ok() && this.entries.len() < 64
+                        && this.entries.iter().any(|entry| entry.workspace.entity_id() == origin)
+                        && this.groups.containing(origin).map(|group| group.id) == group_id => {
+                        let focus = focus.as_ref().is_some_and(|focus| focus.is_focused(window));
+                        let settings = cx.global::<Preferences>();
+                        let seed = TerminalSeed::Ready(prepared, CellMetrics::new(settings.font_size), settings.font_family.clone().into());
+                        this.add_configured_from(1, true, Some(placement), None, focus, Some((seed, None)), Some(origin), window, cx);
+                    }
+                    Ok(_) => this.notice = Some("Workspace startup canceled because its origin changed or became unavailable".into()),
+                    Err(error) => this.notice = Some(format!("Could not start workspace: {error:#}")),
+                }
+                cx.notify();
+            }));
+        }).detach();
+    }
+
     fn add_with_directory(&mut self, panes: usize, inherit_group: bool, placement: Option<workspace_groups::Placement>, directory_override: Option<std::path::PathBuf>, window: &mut Window, cx: &mut Context<Self>) {
         self.add_configured(panes, inherit_group, placement, directory_override, true, None, window, cx);
     }
 
-    fn add_configured(&mut self, panes: usize, inherit_group: bool, placement: Option<workspace_groups::Placement>, directory_override: Option<std::path::PathBuf>, focus: bool, mut prepared: Option<(TerminalSeed, Option<String>)>, window: &mut Window, cx: &mut Context<Self>) -> Option<usize> {
+    fn add_configured(&mut self, panes: usize, inherit_group: bool, placement: Option<workspace_groups::Placement>, directory_override: Option<std::path::PathBuf>, focus: bool, prepared: Option<(TerminalSeed, Option<String>)>, window: &mut Window, cx: &mut Context<Self>) -> Option<usize> {
+        self.add_configured_from(panes, inherit_group, placement, directory_override, focus, prepared, None, window, cx)
+    }
+    fn add_configured_from(&mut self, panes: usize, inherit_group: bool, placement: Option<workspace_groups::Placement>, directory_override: Option<std::path::PathBuf>, focus: bool, mut prepared: Option<(TerminalSeed, Option<String>)>, origin: Option<EntityId>, window: &mut Window, cx: &mut Context<Self>) -> Option<usize> {
         if cx.global::<Shutdowns>().quitting {
             return None;
         }
+        let origin_index = match origin {
+            Some(id) => self.entries.iter().position(|entry| entry.workspace.entity_id() == id)?,
+            None => self.active,
+        };
         if focus { self.remember_focus(window, cx); }
-        let parent_group = self.entries.get(self.active).filter(|_| inherit_group).and_then(|entry| {
+        let parent_group = self.entries.get(origin_index).filter(|_| inherit_group).and_then(|entry| {
             let member = entry.workspace.entity_id();
             self.groups.containing(member).map(|group| (group.id, member))
         });
@@ -3546,7 +3613,7 @@ impl WorkspaceWindow {
             .and_then(|(_, member)| self.groups.containing(member))
             .and_then(|group| group.members.first())
             .and_then(|anchor| self.entries.iter().find(|entry| entry.workspace.entity_id() == *anchor))
-            .or_else(|| self.entries.get(self.active));
+            .or_else(|| self.entries.get(origin_index));
         let directory = directory_override.or_else(|| parent_group.and_then(|(_, member)| self.groups.containing(member)).and_then(|group| group.cwd.clone())).or_else(|| directory_entry.and_then(|entry| {
             let workspace = entry.workspace.read(cx);
             workspace.panes.iter().find(|pane| Some(pane.entity_id()) == entry.last_pane)
@@ -3575,15 +3642,15 @@ impl WorkspaceWindow {
         let metadata = Self::observe_metadata(&workspace, window, cx);
         let last_pane = workspace.read(cx).panes.last().map(Entity::entity_id);
         let index = if parent_group.is_some() { self.entries.len() } else {
-            let anchor = self.entries.get(self.active).and_then(|entry| self.groups.containing(entry.workspace.entity_id()))
+            let anchor = self.entries.get(origin_index).and_then(|entry| self.groups.containing(entry.workspace.entity_id()))
                 .and_then(|group| group.members.first()).and_then(|anchor| self.entries.iter().position(|entry| entry.workspace.entity_id() == *anchor))
-                .unwrap_or(self.active);
+                .unwrap_or(origin_index);
             let placement = placement.unwrap_or(cx.global::<Preferences>().new_workspace_placement);
             // A new unpinned row cannot enter the pinned tier. Its nearest visual
             // position after a pinned origin is the start of the unpinned tier,
             // regardless of where the origin's anchor lives in storage.
             let placement = if placement == workspace_groups::Placement::AfterCurrent
-                && !self.entries.is_empty() && self.top_level_pinned(self.active) {
+                && !self.entries.is_empty() && self.top_level_pinned(origin_index) {
                 workspace_groups::Placement::Top
             } else { placement };
             workspace_groups::insertion_index(self.entries.len(), anchor, placement)
@@ -3987,7 +4054,7 @@ impl Render for WorkspaceWindow {
                 if this.entries.len() >= 64 {
                     this.notice = Some("Window workspace limit reached".into()); cx.notify(); return;
                 }
-                this.add_with_directory(1, true, None, Some(action.path.clone()), window, cx);
+                this.start_workspace(Some(action.path.clone()), window, cx);
             }))
             .on_action(cx.listener(|this, action: &PreviewLocalFile, window, cx| this.preview_local_file(action.path.clone(), window, cx)))
             .on_action(cx.listener(|this, _: &OpenTextPreview, window, cx| this.choose_local_path(false, window, cx)))
@@ -4115,7 +4182,7 @@ impl Render for WorkspaceWindow {
             .on_action(cx.listener(|this, _: &EditWorkspaceDescription, window, cx| this.edit_metadata(MetadataField::Description, window, cx)))
             .on_action(cx.listener(|this, _: &EditWorkspaceIcon, window, cx| this.edit_metadata(MetadataField::Icon, window, cx)))
             .on_action(cx.listener(|this, _: &EditWorkspaceColor, window, cx| this.edit_metadata(MetadataField::Color, window, cx)))
-            .on_action(cx.listener(|this, _: &NewWorkspace, window, cx| this.add(1, window, cx)))
+            .on_action(cx.listener(|this, _: &NewWorkspace, window, cx| this.start_workspace(None, window, cx)))
             .on_action(cx.listener(|this, _: &RefreshTerminalMemory, window, cx| this.refresh_memory(window, cx)))
             .on_action(cx.listener(|this, _: &CycleTerminalMemorySort, _, cx| this.sort_memory(cx)))
             .on_action(cx.listener(|this, _: &ShowTerminalMemorySort, window, cx| this.show_memory_sort(window, cx)))
@@ -4201,7 +4268,7 @@ impl Render for WorkspaceWindow {
                                     .on_mouse_down(MouseButton::Left, |event, window, _| { if cfg!(target_os = "macos") { if event.click_count == 2 { window.zoom_window(); } else { window_geometry::drag_titlebar(window); } } })
                                     .child(if self.sidebar_selection.len() > 1 { format!("{} selected", self.sidebar_selection.len()) } else { "Workspaces".into() }))
                                 .child(pane_view::action_control("sidebar-new-workspace", "New Workspace", NewWorkspace, None)
-                                    .on_click(cx.listener(|this, event: &ClickEvent, window, cx| { if event.standard_click() { this.add(1, window, cx); } })).child(icons::icon("plus")))
+                                    .on_click(cx.listener(|this, event: &ClickEvent, window, cx| { if event.standard_click() { this.start_workspace(None, window, cx); } })).child(icons::icon("plus")))
                                 .tooltip(|window, cx| {
                                     let selection = if cfg!(target_os = "macos") { "⌘-click to select · Shift-click for range" }
                                         else { "Ctrl-click to select · Shift-click for range" };
@@ -4378,7 +4445,7 @@ impl Render for WorkspaceWindow {
                                                                 cx.stop_propagation();
                                                                 if let Some(index) = this.entries.iter().position(|entry| entry.workspace.entity_id() == target) {
                                                                     this.select(index, window, cx);
-                                                                    this.add(1, window, cx);
+                                                                    this.start_workspace(None, window, cx);
                                                                 }
                                                             }))
                                                     ))

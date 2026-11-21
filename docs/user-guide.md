@@ -848,6 +848,14 @@ mise run run
 ```
 
 `mise run bundle` creates `target/debug/rmux.app` on macOS. `mise run test` runs workspace tests; `mise run check` checks the workspace. Cmd+D splits the focused pane right; Cmd+Shift+D splits below. Linux/Windows use Ctrl+Shift+D and Ctrl+Shift+E. Splits can nest in either direction. Cmd+V pastes and Cmd+Q quits.
+Interactive New Workspace, sidebar/group plus buttons and New Workspace in Directory
+prepare their terminal in the background and show **Starting workspace…**. Only one
+command/workspace startup can be pending in a window. Directory and placement are
+captured at the request; completion inserts relative to the original workspace and
+preserves focus if you moved elsewhere. Closing/moving the origin or changing its
+group during startup discards the new terminal with a notice. Settings changes are
+applied before insertion. Initial window and group-creation paths remain separate.
+
 Interactive splits and new tabs inherit the active tab's explicit SSH destination,
 starting a separate SSH client with its own authentication and an SSH-labelled tab.
 They do not reuse remote working directories as local paths or resume remote processes.

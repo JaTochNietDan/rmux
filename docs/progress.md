@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Interactive New Workspace, sidebar/group plus controls and New Workspace in
+Directory now prepare PTY/colors/first frame off-thread. Startup captures directory,
+placement and origin; insertion resolves that original workspace instead of the
+currently selected row, preserves newer focus, and drops the prepared child if the
+origin disappears or changes groups. One command/workspace launch per window bounds
+pending work, with a Starting workspace notice. Settings changes are re-prepared
+before insertion. Desktop compilation and the native workspace-placement fixture
+passed end/top/after-current, group/pinned ordering, failed creation and selection
+checks on the shared insertion path. The new interactive async focus/group-change
+cases still need native UI acceptance; initial app/group-mutation startup is separate.
+
 All RPC workspace creation now uses the background PTY/first-frame pipeline,
 including ordinary local shells. Removed the synchronous workspace dispatcher and
 made publication require a prepared seed. Local directory inheritance is captured
