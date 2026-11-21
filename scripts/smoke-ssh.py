@@ -90,12 +90,21 @@ def main():
                         assert Path(cwd_record.read_text()).resolve() == root.resolve()
                         call("pane.split", {"pane_id": original_surface["pane_id"], "direction": "down", "cwd": str(root / "missing-directory")}, fail=True)
                         assert len(call("surface.list", {"workspace_id": created})["surfaces"]) == 3
+                        local_workspace = call("workspace.create", {"window_id": window, "cwd": str(root), "name": "Local fixture"})["id"]
+                        local_surface = call("surface.list", {"workspace_id": local_workspace})["surfaces"][0]
+                        assert local_surface["ssh_destination"] is None
+                        cwd_record = root / f"local-cwd-{local_surface['process_id']}"
+                        wait_for(cwd_record.exists, "local workspace did not record cwd")
+                        assert Path(cwd_record.read_text()).resolve() == root.resolve()
+                        assert [row["id"] for row in call("workspace.list")["workspaces"] if row["selected"]] == [original]
+                        call("workspace.create", {"window_id": window, "cwd": str(root / "missing-directory")}, fail=True)
+                        assert len(call("workspace.list")["workspaces"]) == 3
                         fixture.unlink()
                         call("pane.split", {"pane_id": original_surface["pane_id"], "direction": "down", "ssh_destination": "missing-client"}, fail=True)
                         assert len(call("surface.list", {"workspace_id": created})["surfaces"]) == 3
 
                         call("workspace.create", {"window_id": window, "ssh_destination": "missing-client"}, fail=True)
-                        assert len(call("workspace.list")["workspaces"]) == 2
+                        assert len(call("workspace.list")["workspaces"]) == 3
                     else:
                         surfaces = call("surface.list")["surfaces"]
                         saved = [row for row in surfaces if row["saved_ssh_destination"] == target]

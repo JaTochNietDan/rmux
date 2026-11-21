@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+All RPC workspace creation now uses the background PTY/first-frame pipeline,
+including ordinary local shells. Removed the synchronous workspace dispatcher and
+made publication require a prepared seed. Local directory inheritance is captured
+from the active pane at request time (then initial-directory fallback); explicit
+cwd wins, and SSH's existing launch-directory behavior is retained. The expanded
+native fixture passed local workspace actual cwd, unchanged selected workspace,
+invalid-directory rollback, and all remote/split teardown and recovery cases.
+Interactive New Workspace and initial app launch remain separate startup work;
+latency, settings-change and native visual acceptance remain pending.
+
 SSH RPC workspace creation now prepares its first frame/colors in the worker and
 passes a Ready terminal through workspace insertion. Interactive Connect via SSH
 and custom-command launches use the same ready insertion boundary, with background

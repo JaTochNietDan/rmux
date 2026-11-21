@@ -413,7 +413,7 @@ pub fn attach_live(cx: &mut gpui::App, stdio: bool, socket_directory: Option<std
     }
     cx.spawn(async move |cx| {
         while let Ok(request) = receiver.recv().await {
-            if let Some(create) = request.workspace_create.as_ref().filter(|create| create.ssh_destination.is_some()) {
+            if let Some(create) = request.workspace_create.as_ref() {
                 let prepared = cx.update(|cx| {
                     if !request.pending.start() { return Err(Failure { code: -32001, message: "Request expired before execution" }); }
                     let target = target_id(&create.window_id)?;
@@ -421,7 +421,7 @@ pub fn attach_live(cx: &mut gpui::App, stdio: bool, socket_directory: Option<std
                         let Some(handle) = handle.downcast::<super::window_view::WorkspaceWindow>() else { continue; };
                         let any: gpui::AnyWindowHandle = handle.into();
                         if any.read::<super::window_view::WorkspaceWindow, _, _>(cx, |entity, _| entity.entity_id() == target).unwrap_or(false) {
-                            let job = handle.update(cx, |view, _, cx| view.automation_prepare_ssh(create, cx))
+                            let job = handle.update(cx, |view, _, cx| view.automation_prepare_workspace(create, cx))
                                 .map_err(|_| Failure { code: -32004, message: "Window closed" })??;
                             return Ok((handle, job));
                         }
@@ -444,8 +444,8 @@ pub fn attach_live(cx: &mut gpui::App, stdio: bool, socket_directory: Option<std
                                 super::TerminalView::prepare(session, colors, palette)
                             }).await;
                         }
-                        handle.update(cx, |view, window, cx| view.automation_finish_ssh(create, prepared, window, cx))
-                            .map_err(|_| Failure { code: -32004, message: "Window closed during SSH startup" })
+                        handle.update(cx, |view, window, cx| view.automation_finish_workspace(create, prepared, window, cx))
+                            .map_err(|_| Failure { code: -32004, message: "Window closed during terminal startup" })
                             .and_then(|result| result)
                     }
                     Err(error) => Err(error),
@@ -663,18 +663,6 @@ pub fn attach_live(cx: &mut gpui::App, stdio: bool, socket_directory: Option<std
                         }
                     }
                     return Err(Failure { code: -32004, message: "Surface not found" });
-                }
-                if let Some(create) = &request.workspace_create {
-                    let target = target_id(&create.window_id)?;
-                    for handle in cx.windows() {
-                        let Some(handle) = handle.downcast::<super::window_view::WorkspaceWindow>() else { continue; };
-                        let any: gpui::AnyWindowHandle = handle.into();
-                        if any.read::<super::window_view::WorkspaceWindow, _, _>(cx, |entity, _| entity.entity_id() == target).unwrap_or(false) {
-                            return handle.update(cx, |view, window, cx| view.automation_create_workspace(create, window, cx))
-                                .map_err(|_| Failure { code: -32004, message: "Window closed" })?;
-                        }
-                    }
-                    return Err(Failure { code: -32004, message: "Window not found" });
                 }
                 if let Some(create) = &request.group_create {
                     let window_id = target_id(&create.window_id)?;

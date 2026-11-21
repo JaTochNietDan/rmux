@@ -37,7 +37,7 @@ Destinations are limited to 255 ASCII bytes, without spaces or command options.
 Native macOS fixture checks cover key authentication, a configured SSH proxy,
 an encrypted-key passphrase prompt without echo, and rejection of changed host
 keys or unauthorized keys. Account-password and agent flows remain unverified.
-SSH workspace launch prepares the client PTY, initial colors and first terminal
+RPC workspace creation (local or SSH) and interactive SSH launch prepare the PTY, initial colors and first terminal
 snapshot on a background worker. Color changes during startup are applied before
 the workspace is inserted. Custom-command launches share this preparation path.
 The SSH client must already be available on PATH; launch errors appear in rmux,
