@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Publish the runner-built archive before advertising it in the update feed."""
 import os
+import hashlib
 from pathlib import Path
 import shutil
 import subprocess
@@ -14,11 +15,23 @@ version = tomllib.loads(Path('Cargo.toml').read_text())['workspace']['package'][
 tag = 'v' + version
 repo = 'JaTochNietDan/rmux'
 output = Path('target/releases')/version
-archive = output/f'rmux-{version}-macos-arm64.zip'
-# GitHub rejects duplicate published tags/releases; do not silently replace assets.
-run('gh', 'release', 'create', tag, str(archive), str(output/'SHA256SUMS'), str(output/'appcast.xml'),
+assets = [output / f'rmux-{version}-{suffix}' for suffix in (
+    'macos-arm64.zip', 'macos-arm64.dmg', 'linux-x86_64.tar.gz', 'windows-x86_64.zip')]
+assets.append(output / 'appcast.xml')
+for asset in assets:
+    if not asset.is_file() or not asset.stat().st_size:
+        raise SystemExit(f'Missing release artifact: {asset}')
+checksums = output / 'SHA256SUMS'
+with checksums.open('w') as stream:
+    for asset in assets:
+        with asset.open('rb') as data:
+            digest = hashlib.file_digest(data, 'sha256').hexdigest()
+        stream.write(f'{digest}  {asset.name}\n')
+# Publish only after all native jobs succeed. Never replace a published version.
+run('gh', 'release', 'create', tag, *(str(path) for path in assets), str(checksums),
     '--repo', repo, '--target', os.environ['GITHUB_SHA'], '--title', f'rmux {version} — preview',
-    '--notes-file', f'docs/releases/{tag}.md', '--prerelease')
+    '--notes-file', f'docs/releases/{tag}.md', '--prerelease', '--draft')
+run('gh', 'release', 'edit', tag, '--repo', repo, '--draft=false')
 run('git', 'fetch', 'origin', 'main')
 run('git', 'checkout', '-B', 'main', 'origin/main')
 Path('updates').mkdir(exist_ok=True)

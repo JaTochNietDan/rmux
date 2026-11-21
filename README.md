@@ -8,7 +8,7 @@ interface, it aims to stay responsive as your workspace grows.
 
 ![rmux with project workspaces and split terminals](docs/images/rmux.png)
 
-[Download for macOS](https://github.com/JaTochNietDan/rmux/releases) ·
+[Download rmux](https://github.com/JaTochNietDan/rmux/releases) ·
 [Getting started](docs/trying-rmux.md) · [User guide](docs/user-guide.md)
 
 ## A home for your terminal work
@@ -28,12 +28,21 @@ interface, it aims to stay responsive as your workspace grows.
 
 ## Install
 
-The first release is for **Apple Silicon Macs**. Download the ZIP from
-[Releases](https://github.com/JaTochNietDan/rmux/releases), unzip it, and move
-**rmux.app** into **Applications**.
+Download a preview from [Releases](https://github.com/JaTochNietDan/rmux/releases):
 
-The macOS release is Developer ID signed and notarized. Choose **rmux → Check
-for Updates…** to check for newer versions using Sparkle.
+| Platform | Download | Install |
+| --- | --- | --- |
+| macOS, Apple Silicon | `.dmg` | Open it and drag **rmux.app** into **Applications**. |
+| Linux, x86-64 | `.tar.gz` | Extract it and run `./rmux` in the extracted directory. |
+| Windows, x86-64 | `.zip` | Extract the whole ZIP and run `rmux.exe`, keeping its DLL beside it. |
+
+The macOS app and DMG are Developer ID signed and notarized. **rmux → Check for
+Updates…** uses Sparkle; the macOS ZIP is also available for manual installation
+and updates. Linux builds target Ubuntu 24.04-compatible systems with X11 or
+Wayland and working graphics drivers. Windows builds are currently unsigned.
+Linux and Windows are early platform previews with native UI acceptance still
+in progress; they do not yet have automatic updates. Every archive includes
+`rmuxctl` and dependency notices. Release checksums are in `SHA256SUMS`.
 
 ## Start here
 
@@ -47,7 +56,7 @@ recovery, and configuration.
 rmux is an early preview inspired by [cmux](https://cmux.com/). It is usable, but
 full feature and interaction parity is still in progress. Embedded browser
 surfaces, remote workflows, and native OS notifications are not yet included.
-Linux and Windows are development targets; this release ships macOS only.
+Linux and Windows packages are experimental; cross-platform behavior is still being validated.
 Performance is a design priority, not a promise of zero lag or a fixed memory
 footprint on every workload.
 

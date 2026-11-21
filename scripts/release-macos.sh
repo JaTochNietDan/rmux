@@ -30,5 +30,21 @@ fi
 generate_appcast "$@" --maximum-deltas 0 \
     --download-url-prefix "https://github.com/JaTochNietDan/rmux/releases/download/v$version/" \
     --link "https://github.com/JaTochNietDan/rmux" "$output"
-(cd "$output" && shasum -a 256 "rmux-$version-macos-arm64.zip" > SHA256SUMS)
+# Keep Sparkle's feed pointed at the signed ZIP; create the installer afterward.
+staging="$(mktemp -d)"
+trap 'rm -rf "$staging"' EXIT HUP INT TERM
+ditto "$app" "$staging/rmux.app"
+ln -s /Applications "$staging/Applications"
+dmg="$output/rmux-$version-macos-arm64.dmg"
+hdiutil create -volname rmux -srcfolder "$staging" -format UDZO -fs HFS+ "$dmg"
+codesign --force --timestamp --sign "$RMUX_SIGN_IDENTITY" "$dmg"
+if [ -n "${RMUX_NOTARY_KEYCHAIN:-}" ]; then
+    xcrun notarytool submit "$dmg" --keychain-profile "$RMUX_NOTARY_PROFILE" --keychain "$RMUX_NOTARY_KEYCHAIN" --wait --output-format json > "$output/notarization-dmg.json"
+else
+    xcrun notarytool submit "$dmg" --keychain-profile "$RMUX_NOTARY_PROFILE" --wait --output-format json > "$output/notarization-dmg.json"
+fi
+python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); print("DMG notarization:",r["status"],r["id"]); sys.exit(0 if r["status"]=="Accepted" else 1)' "$output/notarization-dmg.json"
+xcrun stapler staple "$dmg"
+xcrun stapler validate "$dmg"
+(cd "$output" && shasum -a 256 "rmux-$version-macos-arm64.zip" "rmux-$version-macos-arm64.dmg" > SHA256SUMS)
 printf '%s\n' "Release artifacts: $output"

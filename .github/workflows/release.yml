@@ -1,17 +1,15 @@
-name: Release macOS
+name: Release
 on:
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: release-macos
+  group: release
   cancel-in-progress: false
 jobs:
-  release:
+  macos:
     runs-on: macos-15
     timeout-minutes: 90
-    permissions:
-      contents: write
     env:
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
       MACOSX_DEPLOYMENT_TARGET: '12.0'
@@ -61,9 +59,104 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: macos-release
+          path: |
+            target/releases/*/*.zip
+            target/releases/*/*.dmg
+            target/releases/*/appcast.xml
+          if-no-files-found: error
+
+  portable:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux
+            target: x86_64-unknown-linux-gnu
+          - os: windows-2025
+            platform: windows
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    env:
+      CARGO_INCREMENTAL: '0'
+      RMUX_RELEASE_TARGET: ${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db
+        with:
+          version: 2026.11.8
+          mise_toml: |
+            [tools]
+            rust = "1.99.1"
+            python = "3.13.15"
+            zig = "0.17.0"
+      - name: Linux system libraries (runner only)
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libudev-dev libfontconfig1-dev libxkbcommon-x11-dev libwayland-dev libx11-xcb-dev libvulkan-dev libssl-dev libxcb-shape0-dev libxcb-xfixes0-dev
+      - name: Select existing Windows LLVM
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: '"LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV'
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/release
+            .deps
+          key: ${{ matrix.platform }}-release-${{ hashFiles('Cargo.lock', 'mise.toml') }}
+          restore-keys: ${{ matrix.platform }}-release-
+      - name: Prepare Linux Ghostty
+        if: matrix.platform == 'linux'
+        run: mise exec -- sh scripts/bootstrap-ghostty.sh
+      - name: Prepare Windows Ghostty
+        if: matrix.platform == 'windows'
+        run: mise exec -- pwsh -File scripts/bootstrap-ghostty.ps1
+      - name: Build native release
+        run: mise exec -- cargo build --locked --release -p rmux-desktop -p rmux-cli
+      - name: Save native build cache
+        if: always()
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/release
+            .deps
+          key: ${{ matrix.platform }}-release-${{ hashFiles('Cargo.lock', 'mise.toml') }}-${{ github.sha }}
+      - name: Package native release
+        run: mise exec -- python scripts/package-portable.py ${{ matrix.platform }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ matrix.platform }}-release
           path: target/releases/
           if-no-files-found: error
-      - name: Publish immutable release and advance update feed
+
+  publish:
+    needs: [macos, portable]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db
+        with:
+          version: 2026.11.8
+          mise_toml: |
+            [tools]
+            python = "3.13.15"
+            gh = "2.103.0"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: '*-release'
+          merge-multiple: true
+          path: target/releases/
+      - name: Publish complete release and advance Sparkle feed
         env:
           GH_TOKEN: ${{ github.token }}
         run: mise exec -- python scripts/publish-release.py

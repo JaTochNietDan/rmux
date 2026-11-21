@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Bundle dependency notices from the exact locally resolved Cargo packages."""
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
 
-metadata = json.loads(subprocess.check_output(['cargo', 'metadata', '--locked', '--format-version', '1', '--filter-platform', 'aarch64-apple-darwin']))
+metadata = json.loads(subprocess.check_output(['cargo', 'metadata', '--locked', '--format-version', '1', '--filter-platform', os.environ.get('RMUX_RELEASE_TARGET', 'aarch64-apple-darwin')]))
 resolved = {node['id'] for node in metadata['resolve']['nodes']}
 parts = ['rmux third-party notices\n\nDependency license declarations and available upstream license/notice files.\n']
 for package in sorted(metadata['packages'], key=lambda p: (p['name'], p['version'])):
