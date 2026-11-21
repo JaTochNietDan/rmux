@@ -342,7 +342,9 @@ longer matches, the first result is selected. Navigating to another directory
 starts a fresh filter.
 
 **Read Markdown** in a file preview opens a bounded reading view. Headings are
-bold, code blocks use the terminal font, and lists/quotes receive a visual marker.
+bold with a size hierarchy and searchable H1–H6 labels; wrapped headings use
+up to two visual lines. Code blocks use the terminal font, and lists/quotes receive
+a visual marker.
 Ordered lists retain their starting number and nested lists are indented (visual
 indentation stops increasing after eight levels). Continuation paragraphs do not
 repeat the item marker. Block copying returns its text without added list markers;

@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Markdown reading blocks now preserve H1–H6 identity, including Setext headings.
+Heading rows use a font-size hierarchy, searchable level labels and two-line
+wrapped excerpts with matching row heights for paging/virtualization. Other
+block excerpts retain their previous sizes. Five Markdown parser regressions
+passed, including all ATX levels and both Setext forms, with desktop compilation.
+Native heading spacing/clipping and full document appearance acceptance remain
+pending.
+
 Markdown code excerpts now preserve separate source lines and indentation in
 wrapped mode, instead of flattening all whitespace into prose. Four bounded
 monospace rows are selected around the first contiguous query-word match; tabs

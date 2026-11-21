@@ -1,7 +1,7 @@
 //! Bounded, inert CommonMark reading blocks. No HTML/web engine or asset loads.
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub enum Kind { #[default] Paragraph, Heading, Code, Quote, List { depth: usize, number: Option<u64>, marker: bool } }
+pub enum Kind { #[default] Paragraph, Heading(u8), Code, Quote, List { depth: usize, number: Option<u64>, marker: bool } }
 pub struct Block { pub text: String, pub kind: Kind }
 pub fn blocks(source: &str) -> (Vec<Block>, bool) {
     let mut output = Vec::new();
@@ -39,7 +39,7 @@ pub fn blocks(source: &str) -> (Vec<Block>, bool) {
             }
             Event::Start(tag @ (Tag::HtmlBlock | Tag::Paragraph | Tag::Heading { .. } | Tag::CodeBlock(_))) => {
                 flush(&mut output, &mut text, kind);
-                kind = match tag { Tag::Heading { .. } => Kind::Heading, Tag::CodeBlock(_) => Kind::Code,
+                kind = match tag { Tag::Heading { level, .. } => Kind::Heading(level as u8), Tag::CodeBlock(_) => Kind::Code,
                     _ if !items.is_empty() => *items.last().unwrap(), _ if quote > 0 => Kind::Quote, _ => Kind::Paragraph };
                 if let Some(Kind::List { marker, .. }) = items.last_mut() { *marker = false; }
             }
@@ -90,6 +90,13 @@ pub fn code_excerpt(source: &str, query: &str) -> String {
 mod tests {
     use super::*;
     #[test]
+    fn heading_levels_preserve_atx_and_setext_structure() {
+        let (result, limited) = blocks("# First\n\n## Second\n\n### Third\n\n#### Fourth\n\n##### Fifth\n\n###### Sixth\n\nSetext one\n==========\n\nSetext two\n----------\n");
+        assert!(!limited);
+        assert_eq!(result.iter().map(|block| block.kind).collect::<Vec<_>>(), [Kind::Heading(1), Kind::Heading(2), Kind::Heading(3), Kind::Heading(4), Kind::Heading(5), Kind::Heading(6), Kind::Heading(1), Kind::Heading(2)]);
+        assert_eq!(result[6].text, "Setext one");
+    }
+    #[test]
     fn code_excerpts_keep_lines_indent_and_original_text() {
         let source = "zero\n\tif ready {\n\t\tprintln!(\"世界\");\n\t}\nlast\n";
         let excerpt = code_excerpt(source, "世界");
@@ -123,7 +130,7 @@ mod tests {
     fn reading_blocks_preserve_text_without_fetching_or_executing_assets() {
         let (blocks, truncated) = blocks("# Title\n\nHello **world** [link](https://example.invalid).\n\n- item\n\n> quote\n\n```sh\necho hello\n```\n\n![alt](file:///missing.png)\n\n<script>alert(1)</script>\n");
         assert!(!truncated);
-        assert_eq!(blocks[0].kind, Kind::Heading);
+        assert_eq!(blocks[0].kind, Kind::Heading(1));
         assert_eq!(blocks[1].text, "Hello world link.");
         assert!(blocks.iter().any(|b| matches!(b.kind, Kind::List { .. }) && b.text == "item"));
         assert!(blocks.iter().any(|b| b.kind == Kind::Quote && b.text == "quote"));

@@ -136,6 +136,9 @@ struct Command {
     shortcut: Option<String>,
 }
 impl Command {
+    fn markdown_kind(&self) -> Option<markdown_preview::Kind> {
+        match &self.target { PaletteEvent::Run(action) => action.as_any().downcast_ref::<CopyPreviewLine>().and_then(|line| line.markdown), _ => None }
+    }
     fn preview_line(&self) -> Option<&str> {
         match &self.target {
             PaletteEvent::Run(action) => action.as_any().downcast_ref::<CopyPreviewLine>().map(|line| line.text.as_str()),
@@ -592,7 +595,8 @@ impl CommandPalette {
                 if let Some(line) = action.as_any().downcast_ref::<CopyPreviewLine>() {
                     block_number += 1;
                     command.target = PaletteEvent::Run(Box::new(CopyPreviewLine { text: line.text.clone(), markdown: kinds.next() }));
-                    command.subtitle = Some(format!("Block {block_number} · Enter copies reading text"));
+                    let label = match command.markdown_kind() { Some(markdown_preview::Kind::Heading(level)) => format!("Heading H{level}"), _ => "Block".into() };
+                    command.subtitle = Some(format!("{label} {block_number} · Enter copies reading text"));
                 } else if let Some(action) = action.as_any().downcast_ref::<PreviewLocalFile>() {
                     command.target = PaletteEvent::Run(Box::new(PreviewMarkdownFile { path: action.path.clone() }));
                 } else if action.as_any().is::<CopyPreviewText>() {
@@ -795,7 +799,8 @@ impl CommandPalette {
         }));
     }
     fn command_height(&self, command: usize) -> f32 {
-        if self.wrap_preview && self.commands[command].preview_line().is_some() { 116. }
+        if self.wrap_preview && matches!(self.commands[command].markdown_kind(), Some(markdown_preview::Kind::Heading(_))) { 84. }
+        else if self.wrap_preview && self.commands[command].preview_line().is_some() { 116. }
         else { result_row_height(self.commands[command].subtitle.is_some()) }
     }
     fn edit_selected_file(&mut self, cx: &mut Context<Self>) {
@@ -845,7 +850,8 @@ impl CommandPalette {
         let Some(&command) = self.search.matches.get(row) else { return div().into_any_element(); };
         let selected = row == self.selected;
         let wrapped = self.wrap_preview && self.commands[command].preview_line().is_some();
-        let markdown = match &self.commands[command].target { PaletteEvent::Run(action) => action.as_any().downcast_ref::<CopyPreviewLine>().and_then(|line| line.markdown), _ => None };
+        let markdown = self.commands[command].markdown_kind();
+        let heading = match markdown { Some(markdown_preview::Kind::Heading(level)) => Some(level), _ => None };
         let title = self.commands[command].preview_line()
             .map(|text| if wrapped && markdown == Some(markdown_preview::Kind::Code) {
                 markdown_preview::code_excerpt(text, self.input.read(cx).value())
@@ -887,7 +893,7 @@ impl CommandPalette {
             .h(px(self.command_height(command)))
             .text_sm().line_height(px(20.))
             .when(self.hex_preview && self.commands[command].preview_line().is_some(), |row| row.font_family(FONT_FAMILY))
-            .when(markdown == Some(markdown_preview::Kind::Heading), |row| row.font_weight(FontWeight::BOLD))
+            .when_some(heading, |row, level| row.font_weight(FontWeight::BOLD).text_size(px(match level { 1 => 20., 2 => 18., 3 => 16., _ => 14. })).line_height(px(24.)))
             .when(markdown == Some(markdown_preview::Kind::Code), |row| row.font_family(FONT_FAMILY))
             .when_some(match markdown { Some(markdown_preview::Kind::List { depth, .. }) => Some(depth), _ => None }, |row, depth| row.pl(px(12. + depth.saturating_sub(1).min(8) as f32 * 12.)))
             .when(matches!(markdown, Some(markdown_preview::Kind::Quote | markdown_preview::Kind::List { .. })), |row| row.border_l_2().border_color(rgb(0x637894)))
@@ -913,7 +919,7 @@ impl CommandPalette {
                     .child(div().flex().flex_col().gap_1()
                         .child(if let Some(lines) = code_lines {
                             div().flex().flex_col().overflow_hidden().children(lines.into_iter().map(|line| div().h(px(20.)).flex_shrink_0().whitespace_nowrap().overflow_hidden().child(line))).into_any_element()
-                        } else { div().when(wrapped, |title| title.whitespace_normal().line_clamp(4).text_ellipsis()).when(!wrapped, |title| title.truncate()).child(title).into_any_element() })
+                        } else { div().when(wrapped, |title| title.whitespace_normal().line_clamp(if heading.is_some() { 2 } else { 4 }).text_ellipsis()).when(!wrapped, |title| title.truncate()).child(title).into_any_element() })
                         .when_some(subtitle, |column, subtitle| column.child(div().truncate().text_xs().line_height(px(16.)).text_color(rgb(0xa0a0a0)).child(subtitle)))),
             )
             .when_some(self.commands[command].shortcut.clone(), |row, shortcut| {
