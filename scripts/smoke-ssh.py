@@ -64,6 +64,7 @@ def main():
                         surfaces = call("surface.list", {"workspace_id": created})["surfaces"]
                         assert len(surfaces) == 1 and surfaces[0]["ssh_destination"] == target, surfaces
                         assert surfaces[0]["saved_ssh_destination"] is None and surfaces[0]["directory_label"] is None
+                        wait_for(lambda: call("surface.list", {"workspace_id": created})["surfaces"][0]["remote_directory"] == "/tmp", "remote directory label did not arrive")
                         assert surfaces[0]["process_id"] == int((root / "pid").read_text())
                         assert [row["id"] for row in call("workspace.list")["workspaces"] if row["selected"]] == [original]
                         fixture.unlink()

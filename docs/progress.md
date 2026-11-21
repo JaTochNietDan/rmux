@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Explicit SSH sessions now expose shell-reported OSC 7 paths through a separate
+bounded remote-directory text channel. The sidebar context prefixes Remote, and
+surface JSON includes `remote_directory`; local PathBuf/cwd/git workflows remain
+unset. Remote POSIX paths decode independently of the local OS, reject controls
+and malformed UTF-8, and allocate only when directory revisions change. Three
+focused parser/session tests and the updated native no-network SSH fixture passed,
+including /tmp remote delivery with no local directory. Native visuals remain
+pending; shells must emit OSC 7, and remote filesystem browsing is not implemented.
+
 The native SSH workspace path now passed real OpenSSH authentication against an
 isolated loopback sshd using temporary Ed25519 host/client keys and private client
 configuration. A config alias authenticated successfully; changing known_hosts

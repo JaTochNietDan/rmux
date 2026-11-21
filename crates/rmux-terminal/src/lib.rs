@@ -422,6 +422,13 @@ impl Terminal {
         self.callbacks.bell_revision
     }
     pub fn current_directory(&self) -> Result<Option<std::path::PathBuf>> {
+        self.with_directory_uri(|uri| directory::local_path(uri, directory::local_hostname().as_deref()))
+    }
+    pub fn remote_directory_since(&self, revision: u64) -> Result<Option<(u64, Option<String>)>> {
+        if revision == self.callbacks.directory_revision { return Ok(None); }
+        Ok(Some((self.callbacks.directory_revision, self.with_directory_uri(directory::remote_label)?)))
+    }
+    fn with_directory_uri<T>(&self, convert: impl FnOnce(&str) -> Option<T>) -> Result<Option<T>> {
         let mut value = GhosttyString {
             ptr: ptr::null(),
             len: 0,
@@ -440,10 +447,7 @@ impl Terminal {
             else {
                 return Ok(None);
             };
-            Ok(directory::local_path(
-                uri,
-                directory::local_hostname().as_deref(),
-            ))
+            Ok(convert(uri))
         }
     }
     /// Return a bounded, owned UI title only when Ghostty reports a change.

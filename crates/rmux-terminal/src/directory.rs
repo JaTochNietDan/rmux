@@ -32,7 +32,30 @@ pub(crate) fn local_path(uri: &str, hostname: Option<&str>) -> Option<PathBuf> {
     {
         return None;
     }
-    if path.contains(['?', '#']) {
+    let decoded = decode_path(path)?;
+    #[cfg(unix)]
+    let path = {
+        use std::os::unix::ffi::OsStringExt;
+        PathBuf::from(std::ffi::OsString::from_vec(decoded))
+    };
+    #[cfg(not(unix))]
+    let path = {
+        let text = String::from_utf8(decoded).ok()?;
+        let text = if text.as_bytes().get(2) == Some(&b':') { &text[1..] } else { &text };
+        PathBuf::from(text)
+    };
+    path.is_absolute().then_some(path)
+}
+
+/// Display text only: remote POSIX paths must not become local PathBuf values.
+pub(crate) fn remote_label(uri: &str) -> Option<String> {
+    let (_, path) = uri.strip_prefix("file://")?.split_once('/')?;
+    let text = String::from_utf8(decode_path(path)?).ok()?;
+    (!text.chars().any(char::is_control)).then_some(text)
+}
+
+fn decode_path(path: &str) -> Option<Vec<u8>> {
+    if path.len() > 8192 || path.contains(['?', '#']) {
         return None;
     }
     let mut decoded = vec![b'/'];
@@ -54,27 +77,20 @@ pub(crate) fn local_path(uri: &str, hostname: Option<&str>) -> Option<PathBuf> {
     if decoded.starts_with(b"//") {
         return None;
     }
-    #[cfg(unix)]
-    let path = {
-        use std::os::unix::ffi::OsStringExt;
-        PathBuf::from(std::ffi::OsString::from_vec(decoded))
-    };
-    #[cfg(not(unix))]
-    let path = {
-        let text = String::from_utf8(decoded).ok()?;
-        let text = if text.as_bytes().get(2) == Some(&b':') {
-            &text[1..]
-        } else {
-            &text
-        };
-        PathBuf::from(text)
-    };
-    path.is_absolute().then_some(path)
+    Some(decoded)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn remote_labels_decode_unicode_without_local_host_or_platform_rules() {
+        assert_eq!(remote_label("file://remote/home/user/hello%20%E4%B8%96%E7%95%8C"), Some("/home/user/hello 世界".into()));
+        assert_eq!(remote_label("file:///home/user"), Some("/home/user".into()));
+        for uri in ["file://remote/tmp/%1b", "file://remote/tmp/%0a", "file://remote/tmp/%ff", "file://remote/tmp/%00", "file://remote/tmp/%zz", "file://remote/tmp?query", "file:////server/share"] {
+            assert!(remote_label(uri).is_none(), "{uri}");
+        }
+    }
     #[cfg(unix)]
     #[test]
     fn local_uri_decodes_paths_and_rejects_remote_or_malformed_reports() {

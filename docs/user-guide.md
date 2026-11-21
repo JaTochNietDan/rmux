@@ -18,7 +18,10 @@ slice does not install a relay, resume disconnected sessions, browse remote file
 or automatically reconnect. Live authentication/platform acceptance is pending.
 Sessions launched by this SSH action do not expose a local working directory:
 remote shell directory reports cannot drive local file browsing, git metadata,
-or new-shell directory inheritance. Remote directory display is not implemented.
+or new-shell directory inheritance. When the remote shell emits OSC 7, the sidebar
+shows **Remote · /path**, and surface JSON provides `remote_directory` separately
+from local directory metadata. This is display text, not a local filesystem path;
+remote file browsing and automatic remote shell integration remain unimplemented.
 The requested SSH destination remains available in tab tooltips and terminal
 switcher search after renaming a tab. Surface JSON includes `ssh_destination`
 (null for local terminals). It identifies the launch target, not a confirmed

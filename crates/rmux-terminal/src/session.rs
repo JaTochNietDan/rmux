@@ -130,6 +130,7 @@ pub struct MetadataUpdate {
     pub notifications: Vec<Arc<crate::DesktopNotification>>,
     pub title: Result<Option<(u64, String)>>,
     pub directory: Result<Option<(u64, Option<std::path::PathBuf>)>>,
+    pub remote_directory: Result<Option<(u64, Option<String>)>>,
 }
 
 /// Does not retain the PTY or terminal; safe to retain while waiting for cleanup.
@@ -984,6 +985,7 @@ impl Session {
             notifications: terminal.notifications_since(notification_revision),
             title: terminal.title_since(title_revision),
             directory: if self.remote_destination.is_none() { terminal.directory_since(directory_revision) } else { Ok(None) },
+            remote_directory: if self.remote_destination.is_some() { terminal.remote_directory_since(directory_revision) } else { Ok(None) },
         })
     }
     pub fn try_render_delay(&self) -> Option<Option<std::time::Duration>> {
@@ -1104,7 +1106,11 @@ mod tests {
         for report in [b"\x1b]7;file://localhost/tmp\x07".as_slice(), b"\x1b]7;file:///tmp\x07".as_slice()] {
             session.terminal.lock().unwrap().write(report);
             assert!(session.current_directory()?.is_none());
-            assert!(session.try_metadata_since(0, 0, 0, 0, false).unwrap().directory?.is_none());
+            let metadata = session.try_metadata_since(0, 0, 0, 0, false).unwrap();
+            assert!(metadata.directory?.is_none());
+            let (revision, label) = metadata.remote_directory?.unwrap();
+            assert_eq!(label.as_deref(), Some("/tmp"));
+            assert!(session.try_metadata_since(0, revision, 0, 0, false).unwrap().remote_directory?.is_none());
         }
         Ok(())
     }

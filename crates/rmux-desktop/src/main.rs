@@ -529,6 +529,7 @@ struct TerminalView {
     title_revision: u64,
     directory_revision: u64,
     directory_label: Option<String>,
+    remote_directory_label: Option<String>,
     snapshot_directory: Option<std::path::PathBuf>,
     git_branch: Option<String>,
     git_loading: bool,
@@ -865,6 +866,13 @@ impl TerminalView {
                             }
                             view.refresh_git_context(cx);
                         }
+                        if let Ok(Some((revision, directory))) = metadata.remote_directory {
+                            view.directory_revision = revision;
+                            if view.remote_directory_label != directory {
+                                view.remote_directory_label = directory;
+                                metadata_changed = true;
+                            }
+                        }
                         if metadata_changed {
                             cx.emit(TabMetadataChanged);
                         }
@@ -907,6 +915,7 @@ impl TerminalView {
             title_revision: u64::MAX,
             directory_revision: u64::MAX,
             directory_label: None,
+            remote_directory_label: None,
             snapshot_directory,
             git_branch: None,
             git_loading: false,
