@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+External editing now has an `edit_selected_file` action with Ctrl+Alt+E defaults
+in the directory-browser and file-preview scopes. It resolves the current
+preview or selected regular-file row, ignores directory/symlink rows and IME
+composition, and reuses the launch/error/lifecycle path. The browser button shares
+the action handler; visible navigation hints reflect remapped keys. The focused
+scope/remapping regression passed with desktop test compilation. Native shortcut,
+editor launch/focus and layout acceptance remain pending.
+
 External-editor reaping now reports unsuccessful exits and status-collection
 errors to the originating window, instead of silently treating every spawned
 process as successful. Reaping remains asynchronous and independent of preview

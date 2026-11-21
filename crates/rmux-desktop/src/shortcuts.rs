@@ -134,6 +134,7 @@ fn action(name: &str) -> Option<Box<dyn Action>> {
         "file_location" => Box::new(FileBrowserLocation),
         "refresh_preview" => Box::new(RefreshFilePreview),
         "preview_directory" => Box::new(PreviewDirectory),
+        "edit_selected_file" => Box::new(EditSelectedFile),
         "switch_preview_mode" => Box::new(SwitchPreviewMode),
         "toggle_preview_wrap" => Box::new(TogglePreviewWrap),
         "cancel_file_loading" => Box::new(CancelFileLoading),
@@ -288,6 +289,29 @@ mod tests {
     use crate::{preferences::Preferences, ShowCommandPalette, ToggleSettings};
     use gpui::{KeyBinding, KeyContext, Keymap, Keystroke};
     fn settings(value: serde_json::Value) -> Preferences { serde_json::from_value(value).unwrap() }
+    #[test]
+    fn external_edit_shortcut_is_scoped_to_file_views() {
+        let mut map = Keymap::new(vec![
+            KeyBinding::new("ctrl-alt-e", crate::EditSelectedFile, Some("FileBrowser")),
+            KeyBinding::new("ctrl-alt-e", crate::EditSelectedFile, Some("FilePreview")),
+        ]);
+        let prefs = settings(serde_json::json!({"keybindings":[
+            {"key":"ctrl-alt-e","action":"disabled","context":"files"},
+            {"key":"ctrl-alt-o","action":"edit_selected_file","context":"files"}
+        ]}));
+        map.add_bindings(compile(&prefs).unwrap());
+        let original = [Keystroke::parse("ctrl-alt-e").unwrap()];
+        let replacement = [Keystroke::parse("ctrl-alt-o").unwrap()];
+        let browser = [KeyContext::parse("CommandPalette FileBrowser").unwrap()];
+        assert!(map.bindings_for_input(&original, &browser).0.is_empty());
+        assert!(map.bindings_for_input(&replacement, &browser).0[0].action().as_any().is::<crate::EditSelectedFile>());
+        for context in ["CommandPalette FilePreview", "CommandPalette FilePreview TextPreview"] {
+            assert!(map.bindings_for_input(&original, &[KeyContext::parse(context).unwrap()]).0[0].action().as_any().is::<crate::EditSelectedFile>());
+        }
+        for context in ["Terminal", "CommandPalette", "Settings"] {
+            assert!(map.bindings_for_input(&original, &[KeyContext::parse(context).unwrap()]).0.is_empty());
+        }
+    }
     #[test]
     fn folder_navigation_keys_are_scoped_and_remappable() {
         let mut map = Keymap::new(vec![KeyBinding::new("f5", crate::RefreshFileBrowser, Some("FileBrowser"))]);

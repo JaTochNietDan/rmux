@@ -342,7 +342,10 @@ longer matches, the first result is selected. Navigating to another directory
 starts a fresh filter.
 
 **External Editor** opens the selected regular file from the directory browser
-or text/hex preview. Configure the editor explicitly in Settings JSON, then reload:
+or text/hex preview. Ctrl+Alt+E invokes the same action; remap `edit_selected_file`
+under `context: "files"` for the browser or `context: "file_preview"` for text/hex
+previews. Directories and symlink rows do not launch an editor, and IME composition
+suspends the action. Configure the editor explicitly in Settings JSON, then reload:
 
 ```json
 "file_editor": {

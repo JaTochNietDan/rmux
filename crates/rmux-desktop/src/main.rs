@@ -491,6 +491,7 @@ actions!(
         FileBrowserLocation,
         PreviewDirectory,
         SwitchPreviewMode,
+        EditSelectedFile,
         OpenFolderBrowser,
         FileBrowserBack,
         FileBrowserForward,
@@ -3811,6 +3812,10 @@ fn main() {
             KeyBinding::new("alt-up", FileBrowserParent, Some("FileBrowser")),
             KeyBinding::new("f5", RefreshFileBrowser, Some("FileBrowser")),
             KeyBinding::new(if cfg!(target_os = "macos") { "cmd-l" } else { "ctrl-l" }, FileBrowserLocation, Some("FileBrowser")),
+        ]);
+        cx.bind_keys([
+            KeyBinding::new("ctrl-alt-e", EditSelectedFile, Some("FileBrowser")),
+            KeyBinding::new("ctrl-alt-e", EditSelectedFile, Some("FilePreview")),
         ]);
         shortcuts::initialize(cx);
         cx.on_action(|_: &Quit, cx| request_quit(cx));

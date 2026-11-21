@@ -769,6 +769,12 @@ impl CommandPalette {
         if self.wrap_preview && self.commands[command].preview_line().is_some() { 116. }
         else { result_row_height(self.commands[command].subtitle.is_some()) }
     }
+    fn edit_selected_file(&mut self, cx: &mut Context<Self>) {
+        if self.input.read(cx).is_composing() { return; }
+        let path = self.preview_navigation.as_ref().map(|(path, _)| path.clone())
+            .or_else(|| self.selected_preview_file().map(std::path::Path::to_owned));
+        if let Some(path) = path { cx.emit(PaletteEvent::Run(Box::new(EditLocalFile { path }))); }
+    }
     fn navigate_folder(&mut self, action: &dyn Action, cx: &mut Context<Self>) {
         if self.input.read(cx).is_composing() { return; }
         let Some((back, forward, path)) = self.folder_navigation.as_ref() else { return; };
@@ -1045,11 +1051,11 @@ impl Render for CommandPalette {
         let has_ssh_destination = self.selected_ssh_destination().is_some();
         let has_preview_file = self.selected_preview_file().is_some();
         let preview_shortcuts = if self.preview_navigation.is_some() {
-            [(&RefreshFilePreview as &dyn Action, "refresh"), (&PreviewDirectory as &dyn Action, "directory"), (&SwitchPreviewMode as &dyn Action, "text/hex")]
+            [(&RefreshFilePreview as &dyn Action, "refresh"), (&PreviewDirectory as &dyn Action, "directory"), (&SwitchPreviewMode as &dyn Action, "text/hex"), (&EditSelectedFile as &dyn Action, "edit")]
                 .into_iter().filter_map(|(action, label)| shortcuts::hint(action, &self.input.read(cx).focus, window).map(|key| format!("{key} {label}")))
                 .collect::<Vec<_>>().join(" · ")
         } else if self.folder_navigation.is_some() {
-            [(&FileBrowserBack as &dyn Action, "back"), (&FileBrowserForward as &dyn Action, "forward"), (&FileBrowserParent as &dyn Action, "parent"), (&RefreshFileBrowser as &dyn Action, "refresh"), (&FileBrowserLocation as &dyn Action, "location")]
+            [(&FileBrowserBack as &dyn Action, "back"), (&FileBrowserForward as &dyn Action, "forward"), (&FileBrowserParent as &dyn Action, "parent"), (&RefreshFileBrowser as &dyn Action, "refresh"), (&FileBrowserLocation as &dyn Action, "location"), (&EditSelectedFile as &dyn Action, "edit")]
                 .into_iter().filter_map(|(action, label)| shortcuts::hint(action, &self.input.read(cx).focus, window).map(|key| format!("{key} {label}")))
                 .collect::<Vec<_>>().join(" · ")
         } else { String::new() };
@@ -1067,6 +1073,7 @@ impl Render for CommandPalette {
             .on_action(cx.listener(|this, _: &RefreshFilePreview, _, cx| this.navigate_preview(false, false, cx)))
             .on_action(cx.listener(|this, _: &PreviewDirectory, _, cx| this.navigate_preview(true, false, cx)))
             .on_action(cx.listener(|this, _: &SwitchPreviewMode, _, cx| this.navigate_preview(false, true, cx)))
+            .on_action(cx.listener(|this, _: &EditSelectedFile, _, cx| this.edit_selected_file(cx)))
             .on_action(cx.listener(|this, _: &CopySearchExcerpt, _, cx| this.copy_search_excerpt(cx)))
             .w(px(520.))
             .max_w(relative(0.9))
@@ -1200,10 +1207,7 @@ impl Render for CommandPalette {
                         div().id("edit-selected-file").px_2().py_1().rounded_sm().cursor_pointer().text_color(rgb(0xffffff)).bg(rgb(0x353535))
                             .hover(|style| style.bg(rgb(0x454545)))
                             .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
-                                if !event.standard_click() || this.input.read(cx).is_composing() { return; }
-                                if let Some(path) = this.selected_preview_file().map(std::path::Path::to_owned) {
-                                    cx.emit(PaletteEvent::Run(Box::new(EditLocalFile { path })));
-                                }
+                                if event.standard_click() { this.edit_selected_file(cx); }
                             })).child("External Editor")
                     ))
                     .when(has_ssh_destination, |footer| footer.child(
