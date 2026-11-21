@@ -82,7 +82,10 @@ visual acceptance are pending. Enter submits the address. Bare localhost names (
 loopback addresses default to HTTP, including explicit ports. Other bare hosts
 default to HTTPS. Explicit HTTP/HTTPS schemes remain unchanged; private LAN
 addresses require an explicit HTTP scheme if their server does not support HTTPS. The address field retains
-the navigation draft; the status line reports the page-load URL after redirects.
+unsent navigation drafts. When the field is unfocused and unchanged since its last
+submission/synchronization, native navigation callbacks update it to the current
+URL, including redirects. Focused edits and IME composition remain untouched.
+Escape or Cmd+L restores the current page address. The status line also reports it.
 Browser-context defaults are Cmd+L (select the loaded address), Cmd+R (reload),
 Alt+Left/Right (history), and Cmd+=/Cmd+-/Cmd+0 (page zoom in/out/actual size).
 Zoom uses discrete 25–500% steps per browser window, appears in the status line,

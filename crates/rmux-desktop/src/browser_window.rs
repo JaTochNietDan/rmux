@@ -45,6 +45,12 @@ fn address(text: &str) -> anyhow::Result<String> {
     anyhow::ensure!(url.username().is_empty() && url.password().is_none(), "Use a URL without embedded credentials");
     Ok(url.into())
 }
+// Preserve unsent drafts even after focus leaves the address field. A successful
+// submission becomes the new baseline, allowing normalized URLs and redirects.
+fn should_sync_address(draft: &str, baseline: &str, committed: &str, focused: bool, composing: bool) -> bool {
+    !focused && !composing && !committed.is_empty() && committed != baseline && draft == baseline
+}
+
 fn navigation_error(uri: &str) -> Option<&'static str> {
     if uri.len() > 4096 { return Some("This address exceeds the browser's 4096-byte limit."); }
     if uri.chars().any(char::is_control) { return Some("This address contains unsupported control characters."); }
@@ -193,6 +199,7 @@ impl Drop for Host {
 struct BrowserView {
     host: Rc<RefCell<Host>>,
     input: Entity<TextField>,
+    address_baseline: String,
     find_input: Entity<TextField>,
     find: FindState,
     page: PageState,
@@ -209,11 +216,17 @@ impl BrowserView {
                 this.submit(text, window, cx);
             } else if matches!(event, text_field::EditEvent::Cancelled) {
                 if !this.page.committed.is_empty() {
+                    this.address_baseline = this.page.committed.clone();
                     this.input.update(cx, |input, cx| input.replace_draft(&this.page.committed, cx));
                 }
                 if let Some(view) = &this.host.borrow().view { let _ = view.focus(); }
             }
         }).detach();
+        cx.subscribe_in(&cx.entity(), window, |this, _, _: &BrowserMetadataChanged, window, cx| {
+            this.sync_address(window, cx);
+        }).detach();
+        let address_focus = input.read(cx).focus.clone();
+        cx.on_blur(&address_focus, window, |this, window, cx| this.sync_address(window, cx)).detach();
         let find_input = cx.new(|cx| TextField::new("", cx));
         cx.subscribe_in(&find_input, window, |this, _, event: &text_field::EditEvent, window, cx| {
             match event {
@@ -250,7 +263,16 @@ impl BrowserView {
                 }
             }
         });
-        Self { host: Rc::new(RefCell::new(Host { pending_url: initial, view: None, bounds: None, inspector_used: false })), input, find_input, find: FindState::default(), page: PageState { status: "Enter an address to create an ephemeral browser.".into(), ..Default::default() }, zoom_percent: 100, latest, wake, _updates: task }
+        let address_baseline = initial.clone().unwrap_or_else(|| "about:blank".into());
+        Self { host: Rc::new(RefCell::new(Host { pending_url: initial, view: None, bounds: None, inspector_used: false })), input, address_baseline, find_input, find: FindState::default(), page: PageState { status: "Enter an address to create an ephemeral browser.".into(), ..Default::default() }, zoom_percent: 100, latest, wake, _updates: task }
+    }
+    fn sync_address(&mut self, window: &Window, cx: &mut Context<Self>) {
+        let input = self.input.read(cx);
+        if should_sync_address(input.value(), &self.address_baseline, &self.page.committed,
+            input.focus.is_focused(window), input.is_composing()) {
+            self.address_baseline = self.page.committed.clone();
+            self.input.update(cx, |input, cx| input.replace_draft(&self.address_baseline, cx));
+        }
     }
     fn open_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(view) = &self.host.borrow().view { let _ = view.focus_parent(); }
@@ -302,7 +324,10 @@ impl BrowserView {
     fn submit(&mut self, text: &str, window: &Window, cx: &mut Context<Self>) {
         if self.input.read(cx).is_composing() { return; }
         match address(text).and_then(|url| self.navigate(&url, window)) {
-            Ok(()) => self.page.status = "Navigation requested".into(),
+            Ok(()) => {
+                self.address_baseline = text.to_owned();
+                self.page.status = "Navigation requested".into();
+            },
             Err(error) => self.page.status = error.to_string(),
         }
         cx.notify();
@@ -401,6 +426,7 @@ impl BrowserView {
     fn focus_address(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.input.read(cx).is_composing() { return; }
         if let Some(view) = &self.host.borrow().view { let _ = view.focus_parent(); }
+        if !self.page.committed.is_empty() { self.address_baseline = self.page.committed.clone(); }
         self.input.update(cx, |input, cx| {
             if !self.page.committed.is_empty() { input.replace_draft(&self.page.committed, cx); }
             input.select_all_text(cx);
@@ -443,7 +469,7 @@ impl Render for BrowserView {
         };
         let detail = format!("{} · {}", self.page.status, self.page.committed);
         div().size_full().flex().flex_col().key_context("Browser")
-            .bg(rgb(0x202733)).text_color(rgb(0xe8edf5)).text_size(px(14.))
+            .bg(rgb(0x252525)).text_color(rgb(0xe5e5e5)).text_size(px(14.))
             .child(div().h(px(44.)).flex_shrink_0().px_2().flex().items_center().gap_1()
                 .child(pane_view::action_control("browser-back", "Back", Back, focus.clone()).child("‹")
                     .when(!back, |button| button.opacity(0.4).cursor_default())
@@ -624,7 +650,21 @@ fn open_initial(initial: Option<String>, cx: &mut App) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{FindState, address, allowed, can_open_link, PageUpdates, PageState, zoom_level, navigation_error};
+    use super::{should_sync_address, FindState, address, allowed, can_open_link, PageUpdates, PageState, zoom_level, navigation_error};
+    #[test]
+    fn browser_address_sync_preserves_edits_and_accepts_redirects() {
+        let old = "https://example.com/old";
+        let next = "https://example.com/new";
+        assert!(should_sync_address(old, old, next, false, false));
+        assert!(!should_sync_address(old, old, next, true, false));
+        assert!(!should_sync_address(old, old, next, false, true));
+        assert!(!should_sync_address("unsent 世界 draft", old, next, false, false));
+        assert!(!should_sync_address(old, old, "", false, false));
+        assert!(!should_sync_address(old, old, old, false, false));
+        // Successful submission records the user's draft as a new baseline;
+        // normalized/redirected callback URLs can then update it.
+        assert!(should_sync_address("localhost:3000", "localhost:3000", "http://localhost:3000/login", false, false));
+    }
     #[test]
     fn browser_stop_ignores_late_finish_and_resets_on_new_navigation() {
         let mut state = PageState::default();

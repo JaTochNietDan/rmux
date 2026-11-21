@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Browser address chrome now follows native navigation/redirect URLs when unfocused
+and unchanged since its last synchronization or successful submission. Focused
+edits, IME composition and unsent drafts survive metadata updates and blur; Escape
+and Cmd+L explicitly restore the page URL. A focused address-policy test covers
+those cases, and browser compilation passes. The toolbar background/text now use
+the existing neutral pane-chrome palette rather than a separate blue tint; terminal
+theme settings remain scoped to terminal content. Native visual/focus acceptance
+is pending. The preceding goal turn shipped Stop Loading and its state regression.
+
 Added native Stop Loading to the optional browser. Reload becomes Stop during a
 load; Browser menu and Cmd+. expose the same action. The action checks native
 loading state to cover metadata-delivery delay, cancels via WKWebView, and clears
