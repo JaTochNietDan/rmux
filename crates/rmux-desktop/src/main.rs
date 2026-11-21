@@ -54,6 +54,7 @@ mod list_navigation;
 mod menu_navigation;
 mod snapshot;
 mod startup;
+mod ssh;
 mod status_view;
 mod text_field;
 mod terminal_menu;
@@ -67,6 +68,10 @@ use layout::{Axis as SplitAxis, PaneTree};
 #[derive(Clone, Debug, Default, PartialEq, Action)]
 #[action(namespace = rmux, no_json)]
 struct SetTerminalFont { family: String }
+
+#[derive(Clone, Debug, Default, PartialEq, Action)]
+#[action(namespace = rmux, no_json)]
+struct ConnectSsh { destination: String }
 
 #[derive(Clone, Debug, Default, PartialEq, Action)]
 #[action(namespace = rmux, no_json)]
@@ -462,6 +467,7 @@ actions!(
         BrowseTerminalFiles,
         OpenTextPreview,
         ShowTerminalSearch,
+        ShowSshConnection,
         CopySearchExcerpt,
         OpenFolderBrowser,
         ShowTerminalMenu,
@@ -3755,6 +3761,7 @@ fn main() {
                 items: vec![
                     MenuItem::action("New Window", NewWindow),
                     MenuItem::action("New Workspace", NewWorkspace),
+                    MenuItem::action("Connect via SSH…", ShowSshConnection),
                     MenuItem::action("New Empty Workspace Group", NewWorkspaceGroup),
                     MenuItem::action("New Group from Workspace", GroupCurrentWorkspace),
                     MenuItem::action("Group Selected Workspaces", GroupSelectedWorkspaces),

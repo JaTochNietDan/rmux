@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+R01 now has a first interactive SSH workspace path: File/palette Connect via
+SSH… and custom action `connect_ssh` open a validated alias/user@host editor.
+Submission launches the existing SSH client with a literal argv through the same
+background PTY creation, workspace limits and teardown guards as custom commands.
+OpenSSH owns configuration/authentication/host-key behavior; rmux passes no
+verification bypass flags and stores no credentials. Desktop compilation and
+destination/option-injection regression passed; installed SSH accepted argv in
+a configuration-only dry run without connecting. Live authentication, remote
+metadata, relay, reconnect and platform acceptance remain outstanding.
+
 The task manager now offers Image storage sorting alongside screen/process
 metrics. It ranks Ghostty's sampled image bytes independently of screen resident
 storage, keeps missing samples last and preserves tie order. The same sort order

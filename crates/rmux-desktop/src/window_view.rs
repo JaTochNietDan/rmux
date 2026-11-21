@@ -1182,11 +1182,14 @@ impl WorkspaceWindow {
         result
     }
     fn run_custom_command(&mut self, name: &str, window: &mut Window, cx: &mut Context<Self>) {
-        if self.command_launching { self.notice = Some("A command is already starting in this window".into()); cx.notify(); return; }
-        if self.automation_available(cx).is_err() || self.entries.len() >= 64 { self.notice = Some("Window is busy or has reached its workspace limit".into()); cx.notify(); return; }
         let Some(command) = cx.global::<Preferences>().commands.iter().find(|command| command.name == name).cloned() else {
             self.notice = Some("Custom command is no longer configured".into()); cx.notify(); return;
         };
+        self.launch_command(command, window, cx);
+    }
+    fn launch_command(&mut self, command: preferences::CustomCommand, window: &mut Window, cx: &mut Context<Self>) {
+        if self.command_launching { self.notice = Some("A command is already starting in this window".into()); cx.notify(); return; }
+        if self.automation_available(cx).is_err() || self.entries.len() >= 64 { self.notice = Some("Window is busy or has reached its workspace limit".into()); cx.notify(); return; }
         let directory = command.cwd.clone().or_else(|| self.entries.get(self.active).and_then(|entry| {
             let workspace = entry.workspace.read(cx);
             workspace.panes.iter().find(|pane| Some(pane.entity_id()) == entry.last_pane).or_else(|| workspace.panes.first())
@@ -3859,6 +3862,18 @@ impl Render for WorkspaceWindow {
                 let focus = window.focused(cx);
                 let palette = cx.new(|cx| command_palette::CommandPalette::terminal_search(&this.terminal_search_query, window, cx));
                 this.install_palette(palette, focus, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ShowSshConnection, window, cx| {
+                if this.automation_available(cx).is_err() || this.command_launching { return; }
+                let focus = window.focused(cx);
+                let palette = cx.new(|cx| command_palette::CommandPalette::ssh_connection(window, cx));
+                this.install_palette(palette, focus, window, cx);
+            }))
+            .on_action(cx.listener(|this, action: &ConnectSsh, window, cx| {
+                match ssh::command(&action.destination) {
+                    Ok(command) => this.launch_command(command, window, cx),
+                    Err(error) => { this.notice = Some(error.into()); cx.notify(); }
+                }
             }))
             .on_action(cx.listener(|this, action: &SearchTerminalOutput, window, cx| this.search_terminal_output(action.query.clone(), window, cx)))
             .on_action(cx.listener(|this, _: &OpenFolderBrowser, window, cx| this.choose_local_path(true, window, cx)))

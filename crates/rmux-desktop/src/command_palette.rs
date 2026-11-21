@@ -157,6 +157,7 @@ pub struct CommandPalette {
     buffer_rename: Option<(String, u64)>,
     directory_input: bool,
     terminal_search_input: bool,
+    ssh_input: bool,
     input: Entity<text_field::TextField>,
     heading: &'static str,
     empty_message: &'static str,
@@ -297,6 +298,7 @@ impl CommandPalette {
         command!("Browse Terminal Directory…", BrowseTerminalFiles);
         command!("Open Text Preview…", OpenTextPreview);
         command!("Search Terminal Output…", ShowTerminalSearch);
+        command!("Connect via SSH…", ShowSshConnection);
         command!("Open Folder…", OpenFolderBrowser);
         command!("Choose Terminal Font…", ShowFontPicker);
         command!("Choose Default Font…", ShowDefaultFontPicker);
@@ -521,6 +523,11 @@ impl CommandPalette {
         });
         palette
     }
+    pub fn ssh_connection(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let mut palette = Self::with_commands(Vec::new(), "Connect via SSH", ssh::INPUT_HINT, window, cx);
+        palette.ssh_input = true;
+        palette
+    }
     pub fn memory_sort(current: memory_view::Sort, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let commands = memory_view::Sort::ALL.into_iter().map(|sort| Command {
             title: sort.label().into(), subtitle: (sort == current).then(|| "Current sort order".into()), shortcut: None,
@@ -603,8 +610,8 @@ impl CommandPalette {
             |this, _, event: &text_field::EditEvent, cx| match event {
                 text_field::EditEvent::Changed(query) => {
                     this.feedback = None;
-                    if this.buffer_rename.is_some() || this.directory_input || this.terminal_search_input {
-                        this.empty_message = if this.terminal_search_input { "Enter submits a literal search · Retained history · Up to 256 terminals" } else if this.directory_input { "Enter an absolute directory path; no shell expansion" } else { "Enter a unique buffer name (up to 128 bytes)" };
+                    if this.buffer_rename.is_some() || this.directory_input || this.terminal_search_input || this.ssh_input {
+                        this.empty_message = if this.ssh_input { ssh::INPUT_HINT } else if this.terminal_search_input { "Enter submits a literal search · Retained history · Up to 256 terminals" } else if this.directory_input { "Enter an absolute directory path; no shell expansion" } else { "Enter a unique buffer name (up to 128 bytes)" };
                         cx.notify();
                         return;
                     }
@@ -619,7 +626,7 @@ impl CommandPalette {
         )
         .detach();
         Self {
-            input, heading, empty_message, buffer_rename: None, feedback: None, directory_input: false, terminal_search_input: false, location: None,
+            input, heading, empty_message, buffer_rename: None, feedback: None, directory_input: false, terminal_search_input: false, ssh_input: false, location: None,
             search: palette_match::RankedSearch::new(commands
                 .iter()
                 .map(Command::search_text)
@@ -702,6 +709,14 @@ impl CommandPalette {
     }
     fn run(&mut self, cx: &mut Context<Self>) {
         if self.input.read(cx).is_composing() { return; }
+        if self.ssh_input {
+            let destination = self.input.read(cx).value();
+            match ssh::command(destination) {
+                Ok(_) => cx.emit(PaletteEvent::Run(Box::new(ConnectSsh { destination: destination.to_owned() }))),
+                Err(error) => { self.empty_message = error; cx.notify(); }
+            }
+            return;
+        }
         if self.terminal_search_input {
             let query = self.input.read(cx).value();
             match terminal_search::validate(query) {
@@ -868,10 +883,10 @@ impl Render for CommandPalette {
                 .h(px(result_area_height(self.search.matches.iter().map(|index| self.commands[*index].subtitle.is_some()))))
                 .into_any_element()
             })
-            .when(self.buffer_rename.is_some() || self.directory_input || self.terminal_search_input, |palette| palette.child(
+            .when(self.buffer_rename.is_some() || self.directory_input || self.terminal_search_input || self.ssh_input, |palette| palette.child(
                 div().flex_shrink_0().px_3().py_2().flex().flex_wrap().items_center().gap_2()
                     .child(div().flex_1().min_w_0().text_xs().text_color(rgb(0xa0a0a0))
-                        .child(if self.terminal_search_input { "Enter searches · Escape cancels" } else if self.directory_input { "Enter opens · Escape cancels" } else { "Enter saves · Escape cancels" }))
+                        .child(if self.ssh_input { "Enter connects · Escape cancels" } else if self.terminal_search_input { "Enter searches · Escape cancels" } else if self.directory_input { "Enter opens · Escape cancels" } else { "Enter saves · Escape cancels" }))
                     .child(div().id("buffer-rename-cancel").px_3().py_1().rounded_sm()
                         .text_sm().cursor_pointer().bg(rgb(0x353535)).hover(|style| style.bg(rgb(0x454545)))
                         .on_click(cx.listener(|_, event: &ClickEvent, _, cx| {
@@ -881,9 +896,9 @@ impl Render for CommandPalette {
                         .text_sm().cursor_pointer().bg(rgb(0x007aff)).hover(|style| style.bg(rgb(0x1685ff)))
                         .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
                             if event.standard_click() { this.run(cx); }
-                        })).child(if self.terminal_search_input { "Search" } else if self.directory_input { "Open" } else { "Save" }))
+                        })).child(if self.ssh_input { "Connect" } else if self.terminal_search_input { "Search" } else if self.directory_input { "Open" } else { "Save" }))
             ))
-            .when((!compact || self.feedback.is_some() || has_search_excerpt) && self.buffer_rename.is_none() && !self.directory_input && !self.terminal_search_input, |palette| palette.child(
+            .when((!compact || self.feedback.is_some() || has_search_excerpt) && self.buffer_rename.is_none() && !self.directory_input && !self.terminal_search_input && !self.ssh_input, |palette| palette.child(
                 div()
                     .flex_shrink_0()
                     .px_3()

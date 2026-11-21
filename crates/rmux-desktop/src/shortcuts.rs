@@ -129,6 +129,7 @@ fn action(name: &str) -> Option<Box<dyn Action>> {
         "browse_files" => Box::new(BrowseTerminalFiles),
         "open_text_preview" => Box::new(OpenTextPreview),
         "search_terminal_output" => Box::new(ShowTerminalSearch),
+        "connect_ssh" => Box::new(ShowSshConnection),
         "open_folder" => Box::new(OpenFolderBrowser),
         "choose_font" => Box::new(ShowFontPicker),
         "choose_default_font" => Box::new(ShowDefaultFontPicker),

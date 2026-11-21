@@ -1325,7 +1325,11 @@
         "WEB"
       ],
       "acceptance": "Support aliases, keys, proxy settings, host-key verification and interactive authentication.",
-      "rmux_status": "not_started"
+      "rmux_status": "in_progress",
+      "implementation": "File/palette Connect via SSH editor launches an existing SSH client with a bounded literal destination argv through background PTY workspace creation. Configuration, host-key verification and interactive authentication are delegated to the client. Destination validation tests and a no-network OpenSSH configuration dry run passed.",
+      "remaining": "Live authentication/configuration acceptance, native UI and cross-platform validation, remote workspace identity/metadata and full remote lifecycle integration.",
+      "implementation_sources": ["crates/rmux-desktop/src/ssh.rs", "crates/rmux-desktop/src/window_view.rs", "crates/rmux-desktop/src/command_palette.rs"],
+      "progress_record": "docs/progress.md"
     },
     {
       "id": "R02",

@@ -1,5 +1,18 @@
 # rmux
 
+**File → Connect via SSH…** (also in the command palette, custom action
+`connect_ssh`) opens a destination editor. Enter an SSH config alias, hostname,
+or `user@host`, then press Enter or Connect to launch a new terminal workspace.
+rmux runs the existing `ssh` executable directly with one destination argument;
+it does not invoke a shell to interpret the input. Use your SSH configuration
+for ports, identities and proxies. The SSH client handles configuration, host-key
+verification, agent/key use and password prompts inside the terminal.
+Destinations are limited to 255 ASCII bytes, without spaces or command options.
+The SSH client must already be available on PATH; launch errors appear in rmux,
+and connection/authentication errors appear in the terminal. This first remote
+slice does not install a relay, resume disconnected sessions, browse remote files,
+or automatically reconnect. Live authentication/platform acceptance is pending.
+
 **Merge Workspace into…** in the menu or command palette searches other
 workspaces across this app’s windows, labeled by window. Enter moves the source's existing panes into
 the destination, preserving both nested split trees with the source on the right,
