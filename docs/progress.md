@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Live focus-history RPC smoke exposed dropped rapid focus visits when relying
+only on deferred metadata notifications. Explicit terminal/workspace selections
+now record visits immediately; native focus notifications remain supported.
+The isolated four-terminal/two-workspace smoke now passes tab/pane/workspace
+Back/Forward, workspace.select integration, forward-branch invalidation and
+boundary no-op, with automatic process cleanup. Added
+`scripts/smoke-focus-history.py` for this focused runtime check. This verifies
+logical selection through live RPC on macOS, not visible UI/OS activation or
+Linux/Windows acceptance.
+
 Exposed focus history as explicit-window `window.focus_history` RPC with
 `back`/`forward`, opt-in activation and moved/destination results. It shares the
 native history path and existing busy-window guard; exhausted history is a

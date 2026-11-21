@@ -1597,6 +1597,10 @@ impl WorkspaceWindow {
         let Some(id) = workspace.panes[index].read(cx).active_terminal_id() else {
             return;
         };
+        self.record_terminal_visit(id);
+    }
+
+    fn record_terminal_visit(&mut self, id: EntityId) {
         self.focus_trail.record(id);
         if self.focus_history.last() == Some(&id) {
             return;
@@ -1976,6 +1980,7 @@ impl WorkspaceWindow {
         let Some((pane, tab)) = target else {
             return;
         };
+        self.record_terminal_focus(window, cx);
         self.remember_focus(window, cx);
         self.remember_workspace_switch(index);
         self.active = index;
@@ -1991,6 +1996,7 @@ impl WorkspaceWindow {
             cx.notify();
         });
         pane.update(cx, |pane, cx| pane.select(tab, window, cx));
+        self.record_terminal_visit(terminal);
         cx.notify();
     }
     fn mark_all_read(&mut self, cx: &mut Context<Self>) {
@@ -3687,6 +3693,7 @@ impl WorkspaceWindow {
         if index >= self.entries.len() {
             return;
         }
+        self.record_terminal_focus(window, cx);
         self.rename = None;
         self.remember_focus(window, cx);
         self.remember_workspace_switch(index);
@@ -3703,6 +3710,8 @@ impl WorkspaceWindow {
             .or_else(|| workspace.panes.first())
         {
             pane.read(cx).focus(window, cx);
+            let terminal = pane.read(cx).active_terminal_id();
+            if let Some(terminal) = terminal { self.record_terminal_visit(terminal); }
         }
         cx.notify();
     }
