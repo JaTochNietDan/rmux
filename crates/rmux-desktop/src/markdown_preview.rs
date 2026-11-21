@@ -1,7 +1,7 @@
 //! Bounded, inert CommonMark reading blocks. No HTML/web engine or asset loads.
-use pulldown_cmark::{Event, Parser, Tag, TagEnd};
+use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub enum Kind { #[default] Paragraph, Heading(u8), Code, Quote, List { depth: usize, number: Option<u64>, marker: bool } }
+pub enum Kind { #[default] Paragraph, Heading(u8), Code, Quote, List { depth: usize, number: Option<u64>, marker: bool, checked: Option<bool> } }
 pub struct Block { pub text: String, pub kind: Kind }
 pub fn blocks(source: &str) -> (Vec<Block>, bool) {
     let mut output = Vec::new();
@@ -14,7 +14,7 @@ pub fn blocks(source: &str) -> (Vec<Block>, bool) {
         if !text.trim().is_empty() { output.push(Block { text: std::mem::take(text), kind }); }
         else { text.clear(); }
     };
-    for event in Parser::new(source) {
+    for event in Parser::new_ext(source, Options::ENABLE_TASKLISTS) {
         if output.len() >= 512 { return (output, true); }
         match event {
             Event::Start(Tag::BlockQuote(_)) => quote += 1,
@@ -28,7 +28,7 @@ pub fn blocks(source: &str) -> (Vec<Block>, bool) {
             Event::Start(Tag::Item) => {
                 flush(&mut output, &mut text, kind);
                 let number = lists.last().copied().flatten();
-                kind = Kind::List { depth: lists.len(), number, marker: true };
+                kind = Kind::List { depth: lists.len(), number, marker: true, checked: None };
                 items.push(kind);
                 if let Some(Some(next)) = lists.last_mut() { *next = next.saturating_add(1); }
             }
@@ -45,6 +45,10 @@ pub fn blocks(source: &str) -> (Vec<Block>, bool) {
             }
             Event::End(TagEnd::HtmlBlock | TagEnd::Paragraph | TagEnd::Heading(_) | TagEnd::CodeBlock) => flush(&mut output, &mut text, kind),
             Event::Text(value) | Event::Code(value) | Event::Html(value) | Event::InlineHtml(value) => text.push_str(&value),
+            Event::TaskListMarker(value) => {
+                if let Kind::List { checked, .. } = &mut kind { *checked = Some(value); }
+                if let Some(Kind::List { checked, .. }) = items.last_mut() { *checked = Some(value); }
+            }
             Event::SoftBreak | Event::HardBreak => text.push('\n'),
             Event::Rule => { flush(&mut output, &mut text, kind); output.push(Block { text: "────────".into(), kind: Kind::Paragraph }); },
             _ => {},
@@ -89,6 +93,19 @@ pub fn code_excerpt(source: &str, query: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn task_lists_keep_checked_state_without_modifying_body_text() {
+        let source = "- [ ] pending\n- [x] done\n  - [X] nested\n\n7. [x] ordered\n\n   continuation\n\nordinary [ ] text\n";
+        let (result, limited) = blocks(source);
+        assert!(!limited);
+        assert_eq!(result[0].text, "pending");
+        assert!(matches!(result[0].kind, Kind::List { checked: Some(false), depth: 1, marker: true, .. }));
+        assert!(matches!(result[1].kind, Kind::List { checked: Some(true), depth: 1, .. }));
+        assert!(matches!(result[2].kind, Kind::List { checked: Some(true), depth: 2, .. }));
+        assert!(matches!(result[3].kind, Kind::List { checked: Some(true), number: Some(7), marker: true, .. }));
+        assert!(matches!(result[4].kind, Kind::List { checked: Some(true), marker: false, .. }));
+        assert_eq!(result.last().unwrap().text, "ordinary [ ] text");
+    }
     #[test]
     fn heading_levels_preserve_atx_and_setext_structure() {
         let (result, limited) = blocks("# First\n\n## Second\n\n### Third\n\n#### Fourth\n\n##### Fifth\n\n###### Sixth\n\nSetext one\n==========\n\nSetext two\n----------\n");

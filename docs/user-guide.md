@@ -347,7 +347,10 @@ up to two visual lines. Code blocks use the terminal font, and lists/quotes rece
 a visual marker.
 Ordered lists retain their starting number and nested lists are indented (visual
 indentation stops increasing after eight levels). Continuation paragraphs do not
-repeat the item marker. Block copying returns its text without added list markers;
+repeat the item marker. Task-list items (`[ ]`, `[x]`, `[X]`) show read-only
+checkboxes and searchable Pending task / Completed task labels. Clicking copies
+the block text; it does not toggle completion or write the file.
+Block copying returns its text without added list/checkbox markers;
 source copying preserves the original Markdown. In wrapped mode, code excerpts
 show four separate source lines near the first matching query word, preserve
 indentation, and expand tabs at four-column stops. Long lines and omitted code

@@ -595,7 +595,12 @@ impl CommandPalette {
                 if let Some(line) = action.as_any().downcast_ref::<CopyPreviewLine>() {
                     block_number += 1;
                     command.target = PaletteEvent::Run(Box::new(CopyPreviewLine { text: line.text.clone(), markdown: kinds.next() }));
-                    let label = match command.markdown_kind() { Some(markdown_preview::Kind::Heading(level)) => format!("Heading H{level}"), _ => "Block".into() };
+                    let label = match command.markdown_kind() {
+                        Some(markdown_preview::Kind::Heading(level)) => format!("Heading H{level}"),
+                        Some(markdown_preview::Kind::List { checked: Some(true), .. }) => "Completed task".into(),
+                        Some(markdown_preview::Kind::List { checked: Some(false), .. }) => "Pending task".into(),
+                        _ => "Block".into(),
+                    };
                     command.subtitle = Some(format!("{label} {block_number} · Enter copies reading text"));
                 } else if let Some(action) = action.as_any().downcast_ref::<PreviewLocalFile>() {
                     command.target = PaletteEvent::Run(Box::new(PreviewMarkdownFile { path: action.path.clone() }));
@@ -858,8 +863,11 @@ impl CommandPalette {
             } else { file_browser::preview_line_title(text, self.input.read(cx).value()) })
             .unwrap_or_else(|| self.commands[command].title.clone());
         let title = match markdown {
-            Some(markdown_preview::Kind::List { number: Some(number), marker: true, .. }) => format!("{number}. {title}"),
-            Some(markdown_preview::Kind::List { marker: true, .. }) => format!("• {title}"),
+            Some(markdown_preview::Kind::List { number, checked, marker: true, .. }) => {
+                let bullet = number.map(|number| format!("{number}. ")).unwrap_or_else(|| if checked.is_none() { "• ".into() } else { String::new() });
+                let checkbox = match checked { Some(true) => "☑ ", Some(false) => "☐ ", None => "" };
+                format!("{bullet}{checkbox}{title}")
+            },
             _ => title,
         };
         let title_hint: SharedString = match &self.commands[command].subtitle {

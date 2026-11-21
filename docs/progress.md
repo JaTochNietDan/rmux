@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Markdown task-list parsing is now explicitly enabled. List metadata preserves
+checked state independently of body text, including nested/ordered tasks and
+loose continuations. Rows show read-only checkbox markers plus searchable
+Pending task / Completed task labels, while copy and source-copy semantics stay
+separate. Six Markdown regressions passed, including unchecked/lowercase/uppercase
+checked markers, nested depth, ordered starts and literal bracket text outside
+lists. Native checkbox glyph/layout acceptance remains pending.
+
 Markdown reading blocks now preserve H1–H6 identity, including Setext headings.
 Heading rows use a font-size hierarchy, searchable level labels and two-line
 wrapped excerpts with matching row heights for paging/virtualization. Other
