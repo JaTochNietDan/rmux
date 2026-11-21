@@ -338,7 +338,10 @@ only the captured text. Search numbered lines, press Enter to copy a preview lin
 the preview (a confirmation appears in its footer), or choose
 Back, Refresh, or Copy File Path. Search covers the full retained line. Display
 excerpts stay capped at 1,024 characters and move near the earliest contiguous
-query-word match; fuzzy-only matches retain the opening excerpt. Copying includes
+query-word match; fuzzy-only matches retain the opening excerpt. Contiguous
+query-word matches are highlighted in text and hex excerpts, using Unicode
+lowercasing while preserving original displayed characters. Fuzzy-only matches
+are not highlighted. Copying includes
 the whole retained line. **Wrap excerpts** (Ctrl+Alt+W) shows up to four visual
 lines per text row; toggle again for single-line excerpts. This changes only the
 current preview display, preserves search/selection and leaves copying unchanged.

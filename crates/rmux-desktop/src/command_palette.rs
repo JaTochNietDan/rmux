@@ -712,6 +712,12 @@ impl CommandPalette {
             Some(subtitle) => format!("{title}\n{subtitle}").into(),
             None => title.clone().into(),
         };
+        let title_ranges = if self.commands[command].preview_line().is_some() {
+            file_browser::preview_highlights(&title, self.input.read(cx).value())
+        } else { Vec::new() };
+        let title = StyledText::new(title).with_highlights(title_ranges.into_iter().map(|range| (
+            range, HighlightStyle { color: Some(rgb(0xffffff).into()), background_color: Some(rgb(0x41638c).into()), ..Default::default() }
+        )));
         let subtitle = self.commands[command].subtitle.as_ref().map(|text| {
             let ranges = match &self.commands[command].target {
                 PaletteEvent::SearchTerminal { query, preview: true, .. } => literal_highlights(text, query),

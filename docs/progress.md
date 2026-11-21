@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+File-preview search now highlights contiguous query-word matches in both compact
+and wrapped excerpts, including hex preview text. Lowercase expansion maps back
+to original UTF-8 scalar boundaries; overlapping/adjacent highlights merge. Work
+is restricted to rendered, bounded excerpts and empty queries skip preparation.
+Copy source text and fuzzy ranking remain unchanged. The focused Unicode/range
+regression passed with desktop test compilation; native highlight appearance
+and wrapped-text visual acceptance remain pending.
+
 Fixed memory-tree completeness during process arrivals. Totals now compare
 before/after membership and count newly observed descendants as missing samples,
 so a child created during a refresh cannot leave an understated total labeled
