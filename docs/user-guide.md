@@ -171,8 +171,10 @@ focus and scroll position; a busy parser returns a retryable error. Explicit
 surface IDs are required; implicit targets and workspace/window aliases remain
 pending. Raw `surface.read_text` also accepts `lines` with `scope: "history"`.
 
-`rmuxctl pipe-pane --surface SURFACE_ID --command 'wc -l'` captures retained
-terminal history once and sends it to a local `/bin/sh` command as stdin. Quote
+`rmuxctl pipe-pane --surface SURFACE_ID --lines 20 --command 'wc -l'` captures
+the last 20 logical history lines and sends them once to a local `/bin/sh`
+command as stdin. Omit `--lines` to capture all retained history; supported counts
+are 1–65536. Quote
 the command as one argument; a trailing quoted command is also accepted. The
 command runs in the CLI's working directory and inherits its stdout/stderr.
 Unlike other rmuxctl commands, this returns command output and its exit status,

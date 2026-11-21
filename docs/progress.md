@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+`pipe-pane --lines N` now captures only the requested tail of retained history
+before starting its local consumer. It reuses the existing logical-line RPC path,
+accepts 1–65536 lines and retains the 1 MiB cap and reject-truncated-before-execution
+behavior. Help, completions and user documentation cover the option. Three focused
+CLI/pipe tests passed, including request expansion, invalid/duplicate counts,
+separation of shell command from RPC payload and local subprocess delivery/status.
+Implicit target selectors, JSON output wrapping and Windows execution remain gaps.
+
 The shaped-row cache now recognizes the identical immutable outer row snapshot
 before walking per-row identities. Repaints with unchanged rows reuse the cached
 paint snapshot in constant time; environment changes (font, metrics, scale or

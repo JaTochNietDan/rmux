@@ -31,7 +31,7 @@ pub const HELP: &str = "Commands (JSON output except pipe-pane; explicit opaque 
   send --surface ID [--paste] TEXT
   capture-pane --surface ID [--scrollback] [--lines N]
   read-screen --surface ID [--scrollback | --selection [--preserve-wraps]]
-  pipe-pane --surface ID [--command SHELL_COMMAND | SHELL_COMMAND]
+  pipe-pane --surface ID [--lines N] [--command SHELL_COMMAND | SHELL_COMMAND]
 Use -- before positional text beginning with a dash. List commands list the
 whole process unless narrowed with --window (workspaces/panes/panels) or
 --workspace (panes/panels). No implicit target, ref/index lookup or --force yet.
@@ -39,7 +39,7 @@ whole process unless narrowed with --window (workspaces/panes/panels) or
 
 pub fn help(command: &str) -> Result<String, String> {
     let (arguments, description) = match command {
-        "pipe-pane" => ("--surface ID [--command SHELL_COMMAND | SHELL_COMMAND]", "Capture retained history (up to 1 MiB) and feed it once to a local /bin/sh command via stdin. Truncated captures are rejected. Runs in the CLI working directory, forwards command stdout/stderr and returns its exit status. The CLI waits for the command; use normal shell interruption for long-running commands. Does not stream future output."),
+        "pipe-pane" => ("--surface ID [--lines N] [--command SHELL_COMMAND | SHELL_COMMAND]", "Capture retained history (up to 1 MiB), optionally its last 1–65536 logical lines with --lines N, and feed it once to a local /bin/sh command via stdin. Truncated captures are rejected. Runs in the CLI working directory, forwards command stdout/stderr and returns its exit status. The CLI waits for the command; use normal shell interruption for long-running commands. Does not stream future output."),
         "paste-buffer" => ("--surface ID [--name NAME] [--bracketed]", "Queue a retained buffer to an explicit terminal without changing focus or scroll position. --bracketed uses terminal paste encoding. The buffer is retained; requests are never retried."),
         "rename-buffer" => ("[--name NAME] NEW_NAME", "Rename a retained buffer without copying its contents. Source defaults to default; an existing destination is never overwritten."),
         "set-buffer" => ("[--name NAME] [TEXT|-]", "Set a process-local copy buffer; name defaults to default. Omitted text or - reads UTF-8 stdin exactly, including trailing newlines. Storage and request size are bounded; buffers are not persisted or copied to the OS clipboard."),
@@ -167,7 +167,7 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
             continue;
         }
         if !literal && arg.starts_with('-') && !(command == "set-buffer" && arg == "-") {
-            if command == "capture-pane" && arg == "--lines" {
+            if matches!(command, "capture-pane" | "pipe-pane") && arg == "--lines" {
                 let raw = args.next().ok_or("--lines requires a count")?.into_string().map_err(|_| "count must be UTF-8")?;
                 let lines: usize = raw.parse().map_err(|_| "--lines requires an integer from 1 to 65536")?;
                 if !raw.bytes().all(|byte| byte.is_ascii_digit()) || !(1..=65536).contains(&lines) { return Err("--lines requires an integer from 1 to 65536".into()); }
@@ -461,6 +461,17 @@ mod tests {
         }
         assert!(expand("capture-pane", args(&["--lines", "2"])).is_err());
         assert!(expand("capture-pane", args(&["--surface", "7", "--lines", "2", "--lines", "3"])).is_err());
+    }
+
+    #[test]
+    fn pipe_pane_can_limit_history_before_local_execution() {
+        let (method, params) = expand("pipe-pane", args(&["--surface", "7", "--lines", "20", "--command", "wc -l"])).unwrap();
+        assert_eq!(method, "surface.read_text");
+        assert_eq!(params, serde_json::json!({"surface_id":"7", "scope":"history", "lines":20, "max_bytes":1048576, "command":"wc -l"}));
+        for count in ["0", "65537", "-1", "+2", "many"] {
+            assert!(expand("pipe-pane", args(&["--surface", "7", "--lines", count, "cat"])).is_err());
+        }
+        assert!(expand("pipe-pane", args(&["--surface", "7", "--lines", "2", "--lines", "3", "cat"])).is_err());
     }
 
     #[test]
