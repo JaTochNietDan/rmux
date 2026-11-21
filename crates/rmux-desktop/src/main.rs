@@ -11,6 +11,7 @@ mod icons;
 #[cfg(unix)]
 mod file_drop;
 mod file_browser;
+mod markdown_preview;
 mod external_editor;
 mod terminal_search;
 #[cfg(unix)]
@@ -133,7 +134,12 @@ struct PreviewHexFile { path: std::path::PathBuf }
 
 #[derive(Clone, Debug, Default, PartialEq, Action)]
 #[action(namespace = rmux, no_json)]
-struct CopyPreviewLine { text: String }
+struct PreviewMarkdownFile { path: std::path::PathBuf }
+
+
+#[derive(Clone, Debug, Default, PartialEq, Action)]
+#[action(namespace = rmux, no_json)]
+struct CopyPreviewLine { text: String, markdown: Option<markdown_preview::Kind> }
 
 #[derive(Clone, Debug, Default, PartialEq, Action)]
 #[action(namespace = rmux, no_json)]

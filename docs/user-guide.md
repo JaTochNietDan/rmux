@@ -341,6 +341,22 @@ path and entry type, even if entries reorder. If the entry disappears or no
 longer matches, the first result is selected. Navigating to another directory
 starts a fresh filter.
 
+**Read Markdown** in a file preview opens a bounded reading view. Headings are
+bold, code blocks use the terminal font, and lists/quotes receive a visual marker.
+Search and highlight operate on reading text; Enter copies a block, while
+**Copy Markdown Source** keeps the captured original Markdown. **View Source**
+returns to the ordinary text preview. Refresh/F5 keeps Markdown mode and restores
+its query, wrap setting and selected block number when still present.
+
+This initial viewer uses [pulldown-cmark](https://docs.rs/pulldown-cmark/0.13.6/pulldown_cmark/)
+on the background file worker. It reads the existing 64 KiB / 512-source-line
+prefix and retains at most 512 reading blocks; partial documents are labeled.
+Displayed excerpts remain bounded and default to four visual lines. Links display
+their label, images display alt text, and raw HTML displays as literal text: no
+assets load and no HTML or scripts execute. Inline emphasis styling, tables,
+clickable links, images, full code-block layout and document appearance controls
+remain unimplemented. This is a reading preview, not a complete Markdown renderer.
+
 **External Editor** opens the selected regular file from the directory browser
 or text/hex preview. Ctrl+Alt+E invokes the same action; remap `edit_selected_file`
 under `context: "files"` for the browser or `context: "file_preview"` for text/hex

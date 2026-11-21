@@ -81,7 +81,7 @@ mod navigation_tests {
         let title = crate::file_browser::preview_line_title(&text, "");
         assert!(!title.contains("Needle"));
         let command = super::Command { title, subtitle: Some("Line 1".into()), shortcut: None,
-            target: super::PaletteEvent::Run(Box::new(crate::CopyPreviewLine { text: text.clone() })) };
+            target: super::PaletteEvent::Run(Box::new(crate::CopyPreviewLine { text: text.clone(), markdown: None })) };
         let mut search = crate::palette_match::RankedSearch::new(vec![command.search_text()]);
         search.update("NEEDLE 世界");
         assert_eq!(search.matches, [0]);
@@ -181,12 +181,13 @@ fn folder_target(command: &Command) -> Option<(&std::path::Path, u8)> {
 pub struct PreviewState {
     path: std::path::PathBuf,
     hex: bool,
+    markdown: bool,
     query: String,
     wrapped: bool,
     command: Option<usize>,
 }
 impl PreviewState {
-    pub fn matches(&self, path: &std::path::Path, hex: bool) -> bool { self.path == path && self.hex == hex }
+    pub fn matches(&self, path: &std::path::Path, hex: bool, markdown: bool) -> bool { self.path == path && self.hex == hex && self.markdown == markdown }
 }
 
 pub struct CommandPalette {
@@ -197,6 +198,7 @@ pub struct CommandPalette {
     terminal_search_input: bool,
     ssh_input: bool,
     hex_preview: bool,
+    markdown_preview: bool,
     wrap_preview: bool,
     folder_navigation: Option<(bool, bool, std::path::PathBuf)>,
     preview_navigation: Option<(std::path::PathBuf, bool)>,
@@ -569,12 +571,39 @@ impl CommandPalette {
             let title = file_browser::preview_line_title(&text, "");
             let copy_hint = if preview.partial_line == Some(index) { "Partial line · Enter copies only the captured text" } else { "Enter copies this preview line" };
             Command { title, subtitle: Some(format!("Line {} · {copy_hint}", index + 1)), shortcut: None,
-                target: PaletteEvent::Run(Box::new(CopyPreviewLine { text })) }
+                target: PaletteEvent::Run(Box::new(CopyPreviewLine { text, markdown: None })) }
         }));
         let mut palette = Self::with_commands(commands, if preview.hex && preview.truncated { "Hex preview · First 8 KiB / 1,024 rows" } else if preview.hex { "Hex preview · Search bytes or ASCII · Read only" } else if preview.truncated { "Text preview · Limited to 64 KiB / 512 lines" } else if empty { "Text preview · Empty file" } else { "Text preview · Search lines · Read only" }, "No matching preview lines", window, cx);
         palette.hex_preview = preview.hex;
         palette.preview_navigation = Some(navigation);
         palette.location = Some(location);
+        palette
+    }
+    pub fn markdown_file(mut preview: file_browser::Preview, blocks: Vec<markdown_preview::Block>, limited: bool, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        preview.lines = blocks.iter().map(|block| block.text.clone()).collect();
+        preview.partial_line = None;
+        preview.truncated |= limited;
+        let truncated = preview.truncated;
+        let mut palette = Self::file_preview(preview, window, cx);
+        let mut kinds = blocks.into_iter().map(|block| block.kind);
+        let mut block_number = 0;
+        for command in &mut palette.commands {
+            if let PaletteEvent::Run(action) = &command.target {
+                if let Some(line) = action.as_any().downcast_ref::<CopyPreviewLine>() {
+                    block_number += 1;
+                    command.target = PaletteEvent::Run(Box::new(CopyPreviewLine { text: line.text.clone(), markdown: kinds.next() }));
+                    command.subtitle = Some(format!("Block {block_number} · Enter copies reading text"));
+                } else if let Some(action) = action.as_any().downcast_ref::<PreviewLocalFile>() {
+                    command.target = PaletteEvent::Run(Box::new(PreviewMarkdownFile { path: action.path.clone() }));
+                } else if action.as_any().is::<CopyPreviewText>() {
+                    command.title = "Copy Markdown Source".into();
+                }
+            }
+        }
+        palette.search = palette_match::RankedSearch::new(palette.commands.iter().map(Command::search_text).collect());
+        palette.markdown_preview = true;
+        palette.wrap_preview = true;
+        palette.heading = if truncated { "Markdown reading view · Partial document · Bounded source/blocks" } else { "Markdown reading view · Images and links are inert" };
         palette
     }
     pub fn terminal_search(query: &str, window: &mut Window, cx: &mut Context<Self>) -> Self {
@@ -720,7 +749,7 @@ impl CommandPalette {
         )
         .detach();
         Self {
-            input, heading, empty_message, buffer_rename: None, feedback: None, directory_input: false, terminal_search_input: false, ssh_input: false, hex_preview: false, wrap_preview: false, folder_navigation: None, preview_navigation: None, location: None,
+            input, heading, empty_message, buffer_rename: None, feedback: None, directory_input: false, terminal_search_input: false, ssh_input: false, hex_preview: false, markdown_preview: false, wrap_preview: false, folder_navigation: None, preview_navigation: None, location: None,
             search: palette_match::RankedSearch::new(commands
                 .iter()
                 .map(Command::search_text)
@@ -749,10 +778,10 @@ impl CommandPalette {
     }
     pub fn preview_state(&self, cx: &App) -> Option<PreviewState> {
         let (path, hex) = self.preview_navigation.as_ref()?;
-        Some(PreviewState { path: path.clone(), hex: *hex, query: self.input.read(cx).value().to_owned(), wrapped: self.wrap_preview, command: self.search.matches.get(self.selected).copied() })
+        Some(PreviewState { path: path.clone(), hex: *hex, markdown: self.markdown_preview, query: self.input.read(cx).value().to_owned(), wrapped: self.wrap_preview, command: self.search.matches.get(self.selected).copied() })
     }
     pub fn restore_preview(&mut self, state: PreviewState, cx: &mut Context<Self>) {
-        if !self.preview_navigation.as_ref().is_some_and(|(path, hex)| state.matches(path, *hex)) { return; }
+        if !self.preview_navigation.as_ref().is_some_and(|(path, hex)| state.matches(path, *hex, self.markdown_preview)) { return; }
         self.wrap_preview = state.wrapped;
         self.input.update(cx, |input, cx| input.replace_draft(&state.query, cx));
         // The input's Changed event updates ranking and resets selection first.
@@ -796,6 +825,8 @@ impl CommandPalette {
         let action: Box<dyn Action> = if directory {
             let Some(parent) = path.parent() else { return; };
             Box::new(BrowseDirectory { path: parent.to_owned() })
+        } else if self.markdown_preview && !switch_mode {
+            Box::new(PreviewMarkdownFile { path: path.clone() })
         } else if *hex != switch_mode {
             Box::new(PreviewHexFile { path: path.clone() })
         } else {
@@ -814,6 +845,7 @@ impl CommandPalette {
         let Some(&command) = self.search.matches.get(row) else { return div().into_any_element(); };
         let selected = row == self.selected;
         let wrapped = self.wrap_preview && self.commands[command].preview_line().is_some();
+        let markdown = match &self.commands[command].target { PaletteEvent::Run(action) => action.as_any().downcast_ref::<CopyPreviewLine>().and_then(|line| line.markdown), _ => None };
         let title = self.commands[command].preview_line()
             .map(|text| file_browser::preview_line_title(text, self.input.read(cx).value()))
             .unwrap_or_else(|| self.commands[command].title.clone());
@@ -842,6 +874,9 @@ impl CommandPalette {
             .h(px(self.command_height(command)))
             .text_sm().line_height(px(20.))
             .when(self.hex_preview && self.commands[command].preview_line().is_some(), |row| row.font_family(FONT_FAMILY))
+            .when(markdown == Some(markdown_preview::Kind::Heading), |row| row.font_weight(FontWeight::BOLD))
+            .when(markdown == Some(markdown_preview::Kind::Code), |row| row.font_family(FONT_FAMILY))
+            .when(matches!(markdown, Some(markdown_preview::Kind::Quote | markdown_preview::Kind::List)), |row| row.border_l_2().border_color(rgb(0x637894)))
             .flex()
             .items_center()
             .gap_3()
@@ -1136,9 +1171,11 @@ impl Render for CommandPalette {
                         Box::new(BrowseDirectory { path: parent.to_owned() }) as Box<dyn Action>), cx))
                     .child(self.file_navigation_button("preview-mode", if *hex { "View as Text" } else { "View as Hex" },
                         Some(if *hex { Box::new(PreviewLocalFile { path: path.clone() }) } else { Box::new(PreviewHexFile { path: path.clone() }) }), cx))
+                    .child(self.file_navigation_button("preview-markdown", if self.markdown_preview { "View Source" } else { "Read Markdown" },
+                        Some(if self.markdown_preview { Box::new(PreviewLocalFile { path: path.clone() }) } else { Box::new(PreviewMarkdownFile { path: path.clone() }) }), cx))
                     .child(self.file_navigation_button("preview-editor", "External Editor", Some(Box::new(EditLocalFile { path: path.clone() })), cx))
                     .child(self.file_navigation_button("preview-refresh", "Refresh",
-                        Some(if *hex { Box::new(PreviewHexFile { path: path.clone() }) } else { Box::new(PreviewLocalFile { path: path.clone() }) }), cx))
+                        Some(if self.markdown_preview { Box::new(PreviewMarkdownFile { path: path.clone() }) } else if *hex { Box::new(PreviewHexFile { path: path.clone() }) } else { Box::new(PreviewLocalFile { path: path.clone() }) }), cx))
             ))
             .when(!preview_shortcuts.is_empty(), |palette| palette.child(
                 div().flex_shrink_0().px_3().pt_2().text_xs().text_color(rgb(0xa0a0a0)).child(preview_shortcuts)

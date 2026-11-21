@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Started F03 with an explicit Markdown reading mode from file previews, using
+pinned pulldown-cmark 0.13.6 without default features. Parsing runs on the bounded
+file worker; the existing source cap and a 512-block cap limit retained work.
+Virtualized rows distinguish headings/code/list/quote blocks, support search and
+block copy, preserve source copying, and offer View Source plus mode-correct
+refresh. Raw HTML, link labels and image alt text remain inert. Two parser tests
+passed for structure/text/asset handling and block caps, with desktop compilation.
+Native visuals, full inline/code layout, tables, links/images and appearance
+controls remain pending; F03 is in progress, not accepted.
+
 External-editor invocation now preserves the originating file browser/preview
 instead of closing its palette and restoring terminal focus. The existing view
 retains query, selected entry/line, wrap mode and scroll state across editor

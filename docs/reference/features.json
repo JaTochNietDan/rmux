@@ -1583,7 +1583,15 @@
         "TREE"
       ],
       "acceptance": "Render local documents with bounded assets and predictable navigation.",
-      "rmux_status": "not_started"
+      "rmux_status": "in_progress",
+      "implementation": "Explicit Markdown reading preview uses pinned CommonMark parsing on the file worker with 64 KiB/512-source-line and 512-block caps. Virtualized searchable blocks distinguish headings, code, lists and quotes; block copying and original-source copying are separate. View Source and mode-preserving refresh are available. Links, image alt text and raw HTML are inert. Two focused parser regressions pass.",
+      "remaining": "Native reading-view visual/focus acceptance, full inline and code-block layout, tables, clickable navigation, bounded image assets and appearance controls.",
+      "implementation_sources": [
+        "crates/rmux-desktop/src/markdown_preview.rs",
+        "crates/rmux-desktop/src/command_palette.rs",
+        "crates/rmux-desktop/src/window_view.rs"
+      ],
+      "progress_record": "docs/progress.md"
     },
     {
       "id": "F04",
