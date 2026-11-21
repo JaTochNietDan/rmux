@@ -1,5 +1,12 @@
 # rmux performance acceptance plan
 
+Experimental browser metadata uses one queued wakeup, independently coalesced
+load/title/process state, a 100 ms minimum interval between UI publications, and
+change-only redraw notification. Timers are event-driven and stop at idle. This
+bounds rmux chrome updates, not native WebKit page animation or callback costs.
+Focused reducer tests cover duplicate suppression and sticky failure/recovery;
+native callback-storm latency/CPU measurements remain pending.
+
 Selection-specific shaped glyphs and decorations are retained only for currently
 selected rows with the current foreground setting. Clearing or shrinking a
 selection drops unused variants on the next rendered frame, while active variants

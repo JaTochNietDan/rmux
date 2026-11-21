@@ -68,7 +68,9 @@ existing error display. Ordinary Open Link and modifier-click retain their
 external-browser behavior.
 The webview is created on first navigation and uses an ephemeral profile. Closing
 the window drops its owner. Page-load and document-title callbacks coalesce through one queued wakeup, retaining
-the latest value of each independently. Native window titles include the page title
+the latest value of each independently. UI publication is limited to one batch per
+100 ms during bursts, with no polling timer while idle. Unchanged metadata does
+not request a redraw; the page itself still owns its native rendering workload. Native window titles include the page title
 and rmux identity; page titles are capped at 256 Unicode characters with control
 characters replaced by spaces. A new load clears the previous page title. macOS content-process termination
 sets a visible recovery message, clears the stale title and labels the reload

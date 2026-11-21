@@ -78,15 +78,47 @@ impl PageUpdates {
     }
 }
 #[derive(Default)]
+struct PageState {
+    status: String,
+    committed: String,
+    title: String,
+    failed: bool,
+}
+impl PageState {
+    /// Returns whether a native metadata batch changed visible chrome.
+    fn apply(&mut self, update: PageUpdates) -> bool {
+        let mut changed = false;
+        if let Some(alive) = update.process_alive {
+            let failed = !alive;
+            changed |= self.failed != failed;
+            self.failed = failed;
+            if !alive {
+                changed |= !self.title.is_empty();
+                self.title.clear();
+                let status = "Browser content process stopped. Reload to recover.";
+                if self.status != status { self.status = status.into(); changed = true; }
+            }
+        }
+        if !self.failed {
+            if let Some((finished, url)) = update.load {
+                if self.committed != url { self.committed = url; changed = true; }
+                let status = if finished { "Loaded" } else { "Loading…" };
+                if self.status != status { self.status = status.into(); changed = true; }
+            }
+            if let Some(title) = update.title {
+                if self.title != title { self.title = title; changed = true; }
+            }
+        }
+        changed
+    }
+}
+#[derive(Default)]
 struct Host { view: Option<wry::WebView>, bounds: Option<Bounds<Pixels>>, pending_url: Option<String> }
 struct BrowserWindow {
     host: Rc<RefCell<Host>>,
     input: Entity<TextField>,
-    status: String,
-    committed: String,
-    page_title: String,
+    page: PageState,
     displayed_title: String,
-    content_failed: bool,
     zoom_percent: u16,
     latest: Arc<std::sync::Mutex<PageUpdates>>,
     wake: async_channel::Sender<()>,
@@ -98,13 +130,13 @@ impl BrowserWindow {
         cx.subscribe_in(&input, window, |this, _, event: &text_field::EditEvent, window, cx| {
             if let text_field::EditEvent::Submitted { text, .. } = event {
                 match address(text).and_then(|url| this.navigate(&url, window)) {
-                    Ok(()) => this.status = "Navigation requested".into(),
-                    Err(error) => this.status = error.to_string(),
+                    Ok(()) => this.page.status = "Navigation requested".into(),
+                    Err(error) => this.page.status = error.to_string(),
                 }
                 cx.notify();
             } else if matches!(event, text_field::EditEvent::Cancelled) {
-                if !this.committed.is_empty() {
-                    this.input.update(cx, |input, cx| input.replace_draft(&this.committed, cx));
+                if !this.page.committed.is_empty() {
+                    this.input.update(cx, |input, cx| input.replace_draft(&this.page.committed, cx));
                 }
                 if let Some(view) = &this.host.borrow().view { let _ = view.focus(); }
             }
@@ -114,30 +146,22 @@ impl BrowserWindow {
         let (wake, receive) = async_channel::bounded(1);
         let updates = latest.clone();
         let task = cx.spawn(async move |entity, cx| {
+            let interval = std::time::Duration::from_millis(100);
+            let mut next_update = std::time::Instant::now();
             while receive.recv().await.is_ok() {
+                let delay = next_update.saturating_duration_since(std::time::Instant::now());
+                if !delay.is_zero() { cx.background_executor().timer(delay).await; }
                 let update = updates.lock().ok().map(|mut value| std::mem::take(&mut *value));
                 if let Some(update) = update {
+                    if update.load.is_none() && update.title.is_none() && update.process_alive.is_none() { continue; }
                     if entity.update(cx, |this: &mut Self, cx| {
-                        if let Some(alive) = update.process_alive {
-                            this.content_failed = !alive;
-                            if !alive {
-                                this.page_title.clear();
-                                this.status = "Browser content process stopped. Reload to recover.".into();
-                            }
-                        }
-                        if !this.content_failed {
-                            if let Some((finished, url)) = update.load {
-                                this.committed = url;
-                                this.status = if finished { "Loaded" } else { "Loading…" }.into();
-                            }
-                            if let Some(title) = update.title { this.page_title = title; }
-                        }
-                        cx.notify();
+                        if this.page.apply(update) { cx.notify(); }
                     }).is_err() { break; }
+                    next_update = std::time::Instant::now() + interval;
                 }
             }
         });
-        Self { host: Rc::new(RefCell::new(Host { pending_url: initial, ..Default::default() })), input, status: "Enter an address to create an ephemeral browser.".into(), committed: String::new(), page_title: String::new(), displayed_title: String::new(), content_failed: false, zoom_percent: 100, latest, wake, _updates: task }
+        Self { host: Rc::new(RefCell::new(Host { pending_url: initial, ..Default::default() })), input, page: PageState { status: "Enter an address to create an ephemeral browser.".into(), ..Default::default() }, displayed_title: String::new(), zoom_percent: 100, latest, wake, _updates: task }
     }
     fn navigate(&mut self, url: &str, window: &Window) -> anyhow::Result<()> {
         let mut host = self.host.borrow_mut();
@@ -177,7 +201,7 @@ impl BrowserWindow {
         if next == self.zoom_percent { return; }
         if let Some(view) = &self.host.borrow().view {
             if let Err(error) = view.zoom(f64::from(next) / 100.) {
-                self.status = format!("Could not change page zoom: {error}");
+                self.page.status = format!("Could not change page zoom: {error}");
                 cx.notify();
                 return;
             }
@@ -189,7 +213,7 @@ impl BrowserWindow {
         if self.input.read(cx).is_composing() { return; }
         if let Some(view) = &self.host.borrow().view { let _ = view.focus_parent(); }
         self.input.update(cx, |input, cx| {
-            if !self.committed.is_empty() { input.replace_draft(&self.committed, cx); }
+            if !self.page.committed.is_empty() { input.replace_draft(&self.page.committed, cx); }
             input.select_all_text(cx);
         });
         self.input.read(cx).focus.focus(window);
@@ -203,14 +227,14 @@ impl BrowserWindow {
                 Navigation::Reload => view.reload(),
                 _ => return,
             };
-            if let Err(error) = result { self.status = error.to_string(); }
+            if let Err(error) = result { self.page.status = error.to_string(); }
         }
     }
 }
 impl Render for BrowserWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let title = if self.page_title.is_empty() { "rmux · Browser (Experimental)".to_owned() }
-            else { format!("{} — rmux Browser (Experimental)", self.page_title) };
+        let title = if self.page.title.is_empty() { "rmux · Browser (Experimental)".to_owned() }
+            else { format!("{} — rmux Browser (Experimental)", self.page.title) };
         if self.displayed_title != title {
             window.set_window_title(&title);
             self.displayed_title = title;
@@ -227,15 +251,15 @@ impl Render for BrowserWindow {
             .child(div().h(px(52.)).flex_shrink_0().px_3().flex().items_center().gap_2()
                 .child(button("back", "Back").when(!back, |button| button.opacity(0.4).cursor_default()).when(back, |button| button.on_click(cx.listener(|this, _, _, cx| { this.navigation(Navigation::Back); cx.notify(); }))))
                 .child(button("forward", "Forward").when(!forward, |button| button.opacity(0.4).cursor_default()).when(forward, |button| button.on_click(cx.listener(|this, _, _, cx| { this.navigation(Navigation::Forward); cx.notify(); }))))
-                .child(button("reload", if self.content_failed { "Reload Page" } else { "Reload" }).when(!loaded, |button| button.opacity(0.4).cursor_default()).when(loaded, |button| button.on_click(cx.listener(|this, _, _, cx| { this.navigation(Navigation::Reload); cx.notify(); }))))
+                .child(button("reload", if self.page.failed { "Reload Page" } else { "Reload" }).when(!loaded, |button| button.opacity(0.4).cursor_default()).when(loaded, |button| button.on_click(cx.listener(|this, _, _, cx| { this.navigation(Navigation::Reload); cx.notify(); }))))
                 .child(div().flex_1().min_w_0().child(self.input.clone()))
                 .child(button("go", "Go").on_click(cx.listener(|this, _, window, cx| {
                     if this.input.read(cx).is_composing() { return; }
                     let result = address(this.input.read(cx).value()).and_then(|url| this.navigate(&url, window));
-                    if let Err(error) = result { this.status = error.to_string(); }
+                    if let Err(error) = result { this.page.status = error.to_string(); }
                     cx.notify();
                 }))))
-            .child(div().h(px(28.)).flex_shrink_0().px_3().text_xs().truncate().when(self.content_failed, |status| status.text_color(rgb(0xf0b85b))).child(format!("{} · {}% · {}", self.status, self.zoom_percent, self.committed)))
+            .child(div().h(px(28.)).flex_shrink_0().px_3().text_xs().truncate().when(self.page.failed, |status| status.text_color(rgb(0xf0b85b))).child(format!("{} · {}% · {}", self.page.status, self.zoom_percent, self.page.committed)))
             .child(div().flex_1().min_h_0().child(canvas(move |bounds, window, cx| {
                 let mut host = host.borrow_mut();
                 if host.bounds != Some(bounds) {
@@ -250,8 +274,8 @@ impl Render for BrowserWindow {
                     window.defer(cx, move |window, cx| {
                         let _ = entity.update(cx, |this, cx| {
                             match this.navigate(&url, window) {
-                                Ok(()) => this.status = "Navigation requested".into(),
-                                Err(error) => this.status = error.to_string(),
+                                Ok(()) => this.page.status = "Navigation requested".into(),
+                                Err(error) => this.page.status = error.to_string(),
                             }
                             cx.notify();
                         });
@@ -316,7 +340,25 @@ fn open_initial(initial: Option<String>, cx: &mut App) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{address, allowed, can_open_link, PageUpdates, zoom_level};
+    use super::{address, allowed, can_open_link, PageUpdates, PageState, zoom_level};
+    #[test]
+    fn browser_metadata_repaints_only_on_changes_and_keeps_failure_sticky() {
+        let mut state = PageState::default();
+        let loaded = || PageUpdates { load: Some((true, "https://example.com/".into())), title: Some("Example".into()), ..Default::default() };
+        assert!(state.apply(loaded()));
+        assert!(!state.apply(loaded()));
+        assert!(!state.apply(PageUpdates::default()));
+        let mut failed = PageUpdates::default(); failed.terminated();
+        assert!(state.apply(failed));
+        assert!(state.failed);
+        assert!(!state.apply(loaded()));
+        assert!(state.title.is_empty());
+        assert_eq!(state.committed, "https://example.com/");
+        let mut restarted = PageUpdates::default(); restarted.loaded(false, "https://example.com/retry".into());
+        assert!(state.apply(restarted));
+        assert!(!state.failed);
+        assert_eq!(state.status, "Loading…");
+    }
     #[test]
     fn browser_zoom_walk_is_bounded_and_returns_to_actual_size() {
         let mut level = 100;

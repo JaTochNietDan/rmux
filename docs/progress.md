@@ -2,6 +2,18 @@
 
 ## Current implementation focus
 
+Browser metadata publication now has a 100 ms minimum interval during bursts,
+independent latest-value coalescing and change-only redraw notification. A page
+rapidly changing its title can no longer notify rmux chrome on every callback.
+The timer starts only after an event and does not poll while idle; native page
+rendering/callback work is outside this bound. Extracted PageState applies batches
+without copying current strings, preserves termination across late finish/title
+callbacks, and reports whether visible chrome changed. Eight focused `browser_`
+tests passed, including duplicate/empty-batch suppression and cross-batch failure/
+recovery state. Feature compilation passed. Native callback-storm CPU/latency and
+adjacent-terminal acceptance remain pending. The prior turn made progress with
+committed/pushed browser zoom controls.
+
 Experimental browser windows now have per-window 25–500% page zoom with discrete
 steps, Cmd+=/Cmd+-/Cmd+0 bindings and native Browser menu actions. The status line
 shows the current percentage; actual size resets to 100%. Native zoom failures
