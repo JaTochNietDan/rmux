@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+The experimental macOS browser now observes WRY content-process termination and
+shows a clear reload recovery message, removes stale page titles and labels the
+reload control Reload Page. Failure state persists across late finish/title events;
+a new load-start event restores normal loading status. No automatic retry loop is
+introduced. The callback reuses the bounded coalescing mailbox. Six focused
+`browser_` tests passed, including termination/late-completion/new-load event order;
+the browser-enabled desktop compiled. Native forced-termination/reload and memory
+recovery remain unverified while the Mac is locked. The preceding goal turn made
+progress with committed/pushed bounded browser titles.
+
 Experimental browser windows now show document titles in native window labels,
 retaining the rmux/experimental suffix. Titles are limited to 256 Unicode characters
 and control characters become spaces. Page/title callbacks share one queued wakeup

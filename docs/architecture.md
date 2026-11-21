@@ -67,7 +67,11 @@ The webview is created on first navigation and uses an ephemeral profile. Closin
 the window drops its owner. Page-load and document-title callbacks coalesce through one queued wakeup, retaining
 the latest value of each independently. Native window titles include the page title
 and rmux identity; page titles are capped at 256 Unicode characters with control
-characters replaced by spaces. A new load clears the previous page title.
+characters replaced by spaces. A new load clears the previous page title. macOS content-process termination
+sets a visible recovery message, clears the stale title and labels the reload
+control **Reload Page**. Recovery requires a new load-start event; late completion
+callbacks cannot clear the failure state. There is no automatic reload loop.
+Native process termination/reload behavior still requires runtime acceptance.
 
 This remains experimental: native interaction is unverified, windows are not yet
 workspace surfaces, and browser windows are omitted from session snapshots.

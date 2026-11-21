@@ -1,6 +1,7 @@
 //! Opt-in native browser window. Split-tree ownership remains a separate gate.
 use super::*;
 use crate::text_field::TextField;
+use wry::WebViewBuilderExtDarwin;
 use std::{cell::RefCell, rc::Rc};
 
 actions!(browser, [FocusAddress, Back, Forward, Reload]);
@@ -51,12 +52,18 @@ fn rect(bounds: Bounds<Pixels>) -> wry::Rect {
 struct PageUpdates {
     load: Option<(bool, String)>,
     title: Option<String>,
+    process_alive: Option<bool>,
 }
 impl PageUpdates {
     fn loaded(&mut self, finished: bool, url: String) {
         if url.len() > 4096 { return; }
-        if !finished { self.title = Some(String::new()); }
+        if !finished { self.title = Some(String::new()); self.process_alive = Some(true); }
         self.load = Some((finished, url));
+    }
+    fn terminated(&mut self) {
+        self.process_alive = Some(false);
+        self.load = None;
+        self.title = None;
     }
     fn titled(&mut self, title: &str) {
         self.title = Some(title.chars().take(256).map(|ch| if ch.is_control() { ' ' } else { ch }).collect());
@@ -71,6 +78,7 @@ struct BrowserWindow {
     committed: String,
     page_title: String,
     displayed_title: String,
+    content_failed: bool,
     latest: Arc<std::sync::Mutex<PageUpdates>>,
     wake: async_channel::Sender<()>,
     _updates: Task<()>,
@@ -101,17 +109,26 @@ impl BrowserWindow {
                 let update = updates.lock().ok().map(|mut value| std::mem::take(&mut *value));
                 if let Some(update) = update {
                     if entity.update(cx, |this: &mut Self, cx| {
-                        if let Some((finished, url)) = update.load {
-                            this.committed = url;
-                            this.status = if finished { "Loaded" } else { "Loading…" }.into();
+                        if let Some(alive) = update.process_alive {
+                            this.content_failed = !alive;
+                            if !alive {
+                                this.page_title.clear();
+                                this.status = "Browser content process stopped. Reload to recover.".into();
+                            }
                         }
-                        if let Some(title) = update.title { this.page_title = title; }
+                        if !this.content_failed {
+                            if let Some((finished, url)) = update.load {
+                                this.committed = url;
+                                this.status = if finished { "Loaded" } else { "Loading…" }.into();
+                            }
+                            if let Some(title) = update.title { this.page_title = title; }
+                        }
                         cx.notify();
                     }).is_err() { break; }
                 }
             }
         });
-        Self { host: Rc::new(RefCell::new(Host { pending_url: initial, ..Default::default() })), input, status: "Enter an address to create an ephemeral browser.".into(), committed: String::new(), page_title: String::new(), displayed_title: String::new(), latest, wake, _updates: task }
+        Self { host: Rc::new(RefCell::new(Host { pending_url: initial, ..Default::default() })), input, status: "Enter an address to create an ephemeral browser.".into(), committed: String::new(), page_title: String::new(), displayed_title: String::new(), content_failed: false, latest, wake, _updates: task }
     }
     fn navigate(&mut self, url: &str, window: &Window) -> anyhow::Result<()> {
         let mut host = self.host.borrow_mut();
@@ -121,10 +138,16 @@ impl BrowserWindow {
         let wake = self.wake.clone();
         let title_latest = latest.clone();
         let title_wake = wake.clone();
+        let termination_latest = latest.clone();
+        let termination_wake = wake.clone();
         host.view = Some(wry::WebViewBuilder::new().with_incognito(true).with_url(url)
             .with_bounds(rect(bounds)).with_navigation_handler(|url| allowed(&url))
             .with_new_window_req_handler(|_, _| wry::NewWindowResponse::Deny)
             .with_download_started_handler(|_, _| false)
+            .with_on_web_content_process_terminate_handler(move || {
+                if let Ok(mut value) = termination_latest.lock() { value.terminated(); }
+                let _ = termination_wake.try_send(());
+            })
             .with_document_title_changed_handler(move |title| {
                 if let Ok(mut value) = title_latest.lock() { value.titled(&title); }
                 let _ = title_wake.try_send(());
@@ -180,7 +203,7 @@ impl Render for BrowserWindow {
             .child(div().h(px(52.)).flex_shrink_0().px_3().flex().items_center().gap_2()
                 .child(button("back", "Back").when(!back, |button| button.opacity(0.4).cursor_default()).when(back, |button| button.on_click(cx.listener(|this, _, _, cx| { this.navigation(Navigation::Back); cx.notify(); }))))
                 .child(button("forward", "Forward").when(!forward, |button| button.opacity(0.4).cursor_default()).when(forward, |button| button.on_click(cx.listener(|this, _, _, cx| { this.navigation(Navigation::Forward); cx.notify(); }))))
-                .child(button("reload", "Reload").when(!loaded, |button| button.opacity(0.4).cursor_default()).when(loaded, |button| button.on_click(cx.listener(|this, _, _, cx| { this.navigation(Navigation::Reload); cx.notify(); }))))
+                .child(button("reload", if self.content_failed { "Reload Page" } else { "Reload" }).when(!loaded, |button| button.opacity(0.4).cursor_default()).when(loaded, |button| button.on_click(cx.listener(|this, _, _, cx| { this.navigation(Navigation::Reload); cx.notify(); }))))
                 .child(div().flex_1().min_w_0().child(self.input.clone()))
                 .child(button("go", "Go").on_click(cx.listener(|this, _, window, cx| {
                     if this.input.read(cx).is_composing() { return; }
@@ -188,7 +211,7 @@ impl Render for BrowserWindow {
                     if let Err(error) = result { this.status = error.to_string(); }
                     cx.notify();
                 }))))
-            .child(div().h(px(28.)).flex_shrink_0().px_3().text_xs().truncate().child(format!("{} · {}", self.status, self.committed)))
+            .child(div().h(px(28.)).flex_shrink_0().px_3().text_xs().truncate().when(self.content_failed, |status| status.text_color(rgb(0xf0b85b))).child(format!("{} · {}", self.status, self.committed)))
             .child(div().flex_1().min_h_0().child(canvas(move |bounds, window, cx| {
                 let mut host = host.borrow_mut();
                 if host.bounds != Some(bounds) {
@@ -261,6 +284,24 @@ fn open_initial(initial: Option<String>, cx: &mut App) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{address, allowed, can_open_link, PageUpdates};
+    #[test]
+    fn browser_termination_survives_late_finish_and_recovers_on_new_load() {
+        let mut updates = PageUpdates::default();
+        updates.loaded(false, "https://example.com".into());
+        updates.titled("old title");
+        updates.terminated();
+        assert_eq!(updates.process_alive, Some(false));
+        assert!(updates.load.is_none() && updates.title.is_none());
+        // A queued completion must not declare a terminated process alive.
+        updates.loaded(true, "https://example.com".into());
+        assert_eq!(updates.process_alive, Some(false));
+        let _ = std::mem::take(&mut updates);
+        updates.loaded(true, "https://example.com".into());
+        assert_eq!(updates.process_alive, None);
+        updates.loaded(false, "https://example.com/retry".into());
+        assert_eq!(updates.process_alive, Some(true));
+        assert_eq!(updates.title.as_deref(), Some(""));
+    }
     #[test]
     fn browser_title_updates_coalesce_without_losing_load_state() {
         let mut updates = PageUpdates::default();
