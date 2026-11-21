@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Extended the release split harness with optional workspace-close sampling. Nine
+fresh-instance runs verified that closing the measured workspace leaves only one
+survivor surface. For the 32-pane cases, median app RSS fell from 147.16 to 126.77
+MiB after closing and settling for one second. Raw samples and limits are recorded;
+this is not a full leak test or child-process cleanup proof. v0.1.2 platform builds
+remain live. The preceding turn added release-artifact split/RSS measurements.
+
 Added release-artifact inputs and binary hashing to the split/RSS harness, then
 measured the GitHub-built macOS v0.1.1 app through isolated mise installation.
 Median app RSS at 1/8/32 idle panes was 115.11/123.91/150.78 MiB after one second;

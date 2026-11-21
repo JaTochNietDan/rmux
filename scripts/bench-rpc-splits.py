@@ -12,7 +12,7 @@ import tempfile
 import time
 
 
-def sample(panes, iteration, binary, cli, settle_seconds):
+def sample(panes, iteration, binary, cli, settle_seconds, measure_close=False):
     with tempfile.TemporaryDirectory(prefix="rmux-split-bench-") as directory:
         root = Path(directory)
         shell = root / "shell"
@@ -62,6 +62,25 @@ def sample(panes, iteration, binary, cli, settle_seconds):
                                          check=True, capture_output=True, text=True).stdout.strip())
                 result = {"panes": panes, "iteration": iteration, "split_ms": timings,
                           "split_total_ms": sum(timings), "app_rss_kib": rss}
+                if measure_close:
+                    # Keep one fresh terminal alive so closing the measured workspace
+                    # does not also close the last window/application.
+                    survivor = call("workspace.create", window_id=surface["window_id"],
+                                    name="close-benchmark-survivor", focus=True)
+                    call("workspace.close", workspace_id=work)
+                    deadline = time.monotonic() + 10
+                    while True:
+                        remaining = call("surface.list")["surfaces"]
+                        if len(remaining) == 1 and remaining[0]["workspace_id"] == survivor["id"]:
+                            break
+                        if time.monotonic() > deadline:
+                            raise TimeoutError("closed workspace surfaces remained registered")
+                        time.sleep(.02)
+                    time.sleep(settle_seconds)
+                    result["after_close_app_rss_kib"] = int(subprocess.run(
+                        ["/bin/ps", "-o", "rss=", "-p", str(app.pid)],
+                        check=True, capture_output=True, text=True).stdout.strip())
+                    result["after_close_surfaces"] = len(remaining)
                 call("system.quit")
                 app.wait(timeout=10)
                 assert app.returncode == 0
@@ -82,6 +101,7 @@ if __name__ == "__main__":
     parser.add_argument("--cli", type=Path, default=Path("target/debug/rmuxctl"))
     parser.add_argument("--label", default="local-debug")
     parser.add_argument("--settle-seconds", type=float, default=0)
+    parser.add_argument("--measure-close", action="store_true")
     args = parser.parse_args()
     if not 0 <= args.settle_seconds <= 60:
         parser.error("settle-seconds must be between 0 and 60")
@@ -92,7 +112,7 @@ if __name__ == "__main__":
     revision = subprocess.run(["git", "rev-parse", "--short", "HEAD"], check=True,
                               capture_output=True, text=True).stdout.strip()
     for panes in [1, 8, 32]:
-        samples = [sample(panes, iteration, binary, cli, args.settle_seconds) for iteration in range(3)]
+        samples = [sample(panes, iteration, binary, cli, args.settle_seconds, args.measure_close) for iteration in range(3)]
         timings = [value for row in samples for value in row["split_ms"]]
         print(json.dumps({"harness_revision": revision, "binary_label": args.label,
                           "binary_sha256": binary_sha256, "settle_seconds": args.settle_seconds,

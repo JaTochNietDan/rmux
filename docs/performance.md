@@ -2,6 +2,16 @@
 
 ## Published v0.1.1 macOS split baseline
 
+An additional `--measure-close` run creates a fresh survivor workspace, closes
+the measured workspace, waits until only the survivor surface is registered, and
+samples RSS after another one-second interval. At 1/8/32 panes, median pre-close
+RSS was 107.81/126.19/147.16 MiB and post-close RSS was 108.88/122.13/126.77 MiB.
+Each size used three fresh app instances. [Raw close samples](benchmarks/rpc-close-release-v0.1.1.jsonl).
+Creating the survivor adds allocations, and allocators may retain released memory;
+RSS changes are not a complete leak test. Surface deregistration does not prove
+child-process exit or GPU reclamation. This records cleanup behavior for idle
+fixture shells without claiming a stable memory ceiling.
+
 Measured the GitHub-built, signed macOS ARM64 v0.1.1 executable installed through
 mise, with three fresh app instances per pane count and a one-second settling
 interval before sampling app RSS. Median RSS was **115.11 / 123.91 / 150.78 MiB**
