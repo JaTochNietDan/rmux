@@ -287,7 +287,10 @@ Failed or canceled reads do not change history. Enter on a regular file opens a
 read-only text preview; a symbolic link copies its path. Hidden entries are included.
 Select a regular file and press **Shift+Enter**, or use the **Preview as Hex**
 footer button, to inspect bytes directly without first loading a text preview.
-Plain Enter continues to preview text. **Preview as Hex** is also available in
+Plain Enter continues to preview text. Text and hex previews keep **Directory**,
+**View as Text/Hex**, and **Refresh** above the search field, including when no
+lines match. Refresh retains the current preview mode.
+**Preview as Hex** is also available in
 text previews and file-preview errors, including
 binary/invalid-encoding errors. It displays the first 8 KiB as searchable eight-byte
 rows with hexadecimal offsets and an ASCII column; non-printable bytes appear as

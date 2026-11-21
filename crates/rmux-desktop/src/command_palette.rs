@@ -160,6 +160,7 @@ pub struct CommandPalette {
     ssh_input: bool,
     hex_preview: bool,
     folder_navigation: Option<(bool, bool, std::path::PathBuf)>,
+    preview_navigation: Option<(std::path::PathBuf, bool)>,
     input: Entity<text_field::TextField>,
     heading: &'static str,
     empty_message: &'static str,
@@ -504,6 +505,7 @@ impl CommandPalette {
     }
     pub fn file_preview(preview: file_browser::Preview, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let location: SharedString = preview.path.display().to_string().into();
+        let navigation = (preview.path.clone(), preview.hex);
         let empty = preview.lines.is_empty();
         let mut commands = Vec::new();
         if let Some(parent) = preview.path.parent() {
@@ -528,6 +530,7 @@ impl CommandPalette {
         }));
         let mut palette = Self::with_commands(commands, if preview.hex && preview.truncated { "Hex preview · First 8 KiB / 1,024 rows" } else if preview.hex { "Hex preview · Search bytes or ASCII · Read only" } else if preview.truncated { "Text preview · Limited to 64 KiB / 512 lines" } else if empty { "Text preview · Empty file" } else { "Text preview · Search lines · Read only" }, "No matching preview lines", window, cx);
         palette.hex_preview = preview.hex;
+        palette.preview_navigation = Some(navigation);
         palette.location = Some(location);
         palette
     }
@@ -674,7 +677,7 @@ impl CommandPalette {
         )
         .detach();
         Self {
-            input, heading, empty_message, buffer_rename: None, feedback: None, directory_input: false, terminal_search_input: false, ssh_input: false, hex_preview: false, folder_navigation: None, location: None,
+            input, heading, empty_message, buffer_rename: None, feedback: None, directory_input: false, terminal_search_input: false, ssh_input: false, hex_preview: false, folder_navigation: None, preview_navigation: None, location: None,
             search: palette_match::RankedSearch::new(commands
                 .iter()
                 .map(Command::search_text)
@@ -756,7 +759,7 @@ impl CommandPalette {
         self.feedback = Some("Copied displayed excerpt");
         cx.notify();
     }
-    fn folder_navigation_button(&self, id: &'static str, label: &'static str, action: Option<Box<dyn Action>>, cx: &mut Context<Self>) -> impl IntoElement {
+    fn file_navigation_button(&self, id: &'static str, label: &'static str, action: Option<Box<dyn Action>>, cx: &mut Context<Self>) -> impl IntoElement {
         let enabled = action.is_some();
         div().id(id).px_2().py_1().rounded_sm().text_xs()
             .text_color(rgb(if enabled { 0xdcdfe6 } else { 0x777777 }))
@@ -972,10 +975,19 @@ impl Render for CommandPalette {
             ))
             .when_some(self.folder_navigation.as_ref(), |palette, (back, forward, path)| palette.child(
                 div().flex_shrink_0().px_3().pt_2().flex().flex_wrap().gap_2()
-                    .child(self.folder_navigation_button("folder-back", "← Back", back.then(|| Box::new(FileBrowserBack) as Box<dyn Action>), cx))
-                    .child(self.folder_navigation_button("folder-forward", "Forward →", forward.then(|| Box::new(FileBrowserForward) as Box<dyn Action>), cx))
-                    .child(self.folder_navigation_button("folder-parent", "↑ Parent", path.parent().map(|parent| Box::new(BrowseDirectory { path: parent.to_owned() }) as Box<dyn Action>), cx))
-                    .child(self.folder_navigation_button("folder-refresh", "Refresh", Some(Box::new(BrowseDirectory { path: path.clone() })), cx))
+                    .child(self.file_navigation_button("folder-back", "← Back", back.then(|| Box::new(FileBrowserBack) as Box<dyn Action>), cx))
+                    .child(self.file_navigation_button("folder-forward", "Forward →", forward.then(|| Box::new(FileBrowserForward) as Box<dyn Action>), cx))
+                    .child(self.file_navigation_button("folder-parent", "↑ Parent", path.parent().map(|parent| Box::new(BrowseDirectory { path: parent.to_owned() }) as Box<dyn Action>), cx))
+                    .child(self.file_navigation_button("folder-refresh", "Refresh", Some(Box::new(BrowseDirectory { path: path.clone() })), cx))
+            ))
+            .when_some(self.preview_navigation.as_ref(), |palette, (path, hex)| palette.child(
+                div().flex_shrink_0().px_3().pt_2().flex().flex_wrap().gap_2()
+                    .child(self.file_navigation_button("preview-directory", "← Directory", path.parent().map(|parent|
+                        Box::new(BrowseDirectory { path: parent.to_owned() }) as Box<dyn Action>), cx))
+                    .child(self.file_navigation_button("preview-mode", if *hex { "View as Text" } else { "View as Hex" },
+                        Some(if *hex { Box::new(PreviewLocalFile { path: path.clone() }) } else { Box::new(PreviewHexFile { path: path.clone() }) }), cx))
+                    .child(self.file_navigation_button("preview-refresh", "Refresh",
+                        Some(if *hex { Box::new(PreviewHexFile { path: path.clone() }) } else { Box::new(PreviewLocalFile { path: path.clone() }) }), cx))
             ))
             .child(div().flex_shrink_0().p_3().child(self.input.clone()))
             .child(if self.search.matches.is_empty() {

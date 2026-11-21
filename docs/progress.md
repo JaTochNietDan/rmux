@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Text and hex previews now retain Directory, View as Text/Hex and Refresh buttons
+above search results, including zero-match searches. Refresh preserves the current
+mode; switching modes uses the existing bounded asynchronous readers. The shared
+file-navigation control guards IME composition and standard clicks. Additional
+preview state stores only a path and mode, not another captured text copy. Desktop
+compilation passed; native visual and interaction acceptance remain pending.
+
 Tab-picker keyboard handling now skips ranking for non-navigation keys and IME
 composition before inspecting titles/directories. Exact displayed tab-number
 matching parses canonical decimal tokens without allocating a number string per
