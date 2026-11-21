@@ -21,11 +21,35 @@ else
 fi
 "#;
 
+// PowerShell loads its ordinary profiles before -Command. The private path is
+// data in the environment; never interpolate filesystem paths as command code.
+pub(crate) fn prepare_powershell(
+    command: &mut CommandBuilder,
+    login: bool,
+) -> Result<tempfile::TempDir> {
+    let directory = tempfile::Builder::new()
+        .prefix("rmux-powershell-")
+        .tempdir()?;
+    std::fs::write(
+        directory.path().join("rmux.ps1"),
+        include_str!("../../../shell-integration/powershell/rmux.ps1"),
+    )?;
+    if cfg!(unix) && login {
+        command.arg("-Login");
+    }
+    command.args(["-NoExit", "-Command", r#"try { . (Join-Path $env:RMUX_POWERSHELL_WRAPPER 'rmux.ps1') } finally { Remove-Item Env:\RMUX_POWERSHELL_WRAPPER -ErrorAction SilentlyContinue }"#]);
+    command.env("RMUX_POWERSHELL_WRAPPER", directory.path());
+    Ok(directory)
+}
+
 // Fish evaluates init commands after config.fish for both login modes. Pass the
 // private path through the environment so spaces or shell syntax are never code.
 pub(crate) fn prepare_fish(command: &mut CommandBuilder) -> Result<tempfile::TempDir> {
     let directory = tempfile::Builder::new().prefix("rmux-fish-").tempdir()?;
-    std::fs::write(directory.path().join("rmux.fish"), include_str!("../../../shell-integration/fish/rmux.fish"))?;
+    std::fs::write(
+        directory.path().join("rmux.fish"),
+        include_str!("../../../shell-integration/fish/rmux.fish"),
+    )?;
     command.env("RMUX_FISH_WRAPPER", directory.path());
     command.arg("--init-command");
     command.arg(r#"source "$RMUX_FISH_WRAPPER/rmux.fish"; set -e RMUX_FISH_WRAPPER"#);
@@ -34,12 +58,18 @@ pub(crate) fn prepare_fish(command: &mut CommandBuilder) -> Result<tempfile::Tem
 
 pub(crate) fn prepare_bash(command: &mut CommandBuilder) -> Result<tempfile::TempDir> {
     let directory = tempfile::Builder::new().prefix("rmux-bash-").tempdir()?;
-    std::fs::write(directory.path().join("bashrc"), r#"
+    std::fs::write(
+        directory.path().join("bashrc"),
+        r#"
 [[ ! -r $HOME/.bashrc ]] || source "$HOME/.bashrc"
 source "$RMUX_BASH_WRAPPER/rmux.bash"
 unset RMUX_BASH_WRAPPER
-"#)?;
-    std::fs::write(directory.path().join("rmux.bash"), include_str!("../../../shell-integration/bash/rmux.bash"))?;
+"#,
+    )?;
+    std::fs::write(
+        directory.path().join("rmux.bash"),
+        include_str!("../../../shell-integration/bash/rmux.bash"),
+    )?;
     command.arg("--rcfile");
     command.arg(directory.path().join("bashrc"));
     command.env("RMUX_BASH_WRAPPER", directory.path());
@@ -90,7 +120,10 @@ mod tests {
     #[test]
     fn automatic_nonlogin_bash_preserves_user_rc_and_cleans_wrapper() -> Result<()> {
         let home = tempfile::tempdir()?;
-        std::fs::write(home.path().join(".bashrc"), "export RMUX_TEST_USER_RC=loaded\nPROMPT_COMMAND='printf user-hook'\n")?;
+        std::fs::write(
+            home.path().join(".bashrc"),
+            "export RMUX_TEST_USER_RC=loaded\nPROMPT_COMMAND='printf user-hook'\n",
+        )?;
         let mut builder = CommandBuilder::new("/bin/bash");
         let wrapper = prepare_bash(&mut builder)?;
         let output = std::process::Command::new("/bin/bash")
@@ -100,7 +133,10 @@ mod tests {
             .env("RMUX_SHELL_INTEGRATION", "1")
             .env("RMUX_BASH_WRAPPER", builder.get_env("RMUX_BASH_WRAPPER").unwrap()).output()?;
         assert!(output.status.success());
-        assert_eq!(String::from_utf8(output.stdout)?, "loaded|1|unset|_rmux_bash_capture_status\nprintf user-hook\n_rmux_bash_precmd");
+        assert_eq!(
+            String::from_utf8(output.stdout)?,
+            "loaded|1|unset|_rmux_bash_capture_status\nprintf user-hook\n_rmux_bash_precmd"
+        );
         let path = wrapper.path().to_owned();
         drop(wrapper);
         assert!(!path.exists());
@@ -114,22 +150,42 @@ mod tests {
     fn automatic_nonlogin_bash_reports_directory_and_navigable_prompts_through_pty() -> Result<()> {
         check_prompt_navigation("bash")
     }
+    #[test]
+    #[ignore = "requires mise-managed PowerShell"]
+    fn automatic_powershell_reports_directory_and_navigable_prompts_through_pty() -> Result<()> {
+        check_prompt_navigation("pwsh")
+    }
     fn check_prompt_navigation(shell: &str) -> Result<()> {
         let home = tempfile::tempdir()?;
         let home_path = home.path().canonicalize()?;
         let destination = home_path.join("project 世界 % space");
         std::fs::create_dir(&destination)?;
         std::fs::write(home.path().join(format!(".{shell}rc")), "PS1='fixture> '\n")?;
-        let mut command = CommandBuilder::new(format!("/bin/{shell}"));
+        let profile_dir = home.path().join(".config/powershell");
+        if shell == "pwsh" {
+            std::fs::create_dir_all(&profile_dir)?;
+            std::fs::write(
+                profile_dir.join("Microsoft.PowerShell_profile.ps1"),
+                "function global:prompt { 'fixture> ' }\n$env:RMUX_TEST_USER_RC='loaded'\n",
+            )?;
+        }
+        let mut command = CommandBuilder::new(if shell == "pwsh" {
+            "pwsh".to_owned()
+        } else {
+            format!("/bin/{shell}")
+        });
         let _wrapper = if shell == "zsh" {
             command.args(["-d", "-i", "-l"]);
             prepare_zsh(&mut command, None)?
+        } else if shell == "pwsh" {
+            prepare_powershell(&mut command, false)?
         } else {
             let wrapper = prepare_bash(&mut command)?;
             command.arg("-i");
             wrapper
         };
         command.env("HOME", home.path());
+        command.env("XDG_CONFIG_HOME", home.path().join(".config"));
         command.env("TERM", "xterm-256color");
         command.env("TERM_PROGRAM", "rmux");
         command.env("RMUX_SHELL_INTEGRATION", "1");
@@ -137,7 +193,7 @@ mod tests {
         command.cwd(home.path());
         let session = crate::session::Session::spawn(command, 80, 4)?;
         let wait = |condition: &dyn Fn() -> Result<bool>| -> Result<()> {
-            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(8);
             while !condition()? {
                 anyhow::ensure!(
                     std::time::Instant::now() < deadline,
@@ -151,15 +207,24 @@ mod tests {
             Ok(())
         };
         wait(&|| Ok(session.current_directory()?.as_deref() == Some(home_path.as_path())))?;
-        session
-            .input(b"cd -- \"$RMUX_TEST_DESTINATION\"; printf '%s%s\\n' changed-okay -done\r")?;
+        if shell == "pwsh" {
+            session.input(b"Set-Location -LiteralPath $env:RMUX_TEST_DESTINATION; if ($env:RMUX_TEST_USER_RC -eq 'loaded' -and !$env:RMUX_POWERSHELL_WRAPPER) { Write-Output ('changed-okay' + '-done') }\r")?;
+        } else {
+            session.input(
+                b"cd -- \"$RMUX_TEST_DESTINATION\"; printf '%s%s\\n' changed-okay -done\r",
+            )?;
+        }
         wait(&|| {
             Ok(
                 session.current_directory()?.as_deref() == Some(destination.as_path())
                     && session.frame()?.text().contains("changed-okay-done"),
             )
         })?;
-        session.input(b"printf 'line-%s\\n' {1..12}\r")?;
+        if shell == "pwsh" {
+            session.input(b"1..12 | ForEach-Object { Write-Output (\"line-\" + $_) }\r")?;
+        } else {
+            session.input(b"printf 'line-%s\\n' {1..12}\r")?;
+        }
         wait(&|| {
             let frame = session.frame()?;
             Ok(frame.text().contains("line-12") && frame.text().contains("fixture>"))

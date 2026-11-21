@@ -197,3 +197,7 @@ run = "cargo run -p rmux-desktop --features browser --bin rmux"
 [tasks.test-powershell-integration]
 description = "Check opt-in PowerShell prompt hooks using a mise-managed runtime"
 run = "mise exec powershell@7.5.4 -- pwsh -NoProfile -NonInteractive -File scripts/test-powershell-integration.ps1"
+
+[tasks.test-powershell-startup]
+description = "Check automatic PowerShell startup in a macOS PTY"
+run = "mise exec powershell@7.5.4 -- cargo test -p rmux-terminal automatic_powershell_reports -- --ignored"

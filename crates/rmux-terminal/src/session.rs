@@ -405,28 +405,49 @@ impl Session {
         command.env("TERM", "xterm-256color");
         command.env("COLORTERM", "truecolor");
         command.env("TERM_PROGRAM", "rmux");
-        #[cfg(unix)]
-        let integration = if std::path::Path::new(&shell).file_name()
-            == Some(std::ffi::OsStr::new("zsh"))
+        let powershell = is_powershell(&shell);
+        let integration = if powershell
             && std::env::var_os("RMUX_SHELL_INTEGRATION").as_deref()
                 != Some(std::ffi::OsStr::new("0"))
         {
-            Some(crate::shell_integration::prepare_zsh(
+            Some(crate::shell_integration::prepare_powershell(
                 &mut command,
-                std::env::var_os("ZDOTDIR").as_deref(),
+                login,
             )?)
-        } else if !login && std::path::Path::new(&shell).file_name() == Some(std::ffi::OsStr::new("bash"))
-            && std::env::var_os("RMUX_SHELL_INTEGRATION").as_deref() != Some(std::ffi::OsStr::new("0")) {
-            Some(crate::shell_integration::prepare_bash(&mut command)?)
-        } else if std::path::Path::new(&shell).file_name() == Some(std::ffi::OsStr::new("fish"))
-            && std::env::var_os("RMUX_SHELL_INTEGRATION").as_deref() != Some(std::ffi::OsStr::new("0")) {
-            Some(crate::shell_integration::prepare_fish(&mut command)?)
         } else {
-            None
+            #[cfg(unix)]
+            {
+                if std::path::Path::new(&shell).file_name() == Some(std::ffi::OsStr::new("zsh"))
+                    && std::env::var_os("RMUX_SHELL_INTEGRATION").as_deref()
+                        != Some(std::ffi::OsStr::new("0"))
+                {
+                    Some(crate::shell_integration::prepare_zsh(
+                        &mut command,
+                        std::env::var_os("ZDOTDIR").as_deref(),
+                    )?)
+                } else if !login
+                    && std::path::Path::new(&shell).file_name()
+                        == Some(std::ffi::OsStr::new("bash"))
+                    && std::env::var_os("RMUX_SHELL_INTEGRATION").as_deref()
+                        != Some(std::ffi::OsStr::new("0"))
+                {
+                    Some(crate::shell_integration::prepare_bash(&mut command)?)
+                } else if std::path::Path::new(&shell).file_name()
+                    == Some(std::ffi::OsStr::new("fish"))
+                    && std::env::var_os("RMUX_SHELL_INTEGRATION").as_deref()
+                        != Some(std::ffi::OsStr::new("0"))
+                {
+                    Some(crate::shell_integration::prepare_fish(&mut command)?)
+                } else {
+                    None
+                }
+            }
+            #[cfg(not(unix))]
+            {
+                None
+            }
         };
-        #[cfg(not(unix))]
-        let integration = None;
-        if !cfg!(windows) {
+        if !cfg!(windows) && !(powershell && integration.is_some()) {
             command.args(unix_shell_flags(&shell, login));
         }
         let mut session = Self::spawn_with_scrollback(command, columns, rows, scrollback_bytes)?;
@@ -1071,8 +1092,19 @@ impl Drop for Session {
     }
 }
 
+fn is_powershell(shell: &std::ffi::OsStr) -> bool {
+    std::path::Path::new(shell)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| {
+            ["pwsh", "pwsh.exe", "powershell", "powershell.exe"]
+                .iter()
+                .any(|candidate| name.eq_ignore_ascii_case(candidate))
+        })
+}
+
 /// PowerShell ignores -Login unless it is the first argument. Its startup path
-/// has no rcfile wrapper, so these flags also precede all future startup commands.
+/// uses these fallback flags when automatic integration is disabled.
 fn unix_shell_flags(shell: &std::ffi::OsStr, login: bool) -> &'static [&'static str] {
     let powershell = std::path::Path::new(shell).file_name().and_then(|name| name.to_str())
         .is_some_and(|name| name.eq_ignore_ascii_case("pwsh") || name.eq_ignore_ascii_case("pwsh.exe"));

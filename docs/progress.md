@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+PowerShell tabs now load prompt/directory hooks automatically after ordinary
+profiles using a private temporary script retained for the session lifetime.
+The script path is passed as environment data, never interpolated as code;
+the wrapper removes its environment variable and leaves execution policy alone.
+RMUX_SHELL_INTEGRATION=0 retains ordinary startup. The mise-managed PowerShell
+7.5.4 real-PTY test passed on macOS: custom profile prompt, wrapper environment
+cleanup, Unicode/space/percent directory reporting, scrollback prompt navigation
+and clean exit. Windows and native PSReadLine/theme acceptance remain pending;
+command-start/completion hooks remain open. The preceding turn made progress by
+updating the authorized GitHub notarization issuer secret.
+
 Added opt-in PowerShell prompt/directory integration and bundled its script on
 macOS. It invokes the original prompt first, then returns escaped filesystem OSC 7
 and OSC 133 A/B boundaries; non-filesystem providers omit file URIs. Repeated sourcing

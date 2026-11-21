@@ -198,7 +198,6 @@ pub mod search_worker;
 pub mod selection;
 pub mod session;
 mod text_export;
-#[cfg(unix)]
 mod shell_integration;
 
 #[derive(Clone, Copy)]

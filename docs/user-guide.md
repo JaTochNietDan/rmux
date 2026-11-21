@@ -1674,16 +1674,19 @@ The hooks emit OSC 133 boundaries and percent-encoded OSC 7 paths using built-in
 For an already-running shell, source `shell-integration/zsh/rmux.zsh` manually;
 the macOS bundle also carries it under `Contents/Resources/shell-integration/zsh/`.
 Fish automatically loads its hooks after normal shell configuration for both
-login and non-login sessions. For `RMUX_SHELL=pwsh` on Unix, login startup uses
-`-Login` before `-Interactive`; `RMUX_SHELL_LOGIN=0` uses only `-Interactive`.
-This fixes PowerShell flag ordering without changing user profiles. PowerShell
-prompt/directory hooks are opt-in: dot-source `shell-integration/powershell/rmux.ps1`
-after defining your prompt (`. ./shell-integration/powershell/rmux.ps1`). The macOS
-bundle includes that script under `Contents/Resources/shell-integration/powershell/`.
+login and non-login sessions. PowerShell loads its hooks automatically after normal
+profiles through a private temporary script, without editing profiles or changing
+execution policy. Unix login startup places `-Login` first; `-NoExit -Command`
+loads the hook and keeps the shell interactive. `RMUX_SHELL_INTEGRATION=0` opts out.
+For existing shells, dot-source `shell-integration/powershell/rmux.ps1` after defining
+your prompt. The macOS bundle includes it under
+`Contents/Resources/shell-integration/powershell/`.
 The wrapper preserves prompt output and emits OSC 7 plus OSC 133 A/B; it does not
-yet emit command-start/completion markers. Automatic injection, interactive PTY
-and Windows acceptance remain pending. Run `mise run test-powershell-integration`
-for the focused mise-managed runtime check. Run
+yet emit command-start/completion markers. A real macOS PowerShell PTY fixture
+covers profile loading, Unicode directory changes and prompt navigation. Windows,
+complex prompt themes and native PSReadLine interaction remain unvalidated.
+Run `mise run test-powershell-integration` for prompt semantics and
+`mise run test-powershell-startup` for the macOS PTY fixture. Run
 `mise run test-zsh-integration` for the focused hook check.
 
 Bash reports completed-command status through OSC 133 D before the next prompt.
