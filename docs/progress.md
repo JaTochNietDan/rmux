@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Pending file/directory/SSH-host loads can now be canceled through File, the
+command palette or a custom `cancel_file_loading` shortcut. The notice button
+shares the same handler: signal the worker, discard the UI task and preview
+restore state, and clear only the matching loading notice. In-flight OS calls
+retain their worker permits until returning. The existing pre-filesystem
+cancellation regression passed with desktop test compilation. Native menu/key
+acceptance and cancellation during blocked OS reads remain pending.
+
 Directory browsing now has configurable `files`-scoped defaults for Back/Forward,
 Parent, Refresh and location entry. Navigation works independently of list
 filtering, follows existing asynchronous/history paths and ignores unavailable

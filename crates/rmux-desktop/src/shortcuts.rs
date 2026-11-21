@@ -136,6 +136,7 @@ fn action(name: &str) -> Option<Box<dyn Action>> {
         "preview_directory" => Box::new(PreviewDirectory),
         "switch_preview_mode" => Box::new(SwitchPreviewMode),
         "toggle_preview_wrap" => Box::new(TogglePreviewWrap),
+        "cancel_file_loading" => Box::new(CancelFileLoading),
         "open_text_preview" => Box::new(OpenTextPreview),
         "search_terminal_output" => Box::new(ShowTerminalSearch),
         "connect_ssh" => Box::new(ShowSshConnection),

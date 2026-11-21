@@ -2620,6 +2620,16 @@ impl WorkspaceWindow {
         let palette = cx.new(|cx| command_palette::CommandPalette::buffers(entries, revision, surface, mode, window, cx));
         self.install_palette(palette, focus, window, cx);
     }
+    fn cancel_file_loading(&mut self, cx: &mut Context<Self>) {
+        if self.file_browser_job.is_none() { return; }
+        // Signal the worker before dropping the UI continuation. Its permit
+        // remains owned by the worker until an in-flight OS read returns.
+        self.file_browser_cancel = None;
+        self.file_browser_job = None;
+        self.preview_restore = None;
+        if self.notice.as_deref().is_some_and(file_browser::is_loading_notice) { self.notice = None; }
+        cx.notify();
+    }
     fn browse_directory(&mut self, path: std::path::PathBuf, window: &mut Window, cx: &mut Context<Self>) {
         self.browse_directory_at(path, None, window, cx);
     }
@@ -4228,6 +4238,7 @@ impl Render for WorkspaceWindow {
                 } else { this.notice = Some("Layout preset is no longer configured".into()); cx.notify(); }
             }))
             .on_action(cx.listener(|this, _: &CancelRestore, _, cx| this.cancel_restore(cx)))
+            .on_action(cx.listener(|this, _: &CancelFileLoading, _, cx| this.cancel_file_loading(cx)))
             .on_action(cx.listener(|this, _: &ShowCustomCommandPicker, window, cx| this.show_custom_command_picker(window, cx)))
             .on_action(cx.listener(|this, _: &ShowLayoutPresetPicker, window, cx| this.show_layout_preset_picker(window, cx)))
             .on_action(cx.listener(|this, command: &RunCustomCommand, window, cx| this.run_custom_command(&command.name, window, cx)))
@@ -4635,10 +4646,7 @@ impl Render for WorkspaceWindow {
                         .when(self.file_browser_job.is_some(), |row| row.child(pane_view::pane_control("cancel-file-load", "Cancel file loading")
                             .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
                                 if !event.standard_click() { return; }
-                                this.file_browser_cancel = None;
-                                this.file_browser_job = None;
-                                this.notice = None;
-                                cx.notify();
+                                this.cancel_file_loading(cx);
                             })).child(icons::icon("close"))))
                         .when(self.restore_job.is_some(), |row| row.child(gpui::div().id("cancel-restore").flex_shrink_0().px_2().py_1().rounded_sm().cursor_pointer()
                             .hover(|style| style.bg(rgb(0x353535)))

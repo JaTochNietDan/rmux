@@ -50,6 +50,9 @@ fn check_cancel(canceled: &AtomicBool) -> anyhow::Result<()> {
     anyhow::ensure!(!canceled.load(Ordering::Acquire), "File loading canceled");
     Ok(())
 }
+pub fn is_loading_notice(notice: &str) -> bool {
+    matches!(notice, "Loading local directory…" | "Loading file preview…" | "Loading SSH hosts…")
+}
 pub const MAX_ENTRIES: usize = 2048;
 /// A bounded display excerpt; the original retained line remains the copy source.
 pub fn preview_line_title(text: &str, query: &str) -> String {

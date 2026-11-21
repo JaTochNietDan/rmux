@@ -315,6 +315,7 @@ impl CommandPalette {
         command!("Copy Named Buffer…", ShowCopyBufferPicker);
         command!("Browse Terminal Directory…", BrowseTerminalFiles);
         command!("Open Text Preview…", OpenTextPreview);
+        command!("Cancel File / SSH Host Loading", CancelFileLoading);
         command!("Search Terminal Output…", ShowTerminalSearch);
         command!("Connect via SSH…", ShowSshConnection);
         command!("SSH Hosts…", ShowSshHosts);

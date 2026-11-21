@@ -327,6 +327,15 @@ environment-variable or shell expansion), with a 4,096-byte input limit.
 Choose **New Workspace Here** to start a fresh terminal in the displayed
 directory. It follows normal workspace placement and group membership, while
 the browsed path takes precedence over the group's default directory.
+**Cancel File / SSH Host Loading** in File or the command palette stops a pending
+directory, text/hex preview, or SSH-host discovery request. It is also available
+as the `cancel_file_loading` custom action; use `context: "window"` for a shortcut
+that remains available outside the terminal. Canceling discards the pending UI
+result and signals cooperative worker cancellation without clearing unrelated
+notices. An OS read already in progress cannot be interrupted; its worker slot
+remains occupied until it returns. Native file-picker cancellation stays in the
+picker itself.
+
 Directory reads run in the background and retain at most 2,048 entries per
 snapshot, sorted directories-first within that subset. A limit notice identifies
 partial listings. Entries that disappear or cannot be read are omitted with an explicit
