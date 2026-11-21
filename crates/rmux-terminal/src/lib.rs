@@ -19,6 +19,18 @@ use std::{ffi::c_void, ptr, sync::Arc};
 
 const RENDER_HOLD_LIMIT: Duration = Duration::from_millis(250);
 
+/// Parse bounded literal theme colors using the pinned engine's color grammar.
+/// This accepts X11 names and RGB specifications without creating a terminal.
+pub fn parse_color(value: &str) -> Result<Color> {
+    ensure!(!value.is_empty() && value.len() <= 256 && !value.chars().any(|ch| ch.is_control() && ch != '\t'), "color must fit 256 bytes without control characters");
+    let mut parsed = GhosttyColorRgb::default();
+    // SAFETY: the engine receives a valid UTF-8 byte slice and length, and a
+    // writable RGB output. It neither retains the slice nor needs a NUL sentinel.
+    let result = unsafe { ghostty_color_parse(value.as_ptr().cast(), value.len(), &mut parsed) };
+    ensure!(result == GHOSTTY_SUCCESS, "unsupported or invalid literal color");
+    Ok(parsed.into())
+}
+
 /// Query the pinned engine's factory ANSI palette once, without a PTY or UI.
 /// Theme import calls this off the UI thread only when a sparse palette needs it.
 pub fn default_ansi_palette() -> Result<[Color; 16]> {
@@ -1816,6 +1828,18 @@ mod tests {
         assert_eq!(reset.cursor_color, original.cursor_color);
         Ok(())
     }
+    #[test]
+    fn theme_color_parser_handles_names_rgb_and_rejects_controls() -> Result<()> {
+        for (input, expected) in [("#abc", Color(170,187,204)), ("aabbcc", Color(170,187,204)), (" RED ", Color(255,0,0)), ("LightGoldenrodYellow", Color(250,250,210)), ("rgb:ffff/0000/ffff", Color(255,0,255)), ("rgbi:1/0/1", Color(255,0,255))] {
+            assert_eq!(parse_color(input)?, expected, "{input}");
+        }
+        for input in ["", "##123456", "not-a-color", "red\0", "red\n", "cell-background"] {
+            assert!(parse_color(input).is_err(), "{input:?}");
+        }
+        assert!(parse_color(&"x".repeat(257)).is_err());
+        Ok(())
+    }
+
     #[test]
     fn ansi_palette_updates_existing_cells_and_preserves_extended_colors() -> Result<()> {
         let mut terminal = Terminal::new(20, 3)?;

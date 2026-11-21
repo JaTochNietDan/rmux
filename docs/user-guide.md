@@ -843,9 +843,11 @@ selection-foreground = eceff4
 Optional `palette = N=RRGGBB` entries override individual ANSI slots (decimal
 0–15). Omitted slots inherit the selected built-in preset; Dark uses the pinned
 Ghostty engine defaults. A new import never inherits entries from the previous
-import. Colors accept six hex digits with or without `#`; blank lines and whole-line
+import. Theme colors use the pinned Ghostty parser: X11 names (for example `red`),
+3/6-digit hex with optional `#`, 9/12-digit hex with `#`, and `rgb:`/`rgbi:`
+specifications. Color values are capped at 256 bytes. Blank lines and whole-line
 `#` comments are allowed. Repeated supported assignments use the last value.
-Named colors, extended palette slots, includes and other settings
+Extended palette slots, includes and other settings
 are rejected with a line-specific error rather than silently ignored. Files must
 be regular UTF-8 files, not symlinks, and at most 64 KiB. This is not a full Ghostty
 configuration importer. No files are watched or downloaded.

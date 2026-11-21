@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Theme import now delegates literal color parsing to the pinned Ghostty engine,
+adding X11 names, short/wide hex and rgb:/rgbi: specifications without a duplicate
+color-name table or temporary terminal. The Rust boundary caps input at 256 bytes
+and rejects controls; theme errors retain line context. Two focused engine/import
+tests passed for named/hex/RGB values, malformed values, controls and bounds.
+Explicit rmux JSON colors remain strict #RRGGBB. Dynamic cell-color references,
+extended palette indices and native theme visuals remain pending.
+
 Theme imports now accept partial ANSI palettes. Missing slots inherit the selected
 built-in preset; Dark resolves the pinned engine's factory palette through a
 one-time tiny terminal allocation without a PTY, then caches only 16 colors.

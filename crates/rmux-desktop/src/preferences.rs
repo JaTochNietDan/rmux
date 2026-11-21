@@ -20,6 +20,11 @@ impl TryFrom<String> for HexColor {
 impl From<HexColor> for String {
     fn from(color: HexColor) -> Self { format!("#{:06x}", color.0) }
 }
+impl From<rmux_terminal::Color> for HexColor {
+    fn from(rmux_terminal::Color(r, g, b): rmux_terminal::Color) -> Self {
+        Self((u32::from(r) << 16) | (u32::from(g) << 8) | u32::from(b))
+    }
+}
 impl HexColor {
     fn rgb(self) -> rmux_terminal::Color {
         rmux_terminal::Color((self.0 >> 16) as u8, (self.0 >> 8) as u8, self.0 as u8)

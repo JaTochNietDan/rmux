@@ -48,10 +48,7 @@ fn parse(text: &str) -> Result<Theme> {
                 ensure!(slot < 16, "only ANSI palette indices 0–15 are supported");
                 (color, Some(slot))
             } else { (value, None) };
-            let value = value.trim();
-            let value = value.strip_prefix('#').unwrap_or(value);
-            ensure!(value.len() == 6 && value.bytes().all(|b| b.is_ascii_hexdigit()), "expected RRGGBB or #RRGGBB color");
-            let color = HexColor::try_from(format!("#{value}")).map_err(anyhow::Error::msg)?;
+            let color = HexColor::from(rmux_terminal::parse_color(value.trim())?);
             Ok((key, color, slot))
         };
         let (key, color, slot) = parse_line().with_context(|| format!("theme line {}", index + 1))?;
@@ -93,11 +90,14 @@ mod tests {
         assert_eq!(String::from(theme.colors[0].unwrap()), "#aabbcc");
         assert_eq!(String::from(parse("selection-background=010203")?.selection_background.unwrap()), "#010203");
         assert_eq!(String::from(theme.palette.unwrap()[15]), "#112233");
+        let named = parse("foreground=red\nbackground=#abc\npalette=1=rgb:ffff/0000/ffff")?;
+        assert_eq!(String::from(named.colors[0].unwrap()), "#ff0000");
+        assert_eq!(String::from(named.colors[1].unwrap()), "#aabbcc");
         let sparse = parse("palette=1=123456")?;
         assert!(sparse.palette.is_none());
         assert!(sparse.palette_entries[0].is_none());
         assert_eq!(String::from(sparse.palette_entries[1].unwrap()), "#123456");
-        for invalid in ["", "foreground=red", "background=##112233", "palette=16=112233", "command=echo hello", "cursor-opacity=0.5"] {
+        for invalid in ["", "foreground=not-a-color", "background=##112233", "palette=16=112233", "command=echo hello", "cursor-opacity=0.5"] {
             assert!(parse(invalid).is_err(), "{invalid}");
         }
         Ok(())
