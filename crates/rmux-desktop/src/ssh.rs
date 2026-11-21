@@ -1,5 +1,91 @@
 //! Launch OpenSSH directly; authentication/configuration remain client-owned.
 pub const INPUT_HINT: &str = "SSH alias, user@host or ssh://user@host:port · Authenticate in the terminal";
+pub struct Aliases { pub names: Vec<String>, pub limited: bool }
+pub fn read_aliases(path: &std::path::Path, canceled: &std::sync::atomic::AtomicBool) -> anyhow::Result<Aliases> {
+    use std::io::Read;
+    let check = || -> anyhow::Result<()> {
+        anyhow::ensure!(!canceled.load(std::sync::atomic::Ordering::Acquire), "SSH host loading canceled");
+        Ok(())
+    };
+    check()?;
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)] {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NONBLOCK);
+    }
+    let mut file = match options.open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Aliases { names: Vec::new(), limited: false }),
+        Err(error) => return Err(error.into()),
+    };
+    anyhow::ensure!(file.metadata()?.is_file(), "SSH configuration is not a regular file");
+    let mut bytes = Vec::new();
+    let mut chunk = [0; 8192];
+    while bytes.len() < 65537 {
+        check()?;
+        let limit = chunk.len().min(65537 - bytes.len());
+        let count = match file.read(&mut chunk[..limit]) {
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            result => result?,
+        };
+        if count == 0 { break; }
+        bytes.extend_from_slice(&chunk[..count]);
+    }
+    check()?;
+    let limited = bytes.len() > 65536;
+    if limited {
+        bytes.truncate(65536);
+        // Never offer a host name cut in half at the read limit.
+        bytes.truncate(bytes.iter().rposition(|byte| *byte == b'\n').map_or(0, |index| index + 1));
+    }
+    let text = std::str::from_utf8(&bytes)?;
+    let mut result = parse_aliases(text);
+    result.limited |= limited;
+    Ok(result)
+}
+
+fn config_words(line: &str) -> Option<Vec<String>> {
+    let mut words = Vec::new();
+    let mut word = String::new();
+    let mut quoted = false;
+    let mut escaped = false;
+    for ch in line.chars() {
+        if escaped { word.push(ch); escaped = false; continue; }
+        match ch {
+            '\\' => escaped = true,
+            '"' => quoted = !quoted,
+            '#' if !quoted => break,
+            ch if !quoted && (ch.is_whitespace() || ch == '=') => {
+                if !word.is_empty() { words.push(std::mem::take(&mut word)); }
+            }
+            ch => word.push(ch),
+        }
+    }
+    if quoted || escaped { return None; }
+    if !word.is_empty() { words.push(word); }
+    Some(words)
+}
+
+fn parse_aliases(text: &str) -> Aliases {
+    let mut names = std::collections::BTreeMap::new();
+    let mut limited = false;
+    for line in text.lines() {
+        let Some(words) = config_words(line) else { continue; };
+        if !words.first().is_some_and(|word| word.eq_ignore_ascii_case("Host")) { continue; }
+        for name in words.into_iter().skip(1) {
+            if name.is_empty() || name.len() > 255 || name.starts_with('-')
+                || !name.bytes().all(|ch| ch.is_ascii_alphanumeric() || b"._-:%".contains(&ch)) { continue; }
+            let key = name.to_ascii_lowercase();
+            if names.contains_key(&key) { continue; }
+            if names.len() == 256 { limited = true; break; }
+            names.insert(key, name);
+        }
+        if limited { break; }
+    }
+    Aliases { names: names.into_values().collect(), limited }
+}
+
 pub fn command(destination: &str) -> Result<crate::preferences::CustomCommand, &'static str> {
     let authority = destination.strip_prefix("ssh://").unwrap_or(destination);
     if destination.is_empty() || destination.len() > 255 || destination.starts_with('-')
@@ -54,6 +140,32 @@ fn validate_url_host(host: &str) -> Result<(&str, Option<&str>), &'static str> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn host_aliases_are_literal_sorted_deduplicated_and_bounded() {
+        let aliases = super::parse_aliases("# Hosts\nHost \"Production\" dev *.example !blocked\n HostName internal\nhOsT=DEV staging # comment\nInclude elsewhere\nMatch exec something\nHost \"unterminated\nHost user@host -option\n");
+        assert_eq!(aliases.names, ["dev", "Production", "staging"]);
+        assert!(!aliases.limited);
+        let many: String = (0..300).map(|index| format!("Host alias-{index}\n")).collect();
+        let aliases = super::parse_aliases(&many);
+        assert_eq!(aliases.names.len(), 256);
+        assert!(aliases.limited);
+    }
+    #[test]
+    fn host_config_reads_drop_partial_lines_and_honor_cancellation() -> anyhow::Result<()> {
+        use std::sync::atomic::AtomicBool;
+        let root = tempfile::tempdir()?;
+        let path = root.path().join("config");
+        assert!(super::read_aliases(&path, &AtomicBool::new(false))?.names.is_empty());
+        assert!(super::read_aliases(&path, &AtomicBool::new(true)).is_err());
+        let mut text = "Host complete\n".to_owned();
+        text.push_str(&format!("#{}\n", "x".repeat(65500)));
+        text.push_str(&format!("Host {}", "partial".repeat(20)));
+        std::fs::write(&path, text)?;
+        let aliases = super::read_aliases(&path, &AtomicBool::new(false))?;
+        assert_eq!(aliases.names, ["complete"]);
+        assert!(aliases.limited);
+        Ok(())
+    }
     #[test]
     fn ssh_urls_validate_ports_ipv6_and_exclude_passwords_or_paths() {
         for (destination, expected) in [

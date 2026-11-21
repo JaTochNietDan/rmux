@@ -299,6 +299,7 @@ impl CommandPalette {
         command!("Open Text Preview…", OpenTextPreview);
         command!("Search Terminal Output…", ShowTerminalSearch);
         command!("Connect via SSH…", ShowSshConnection);
+        command!("SSH Hosts…", ShowSshHosts);
         command!("Open Folder…", OpenFolderBrowser);
         command!("Choose Terminal Font…", ShowFontPicker);
         command!("Choose Default Font…", ShowDefaultFontPicker);
@@ -527,6 +528,24 @@ impl CommandPalette {
         let mut palette = Self::with_commands(Vec::new(), "Connect via SSH", ssh::INPUT_HINT, window, cx);
         palette.ssh_input = true;
         palette.input.update(cx, |input, cx| { input.replace_draft(destination, cx); input.select_all_text(cx); });
+        palette
+    }
+    pub fn ssh_hosts(result: anyhow::Result<ssh::Aliases>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let mut commands = vec![Command { title: "Enter SSH destination…".into(), subtitle: None, shortcut: None,
+            target: PaletteEvent::Run(Box::new(ShowSshConnection)) }, Command { title: "Refresh SSH hosts".into(), subtitle: None, shortcut: None,
+            target: PaletteEvent::Run(Box::new(ShowSshHosts)) }];
+        let summary = match result {
+            Ok(aliases) => {
+                let summary = format!("{} aliases from ~/.ssh/config{} · Includes/patterns not expanded", aliases.names.len(), if aliases.limited { " · Limited to 64 KiB / 256 aliases" } else { "" });
+                commands.extend(aliases.names.into_iter().map(|destination| Command { title: destination.clone(), subtitle: Some("Enter opens a new SSH workspace".into()), shortcut: None,
+                    target: PaletteEvent::Run(Box::new(ConnectSsh { destination })) }));
+                summary
+            }
+            Err(error) => format!("Could not read SSH hosts: {error}"),
+        };
+        let mut palette = Self::with_commands(commands, "SSH hosts · Choose a destination", "No matching aliases · Clear search to enter a destination", window, cx);
+        palette.location = Some(summary.into());
+        if palette.commands.len() > 2 { palette.selected = 2; }
         palette
     }
     pub fn memory_sort(current: memory_view::Sort, window: &mut Window, cx: &mut Context<Self>) -> Self {

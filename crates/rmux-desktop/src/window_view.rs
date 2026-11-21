@@ -2545,6 +2545,36 @@ impl WorkspaceWindow {
         }));
         cx.notify();
     }
+    fn show_ssh_hosts(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.file_browser_job.is_some() || self.automation_available(cx).is_err() { return; }
+        let Some(focus) = window.focused(cx) else { return; };
+        let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(std::path::PathBuf::from);
+        let Some(home) = home.filter(|path| path.is_absolute()) else { self.notice = Some("Home directory unavailable for SSH configuration".into()); cx.notify(); return; };
+        let permit = match file_browser::Permit::acquire() {
+            Ok(permit) => permit,
+            Err(error) => { self.notice = Some(error.to_string()); cx.notify(); return; }
+        };
+        let path = home.join(".ssh/config");
+        self.notice = Some("Loading SSH hosts…".into());
+        let executor = cx.background_executor().clone();
+        let cancellation = file_browser::Cancellation::default();
+        let canceled = cancellation.0.clone();
+        self.file_browser_cancel = Some(cancellation);
+        self.file_browser_job = Some(cx.spawn_in(window, async move |entity, cx| {
+            let result = executor.spawn(async move { let _permit = permit; ssh::read_aliases(&path, &canceled) }).await;
+            let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
+                this.file_browser_job = None;
+                this.file_browser_cancel = None;
+                if this.notice.as_deref() == Some("Loading SSH hosts…") { this.notice = None; }
+                if focus.is_focused(window) && this.automation_available(cx).is_ok() {
+                    let palette = cx.new(|cx| command_palette::CommandPalette::ssh_hosts(result, window, cx));
+                    this.install_palette(palette, Some(focus), window, cx);
+                }
+                cx.notify();
+            }));
+        }));
+        cx.notify();
+    }
     fn focus_search_result(&mut self, workspace: EntityId, terminal: EntityId, query: &str, window: &mut Window, cx: &mut Context<Self>) -> Result<()> {
         self.automation_available(cx).map_err(|error| anyhow::anyhow!(error.message))?;
         let target = self.entries.iter().find(|entry| entry.workspace.entity_id() == workspace)
@@ -3901,6 +3931,7 @@ impl Render for WorkspaceWindow {
                 let palette = cx.new(|cx| command_palette::CommandPalette::ssh_connection(&destination, window, cx));
                 this.install_palette(palette, focus, window, cx);
             }))
+            .on_action(cx.listener(|this, _: &ShowSshHosts, window, cx| this.show_ssh_hosts(window, cx)))
             .on_action(cx.listener(|this, action: &ConnectSsh, window, cx| {
                 match ssh::command(&action.destination) {
                     Ok(command) => this.launch_command(command, Some(action.destination.clone()), window, cx),

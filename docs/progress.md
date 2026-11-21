@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Added File/palette SSH Hosts… and custom action `ssh_hosts`. Concrete Host aliases
+are loaded on demand into a searchable picker with Connect, Refresh and direct
+entry. The background read shares the four-file-worker budget and cancellation,
+caps source data at 64 KiB and results at 256, and drops a cut final line. Quoted
+aliases/comments/Host= forms and case-insensitive deduplication are handled;
+patterns, negations and Include expansion are excluded, and Match never executes.
+Four SSH tests and desktop compilation passed. Native picker/focus acceptance and
+bounded Include discovery remain pending; full connection config stays SSH-owned.
+
 Copy Working Directory now copies the cached remote path for explicit SSH
 sessions, while their context menus disable local Reveal. The shared deferred
 directory lookup also checks remote identity: inspection found that it bypassed

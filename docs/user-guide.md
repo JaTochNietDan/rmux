@@ -11,6 +11,15 @@ rmux runs the existing `ssh` executable directly; it does not invoke a shell to
 interpret the input. Use your SSH configuration for identities, proxies and
 default ports. The SSH client handles configuration, host-key
 verification, agent/key use and password prompts inside the terminal.
+**File → SSH Hosts…** (palette/custom action `ssh_hosts`) reads concrete aliases
+from `~/.ssh/config` on demand and opens a searchable picker. Enter connects;
+Refresh rereads the file, and Enter SSH destination opens the direct editor.
+Discovery reads at most 64 KiB and returns at most 256 unique aliases. It skips
+patterns/negations, does not expand Include files or execute Match commands, and
+does not read identity files. Missing configuration yields an empty picker with
+manual entry available. Cancellation and the shared four-file-worker limit apply;
+no idle watcher runs. OpenSSH still reads its full configuration when connecting,
+so aliases outside this discovery subset can be entered manually.
 Destinations are limited to 255 ASCII bytes, without spaces or command options.
 The SSH client must already be available on PATH; launch errors appear in rmux,
 and connection/authentication errors appear in the terminal. This first remote
