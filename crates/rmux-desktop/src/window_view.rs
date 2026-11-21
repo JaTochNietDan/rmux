@@ -2471,6 +2471,14 @@ impl WorkspaceWindow {
             .map(|index| { let entry = &self.entries[index]; (entry.workspace.entity_id(), entry.name.clone()) })
             .collect();
         let active_workspace = self.entries[self.active].workspace.entity_id();
+        let workspace = self.entries[self.active].workspace.read(cx);
+        let (tab, paste) = workspace.focused_index(window, cx)
+            .map(|index| workspace.panes[index].read(cx).pending_palette_operations(cx))
+            .unwrap_or_default();
+        let pending = command_palette::PendingOperations {
+            workspace: self.workspace_launch_cancel.is_some(),
+            split: workspace.spawning_split.is_some(), tab, paste,
+        };
         let mut terminals = Vec::new();
         for entry in &self.entries {
             for (pane_index, pane) in entry.workspace.read(cx).panes.iter().enumerate() {
@@ -2521,7 +2529,7 @@ impl WorkspaceWindow {
                 self.groups.entries().iter().filter(|group| !group.members.contains(&active_workspace))
                     .map(|group| (group.id, group.name.clone())).collect(),
                 active_workspace,
-                self.workspace_launch_cancel.is_some(),
+                pending,
                 window,
                 cx,
             )

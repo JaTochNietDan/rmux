@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Palette cancellation entries now reflect pending work at opening: workspace
+launch, focused-pane tab launch, active-workspace split, and focused-terminal
+queued/image paste. Idle cancellation commands are omitted without changing
+the underlying menu/shortcut actions or their completion-race guards. State is
+sampled before the palette takes focus and requires no polling. Desktop
+compilation passes; native busy-operation interaction acceptance is pending.
+
 Palette command/workspace titles and detail rows now highlight contiguous query
 words using the existing Unicode-safe preview highlighting helper. Search ranking
 and fuzzy matching are unchanged; noncontiguous fuzzy matches may have no marked

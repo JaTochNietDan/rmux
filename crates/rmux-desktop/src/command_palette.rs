@@ -227,6 +227,14 @@ pub enum PaletteEvent {
 #[derive(Clone, Copy, PartialEq)]
 pub enum BufferMode { Paste, Delete, Rename, Copy }
 
+#[derive(Default)]
+pub struct PendingOperations {
+    pub workspace: bool,
+    pub tab: bool,
+    pub split: bool,
+    pub paste: bool,
+}
+
 pub struct FolderState {
     path: std::path::PathBuf,
     query: String,
@@ -283,7 +291,7 @@ impl CommandPalette {
         external_workspaces: Vec<(AnyWindowHandle, EntityId, String)>,
         groups: Vec<(u64, String)>,
         active_workspace: EntityId,
-        workspace_launch_pending: bool,
+        pending: PendingOperations,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -307,7 +315,7 @@ impl CommandPalette {
         command!("Find in Terminal", Find);
         command!("Connect via SSH…", ShowSshConnection);
         command!("Settings", ToggleSettings);
-        if workspace_launch_pending { command!("Cancel New Workspace", CancelNewWorkspace); }
+        if pending.workspace { command!("Cancel New Workspace", CancelNewWorkspace); }
         command!("Show / Refresh Terminal Memory", RefreshTerminalMemory);
         command!("Cycle Terminal Memory Sort", CycleTerminalMemorySort);
         command!("New Empty Workspace Group", NewWorkspaceGroup);
@@ -332,9 +340,9 @@ impl CommandPalette {
             });
         }
         command!("New Local Tab", NewLocalTab);
-        command!("Cancel New Terminal Tab", CancelNewTab);
-        command!("Cancel Queued Paste", CancelQueuedPaste);
-        command!("Cancel Split Terminal", CancelSplit);
+        if pending.tab { command!("Cancel New Terminal Tab", CancelNewTab); }
+        if pending.paste { command!("Cancel Queued Paste", CancelQueuedPaste); }
+        if pending.split { command!("Cancel Split Terminal", CancelSplit); }
         command!("New Window", NewWindow);
         command!("Split Left", SplitLeft);
         command!("Split Above", SplitAbove);

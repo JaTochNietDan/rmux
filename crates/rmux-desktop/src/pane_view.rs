@@ -619,6 +619,14 @@ impl PaneView {
         self.terminals.get(self.active).map(Entity::entity_id)
     }
 
+    pub fn pending_palette_operations(&self, cx: &App) -> (bool, bool) {
+        let paste = self.terminals.get(self.active).is_some_and(|terminal| {
+            let terminal = terminal.read(cx);
+            terminal.image_paste_pending() || terminal.session.paste_pending()
+        });
+        (self.spawning_tab.is_some(), paste)
+    }
+
     pub fn release_render_caches(&mut self, cx: &mut Context<Self>) {
         for terminal in &self.terminals {
             if terminal.read(cx).has_render_cache() {
