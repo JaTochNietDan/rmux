@@ -5,6 +5,10 @@ of a scratch heap allocation per dirty frame. Larger graphemes use a per-frame
 reusable overflow allocation; it is not retained by hidden terminals. Focused
 Unicode/snapshot ownership coverage passes. This is an allocation-path change,
 not a measured throughput, latency or process-memory improvement.
+Dirty-row extraction also delays cell-vector allocation until the first changed
+cell. Identical dirty rewrites keep their existing row allocation; changed rows
+copy the unchanged prefix. Snapshot, resize, selection and style-identity tests
+cover this path. Long grapheme text may still allocate while cells are compared.
 
 Native RPC split baseline (`4642803` plus harness, macOS arm64 debug, locked desktop):
 three fresh app instances per target size, with idle fixture shells and breadth-first

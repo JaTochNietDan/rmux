@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Dirty-row extraction now defers its cell-vector allocation until the first cell
+that differs from the retained row. Identical rewrites retain the original row
+and outer-vector identities without a temporary cell Vec; changed rows clone only
+the unchanged prefix before appending new cells. Shorter rows and initial empty
+rows retain correct replacement behavior. Four focused snapshot tests plus the
+existing selection/style-change identity regression passed, covering Unicode,
+oversized graphemes, late edits, resize and older-frame ownership. This reduces a
+known allocation path, without a measured throughput or RSS improvement claim.
+
 Terminal snapshot extraction now uses a 64-byte stack scratch buffer for ordinary
 glyph text instead of allocating a Vec for every dirty frame. Oversized graphemes
 allocate an overflow buffer, reused for the remaining cells in that frame and freed

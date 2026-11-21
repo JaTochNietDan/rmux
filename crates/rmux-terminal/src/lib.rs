@@ -962,7 +962,8 @@ impl Terminal {
                     GHOSTTY_RENDER_STATE_ROW_DATA_CELLS,
                     out(&mut self.cells),
                 ))?;
-                let mut row = Vec::with_capacity(self.frame.columns as usize);
+                let previous = &self.frame.rows[y as usize];
+                let mut row: Option<Vec<Cell>> = None;
                 let mut x = 0;
                 while ghostty_render_state_row_cells_next(self.cells) {
                     let mut raw = GhosttyCell::default();
@@ -1026,7 +1027,7 @@ impl Terminal {
                         underline_color = bg;
                     }
                     let glyph_bytes = if overflow_glyph.is_empty() { &inline_glyph[..] } else { &overflow_glyph[..] };
-                    row.push(Cell {
+                    let cell = Cell {
                         text: smol_str::SmolStr::new(String::from_utf8_lossy(&glyph_bytes[..buf.len])),
                         column: x,
                         width,
@@ -1041,15 +1042,20 @@ impl Terminal {
                         strikethrough: style.flags & 64 != 0,
                         overline: style.flags & 128 != 0,
                         hidden: style.flags & 32 != 0,
-                    });
+                    };
+                    if row.is_none() && previous.get(x as usize) != Some(&cell) {
+                        let mut changed = Vec::with_capacity(self.frame.columns as usize);
+                        changed.extend_from_slice(&previous[..(x as usize).min(previous.len())]);
+                        row = Some(changed);
+                    }
+                    if let Some(row) = &mut row { row.push(cell); }
                     x += 1;
                 }
-                if self
-                    .frame
-                    .rows
-                    .get(y as usize)
-                    .is_some_and(|previous| previous.as_ref() != &row)
-                {
+                // A shortened row is a change even when every remaining cell matches.
+                if row.is_none() && (x as usize) < previous.len() {
+                    row = Some(previous[..x as usize].to_vec());
+                }
+                if let Some(row) = row {
                     Arc::make_mut(&mut self.frame.rows)[y as usize] = Arc::new(row);
                 }
             }
@@ -1687,6 +1693,27 @@ mod tests {
         }
         Ok(())
     }
+    #[test]
+    fn snapshot_identical_rewrites_preserve_rows_and_late_edits_keep_prefix() -> Result<()> {
+        let mut terminal = Terminal::new(20, 3)?;
+        terminal.write("abc界e\u{301}tail".as_bytes());
+        let original = terminal.frame()?;
+        terminal.write("\rabc界e\u{301}tail".as_bytes());
+        let identical = terminal.frame()?;
+        assert!(Arc::ptr_eq(&original.rows, &identical.rows));
+        terminal.write(b"!");
+        let changed = terminal.frame()?;
+        assert!(changed.text().starts_with("abc界e\u{301}tail!"));
+        assert!(original.text().starts_with("abc界e\u{301}tail\n"));
+        assert!(!Arc::ptr_eq(&original.rows[0], &changed.rows[0]));
+        assert!(Arc::ptr_eq(&original.rows[1], &changed.rows[1]));
+        terminal.resize(8, 2)?;
+        let resized = terminal.frame()?;
+        assert_eq!(resized.columns, 8);
+        assert!(resized.rows.iter().all(|row| row.len() == 8));
+        Ok(())
+    }
+
     #[test]
     fn snapshot_handles_inline_and_overflow_graphemes_across_frames() -> Result<()> {
         let mut terminal = Terminal::new(20, 3)?;
