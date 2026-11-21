@@ -2,6 +2,18 @@
 
 ## Current implementation focus
 
+Experimental browser navigation now applies URL length/control/credential policy
+to page-initiated requests as well as explicit input. Blocked navigation, popups
+and downloads show concise static feedback rather than silently doing nothing or
+echoing secret-bearing URLs. Notices coalesce through the bounded mailbox, clear
+on new navigation and cannot mask a content-process failure. Nine focused browser
+tests passed, including notice deduplication/reset and failure precedence. The
+existing GitHub run 44859718234 is confirmed live in browser test/build execution;
+no result yet. CI now lets active runs complete and keeps the latest pending run,
+so rapid pushes do not repeatedly abandon a cold build before caching. Native
+interaction acceptance remains open. The preceding turn made progress by adding
+and starting the GitHub browser workflow.
+
 Added GitHub-hosted macOS CI for the optional browser feature, using the existing
 pinned mise/Xcode runner setup. Relevant pushes/PRs run focused browser tests, link
 the native composition probe, and check that WRY is absent from default builds.

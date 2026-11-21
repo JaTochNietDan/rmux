@@ -81,7 +81,10 @@ Native process termination/reload behavior still requires runtime acceptance.
 This remains experimental: native interaction is unverified, windows are not yet
 workspace surfaces, and browser windows are omitted from session snapshots.
 Only HTTP/HTTPS and about:blank navigation are allowed; embedded URL credentials,
-external protocol launches, popups and downloads are unsupported. Persistent
+external protocol launches, popups and downloads are unsupported and display a
+concise status message when attempted. Page-initiated navigation uses the same
+4096-byte/control-character/credential limits as terminal links; feedback does
+not echo credentials. New navigation clears prior blocked-operation notices. Persistent
 profiles, authentication workflows, permissions, error-page UX, native shortcut acceptance,
 search-engine queries, split integration and automation remain work items. No
 browser code or runtime is enabled in a default build. The macOS feature build and
@@ -93,7 +96,7 @@ The Experimental browser GitHub Actions workflow runs on relevant main-branch
 pushes, pull requests and manual dispatch. It uses the pinned mise toolchain on
 macOS, runs focused browser tests, links the composition probe, and rejects WRY
 in the default dependency tree. Compilation caches are separate from release
-caches, concurrent outdated runs are canceled, and no signing secrets or publish
+caches, active runs finish and only the latest pending run is retained, and no signing secrets or publish
 permissions are involved. This is build/policy coverage, not interactive browser
 or cross-platform acceptance.
 

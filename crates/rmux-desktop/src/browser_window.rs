@@ -45,9 +45,21 @@ fn address(text: &str) -> anyhow::Result<String> {
     anyhow::ensure!(url.username().is_empty() && url.password().is_none(), "Use a URL without embedded credentials");
     Ok(url.into())
 }
-fn allowed(url: &str) -> bool {
-    url == "about:blank" || url::Url::parse(url).is_ok_and(|url| matches!(url.scheme(), "http" | "https") && url.username().is_empty() && url.password().is_none())
+fn navigation_error(uri: &str) -> Option<&'static str> {
+    if uri.len() > 4096 { return Some("This address exceeds the browser's 4096-byte limit."); }
+    if uri.chars().any(char::is_control) { return Some("This address contains unsupported control characters."); }
+    if uri == "about:blank" { return None; }
+    let Ok(url) = url::Url::parse(uri) else { return Some("This address is not a valid URL."); };
+    if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {
+        return Some("Only HTTP, HTTPS and about:blank navigation are supported.");
+    }
+    if !url.username().is_empty() || url.password().is_some() {
+        return Some("Use an address without embedded credentials.");
+    }
+    None
 }
+fn allowed(url: &str) -> bool { navigation_error(url).is_none() }
+
 fn rect(bounds: Bounds<Pixels>) -> wry::Rect {
     wry::Rect {
         position: wry::dpi::LogicalPosition::new(f64::from(f32::from(bounds.origin.x)), f64::from(f32::from(bounds.origin.y))).into(),
@@ -61,15 +73,17 @@ struct PageUpdates {
     load: Option<(bool, String)>,
     title: Option<String>,
     process_alive: Option<bool>,
+    notice: Option<&'static str>,
 }
 impl PageUpdates {
     fn loaded(&mut self, finished: bool, url: String) {
         if url.len() > 4096 { return; }
-        if !finished { self.title = Some(String::new()); self.process_alive = Some(true); }
+        if !finished { self.title = Some(String::new()); self.process_alive = Some(true); self.notice = None; }
         self.load = Some((finished, url));
     }
     fn terminated(&mut self) {
         self.process_alive = Some(false);
+        self.notice = None;
         self.load = None;
         self.title = None;
     }
@@ -107,6 +121,11 @@ impl PageState {
             }
             if let Some(title) = update.title {
                 if self.title != title { self.title = title; changed = true; }
+            }
+        }
+        if !self.failed {
+            if let Some(notice) = update.notice {
+                if self.status != notice { self.status = notice.into(); changed = true; }
             }
         }
         changed
@@ -153,7 +172,7 @@ impl BrowserWindow {
                 if !delay.is_zero() { cx.background_executor().timer(delay).await; }
                 let update = updates.lock().ok().map(|mut value| std::mem::take(&mut *value));
                 if let Some(update) = update {
-                    if update.load.is_none() && update.title.is_none() && update.process_alive.is_none() { continue; }
+                    if update.load.is_none() && update.title.is_none() && update.process_alive.is_none() && update.notice.is_none() { continue; }
                     if entity.update(cx, |this: &mut Self, cx| {
                         if this.page.apply(update) { cx.notify(); }
                     }).is_err() { break; }
@@ -173,10 +192,28 @@ impl BrowserWindow {
         let title_wake = wake.clone();
         let termination_latest = latest.clone();
         let termination_wake = wake.clone();
+        let blocked = {
+            let latest = self.latest.clone();
+            let wake = self.wake.clone();
+            move |message: &'static str| {
+                if let Ok(mut value) = latest.lock() { value.notice = Some(message); }
+                let _ = wake.try_send(());
+            }
+        };
+        let blocked_popup = blocked.clone();
+        let blocked_download = blocked.clone();
         let view = wry::WebViewBuilder::new().with_incognito(true).with_url(url)
-            .with_bounds(rect(bounds)).with_navigation_handler(|url| allowed(&url))
-            .with_new_window_req_handler(|_, _| wry::NewWindowResponse::Deny)
-            .with_download_started_handler(|_, _| false)
+            .with_bounds(rect(bounds)).with_navigation_handler(move |url| {
+                if let Some(reason) = navigation_error(&url) { blocked(reason); false } else { true }
+            })
+            .with_new_window_req_handler(move |_, _| {
+                blocked_popup("Pop-up windows are not supported yet.");
+                wry::NewWindowResponse::Deny
+            })
+            .with_download_started_handler(move |_, _| {
+                blocked_download("Downloads are not supported yet.");
+                false
+            })
             .with_on_web_content_process_terminate_handler(move || {
                 if let Ok(mut value) = termination_latest.lock() { value.terminated(); }
                 let _ = termination_wake.try_send(());
@@ -340,7 +377,26 @@ fn open_initial(initial: Option<String>, cx: &mut App) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{address, allowed, can_open_link, PageUpdates, PageState, zoom_level};
+    use super::{address, allowed, can_open_link, PageUpdates, PageState, zoom_level, navigation_error};
+    #[test]
+    fn browser_blocked_navigation_has_bounded_nonsecret_feedback() {
+        assert_eq!(navigation_error("https://user:secret@example.com"), Some("Use an address without embedded credentials."));
+        assert!(navigation_error(&format!("https://example.com/{}", "x".repeat(4096))).is_some());
+        assert!(navigation_error("https://example.com/a\nb").is_some());
+        assert!(navigation_error("mailto:user@example.com").is_some());
+        assert_eq!(navigation_error("https://example.com/path"), None);
+        let mut state = PageState::default();
+        let notice = || PageUpdates { notice: Some("Downloads are not supported yet."), ..Default::default() };
+        assert!(state.apply(notice()));
+        assert!(!state.apply(notice()));
+        let mut next = notice();
+        next.loaded(false, "https://example.com/".into());
+        assert!(state.apply(next));
+        assert_eq!(state.status, "Loading…");
+        let mut failed = notice(); failed.terminated(); state.apply(failed);
+        assert!(!state.apply(notice()));
+        assert!(state.status.contains("process stopped"));
+    }
     #[test]
     fn browser_metadata_repaints_only_on_changes_and_keeps_failure_sticky() {
         let mut state = PageState::default();
