@@ -28,6 +28,9 @@ manual entry available. Cancellation and the shared four-file-worker limit apply
 no idle watcher runs. OpenSSH still reads its full configuration when connecting,
 so aliases outside this discovery subset can be entered manually.
 Destinations are limited to 255 ASCII bytes, without spaces or command options.
+Native macOS fixture checks cover key authentication, a configured SSH proxy,
+an encrypted-key passphrase prompt without echo, and rejection of changed host
+keys or unauthorized keys. Account-password and agent flows remain unverified.
 The SSH client must already be available on PATH; launch errors appear in rmux,
 and connection/authentication errors appear in the terminal. This first remote
 slice does not install a relay, resume disconnected sessions, browse remote files,

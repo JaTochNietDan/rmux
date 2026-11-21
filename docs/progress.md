@@ -2,6 +2,18 @@
 
 ## Current implementation focus
 
+Extended and passed the native macOS loopback SSH fixture with a configured
+ProxyCommand using SSH forwarding and a passphrase-protected temporary Ed25519
+key. The encrypted-key prompt is observed through surface text, answered through
+the real surface.send_text→PTY path, and checked for successful authentication
+without passphrase echo. Proxy forwarding is restricted to the fixture port;
+IdentityAgent is disabled and askpass bypassed so saved credentials/GUI helpers
+cannot satisfy these cases. Existing host-key-change and unauthorized-key failure
+cases still pass; sshd logs exactly four successful authentications (direct,
+proxy transport, proxy destination, encrypted key). Temporary processes/files are
+cleaned up. `mise run smoke-ssh-loopback` reproduces the result. Account-password,
+agent, native visual and cross-platform acceptance remain pending; R01 stays partial.
+
 SSH Hosts now discovers aliases through nested Include files, supporting absolute,
 user-config-relative and ~/ paths plus lexical filename glob expansion. Discovery
 has shared 256 KiB / 64-file / 2,048-directory-entry limits, 64 KiB per file, eight

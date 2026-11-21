@@ -1327,7 +1327,7 @@
       "acceptance": "Support aliases, keys, proxy settings, host-key verification and interactive authentication.",
       "rmux_status": "in_progress",
       "implementation": "File/palette Connect via SSH and CLI new-workspace --ssh launch an existing client through background PTY creation. Aliases and SSH URLs support explicit user/port/IPv6 arguments. Configuration, host-key verification and authentication are client-owned. Session identity prevents remote directories from driving local filesystem workflows and persists as an explicitly disconnected target on local-shell recovery. Validation/configuration checks and a native macOS no-network CLI/RPC fixture passed startup, argv, metadata, rollback, teardown and recovery.",
-      "remaining": "Interactive password, agent and proxy flows; native visual and cross-platform validation; remote directory metadata and full remote lifecycle integration. Native macOS config-alias/public-key success, changed-host-key rejection and unauthorized-key rejection passed against an isolated loopback sshd.",
+      "remaining": "Account-password and agent authentication, native visual and cross-platform validation, and full remote lifecycle integration remain. Native macOS isolated loopback tests passed config-alias/public-key authentication, a configured SSH proxy, interactive encrypted-key passphrase input without echo, changed-host-key rejection and unauthorized-key rejection. Separate cached remote-directory metadata and bounded config/include alias discovery are implemented.",
       "implementation_sources": ["crates/rmux-desktop/src/ssh.rs", "crates/rmux-desktop/src/window_view.rs", "crates/rmux-desktop/src/command_palette.rs"],
       "progress_record": "docs/progress.md"
     },
