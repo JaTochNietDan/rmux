@@ -295,6 +295,9 @@ impl Preferences {
     pub fn selection_foreground(&self) -> Option<rmux_terminal::Color> {
         self.selection_foreground.or_else(|| self.imported_theme.as_ref().and_then(|theme| theme.selection_foreground)).map(HexColor::rgb)
     }
+    pub fn selection_background_fill(&self) -> gpui::Hsla {
+        self.selection_background().map(crate::color).unwrap_or_else(|| gpui::rgba(0x668fca80).into())
+    }
     pub fn selection_background(&self) -> Option<rmux_terminal::Color> {
         self.selection_background.or_else(|| self.imported_theme.as_ref().and_then(|theme| theme.selection_background)).map(HexColor::rgb)
     }

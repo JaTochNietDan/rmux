@@ -99,20 +99,35 @@ fn theme_preview(settings: &Preferences) -> impl IntoElement {
     let rgb_color = |Color(r, g, b): Color| rgb((u32::from(r) << 16) | (u32::from(g) << 8) | u32::from(b));
     let colors = settings.terminal_colors();
     let overridden = settings.foreground_color.is_some() || settings.background_color.is_some()
-        || settings.cursor_color.is_some() || settings.ansi_palette.is_some();
+        || settings.cursor_color.is_some() || settings.cursor_text.is_some()
+        || settings.selection_background.is_some() || settings.selection_foreground.is_some()
+        || settings.ansi_palette.is_some();
     div().mt_2().min_w_0().flex().flex_col().gap_2()
         .child(div().p_2().rounded_sm().overflow_hidden()
             .bg(rgb_color(colors[1].unwrap_or(DEFAULT_BACKGROUND)))
             .text_color(rgb_color(colors[0].unwrap_or(DEFAULT_FOREGROUND)))
             .font_family(settings.font_family.clone()).text_size(px(12.))
-            .child(div().flex().items_center().gap_1()
-                .child(div().min_w_0().truncate().child("❯ echo hello"))
-                .child(div().w(px(7.)).h(px(13.)).flex_shrink_0()
-                    .bg(rgb_color(colors[2].unwrap_or(DEFAULT_CURSOR)))))
+            .child(div().flex().items_center().line_height(px(16.))
+                .child(div().min_w_0().truncate().child("❯ echo hell"))
+                .child(div().id("theme-cursor-sample").w(px(8.)).h(px(16.)).flex_shrink_0().text_center()
+                    .bg(rgb_color(colors[2].unwrap_or(DEFAULT_CURSOR)))
+                    .text_color(rgb_color(settings.cursor_text().unwrap_or(colors[1].unwrap_or(DEFAULT_BACKGROUND))))
+                    .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("Block cursor text".into())).into())
+                    .child("o")))
+            .child(div().mt_1().flex().min_w_0()
+                .child(div().min_w_0().truncate().px_1().line_height(px(16.))
+                    .bg(settings.selection_background_fill())
+                    .text_color(rgb_color(settings.selection_foreground().unwrap_or(colors[0].unwrap_or(DEFAULT_FOREGROUND))))
+                    .child("Selected text")))
             .when_some(settings.terminal_palette(), |preview, palette| preview
                 .child(div().mt_2().flex().h(px(8.)).children(palette.into_iter().map(|color|
                     div().flex_1().h_full().bg(rgb_color(color)))))))
-        .when_some(settings.theme_file.as_ref(), |preview, path| preview.child(div().min_w_0().truncate().text_xs().text_color(rgb(0xa0a0a0)).child(format!("Imported: {}", path.file_name().unwrap_or_default().to_string_lossy()))))
+        .when_some(settings.theme_file.as_ref(), |preview, path| {
+            let hint: SharedString = path.display().to_string().into();
+            preview.child(div().id("imported-theme-path").min_w_0().truncate().text_xs().text_color(rgb(0xa0a0a0))
+                .tooltip(move |_, cx| cx.new(|_| pane_view::ControlHint(hint.clone())).into())
+                .child(format!("Imported: {}", path.file_name().unwrap_or_default().to_string_lossy())))
+        })
         .child(div().text_xs().text_color(rgb(0xa0a0a0)).child(if overridden {
             "Preview includes your configured color overrides."
         } else { "Preview of configured colors. Apps may override them." }))

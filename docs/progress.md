@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Settings now previews block-cursor glyph color and selected text alongside terminal
+colors and ANSI swatches. Selection fill resolution is shared with actual terminal
+painting, retaining the same translucent default. Override messaging includes the
+new cursor/selection fields, and imported filenames expose full paths on hover.
+The sample remains configuration-only with no PTY, engine creation or polling.
+Desktop compilation passed; native preview spacing/contrast and hover acceptance
+remain pending.
+
 Palette assignments now use the pinned Ghostty parser for decimal, hexadecimal,
 octal and binary indices and literal colors, while retaining rmux's 0–15 ANSI
 limit. The bounded FFI wrapper rejects oversized/control-containing entries.
