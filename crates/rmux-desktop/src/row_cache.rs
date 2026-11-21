@@ -55,7 +55,6 @@ pub struct ShapedRow {
 pub struct RowCache {
     rows: Arc<Vec<Arc<ShapedRow>>>,
     source: Weak<Vec<Arc<Vec<Cell>>>>,
-    selection_color: Option<CellColor>,
     environment: Option<(Color, f32, CellMetrics, SharedString)>,
 }
 impl RowCache {
@@ -69,11 +68,20 @@ impl RowCache {
         released
     }
 
-    pub fn prepare_selection(&mut self, frame: &Frame, foreground: Option<CellColor>, cells: CellMetrics, family: &SharedString, window: &Window) {
-        if self.selection_color != foreground {
-            for row in self.rows.iter() { row.selected_texts.borrow_mut().take(); }
-            self.selection_color = foreground;
+    /// Selection variants can contain a second set of shaped glyphs per row.
+    /// Keep them only while the corresponding row is selected in this frame.
+    fn release_unused_selection(&self, selections: &[Option<(u16, u16)>], foreground: Option<CellColor>) {
+        for (index, row) in self.rows.iter().enumerate() {
+            let mut cached = row.selected_texts.borrow_mut();
+            let selected = selections.get(index).is_some_and(Option::is_some);
+            if !selected || cached.as_ref().is_some_and(|(color, _, _)| Some(*color) != foreground) {
+                cached.take();
+            }
         }
+    }
+
+    pub fn prepare_selection(&mut self, frame: &Frame, foreground: Option<CellColor>, cells: CellMetrics, family: &SharedString, window: &Window) {
+        self.release_unused_selection(&frame.selections, foreground);
         let Some(foreground) = foreground else { return; };
         for (row, selection) in self.rows.iter().zip(frame.selections.iter()) {
             if selection.is_none() { continue; }
@@ -341,6 +349,31 @@ mod tests {
         Ok(())
     }
 
+
+    #[test]
+    fn selection_variants_release_on_clear_shrink_and_color_changes() {
+        use super::*;
+        let setting = CellColor::CellForeground;
+        let make_row = || Arc::new(ShapedRow {
+            source: Arc::new(Vec::new()), texts: Vec::new(),
+            selected_texts: RefCell::new(Some((setting, Vec::with_capacity(64), Vec::with_capacity(64)))),
+            backgrounds: Vec::new(), overlines: Vec::new(),
+        });
+        let cache = RowCache { rows: Arc::new(vec![make_row(), make_row(), make_row()]), ..Default::default() };
+        // A shortened selection array must also release variants beyond its end.
+        cache.release_unused_selection(&[None, Some((0, 3))], Some(setting));
+        assert!(cache.rows[0].selected_texts.borrow().is_none());
+        assert!(cache.rows[2].selected_texts.borrow().is_none());
+        assert_eq!(cache.rows[1].selected_texts.borrow().as_ref().unwrap().1.capacity(), 64);
+        cache.release_unused_selection(&[None, Some((0, 3))], Some(CellColor::CellBackground));
+        assert!(cache.rows[1].selected_texts.borrow().is_none());
+        let cache = RowCache { rows: Arc::new(vec![make_row()]), ..Default::default() };
+        cache.release_unused_selection(&[Some((0, 3))], None);
+        assert!(cache.rows[0].selected_texts.borrow().is_none());
+        let cache = RowCache { rows: Arc::new(vec![make_row()]), ..Default::default() };
+        cache.release_unused_selection(&[None], Some(setting));
+        assert!(cache.rows[0].selected_texts.borrow().is_none());
+    }
 
     #[test]
     fn releasing_cache_drops_rows_and_backing_capacity() {

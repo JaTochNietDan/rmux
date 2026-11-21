@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+The terminal renderer now releases selection-specific glyph/decoration variants
+when a row leaves the selection, the selection clears, or its foreground setting
+changes. Previously variants remained attached to unchanged shaped rows until a
+content/style replacement or hidden-pane cache release. Still-selected rows retain
+their variants; no PTY/engine/scrollback state changes. Seven focused row-cache tests
+passed, including selected-variant retention, deselection, shortened selection
+arrays and color clearing/replacement. This proves ownership cleanup, not measured
+RSS savings or native selection-drag latency; those remain acceptance work. The
+previous goal turn made progress with committed/pushed monospace Markdown runs.
+
 Inline Markdown code now uses the terminal's monospace family within otherwise
 proportional text. A render-time text component resolves inherited row styling
 before creating byte-aligned runs, preserving heading weight/size, nested emphasis,

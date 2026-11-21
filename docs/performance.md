@@ -1,5 +1,11 @@
 # rmux performance acceptance plan
 
+Selection-specific shaped glyphs and decorations are retained only for currently
+selected rows with the current foreground setting. Clearing or shrinking a
+selection drops unused variants on the next rendered frame, while active variants
+remain reusable. Focused ownership tests pass; native drag latency and RSS impact
+have not been measured for this change.
+
 The desktop shaped-row cache checks immutable outer snapshot identity before
 scanning row identities. Unchanged snapshots take a constant-time reuse path after
 font/scale/metrics/background validation. A weak identity reference avoids retaining
