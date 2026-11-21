@@ -3,9 +3,13 @@
 **File → Connect via SSH…** (also in the command palette, custom action
 `connect_ssh`) opens a destination editor. Enter an SSH config alias, hostname,
 or `user@host`, then press Enter or Connect to launch a new terminal workspace.
-rmux runs the existing `ssh` executable directly with one destination argument;
-it does not invoke a shell to interpret the input. Use your SSH configuration
-for ports, identities and proxies. The SSH client handles configuration, host-key
+For an explicit port, use `ssh://user@host:2222` or
+`ssh://user@[2001:db8::1]:2222`. Ports must be 1–65535. SSH URLs support no
+passwords, paths or percent-encoded user information. rmux converts their user
+and port to separate SSH arguments and passes the host after `--`.
+rmux runs the existing `ssh` executable directly; it does not invoke a shell to
+interpret the input. Use your SSH configuration for identities, proxies and
+default ports. The SSH client handles configuration, host-key
 verification, agent/key use and password prompts inside the terminal.
 Destinations are limited to 255 ASCII bytes, without spaces or command options.
 The SSH client must already be available on PATH; launch errors appear in rmux,

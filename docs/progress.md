@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+SSH destination entry now accepts ssh:// URLs with explicit ports and bracketed
+IPv6, validating port range, address syntax and username-only user information.
+URLs are normalized to separate -l/-p/host arguments rather than relying on the
+SSH client's URL parser (the installed client rejected a bracketed IPv6 URL).
+Two focused validation tests passed, and configuration-only checks confirmed
+the normalized hostname/IPv6 arguments resolve the intended user and port without
+network connections. Live remote acceptance remains pending.
+
 Explicit SSH workspaces now suppress local-directory metadata before their view
 is created. Both initial cwd fallback and OSC-derived local paths are excluded,
 including remote reports using localhost or an empty hostname. This prevents
