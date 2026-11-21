@@ -55,7 +55,7 @@ pub fn is_loading_notice(notice: &str) -> bool {
 }
 pub const MAX_ENTRIES: usize = 2048;
 /// A bounded display excerpt; the original retained line remains the copy source.
-pub fn preview_line_title(text: &str, query: &str) -> String {
+pub(crate) fn preview_excerpt_start(text: &str, query: &str) -> usize {
     let query = query.to_lowercase();
     let mut start = 0;
     if !query.trim().is_empty() {
@@ -74,6 +74,10 @@ pub fn preview_line_title(text: &str, query: &str) -> String {
             start = position.saturating_sub(32);
         }
     }
+    start
+}
+pub fn preview_line_title(text: &str, query: &str) -> String {
+    let start = preview_excerpt_start(text, query);
     let mut chars = text.chars().skip(start);
     let mut title = if start > 0 { "…".into() } else { String::new() };
     title.extend(chars.by_ref().take(1024).map(|ch| if ch.is_control() { ' ' } else { ch }));

@@ -139,7 +139,7 @@ struct PreviewMarkdownFile { path: std::path::PathBuf }
 
 #[derive(Clone, Debug, Default, PartialEq, Action)]
 #[action(namespace = rmux, no_json)]
-struct CopyPreviewLine { text: String, markdown: Option<markdown_preview::Kind> }
+struct CopyPreviewLine { text: String, markdown: Option<markdown_preview::Kind>, spans: Vec<markdown_preview::Span> }
 
 #[derive(Clone, Debug, Default, PartialEq, Action)]
 #[action(namespace = rmux, no_json)]

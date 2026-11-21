@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Markdown reading blocks now retain nested bold/italic spans. Excerpt projection
+maps original UTF-8 ranges through control-character sanitization, clipped-prefix
+ellipses and list/task markers. Search colors and emphasis merge into sorted,
+disjoint renderer runs so one does not overwrite the other; copy text is unchanged.
+Seven existing Markdown tests passed, followed by two new focused regressions for
+nested/reset styling and Unicode/control/search-overlap projection. Desktop test
+compilation passed. Native shaping/style/clipping acceptance and remaining inline
+code/strikethrough/table/asset rendering are pending.
+
 Markdown/source switching now has the configurable `toggle_markdown_preview`
 action with Ctrl+Alt+V in file previews. Active-key hints reflect overrides, and
 searchable Read Markdown / View Markdown Source commands complement the toolbar.

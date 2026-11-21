@@ -81,7 +81,7 @@ mod navigation_tests {
         let title = crate::file_browser::preview_line_title(&text, "");
         assert!(!title.contains("Needle"));
         let command = super::Command { title, subtitle: Some("Line 1".into()), shortcut: None,
-            target: super::PaletteEvent::Run(Box::new(crate::CopyPreviewLine { text: text.clone(), markdown: None })) };
+            target: super::PaletteEvent::Run(Box::new(crate::CopyPreviewLine { text: text.clone(), markdown: None, spans: Vec::new() })) };
         let mut search = crate::palette_match::RankedSearch::new(vec![command.search_text()]);
         search.update("NEEDLE 世界");
         assert_eq!(search.matches, [0]);
@@ -576,7 +576,7 @@ impl CommandPalette {
             let title = file_browser::preview_line_title(&text, "");
             let copy_hint = if preview.partial_line == Some(index) { "Partial line · Enter copies only the captured text" } else { "Enter copies this preview line" };
             Command { title, subtitle: Some(format!("Line {} · {copy_hint}", index + 1)), shortcut: None,
-                target: PaletteEvent::Run(Box::new(CopyPreviewLine { text, markdown: None })) }
+                target: PaletteEvent::Run(Box::new(CopyPreviewLine { text, markdown: None, spans: Vec::new() })) }
         }));
         let mut palette = Self::with_commands(commands, if preview.hex && preview.truncated { "Hex preview · First 8 KiB / 1,024 rows" } else if preview.hex { "Hex preview · Search bytes or ASCII · Read only" } else if preview.truncated { "Text preview · Limited to 64 KiB / 512 lines" } else if empty { "Text preview · Empty file" } else { "Text preview · Search lines · Read only" }, "No matching preview lines", window, cx);
         palette.hex_preview = preview.hex;
@@ -590,13 +590,14 @@ impl CommandPalette {
         preview.truncated |= limited;
         let truncated = preview.truncated;
         let mut palette = Self::file_preview(preview, window, cx);
-        let mut kinds = blocks.into_iter().map(|block| block.kind);
+        let mut blocks = blocks.into_iter();
         let mut block_number = 0;
         for command in &mut palette.commands {
             if let PaletteEvent::Run(action) = &command.target {
                 if let Some(line) = action.as_any().downcast_ref::<CopyPreviewLine>() {
                     block_number += 1;
-                    command.target = PaletteEvent::Run(Box::new(CopyPreviewLine { text: line.text.clone(), markdown: kinds.next() }));
+                    let block = blocks.next().expect("one reading block per line");
+                    command.target = PaletteEvent::Run(Box::new(CopyPreviewLine { text: line.text.clone(), markdown: Some(block.kind), spans: block.spans }));
                     let label = match command.markdown_kind() {
                         Some(markdown_preview::Kind::Heading(level)) => format!("Heading H{level}"),
                         Some(markdown_preview::Kind::List { checked: Some(true), .. }) => "Completed task".into(),
@@ -875,6 +876,7 @@ impl CommandPalette {
                 markdown_preview::code_excerpt(text, self.input.read(cx).value())
             } else { file_browser::preview_line_title(text, self.input.read(cx).value()) })
             .unwrap_or_else(|| self.commands[command].title.clone());
+        let excerpt_len = title.len();
         let title = match markdown {
             Some(markdown_preview::Kind::List { number, checked, marker: true, .. }) => {
                 let bullet = number.map(|number| format!("{number}. ")).unwrap_or_else(|| if checked.is_none() { "• ".into() } else { String::new() });
@@ -882,6 +884,11 @@ impl CommandPalette {
                 format!("{bullet}{checkbox}{title}")
             },
             _ => title,
+        };
+        let inline = match &self.commands[command].target {
+            PaletteEvent::Run(action) => action.as_any().downcast_ref::<CopyPreviewLine>().map(|line|
+                markdown_preview::excerpt_spans(&line.text, self.input.read(cx).value(), &line.spans, title.len() - excerpt_len)).unwrap_or_default(),
+            _ => Vec::new(),
         };
         let title_hint: SharedString = match &self.commands[command].subtitle {
             Some(subtitle) => format!("{title}\n{subtitle}").into(),
@@ -896,8 +903,9 @@ impl CommandPalette {
                 range, HighlightStyle { color: Some(rgb(0xffffff).into()), background_color: Some(rgb(0x41638c).into()), ..Default::default() }
             )))
         }).collect::<Vec<_>>());
-        let title = StyledText::new(title).with_highlights(title_ranges.into_iter().map(|range| (
-            range, HighlightStyle { color: Some(rgb(0xffffff).into()), background_color: Some(rgb(0x41638c).into()), ..Default::default() }
+        let title = StyledText::new(title).with_highlights(markdown_preview::merge_highlights(&inline, &title_ranges).into_iter().map(|(range, style, matched)| (
+            range, HighlightStyle { font_weight: style.bold.then_some(FontWeight::BOLD), font_style: style.italic.then_some(FontStyle::Italic),
+                color: matched.then(|| rgb(0xffffff).into()), background_color: matched.then(|| rgb(0x41638c).into()), ..Default::default() }
         )));
         let subtitle = self.commands[command].subtitle.as_ref().map(|text| {
             let ranges = match &self.commands[command].target {
