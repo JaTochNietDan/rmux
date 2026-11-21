@@ -44,7 +44,11 @@ Prototype terminal/browser composition, focus, clipping, drag overlays, resizing
 `mise run browser` enables the optional macOS `browser` feature in rmux. File →
 New Browser Window (Experimental), also in the command palette, opens a separate
 native window with an address field, Back/Forward/Reload/Go controls and a committed
-URL/loading status line. Enter submits the address. Bare localhost names (including `.localhost`) and IPv4/IPv6
+URL/loading status line. The compact toolbar shares rmux’s 28-pixel controls and shortcut-aware tooltips,
+with a bordered address field. Enter and the Go control submit through the same
+path. The separate zoom percentage resets to actual size when clicked; truncated
+status/URL text is available in a tooltip. Native tooltip overlay/clipping and
+visual acceptance are pending. Enter submits the address. Bare localhost names (including `.localhost`) and IPv4/IPv6
 loopback addresses default to HTTP, including explicit ports. Other bare hosts
 default to HTTPS. Explicit HTTP/HTTPS schemes remain unchanged; private LAN
 addresses require an explicit HTTP scheme if their server does not support HTTPS. The address field retains
@@ -73,8 +77,8 @@ the latest value of each independently. UI publication is limited to one batch p
 not request a redraw; the page itself still owns its native rendering workload. Native window titles include the page title
 and rmux identity; page titles are capped at 256 Unicode characters with control
 characters replaced by spaces. A new load clears the previous page title. macOS content-process termination
-sets a visible recovery message, clears the stale title and labels the reload
-control **Reload Page**. Recovery requires a new load-start event; late completion
+sets a visible recovery message, clears the stale title and gives the reload
+control a recovery tooltip. Recovery requires a new load-start event; late completion
 callbacks cannot clear the failure state. There is no automatic reload loop.
 Native process termination/reload behavior still requires runtime acceptance.
 

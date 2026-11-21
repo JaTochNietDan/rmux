@@ -147,11 +147,7 @@ impl BrowserView {
         let input = cx.new(|cx| TextField::new(initial.as_deref().unwrap_or("about:blank"), cx));
         cx.subscribe_in(&input, window, |this, _, event: &text_field::EditEvent, window, cx| {
             if let text_field::EditEvent::Submitted { text, .. } = event {
-                match address(text).and_then(|url| this.navigate(&url, window)) {
-                    Ok(()) => this.page.status = "Navigation requested".into(),
-                    Err(error) => this.page.status = error.to_string(),
-                }
-                cx.notify();
+                this.submit(text, window, cx);
             } else if matches!(event, text_field::EditEvent::Cancelled) {
                 if !this.page.committed.is_empty() {
                     this.input.update(cx, |input, cx| input.replace_draft(&this.page.committed, cx));
@@ -180,6 +176,14 @@ impl BrowserView {
             }
         });
         Self { host: Rc::new(RefCell::new(Host { pending_url: initial, ..Default::default() })), input, page: PageState { status: "Enter an address to create an ephemeral browser.".into(), ..Default::default() }, zoom_percent: 100, latest, wake, _updates: task }
+    }
+    fn submit(&mut self, text: &str, window: &Window, cx: &mut Context<Self>) {
+        if self.input.read(cx).is_composing() { return; }
+        match address(text).and_then(|url| self.navigate(&url, window)) {
+            Ok(()) => self.page.status = "Navigation requested".into(),
+            Err(error) => self.page.status = error.to_string(),
+        }
+        cx.notify();
     }
     fn navigate(&mut self, url: &str, window: &Window) -> anyhow::Result<()> {
         let mut host = self.host.borrow_mut();
@@ -277,21 +281,35 @@ impl Render for BrowserView {
         let (back, forward, loaded) = self.host.borrow().view.as_ref().map(|view|
             (view.can_go_back().unwrap_or(false), view.can_go_forward().unwrap_or(false), true)
         ).unwrap_or((false, false, false));
-        let button = |id, label| div().id(id).px_3().py_2().rounded_md().bg(rgb(0x354969)).cursor_pointer().child(label);
+        let focus = Some(self.input.read(cx).focus.clone());
+        let detail = format!("{} · {}", self.page.status, self.page.committed);
         div().size_full().flex().flex_col().key_context("Browser")
             .bg(rgb(0x202733)).text_color(rgb(0xe8edf5)).text_size(px(14.))
-            .child(div().h(px(52.)).flex_shrink_0().px_3().flex().items_center().gap_2()
-                .child(button("back", "Back").when(!back, |button| button.opacity(0.4).cursor_default()).when(back, |button| button.on_click(cx.listener(|this, _, _, cx| { this.navigation(Navigation::Back); cx.notify(); }))))
-                .child(button("forward", "Forward").when(!forward, |button| button.opacity(0.4).cursor_default()).when(forward, |button| button.on_click(cx.listener(|this, _, _, cx| { this.navigation(Navigation::Forward); cx.notify(); }))))
-                .child(button("reload", if self.page.failed { "Reload Page" } else { "Reload" }).when(!loaded, |button| button.opacity(0.4).cursor_default()).when(loaded, |button| button.on_click(cx.listener(|this, _, _, cx| { this.navigation(Navigation::Reload); cx.notify(); }))))
-                .child(div().flex_1().min_w_0().child(self.input.clone()))
-                .child(button("go", "Go").on_click(cx.listener(|this, _, window, cx| {
-                    if this.input.read(cx).is_composing() { return; }
-                    let result = address(this.input.read(cx).value()).and_then(|url| this.navigate(&url, window));
-                    if let Err(error) = result { this.page.status = error.to_string(); }
-                    cx.notify();
-                }))))
-            .child(div().h(px(28.)).flex_shrink_0().px_3().text_xs().truncate().when(self.page.failed, |status| status.text_color(rgb(0xf0b85b))).child(format!("{} · {}% · {}", self.page.status, self.zoom_percent, self.page.committed)))
+            .child(div().h(px(44.)).flex_shrink_0().px_2().flex().items_center().gap_1()
+                .child(pane_view::action_control("browser-back", "Back", Back, focus.clone()).child("‹")
+                    .when(!back, |button| button.opacity(0.4).cursor_default())
+                    .when(back, |button| button.on_click(cx.listener(|this, _, _, cx| { this.navigation(Navigation::Back); cx.notify(); }))))
+                .child(pane_view::action_control("browser-forward", "Forward", Forward, focus.clone()).child("›")
+                    .when(!forward, |button| button.opacity(0.4).cursor_default())
+                    .when(forward, |button| button.on_click(cx.listener(|this, _, _, cx| { this.navigation(Navigation::Forward); cx.notify(); }))))
+                .child(pane_view::action_control("browser-reload", if self.page.failed { "Reload page to recover" } else { "Reload" }, Reload, focus.clone()).child("↻")
+                    .when(!loaded, |button| button.opacity(0.4).cursor_default())
+                    .when(loaded, |button| button.on_click(cx.listener(|this, _, _, cx| { this.navigation(Navigation::Reload); cx.notify(); }))))
+                .child(div().flex_1().min_w_0().px_2().py_1().rounded_md().border_1().border_color(rgb(0x465063)).bg(rgb(0x242a36)).child(self.input.clone()))
+                .child(pane_view::control_button("browser-go").child("→")
+                    .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("Go to address · Enter".into())).into())
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        let text = this.input.read(cx).value().to_owned();
+                        this.submit(&text, window, cx);
+                    }))))
+            .child(div().h(px(24.)).flex_shrink_0().px_3().flex().items_center().gap_2().text_xs()
+                .child(div().id("browser-status").flex_1().min_w_0().truncate()
+                    .when(self.page.failed, |status| status.text_color(rgb(0xf0b85b)))
+                    .tooltip({ let detail = detail.clone(); move |_, cx| cx.new(|_| pane_view::ControlHint(detail.clone().into())).into() })
+                    .child(detail))
+                .child(pane_view::action_control("browser-zoom", "Actual Size", ResetZoom, focus).w(px(48.)).h(px(24.))
+                    .child(format!("{}%", self.zoom_percent))
+                    .on_click(cx.listener(|this, _, _, cx| this.zoom(0, cx)))))
             .child(div().flex_1().min_h_0().child(canvas(move |bounds, window, cx| {
                 let mut host = host.borrow_mut();
                 if host.bounds != Some(bounds) {

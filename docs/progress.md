@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+The experimental browser toolbar now shares rmux's compact 28-pixel navigation
+controls and shortcut-aware tooltips. A bordered address field, 44-pixel toolbar
+and 24-pixel status row leave more room for page content; the separate zoom label
+resets to actual size, and status/URL text has a full-detail tooltip. Go and Enter
+now share one IME-aware submission path with identical pending/error status.
+Browser-enabled compilation passed. Native spacing, glyph appearance, tooltip
+stacking against WKWebView, clipping and input acceptance remain pending. The first
+GitHub browser run 44859718234 completed successfully (tests, probe link and default
+dependency isolation); f6ba628's run 44859910910 is active and 18f5012's run is pending.
+The previous goal turn made progress by separating browser view/window ownership.
+
 Separated browser content into a BrowserView GPUI entity owned by a small standalone
 BrowserWindow wrapper. Native webview/control/metadata ownership stays with the
 view; window title and close policy stay with the wrapper, which subscribes to

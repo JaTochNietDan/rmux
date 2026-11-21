@@ -156,7 +156,7 @@ pub(super) fn pane_control(id: impl Into<ElementId>, hint: &'static str) -> Stat
     control_button(id).tooltip(move |_, cx| cx.new(|_| ControlHint(hint.into())).into())
 }
 
-fn control_button(id: impl Into<ElementId>) -> Stateful<Div> {
+pub(super) fn control_button(id: impl Into<ElementId>) -> Stateful<Div> {
     div()
         .id(id)
         .flex()
