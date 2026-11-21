@@ -277,7 +277,9 @@ Successful renames invalidate open buffer pickers, which must be reopened.
 **Browse Terminal Directory…** in the menu/palette (custom action `browse_files`)
 opens an on-demand local directory picker from the current terminal's cached
 working directory. Search names, press Enter on a directory to browse it, or
-choose Parent/Refresh. Back/Forward entries navigate successfully visited folders
+choose Parent/Refresh. A persistent navigation bar keeps Back, Forward, Parent and
+Refresh available while filtering names; unavailable destinations are disabled.
+Back/Forward entries navigate successfully visited folders
 in this window; custom actions `file_back` and `file_forward` provide keyboard
 bindings. History retains at most 32 paths and is not persisted. Refresh preserves
 Forward, while opening a different folder after Back replaces the forward branch.

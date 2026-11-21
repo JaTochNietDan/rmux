@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Local folder browsing now has a persistent Back/Forward/Parent/Refresh navigation
+bar above the search field, so filtering cannot hide navigation actions. History
+availability disables Back/Forward, root directories disable Parent, and IME
+composition prevents accidental navigation. Controls reuse existing asynchronous
+folder loading and remain separate from searchable command rows. Desktop
+compilation passed; native button, narrow-window and visual acceptance is pending.
+
 The Settings theme picker now includes a compact configured-color preview with
 sample text, cursor color and ANSI swatches for explicit palettes. It identifies
 user overrides and explains that applications may change colors. Defaults are

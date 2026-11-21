@@ -159,6 +159,7 @@ pub struct CommandPalette {
     terminal_search_input: bool,
     ssh_input: bool,
     hex_preview: bool,
+    folder_navigation: Option<(bool, bool, std::path::PathBuf)>,
     input: Entity<text_field::TextField>,
     heading: &'static str,
     empty_message: &'static str,
@@ -442,6 +443,7 @@ impl CommandPalette {
         let location: SharedString = if listing.unavailable > 0 {
             format!("{} · {} unavailable entries · Refresh to retry", listing.path.display(), listing.unavailable).into()
         } else { listing.path.display().to_string().into() };
+        let navigation = (back, forward, listing.path.clone());
         let mut commands = Vec::new();
         if back { commands.push(Command { title: "Back · Previous folder".into(), subtitle: None, shortcut: None,
             target: PaletteEvent::Run(Box::new(FileBrowserBack)) }); }
@@ -475,6 +477,7 @@ impl CommandPalette {
         let mut palette = Self::with_commands(commands, if listing.truncated { "Local files · Limited to 2,048 entries; use a narrower directory" } else { "Local files · Browse directories or preview text" },
             "No matching entries", window, cx);
         palette.location = Some(location);
+        palette.folder_navigation = Some(navigation);
         palette
     }
     pub fn file_error(path: std::path::PathBuf, error: String, directory: bool, window: &mut Window, cx: &mut Context<Self>) -> Self {
@@ -671,7 +674,7 @@ impl CommandPalette {
         )
         .detach();
         Self {
-            input, heading, empty_message, buffer_rename: None, feedback: None, directory_input: false, terminal_search_input: false, ssh_input: false, hex_preview: false, location: None,
+            input, heading, empty_message, buffer_rename: None, feedback: None, directory_input: false, terminal_search_input: false, ssh_input: false, hex_preview: false, folder_navigation: None, location: None,
             search: palette_match::RankedSearch::new(commands
                 .iter()
                 .map(Command::search_text)
@@ -753,6 +756,19 @@ impl CommandPalette {
         self.feedback = Some("Copied displayed excerpt");
         cx.notify();
     }
+    fn folder_navigation_button(&self, id: &'static str, label: &'static str, action: Option<Box<dyn Action>>, cx: &mut Context<Self>) -> impl IntoElement {
+        let enabled = action.is_some();
+        div().id(id).px_2().py_1().rounded_sm().text_xs()
+            .text_color(rgb(if enabled { 0xdcdfe6 } else { 0x777777 }))
+            .bg(rgb(0x303030))
+            .when(enabled, |button| button.cursor_pointer().hover(|style| style.bg(rgb(0x454545))))
+            .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
+                if !event.standard_click() || this.input.read(cx).is_composing() { return; }
+                if let Some(action) = &action { cx.emit(PaletteEvent::Run(action.boxed_clone())); }
+            }))
+            .child(label)
+    }
+
     fn selected_preview_file(&self) -> Option<&std::path::Path> {
         if self.ssh_input || self.directory_input || self.terminal_search_input || self.hex_preview || self.buffer_rename.is_some() { return None; }
         let command = self.commands.get(*self.search.matches.get(self.selected)?)?;
@@ -953,6 +969,13 @@ impl Render for CommandPalette {
                     .text_xs().text_color(rgb(0xb8b8b8)).truncate()
                     .tooltip({ let location = location.clone(); move |_, cx| cx.new(|_| pane_view::ControlHint(location.clone())).into() })
                     .child(location)
+            ))
+            .when_some(self.folder_navigation.as_ref(), |palette, (back, forward, path)| palette.child(
+                div().flex_shrink_0().px_3().pt_2().flex().flex_wrap().gap_2()
+                    .child(self.folder_navigation_button("folder-back", "← Back", back.then(|| Box::new(FileBrowserBack) as Box<dyn Action>), cx))
+                    .child(self.folder_navigation_button("folder-forward", "Forward →", forward.then(|| Box::new(FileBrowserForward) as Box<dyn Action>), cx))
+                    .child(self.folder_navigation_button("folder-parent", "↑ Parent", path.parent().map(|parent| Box::new(BrowseDirectory { path: parent.to_owned() }) as Box<dyn Action>), cx))
+                    .child(self.folder_navigation_button("folder-refresh", "Refresh", Some(Box::new(BrowseDirectory { path: path.clone() })), cx))
             ))
             .child(div().flex_shrink_0().p_3().child(self.input.clone()))
             .child(if self.search.matches.is_empty() {
