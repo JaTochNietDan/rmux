@@ -2,6 +2,12 @@
 
 ## Current implementation focus
 
+Selecting a global-search preview now exposes a compact Copy excerpt footer
+button. It copies the captured displayed text (including clipping ellipses),
+keeps the result palette/filter/selection open and confirms the copy. Deep-history
+status rows have no copy button. This uses the bounded snapshot, without rereading
+terminal history. Desktop compilation passed; native interaction remains pending.
+
 Global-search preview rows now highlight literal query occurrences using Find's
 ASCII case rules and UTF-8-safe byte ranges. Highlight work runs only for rendered
 rows over the bounded excerpt. Deep-history status messages carry explicit

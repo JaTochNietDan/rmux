@@ -777,6 +777,10 @@ impl Render for CommandPalette {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let height = f32::from(window.viewport_size().height);
         let compact = height < 300.;
+        let search_excerpt = self.search.matches.get(self.selected)
+            .map(|index| &self.commands[*index])
+            .filter(|command| matches!(command.target, PaletteEvent::SearchTerminal { preview: true, .. }))
+            .and_then(|command| command.subtitle.clone());
         div()
             .id("command-palette")
             .w(px(520.))
@@ -855,14 +859,29 @@ impl Render for CommandPalette {
                             if event.standard_click() { this.run(cx); }
                         })).child(if self.terminal_search_input { "Search" } else if self.directory_input { "Open" } else { "Save" }))
             ))
-            .when((!compact || self.feedback.is_some()) && self.buffer_rename.is_none() && !self.directory_input && !self.terminal_search_input, |palette| palette.child(
+            .when((!compact || self.feedback.is_some() || search_excerpt.is_some()) && self.buffer_rename.is_none() && !self.directory_input && !self.terminal_search_input, |palette| palette.child(
                 div()
                     .flex_shrink_0()
                     .px_3()
                     .py_2()
+                    .flex().flex_wrap().items_center().gap_2()
                     .text_xs()
                     .text_color(rgb(0xa0a0a0))
-                    .child(self.feedback.unwrap_or("↑↓ select · PgUp/PgDn jump · Enter run · Esc close")),
+                    .child(div().flex_1().min_w_0().child(self.feedback.unwrap_or("↑↓ select · PgUp/PgDn jump · Enter run · Esc close")))
+                    .when_some(search_excerpt, |footer, excerpt| footer.child(
+                        div().id("copy-search-excerpt").px_2().py_1().rounded_sm()
+                            .cursor_pointer().text_color(rgb(0xffffff)).bg(rgb(0x353535))
+                            .hover(|style| style.bg(rgb(0x454545)))
+                            .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("Copy the displayed excerpt, including clipping ellipses".into())).into())
+                            .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
+                                if !event.standard_click() { return; }
+                                clipboard::write(ClipboardItem::new_string(excerpt.clone()), cx);
+                                this.feedback = Some("Copied displayed excerpt");
+                                cx.notify();
+                                cx.stop_propagation();
+                            }))
+                            .child("Copy excerpt")
+                    )),
             ))
     }
 }

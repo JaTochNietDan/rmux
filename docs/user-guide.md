@@ -1741,6 +1741,9 @@ Results outside the preview identify the terminal without copying its full histo
 Preview excerpts start up to 32 characters before the literal match and show at
 most 1,024 characters, with ellipses marking omitted text. Literal matches in
 these excerpts are highlighted; deep-history status messages are not excerpts.
+Select a preview result and click **Copy excerpt** to copy its captured text,
+including any clipping ellipses, while keeping the results open. This does not
+copy the full original line or reread live terminal output.
 All selected terminals' previews are checked before deeper fallback scans begin;
 the completed batch retains terminal order rather than completion order.
 One worker scans at most 256 terminals, with the originating window first.
