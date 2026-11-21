@@ -371,7 +371,9 @@ with no omitted content remain complete.
 Displayed excerpts remain bounded and default to four visual lines. Links display
 their label, images display alt text, and raw HTML displays as literal text: no
 assets load and no HTML or scripts execute. Bold and italic emphasis, including nesting, render within reading blocks and
-remain visible under search highlights. Inline-code/strikethrough styling, tables,
+remain visible under search highlights. Inline code has a shaded background (using
+the surrounding font), and `~~strikethrough~~` draws a strike through its text.
+Search colors take precedence over code shading while retaining emphasis and strikes. Tables,
 clickable links, images, full code-block scrolling and document appearance controls
 remain unimplemented. This is a reading preview, not a complete Markdown renderer.
 

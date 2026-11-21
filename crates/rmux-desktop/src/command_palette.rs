@@ -905,7 +905,9 @@ impl CommandPalette {
         }).collect::<Vec<_>>());
         let title = StyledText::new(title).with_highlights(markdown_preview::merge_highlights(&inline, &title_ranges).into_iter().map(|(range, style, matched)| (
             range, HighlightStyle { font_weight: style.bold.then_some(FontWeight::BOLD), font_style: style.italic.then_some(FontStyle::Italic),
-                color: matched.then(|| rgb(0xffffff).into()), background_color: matched.then(|| rgb(0x41638c).into()), ..Default::default() }
+                color: matched.then(|| rgb(0xffffff).into()),
+                background_color: if matched { Some(rgb(0x41638c).into()) } else { style.code.then(|| rgb(0x363b46).into()) },
+                strikethrough: style.strike.then_some(StrikethroughStyle { thickness: px(1.), color: None }), ..Default::default() }
         )));
         let subtitle = self.commands[command].subtitle.as_ref().map(|text| {
             let ranges = match &self.commands[command].target {

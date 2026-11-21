@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Markdown inline code now receives a shaded background, and the parser enables
+strikethrough with nested span retention. Search colors override code shading
+without discarding strike/bold/italic attributes. Code delimiter contents remain
+literal, style state ends at its matching event, and copied text stays unchanged.
+All ten Markdown tests passed, including a new nested-code/strike/search regression;
+desktop compilation passed. Native visual acceptance, inline-code monospace font
+selection, full document layout and assets remain pending. The preceding goal turn
+updated the authoritative GitHub notarization secret and therefore made progress.
+
 Markdown reading blocks now retain nested bold/italic spans. Excerpt projection
 maps original UTF-8 ranges through control-character sanitization, clipped-prefix
 ellipses and list/task markers. Search colors and emphasis merge into sorted,

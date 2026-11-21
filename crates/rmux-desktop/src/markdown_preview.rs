@@ -3,7 +3,7 @@ use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum Kind { #[default] Paragraph, Heading(u8), Code, Quote, List { depth: usize, number: Option<u64>, marker: bool, checked: Option<bool> } }
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct InlineStyle { pub bold: bool, pub italic: bool }
+pub struct InlineStyle { pub bold: bool, pub italic: bool, pub code: bool, pub strike: bool }
 #[derive(Clone, Debug, PartialEq)]
 pub struct Span { pub range: std::ops::Range<usize>, pub style: InlineStyle }
 pub struct Block { pub text: String, pub kind: Kind, pub spans: Vec<Span> }
@@ -13,6 +13,7 @@ pub fn blocks(source: &str) -> (Vec<Block>, bool) {
     let mut kind = Kind::Paragraph;
     let mut spans: Vec<Span> = Vec::new();
     let (mut bold, mut italic) = (0usize, 0usize);
+    let mut strike = 0usize;
     let mut quote = 0usize;
     let mut lists: Vec<Option<u64>> = Vec::new();
     let mut items: Vec<Kind> = Vec::new();
@@ -22,7 +23,7 @@ pub fn blocks(source: &str) -> (Vec<Block>, bool) {
         output.push(Block { text: std::mem::take(text), kind, spans: std::mem::take(spans) });
         false
     };
-    for event in Parser::new_ext(source, Options::ENABLE_TASKLISTS) {
+    for event in Parser::new_ext(source, Options::ENABLE_TASKLISTS | Options::ENABLE_STRIKETHROUGH) {
         match event {
             Event::Start(Tag::BlockQuote(_)) => quote += 1,
             Event::End(TagEnd::BlockQuote(_)) => quote = quote.saturating_sub(1),
@@ -55,11 +56,15 @@ pub fn blocks(source: &str) -> (Vec<Block>, bool) {
             Event::End(TagEnd::Strong) => bold = bold.saturating_sub(1),
             Event::Start(Tag::Emphasis) => italic += 1,
             Event::End(TagEnd::Emphasis) => italic = italic.saturating_sub(1),
-            Event::Text(value) | Event::Code(value) | Event::Html(value) | Event::InlineHtml(value) => {
+            Event::Start(Tag::Strikethrough) => strike += 1,
+            Event::End(TagEnd::Strikethrough) => strike = strike.saturating_sub(1),
+            event @ (Event::Text(_) | Event::Code(_) | Event::Html(_) | Event::InlineHtml(_)) => {
+                let code = matches!(event, Event::Code(_));
+                let (Event::Text(value) | Event::Code(value) | Event::Html(value) | Event::InlineHtml(value)) = event else { unreachable!() };
                 let start = text.len();
                 text.push_str(&value);
-                if start < text.len() && (bold > 0 || italic > 0) {
-                    let style = InlineStyle { bold: bold > 0, italic: italic > 0 };
+                if start < text.len() && (bold > 0 || italic > 0 || strike > 0 || code) {
+                    let style = InlineStyle { bold: bold > 0, italic: italic > 0, code, strike: strike > 0 };
                     if let Some(previous) = spans.last_mut() && previous.range.end == start && previous.style == style { previous.range.end = text.len(); }
                     else { spans.push(Span { range: start..text.len(), style }); }
                 }
@@ -110,7 +115,7 @@ pub fn merge_highlights(spans: &[Span], search: &[std::ops::Range<usize>]) -> Ve
         while search_index < search.len() && search[search_index].end <= pair[0] { search_index += 1; }
         let style = spans.get(style_index).filter(|span| span.range.contains(&pair[0])).map(|span| span.style).unwrap_or_default();
         let matched = search.get(search_index).is_some_and(|range| range.contains(&pair[0]));
-        (style.bold || style.italic || matched).then_some((pair[0]..pair[1], style, matched))
+        (style != InlineStyle::default() || matched).then_some((pair[0]..pair[1], style, matched))
     }).collect()
 }
 
@@ -150,18 +155,36 @@ pub fn code_excerpt(source: &str, query: &str) -> String {
 mod tests {
     use super::*;
     #[test]
+    fn inline_code_and_strike_preserve_literals_and_search_styles() {
+        let (result, limited) = blocks("~~old **bold** `*literal*`~~ and `~~code~~`\n\nplain");
+        assert!(!limited);
+        let block = &result[0];
+        assert_eq!(block.text, "old bold *literal* and ~~code~~");
+        let literal = block.spans.iter().find(|span| &block.text[span.range.clone()] == "*literal*").unwrap();
+        assert!(literal.style.code && literal.style.strike && !literal.style.italic);
+        let bold = block.spans.iter().find(|span| &block.text[span.range.clone()] == "bold").unwrap();
+        assert!(bold.style.bold && bold.style.strike);
+        let code = block.spans.last().unwrap();
+        assert!(code.style.code && !code.style.strike);
+        assert!(result[1].spans.is_empty());
+        let search = crate::file_browser::preview_highlights(&block.text, "literal");
+        let runs = merge_highlights(&block.spans, &search);
+        assert!(runs.windows(2).all(|pair| pair[0].0.end <= pair[1].0.start));
+        assert!(runs.iter().any(|(range, style, matched)| &block.text[range.clone()] == "literal" && style.code && style.strike && *matched));
+    }
+    #[test]
     fn inline_emphasis_nests_and_resets_across_blocks() {
         let (result, _) = blocks("***both*** normal **bold** *italic*\n\nplain\n");
         assert_eq!(result[0].text, "both normal bold italic");
         let spans: Vec<_> = result[0].spans.iter().map(|span| (&result[0].text[span.range.clone()], span.style)).collect();
-        assert_eq!(spans, [("both", InlineStyle { bold: true, italic: true }), ("bold", InlineStyle { bold: true, italic: false }), ("italic", InlineStyle { bold: false, italic: true })]);
+        assert_eq!(spans, [("both", InlineStyle { bold: true, italic: true, ..Default::default() }), ("bold", InlineStyle { bold: true, italic: false, ..Default::default() }), ("italic", InlineStyle { bold: false, italic: true, ..Default::default() })]);
         assert!(result[1].spans.is_empty());
     }
     #[test]
     fn inline_excerpt_ranges_handle_unicode_controls_and_search_overlap() {
         let text = format!("{}A\u{85}界 needle", "İ".repeat(1100));
         let start = text.find('A').unwrap();
-        let spans = [Span { range: start..start + "A\u{85}界".len(), style: InlineStyle { bold: true, italic: true } }];
+        let spans = [Span { range: start..start + "A\u{85}界".len(), style: InlineStyle { bold: true, italic: true, ..Default::default() } }];
         let prefix = "☑ ";
         let title = format!("{prefix}{}", crate::file_browser::preview_line_title(&text, "needle"));
         let projected = excerpt_spans(&text, "needle", &spans, prefix.len());
