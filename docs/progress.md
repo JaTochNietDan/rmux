@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Reviewing PowerShell integration exposed an existing Unix launch-order bug:
+PowerShell requires -Login first, but the common launcher appended -i then -l.
+Recognized pwsh basenames now receive -Login/-Interactive in the documented order;
+non-login pwsh gets -Interactive, and other shells keep their existing flags.
+The focused argument-policy regression passed for path spaces, case variants,
+non-login mode and unrelated shell names. No tool was installed, no user profile
+was changed, and native PowerShell/Windows execution was not validated. Prompt/OSC
+hooks remain a separate open step. Reference: Microsoft's about_Pwsh -Login docs
+(https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_pwsh?view=powershell-7.5#-login--l).
+The previous goal turn made progress with snapshot recovery diagnostics and CI.
+
 Opt-in snapshot_recovery diagnostics now count placeholder prepaints and completed
 wait intervals from first placeholder to fresh engine frame. Total/max nanoseconds
 exclude time after hiding the pane again; normal frames without a preceding stall

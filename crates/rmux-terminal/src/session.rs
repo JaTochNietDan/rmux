@@ -427,8 +427,7 @@ impl Session {
         #[cfg(not(unix))]
         let integration = None;
         if !cfg!(windows) {
-            command.arg("-i");
-            if login { command.arg("-l"); }
+            command.args(unix_shell_flags(&shell, login));
         }
         let mut session = Self::spawn_with_scrollback(command, columns, rows, scrollback_bytes)?;
         session._shell_integration = integration;
@@ -1072,6 +1071,19 @@ impl Drop for Session {
     }
 }
 
+/// PowerShell ignores -Login unless it is the first argument. Its startup path
+/// has no rcfile wrapper, so these flags also precede all future startup commands.
+fn unix_shell_flags(shell: &std::ffi::OsStr, login: bool) -> &'static [&'static str] {
+    let powershell = std::path::Path::new(shell).file_name().and_then(|name| name.to_str())
+        .is_some_and(|name| name.eq_ignore_ascii_case("pwsh") || name.eq_ignore_ascii_case("pwsh.exe"));
+    match (powershell, login) {
+        (true, true) => &["-Login", "-Interactive"],
+        (true, false) => &["-Interactive"],
+        (false, true) => &["-i", "-l"],
+        (false, false) => &["-i"],
+    }
+}
+
 fn select_shell(
     explicit: Option<std::ffi::OsString>,
     inherited: Option<std::ffi::OsString>,
@@ -1093,6 +1105,18 @@ fn select_shell(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn powershell_login_flag_precedes_interactive_without_changing_other_shells() {
+        use std::ffi::OsStr;
+        for shell in ["pwsh", "/opt/Power Shell/pwsh", "/tmp/PWSH", "pwsh.exe"] {
+            assert_eq!(super::unix_shell_flags(OsStr::new(shell), true), ["-Login", "-Interactive"]);
+            assert_eq!(super::unix_shell_flags(OsStr::new(shell), false), ["-Interactive"]);
+        }
+        for shell in ["/bin/bash", "/bin/zsh", "fish", "/tmp/pwsh-custom"] {
+            assert_eq!(super::unix_shell_flags(OsStr::new(shell), true), ["-i", "-l"]);
+            assert_eq!(super::unix_shell_flags(OsStr::new(shell), false), ["-i"]);
+        }
+    }
     #[test]
     #[cfg(unix)]
     fn explicit_remote_sessions_do_not_export_local_directory_metadata() -> anyhow::Result<()> {
