@@ -14,6 +14,7 @@ pub(super) struct TextField {
     pointer_anchor: Option<usize>,
     history: edit_history::EditHistory,
     rejected_edit: bool,
+    pub placeholder: Option<&'static str>,
 }
 impl EventEmitter<EditEvent> for TextField {}
 impl TextField {
@@ -51,6 +52,7 @@ impl TextField {
             pointer_anchor: None,
             history: Default::default(),
             rejected_edit: false,
+            placeholder: None,
         }
     }
     fn changed(&mut self, cx: &mut Context<Self>) {
@@ -316,6 +318,7 @@ impl Render for TextField {
                                 let end = line.x_for_index(selection.end);
                                 let focused = this.focus.is_focused(window);
                                 let reversed = this.reversed;
+                                let placeholder = this.placeholder.filter(|_| this.text.text.is_empty() && !this.is_composing());
                                 window.handle_input(
                                     &this.focus,
                                     ElementInputHandler::new(bounds, paint.clone()),
@@ -332,6 +335,14 @@ impl Render for TextField {
                                         ));
                                     }
                                     let _ = line.paint(origin, px(24.), window, cx);
+                                        if let Some(placeholder) = placeholder {
+                                            let hint = window.text_system().shape_line(placeholder.into(), px(14.), &[TextRun {
+                                                len: placeholder.len(), font: window.text_style().font(),
+                                                color: rgb(0x858585).into(), background_color: None,
+                                                underline: None, strikethrough: None,
+                                            }], None);
+                                            let _ = hint.paint(origin + point(px(5.), px(0.)), px(24.), window, cx);
+                                        }
                                     if focused {
                                         window.paint_quad(fill(
                                             Bounds::new(

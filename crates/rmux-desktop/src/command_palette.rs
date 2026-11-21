@@ -538,7 +538,9 @@ impl CommandPalette {
                 subtitle: directory,
             });
         }
-        Self::with_commands(commands, "Search commands and workspaces", "No matching commands or workspaces", window, cx)
+        let palette = Self::with_commands(commands, "Search commands and workspaces", "No matching commands or workspaces", window, cx);
+        palette.input.update(cx, |input, _| input.placeholder = Some("Type a command or workspace name…"));
+        palette
     }
     pub fn buffers(entries: Vec<(String, usize, String)>, revision: u64, surface_id: String, mode: BufferMode, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let commands = entries.into_iter().map(|(name, bytes, preview)| Command {
