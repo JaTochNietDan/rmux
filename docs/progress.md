@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+The Settings theme picker now includes a compact configured-color preview with
+sample text, cursor color and ANSI swatches for explicit palettes. It identifies
+user overrides and explains that applications may change colors. Defaults are
+shared with the terminal renderer, avoiding divergent preview colors; the preview
+creates no terminal/session and adds no timers. Desktop compilation passed. Native
+layout and screenshot acceptance remain pending: the Mac was confirmed locked.
+
 Added Nord as a fifth built-in terminal theme, using the official Nord terminal
 ANSI palette, foreground, background and cursor colors. Existing shared theme
 choices expose it in Settings and the command palette without new runtime work.

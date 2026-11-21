@@ -196,6 +196,9 @@ pub enum CursorShape {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Color(pub u8, pub u8, pub u8);
+pub const DEFAULT_FOREGROUND: Color = Color(220, 223, 230);
+pub const DEFAULT_BACKGROUND: Color = Color(18, 20, 26);
+pub const DEFAULT_CURSOR: Color = Color(140, 180, 255);
 impl From<GhosttyColorRgb> for Color {
     fn from(c: GhosttyColorRgb) -> Self {
         Self(c.r, c.g, c.b)
@@ -501,10 +504,10 @@ impl Terminal {
                 selections: Arc::new(vec![None; rows as usize]),
                 columns,
                 rows: Arc::new(vec![Arc::default(); rows as usize]),
-                background: Color(18, 20, 26),
+                background: DEFAULT_BACKGROUND,
                 cursor: None,
                 cursor_shape: CursorShape::Block,
-                cursor_color: Color(140, 180, 255),
+                cursor_color: DEFAULT_CURSOR,
                 scrollback_lines: 0,
                 scrollback_offset: 0,
             },
@@ -797,8 +800,8 @@ impl Terminal {
     pub fn set_default_colors(&mut self, colors: [Option<Color>; 3]) -> Result<()> {
         self.revision = self.revision.wrapping_add(1);
         let colors = [
-            colors[0].or(Some(Color(220, 223, 230))),
-            colors[1].or(Some(Color(18, 20, 26))),
+            colors[0].or(Some(DEFAULT_FOREGROUND)),
+            colors[1].or(Some(DEFAULT_BACKGROUND)),
             colors[2],
         ];
         for (option, color) in [
@@ -908,7 +911,7 @@ impl Terminal {
             self.frame.cursor_color = if colors.cursor_has_value {
                 colors.cursor.into()
             } else {
-                Color(140, 180, 255)
+                DEFAULT_CURSOR
             };
             let mut cursor = GhosttyRenderStateCursor {
                 size: size_of::<GhosttyRenderStateCursor>(),

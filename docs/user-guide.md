@@ -799,6 +799,9 @@ background with a darker ANSI palette), `"solarized_dark"`, `"solarized_light"`,
 The Solarized presets use [Ethan Schoonover's published palette](https://ethanschoonover.com/solarized/).
 Nord uses the [official Nord terminal palette](https://github.com/nordtheme/alacritty/blob/main/src/nord.yaml).
 Settings shows all five presets as direct choices, highlighting the selected one;
+A compact sample below the choices shows configured text, background and cursor
+colors, plus ANSI swatches when a preset or custom palette supplies them. It includes
+your explicit color overrides; running applications can still override these colors.
 Left/Right still cycles when the theme control is selected. The palette offers
 Terminal Theme commands for direct keyboard selection. Use Save these settings
 to persist a session choice. It reloads live; explicit color and

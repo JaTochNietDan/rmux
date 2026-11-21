@@ -92,6 +92,30 @@ fn row(label: &'static str, key: &'static str, value: String, stepper: bool, sel
             .when(stepper, |controls| controls
                 .child(button(format!("{key}-more"), "+".into(), key, 1))))
 }
+// Configuration-only preview: never creates a terminal or reads a running session.
+fn theme_preview(settings: &Preferences) -> impl IntoElement {
+    use rmux_terminal::{Color, DEFAULT_BACKGROUND, DEFAULT_CURSOR, DEFAULT_FOREGROUND};
+    let rgb_color = |Color(r, g, b): Color| rgb((u32::from(r) << 16) | (u32::from(g) << 8) | u32::from(b));
+    let colors = settings.terminal_colors();
+    let overridden = settings.foreground_color.is_some() || settings.background_color.is_some()
+        || settings.cursor_color.is_some() || settings.ansi_palette.is_some();
+    div().mt_2().min_w_0().flex().flex_col().gap_2()
+        .child(div().p_2().rounded_sm().overflow_hidden()
+            .bg(rgb_color(colors[1].unwrap_or(DEFAULT_BACKGROUND)))
+            .text_color(rgb_color(colors[0].unwrap_or(DEFAULT_FOREGROUND)))
+            .font_family(settings.font_family.clone()).text_size(px(12.))
+            .child(div().flex().items_center().gap_1()
+                .child(div().min_w_0().truncate().child("❯ echo hello"))
+                .child(div().w(px(7.)).h(px(13.)).flex_shrink_0()
+                    .bg(rgb_color(colors[2].unwrap_or(DEFAULT_CURSOR)))))
+            .when_some(settings.terminal_palette(), |preview, palette| preview
+                .child(div().mt_2().flex().h(px(8.)).children(palette.into_iter().map(|color|
+                    div().flex_1().h_full().bg(rgb_color(color)))))))
+        .child(div().text_xs().text_color(rgb(0xa0a0a0)).child(if overridden {
+            "Preview includes your configured color overrides."
+        } else { "Preview of configured colors. Apps may override them." }))
+}
+
 pub fn panel(state: State, window: &Window, cx: &mut Context<window_view::WorkspaceWindow>) -> AnyElement {
     let settings = cx.global::<Preferences>();
     let busy = cx.global::<preferences::ReloadState>().0;
@@ -129,7 +153,8 @@ pub fn panel(state: State, window: &Window, cx: &mut Context<window_view::Worksp
                                 if event.standard_click() { window.dispatch_action(Box::new(SetTerminalTheme { theme }), cx); }
                             }).child(theme.label())
                     })
-                )))
+                ))
+                .child(theme_preview(settings)))
             .child(row("Focused cursor", "focused_cursor", settings.focused_cursor.label().into(), false, state.selected == 3, false))
             .child(row("Unfocused cursor", "cursor", match settings.unfocused_cursor { preferences::UnfocusedCursor::Hollow => "Hollow", preferences::UnfocusedCursor::Hidden => "Hidden" }.into(), false, state.selected == 4, false))
             .child(row("Copy on select", "copy", if settings.copy_on_select { "On" } else { "Off" }.into(), false, state.selected == 5, false))
