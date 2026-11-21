@@ -166,6 +166,9 @@ pub struct Preferences {
     pub cursor_color: Option<HexColor>,
     pub ansi_palette: Option<[HexColor; 16]>,
     pub terminal_theme: TerminalTheme,
+    pub theme_file: Option<std::path::PathBuf>,
+    #[serde(skip)]
+    imported_theme: Option<crate::theme_file::Theme>,
     pub confirm_close: ClosePolicy,
     #[serde(skip)]
     source: Option<std::path::PathBuf>,
@@ -200,6 +203,8 @@ impl Default for Preferences {
             cursor_color: None,
             ansi_palette: None,
             terminal_theme: TerminalTheme::default(),
+            theme_file: None,
+            imported_theme: None,
             confirm_close: ClosePolicy::Active,
             source: None,
             required: false,
@@ -223,8 +228,13 @@ impl Preferences {
     pub fn cursor_shape(&self, focused: bool, composing: bool, application: rmux_terminal::CursorShape) -> Option<rmux_terminal::CursorShape> {
         self.unfocused_cursor.shape(focused, composing, self.focused_cursor.shape(application))
     }
+    pub fn select_theme(&mut self, theme: TerminalTheme) {
+        self.terminal_theme = theme;
+        self.theme_file = None;
+        self.imported_theme = None;
+    }
     pub fn terminal_palette(&self) -> Option<[rmux_terminal::Color; 16]> {
-        self.ansi_palette.map(|colors| colors.map(HexColor::rgb)).or_else(|| {
+        self.ansi_palette.or_else(|| self.imported_theme.as_ref().and_then(|theme| theme.palette)).map(|colors| colors.map(HexColor::rgb)).or_else(|| {
             match self.terminal_theme {
                 TerminalTheme::Dark => None,
                 TerminalTheme::Light => Some([
@@ -259,7 +269,7 @@ impl Preferences {
             TerminalTheme::SolarizedLight => [Some(HexColor(0x657b83)), Some(HexColor(0xfdf6e3)), Some(HexColor(0x657b83))],
         };
         let overrides = [self.foreground_color, self.background_color, self.cursor_color];
-        std::array::from_fn(|index| overrides[index].or(defaults[index]).map(HexColor::rgb))
+        std::array::from_fn(|index| overrides[index].or_else(|| self.imported_theme.as_ref().and_then(|theme| theme.colors[index])).or(defaults[index]).map(HexColor::rgb))
     }
     /// Called only by the explicit Open Settings File UI action.
     pub fn prepare_file(&self) -> Result<std::path::PathBuf> {
@@ -305,6 +315,7 @@ impl Preferences {
             && self.terminal_padding == other.terminal_padding
             && self.scrollback_mib == other.scrollback_mib
             && self.terminal_theme == other.terminal_theme
+            && self.theme_file == other.theme_file
             && self.unfocused_cursor == other.unfocused_cursor
             && self.focused_cursor == other.focused_cursor
             && self.macos_option_as_alt == other.macos_option_as_alt
@@ -326,7 +337,7 @@ impl Preferences {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => path,
             Err(error) => return Err(error.into()),
         };
-        let mut latest = Self::read(&path, false)?;
+        let mut latest = Self::read_config(&path, false)?;
         latest.font_size = self.font_size;
         latest.font_family = self.font_family.clone();
         latest.background_opacity = self.background_opacity;
@@ -334,6 +345,7 @@ impl Preferences {
         latest.terminal_padding = self.terminal_padding;
         latest.scrollback_mib = self.scrollback_mib;
         latest.terminal_theme = self.terminal_theme;
+        latest.theme_file = self.theme_file.clone();
         latest.unfocused_cursor = self.unfocused_cursor;
         latest.focused_cursor = self.focused_cursor;
         latest.macos_option_as_alt = self.macos_option_as_alt;
@@ -400,6 +412,7 @@ impl Preferences {
             }
             ensure!(command.cwd.as_ref().is_none_or(|path| path.is_absolute() && path.as_os_str().len() <= 8192), "command cwd must be an absolute path up to 8192 bytes");
         }
+        ensure!(value.theme_file.as_ref().is_none_or(|path| path.is_absolute() && path.as_os_str().len() <= 8192), "theme_file must be an absolute path up to 8192 bytes");
         ensure!(value.terminal_padding <= 32, "terminal_padding must be between 0 and 32");
         ensure!(value.session_file.as_ref().is_none_or(|path| path.is_absolute() && path.as_os_str().len() <= 8192), "session_file must be an absolute path up to 8192 bytes");
         ensure!(
@@ -420,7 +433,7 @@ impl Preferences {
         crate::shortcuts::compile(&value)?;
         Ok(value)
     }
-    fn read(path: &Path, required: bool) -> Result<Self> {
+    fn read_config(path: &Path, required: bool) -> Result<Self> {
         let file = match std::fs::File::open(path) {
             Err(error) if !required && error.kind() == std::io::ErrorKind::NotFound => {
                 return Ok(Self::default());
@@ -430,6 +443,13 @@ impl Preferences {
         let mut bytes = Vec::new();
         file.take(64 * 1024 + 1).read_to_end(&mut bytes)?;
         Self::decode(&bytes).with_context(|| format!("configuration {}", path.display()))
+    }
+    fn read(path: &Path, required: bool) -> Result<Self> {
+        let mut value = Self::read_config(path, required)?;
+        if let Some(path) = &value.theme_file {
+            value.imported_theme = Some(crate::theme_file::read(path).with_context(|| format!("theme {}", path.display()))?);
+        }
+        Ok(value)
     }
     pub fn load() -> Result<Self> {
         let explicit = std::env::var_os("RMUX_CONFIG");
@@ -463,6 +483,33 @@ impl Preferences {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn theme_file_load_reload_overrides_and_preset_save() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        let theme = directory.path().join("colors.theme");
+        let config = directory.path().join("config.json");
+        std::fs::write(&theme, "foreground=112233\nbackground=445566\ncursor-color=778899\n")?;
+        std::fs::write(&config, serde_json::to_vec(&serde_json::json!({"theme_file":theme, "foreground_color":"#aabbcc"}))?)?;
+        let mut settings = Preferences::read(&config, true)?;
+        settings.source = Some(config.clone());
+        assert_eq!(settings.terminal_colors(), [Some(rmux_terminal::Color(170,187,204)), Some(rmux_terminal::Color(68,85,102)), Some(rmux_terminal::Color(119,136,153))]);
+        settings.save_appearance()?;
+        assert_eq!(Preferences::read(&config, true)?.theme_file.as_ref(), Some(&theme));
+        std::fs::write(&theme, "background=010203\n")?;
+        let updated = settings.reload()?;
+        assert_eq!(updated.terminal_colors()[1], Some(rmux_terminal::Color(1,2,3)));
+        std::fs::write(&theme, "background=invalid\n")?;
+        assert!(settings.reload().is_err());
+        assert_eq!(settings.terminal_colors()[1], Some(rmux_terminal::Color(68,85,102)));
+        // A broken imported file must not prevent saving a built-in replacement.
+        settings.select_theme(TerminalTheme::Nord);
+        assert_eq!(settings.terminal_colors()[1], Some(rmux_terminal::Color(46,52,64)));
+        settings.save_appearance()?;
+        assert!(Preferences::read(&config, true)?.theme_file.is_none());
+        assert!(Preferences::decode(br#"{"theme_file":"relative.theme"}"#).is_err());
+        Ok(())
+    }
+
     #[test]
     fn background_appearance_controls_validate_cycle_and_persist() -> Result<()> {
         use gpui::WindowBackgroundAppearance::{Opaque, Transparent, Blurred};

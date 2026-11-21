@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Added configuration-driven `theme_file` import for a strict Ghostty-style color
+subset: foreground/background/cursor RGB and complete 16-entry ANSI palettes.
+Reads are explicit at startup/reload, capped at 64 KiB and regular-file only;
+unsupported settings/colors fail with line context. Explicit rmux overrides win,
+then imported colors, then built-in defaults. Settings displays the import and
+choosing a preset clears it; saving can recover from a broken imported file.
+Three focused import tests passed for parsing, bounds/nonregular files, precedence,
+reload failure retention and preset persistence. Also repaired an older row-cache
+test initializer and passed its release test. Native theme reload/visual acceptance,
+interactive import picker and broader Ghostty theme syntax remain pending.
+
 Fixed Bash prompt-hook detection for exported indexed arrays (`declare -ax`).
 Attribute-aware detection preserves array elements and order instead of applying
 the scalar rewrite to element zero. The fixture now checks plain/exported array

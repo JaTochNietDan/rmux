@@ -4173,9 +4173,9 @@ impl Render for WorkspaceWindow {
                     state.selected = settings_view::KEYS.iter().position(|key| *key == "theme").unwrap_or(0);
                     state.focus.focus(window);
                 }
-                if cx.global::<Preferences>().terminal_theme != action.theme {
+                if cx.global::<Preferences>().terminal_theme != action.theme || cx.global::<Preferences>().theme_file.is_some() {
                     let mut settings = cx.global::<Preferences>().clone();
-                    settings.terminal_theme = action.theme;
+                    settings.select_theme(action.theme);
                     cx.set_global(settings);
                 }
                 this.notice = None;

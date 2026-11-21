@@ -820,6 +820,29 @@ palette values override the preset. This changes terminal content only, not the
 sidebar or other application controls, and does not automatically follow OS
 appearance changes.
 
+Set `"theme_file": "/absolute/path/to/colors.theme"` to import a local color
+file, then Reload Settings. This supports a strict subset of
+[Ghostty color assignments](https://ghostty.org/docs/config/reference):
+
+```text
+foreground = d8dee9
+background = #2e3440
+cursor-color = d8dee9
+```
+
+Optional `palette = N=RRGGBB` entries must define all 16 ANSI slots (decimal
+0–15). Colors accept six hex digits with or without `#`; blank lines and whole-line
+`#` comments are allowed. Repeated supported assignments use the last value.
+Named colors, selection colors, extended palette slots, includes and other settings
+are rejected with a line-specific error rather than silently ignored. Files must
+be regular UTF-8 files, not symlinks, and at most 64 KiB. This is not a full Ghostty
+configuration importer. No files are watched or downloaded.
+
+Precedence is explicit rmux color/palette settings, imported colors, then the
+selected built-in preset. Settings shows the imported filename and effective
+colors. Choosing a built-in preset clears the import for this session; Save these
+settings persists that choice. Invalid reloads retain the previous valid settings.
+
 Font sizes must be 8–40. Reset Font Size uses this configured default; new tabs
 and splits inherit the source terminal's size and family, and saved layouts
 retain their saved fonts.

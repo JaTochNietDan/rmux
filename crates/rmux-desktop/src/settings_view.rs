@@ -36,7 +36,7 @@ pub fn adjust(settings: &mut Preferences, key: &str, delta: i32) {
         "font" => settings.font_size = (settings.font_size + delta as f32).clamp(8., 40.),
         "padding" => settings.terminal_padding = (settings.terminal_padding as i32 + delta).clamp(0, 32) as u8,
         "scrollback" => settings.scrollback_mib = (settings.scrollback_mib as i32 + delta.signum()).clamp(0, 256) as u16,
-        "theme" => settings.terminal_theme = settings.terminal_theme.cycle(delta),
+        "theme" => settings.select_theme(settings.terminal_theme.cycle(delta)),
         "focused_cursor" => settings.focused_cursor = settings.focused_cursor.cycle(delta < 0),
         "close" if !settings.close_policy_overridden() => {
             use close_policy::ClosePolicy::{Active, Always, Never};
@@ -111,6 +111,7 @@ fn theme_preview(settings: &Preferences) -> impl IntoElement {
             .when_some(settings.terminal_palette(), |preview, palette| preview
                 .child(div().mt_2().flex().h(px(8.)).children(palette.into_iter().map(|color|
                     div().flex_1().h_full().bg(rgb_color(color)))))))
+        .when_some(settings.theme_file.as_ref(), |preview, path| preview.child(div().min_w_0().truncate().text_xs().text_color(rgb(0xa0a0a0)).child(format!("Imported: {}", path.file_name().unwrap_or_default().to_string_lossy()))))
         .child(div().text_xs().text_color(rgb(0xa0a0a0)).child(if overridden {
             "Preview includes your configured color overrides."
         } else { "Preview of configured colors. Apps may override them." }))
@@ -143,7 +144,7 @@ pub fn panel(state: State, window: &Window, cx: &mut Context<window_view::Worksp
                 .child(div().mb_2().text_size(px(13.)).child("Terminal theme"))
                 .child(div().flex().flex_wrap().gap_2().children(
                     preferences::TerminalTheme::ALL.into_iter().enumerate().map(|(index, theme)| {
-                        let selected = settings.terminal_theme == theme;
+                        let selected = settings.theme_file.is_none() && settings.terminal_theme == theme;
                         div().id(("theme-choice", index)).px_2().py_1().rounded_sm().cursor_pointer()
                             .text_size(px(12.)).border_1()
                             .border_color(rgb(if selected { 0x4599ef } else { 0x454545 }))

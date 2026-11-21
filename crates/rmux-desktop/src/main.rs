@@ -46,6 +46,7 @@ mod layout;
 mod palette_match;
 mod pane_view;
 mod preferences;
+mod theme_file;
 use preferences::Preferences;
 mod restore;
 mod recovery;
