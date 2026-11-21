@@ -2470,12 +2470,15 @@ impl Element for TerminalElement {
                 window.paint_quad(quad);
             }
         });
+        let selection_background = cx.global::<Preferences>().selection_background()
+            .map(color).unwrap_or_else(|| rgba(0x668fca80).into());
         window.with_content_mask(Some(ContentMask { bounds: state.content_bounds }), |window| {
             for (y, row) in state.rows.iter().enumerate() {
                 row_cache::paint_row(
                     row,
                     state.content_bounds.origin + point(px(0.), px(y as f32 * cells.height)),
                     state.selections.get(y).copied().flatten(),
+                    selection_background,
                     cells,
                     window,
                     cx,

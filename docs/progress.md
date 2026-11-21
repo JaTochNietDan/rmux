@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Added imported `selection-background` and explicit JSON `selection_background`.
+The renderer resolves the configured color once per paint and applies it to the
+existing selection quad, without changing shaped-row cache identities or copying
+text. Explicit values override imported values; no configured value retains the
+translucent blue default. Two focused tests passed for import parsing, override
+precedence, serialization and clearing an import. Selection foreground styling,
+native selection visuals and contrast acceptance remain pending.
+
 Added Import Terminal Theme to the menu, command palette, keyboard-navigable
 Settings row and custom `import_theme` action. The native single-file picker uses
 the shared prompt gate; bounded theme parsing runs off the UI thread under the

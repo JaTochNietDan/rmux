@@ -351,6 +351,7 @@ pub fn paint_row(
     row: &ShapedRow,
     origin: Point<Pixels>,
     selection: Option<(u16, u16)>,
+    selection_background: Hsla,
     cells: CellMetrics,
     window: &mut Window,
     cx: &mut App,
@@ -370,7 +371,7 @@ pub fn paint_row(
                 origin + point(px(start as f32 * cells.width), px(0.)),
                 size(px((end - start + 1) as f32 * cells.width), px(cells.height)),
             ),
-            rgba(0x668fca80),
+            selection_background,
         ));
     }
     for text in &row.texts {

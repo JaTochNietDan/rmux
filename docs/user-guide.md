@@ -835,15 +835,22 @@ Settings. This supports a strict subset of
 foreground = d8dee9
 background = #2e3440
 cursor-color = d8dee9
+selection-background = 4c566a
 ```
 
 Optional `palette = N=RRGGBB` entries must define all 16 ANSI slots (decimal
 0–15). Colors accept six hex digits with or without `#`; blank lines and whole-line
 `#` comments are allowed. Repeated supported assignments use the last value.
-Named colors, selection colors, extended palette slots, includes and other settings
+Named colors, selection foreground colors, extended palette slots, includes and other settings
 are rejected with a line-specific error rather than silently ignored. Files must
 be regular UTF-8 files, not symlinks, and at most 64 KiB. This is not a full Ghostty
 configuration importer. No files are watched or downloaded.
+
+`selection_background` in rmux JSON also accepts `"#RRGGBB"` and overrides the
+imported selection background. Configured selection backgrounds are opaque; with
+neither setting, the existing translucent blue highlight is retained. Text keeps
+its terminal foreground colors. Selection colors update at paint time without
+reshaping cached rows.
 
 Precedence is explicit rmux color/palette settings, imported colors, then the
 selected built-in preset. Settings shows the imported filename and effective

@@ -164,6 +164,7 @@ pub struct Preferences {
     pub background_opacity: u8,
     pub background_blur: bool,
     pub cursor_color: Option<HexColor>,
+    pub selection_background: Option<HexColor>,
     pub ansi_palette: Option<[HexColor; 16]>,
     pub terminal_theme: TerminalTheme,
     pub theme_file: Option<std::path::PathBuf>,
@@ -201,6 +202,7 @@ impl Default for Preferences {
             background_opacity: 100,
             background_blur: false,
             cursor_color: None,
+            selection_background: None,
             ansi_palette: None,
             terminal_theme: TerminalTheme::default(),
             theme_file: None,
@@ -266,6 +268,9 @@ impl Preferences {
                 ].map(|value| HexColor(value).rgb())),
             }
         })
+    }
+    pub fn selection_background(&self) -> Option<rmux_terminal::Color> {
+        self.selection_background.or_else(|| self.imported_theme.as_ref().and_then(|theme| theme.selection_background)).map(HexColor::rgb)
     }
     pub fn terminal_colors(&self) -> [Option<rmux_terminal::Color>; 3] {
         let defaults = match self.terminal_theme {
@@ -490,6 +495,22 @@ impl Preferences {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn selection_background_import_override_and_preset_fallback() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        let path = directory.path().join("theme");
+        std::fs::write(&path, "selection-background=112233\n")?;
+        assert_eq!(Preferences::default().selection_background(), None);
+        let mut imported = Preferences::default().import_theme(path.clone())?;
+        assert_eq!(imported.selection_background(), Some(rmux_terminal::Color(17,34,51)));
+        imported.select_theme(TerminalTheme::Dark);
+        assert_eq!(imported.selection_background(), None);
+        let explicit = Preferences::decode(br##"{"selection_background":"#abcdef"}"##)?.import_theme(path)?;
+        assert_eq!(explicit.selection_background(), Some(rmux_terminal::Color(171,205,239)));
+        assert_eq!(serde_json::to_value(&explicit)?["selection_background"], "#abcdef");
+        Ok(())
+    }
+
     #[test]
     fn theme_file_load_reload_overrides_and_preset_save() -> Result<()> {
         let directory = tempfile::tempdir()?;
