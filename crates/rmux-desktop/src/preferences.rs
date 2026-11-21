@@ -1067,6 +1067,29 @@ mod tests {
         Ok(())
     }
     #[test]
+    fn file_editor_reload_validates_and_retains_previous_configuration() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        let path = directory.path().join("config.json");
+        let program = std::env::current_exe()?;
+        let source = Preferences { source: Some(path.clone()), required: true, ..Preferences::default() };
+        let valid = serde_json::json!({"file_editor":{"program":program,"args":["--","{file}"]}});
+        std::fs::write(&path, serde_json::to_vec(&valid)?)?;
+        let current = source.reload()?;
+        assert_eq!(current.file_editor.as_ref().unwrap().program, program);
+        for invalid in [
+            serde_json::json!({"program":"relative","args":["{file}"]}),
+            serde_json::json!({"program":program,"args":[]}),
+            serde_json::json!({"program":format!("{}\0", program.display()),"args":["{file}"]}),
+        ] {
+            std::fs::write(&path, serde_json::to_vec(&serde_json::json!({"file_editor":invalid}))?)?;
+            assert!(current.reload().is_err());
+            assert_eq!(current.file_editor.as_ref().unwrap().program, program);
+        }
+        std::fs::write(&path, b"{}")?;
+        assert!(current.reload()?.file_editor.is_none());
+        Ok(())
+    }
+    #[test]
     fn reload_keeps_source_override_and_previous_valid_settings() -> Result<()> {
         let directory = tempfile::tempdir()?;
         let path = directory.path().join("config.json");

@@ -9,7 +9,7 @@ pub struct Editor {
 }
 impl Editor {
     pub fn validate(&self) -> Result<()> {
-        ensure!(self.program.is_absolute() && self.program.as_os_str().len() <= 8192, "file_editor.program must be an absolute path up to 8192 bytes");
+        ensure!(self.program.is_absolute() && self.program.as_os_str().len() <= 8192 && !self.program.as_os_str().as_encoded_bytes().contains(&0), "file_editor.program must be an absolute path up to 8192 bytes without NULs");
         ensure!(self.args.len() <= 64 && self.args.iter().all(|arg| arg.len() <= 8192 && !arg.contains('\0')), "file_editor.args must contain at most 64 arguments, each up to 8192 bytes without NULs");
         ensure!(self.args.iter().filter(|arg| arg.as_str() == "{file}").count() == 1, "file_editor.args must contain exactly one standalone {{file}} argument");
         Ok(())

@@ -1350,6 +1350,11 @@ impl WorkspaceWindow {
         } else if matches!(key, "left" | "right" | "enter" | "space") {
             let selected = state.selected;
             if selected < settings_view::KEYS.len() {
+                if settings_view::KEYS[selected] == "file_editor" {
+                    self.open_settings_file(cx);
+                    cx.stop_propagation();
+                    return;
+                }
                 if settings_view::KEYS[selected] == "import_theme" {
                     self.choose_terminal_theme(window, cx);
                     cx.stop_propagation();
@@ -4301,6 +4306,10 @@ impl Render for WorkspaceWindow {
                     state.focus.focus(window);
                 }
                 let mut settings = cx.global::<Preferences>().clone();
+                if change.key == "file_editor" {
+                    this.open_settings_file(cx);
+                    return;
+                }
                 if change.key == "import_theme" {
                     this.choose_terminal_theme(window, cx);
                     return;

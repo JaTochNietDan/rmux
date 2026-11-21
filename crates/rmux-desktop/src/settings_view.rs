@@ -9,7 +9,7 @@ pub struct State {
 }
 pub const KEYS: &[&str] = &["font", "padding", "theme", "focused_cursor", "cursor", "copy", "close", "group_placement", "scrollback", "native_notifications", "notification_focus", "font_family", "opacity", "blur", "workspace_placement",
     #[cfg(target_os = "macos")] "option_as_alt",
-    "import_theme",
+    "import_theme", "file_editor",
 ];
 // Each control owns its explanatory content. Only the heading and footer hint
 // are separate non-control children of the scroll container.
@@ -201,7 +201,14 @@ pub fn panel(state: State, window: &Window, cx: &mut Context<window_view::Worksp
             .when(cfg!(target_os = "macos"), |panel| panel.child(div()
                 .child(row("Option key behavior", "option_as_alt", if settings.macos_option_as_alt { "Terminal Alt" } else { "Native text" }.into(), false, state.selected == 15, false))
                 .child(div().pt_2().text_xs().text_color(rgb(0xa0a0a0)).child("Terminal Alt sends Option shortcuts to your shell. Native text allows Option characters and dead keys. Control+Option and navigation keys still use terminal encoding."))))
-            .child(row("Import terminal theme", "import_theme", if busy { "Working…" } else { "Choose file…" }.into(), false, state.selected == KEYS.len() - 1, false))
+            .child(row("Import terminal theme", "import_theme", if busy { "Working…" } else { "Choose file…" }.into(), false, state.selected == KEYS.len() - 2, false))
+            .child(div()
+                .child(row("External editor", "file_editor", "Configure…".into(), false, state.selected == KEYS.len() - 1, false))
+                .child(div().pt_2().text_xs().text_color(rgb(0xa0a0a0)).child("Opens Settings JSON. Set file_editor.program and args, then Reload Settings."))
+                .child(div().id("settings-editor-program").pt_1().text_xs().min_w_0().truncate().text_color(rgb(0xb8b8b8))
+                    .tooltip({ let program: SharedString = settings.file_editor.as_ref().map(|editor| editor.program.display().to_string()).unwrap_or_else(|| "No external editor configured".into()).into();
+                        move |_, cx| cx.new(|_| pane_view::ControlHint(program.clone())).into() })
+                    .child(settings.file_editor.as_ref().map(|editor| editor.program.display().to_string()).unwrap_or_else(|| "Not configured".into()))))
             .child(div().py_3().text_xs().text_color(rgb(0xa0a0a0)).child("Tab / ↑↓ to navigate · ←→ to change · Enter to activate · Esc to close. Changes apply to this session. Font family and text size update terminals using the previous defaults. Per-terminal zoom stays unchanged; Reset Font Size rejoins the default. Custom colors in your config override the theme."))
             .child(div().id("settings-save").border_1().border_color(if state.selected == KEYS.len() { rgb(0xffffff) } else { rgb(0x007aff) }).px_3().py_2().rounded_sm().text_sm()
                 .bg(rgb(if busy { 0x353535 } else { 0x007aff }))

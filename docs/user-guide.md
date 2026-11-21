@@ -345,7 +345,9 @@ starts a fresh filter.
 or text/hex preview. Ctrl+Alt+E invokes the same action; remap `edit_selected_file`
 under `context: "files"` for the browser or `context: "file_preview"` for text/hex
 previews. Directories and symlink rows do not launch an editor, and IME composition
-suspends the action. Configure the editor explicitly in Settings JSON, then reload:
+suspends the action. **Settings → External editor → Configure…** opens Settings
+JSON and shows the currently configured executable (hover for the full path).
+Set the editor explicitly, then Reload Settings:
 
 ```json
 "file_editor": {

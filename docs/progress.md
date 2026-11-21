@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Settings now exposes a keyboard-navigable External Editor configuration row,
+with configured executable summary/full-path tooltip and direct Settings JSON
+access. Executable paths containing NULs fail configuration validation before
+launch. Focused reload coverage verifies valid setup, invalid relative/NUL paths
+and missing placeholders, retention of previous valid settings, and removal of
+the editor configuration. That regression and Settings navigation test passed;
+native configuration-row layout/focus and external editor acceptance remain open.
+
 External editing now has an `edit_selected_file` action with Ctrl+Alt+E defaults
 in the directory-browser and file-preview scopes. It resolves the current
 preview or selected regular-file row, ignores directory/symlink rows and IME
