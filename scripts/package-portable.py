@@ -29,7 +29,9 @@ with tempfile.TemporaryDirectory(prefix='rmux-package-') as temporary:
     shutil.copy2('README.md', root / 'README.md')
     subprocess.run([sys.executable, 'scripts/release-notices.py', str(root / 'THIRD-PARTY-NOTICES.txt')], check=True)
     if platform == 'linux':
-        (root / 'rmux.desktop').write_text('[Desktop Entry]\nType=Application\nName=rmux\nComment=Terminal workspace\nExec=rmux\nTerminal=false\nCategories=System;TerminalEmulator;\n')
+        shutil.copy2('packaging/linux/rmux.desktop', root / 'rmux.desktop')
+        shutil.copy2('docs/brand/rmux.svg', root / 'rmux.svg')
+        shutil.copy2('packaging/linux/README.txt', root / 'LINUX-DESKTOP.txt')
         with tarfile.open(output / (name + '.tar.gz'), 'w:gz') as archive:
             archive.add(root, arcname=name)
     else:

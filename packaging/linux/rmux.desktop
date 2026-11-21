@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=rmux
+Comment=Terminal workspaces with split panes
+Exec=rmux
+TryExec=rmux
+Icon=rmux
+Terminal=false
+Categories=System;TerminalEmulator;
+Keywords=terminal;shell;workspace;

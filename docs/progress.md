@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Linux release packaging now includes the new SVG mark and a maintained desktop
+entry with Icon, TryExec and search keywords. Optional per-user launcher setup is
+included in LINUX-DESKTOP.txt; portable execution still needs no installation.
+Reviewed the packaging paths and parsed the desktop entry, with Python syntax
+validation. Linux graphical launcher acceptance remains pending. The preceding
+turn integrated the macOS icon; these assets will ship in the next release.
+
 Integrated the new mark into macOS packaging via a multi-resolution ICNS and
 CFBundleIconFile, copied before signing for both development and distribution
 bundles. An AppKit renderer reproduces the SVG geometry using the existing SDK;
