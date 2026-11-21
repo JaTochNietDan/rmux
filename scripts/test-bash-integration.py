@@ -52,6 +52,20 @@ with tempfile.TemporaryDirectory(prefix="rmux-bash-") as temporary:
                                        "printf '%s %s' ${BASH_VERSINFO[0]} ${BASH_VERSINFO[1]}"],
                                       env=environment).decode().split()
     supports_ps0 = tuple(map(int, version)) >= (4, 4)
+    # Indexed PROMPT_COMMAND execution is supported by Bash 5.1+. Older
+    # versions still let us verify preservation of the user's array structure.
+    for exported in (False, True):
+        arrays = run("\n".join([
+            "PROMPT_COMMAND=('printf \"FIRST:%s\\n\" \"$?\"' 'printf \"SECOND\\n\"')",
+            "export PROMPT_COMMAND" if exported else ":",
+            source, source,
+            "printf 'ARRAY:%s:%s:%s:END\\n' \"${#PROMPT_COMMAND[@]}\" \"${PROMPT_COMMAND[0]}\" \"${PROMPT_COMMAND[3]}\"",
+            "false",
+        ]))
+        assert b"ARRAY:4:_rmux_bash_capture_status:_rmux_bash_precmd:END" in arrays
+        if tuple(map(int, version)) >= (5, 1):
+            assert b"FIRST:1\nSECOND\n" in arrays or b"FIRST:1\r\nSECOND\r\n" in arrays
+            assert b"\x1b]133;D;1\x07" in arrays
     preexec = run("\n".join([
         "PS0='user-before>'",
         source, source,
@@ -68,4 +82,4 @@ with tempfile.TemporaryDirectory(prefix="rmux-bash-") as temporary:
         assert marker not in preexec, "old Bash must keep PS0 unchanged"
     disabled = run(source, dict(environment, RMUX_SHELL_INTEGRATION="0"))
     assert b"\x1b]133;" not in disabled and b"\x1b]7;" not in disabled
-print("bash integration: existing hook, idempotence, prompt replacement, encoded cwd, command status, version-gated PS0 preservation and opt-out passed")
+print("bash integration: scalar/exported-array hooks, idempotence, prompt replacement, encoded cwd, command status, version-gated PS0 preservation and opt-out passed")

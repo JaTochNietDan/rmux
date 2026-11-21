@@ -42,7 +42,10 @@ _rmux_bash_precmd() {
 
 # Preserve scalar hooks, including multiline commands and trailing comments.
 # Modern Bash also supports PROMPT_COMMAND arrays; retain their element order.
-case $(declare -p PROMPT_COMMAND 2>/dev/null) in
-    'declare -a '*) PROMPT_COMMAND=(_rmux_bash_capture_status "${PROMPT_COMMAND[@]}" _rmux_bash_precmd) ;;
-    *) PROMPT_COMMAND=$'_rmux_bash_capture_status\n'"${PROMPT_COMMAND-}"$'\n_rmux_bash_precmd' ;;
-esac
+# Other attributes (for example export: -ax) must not turn an indexed array
+# into the scalar path, which would overwrite element zero and repeat hooks.
+if [[ $(declare -p PROMPT_COMMAND 2>/dev/null) =~ ^declare[[:space:]]+-[^[:space:]]*a[^[:space:]]*[[:space:]] ]]; then
+    PROMPT_COMMAND=(_rmux_bash_capture_status "${PROMPT_COMMAND[@]}" _rmux_bash_precmd)
+else
+    PROMPT_COMMAND=$'_rmux_bash_capture_status\n'"${PROMPT_COMMAND-}"$'\n_rmux_bash_precmd'
+fi
