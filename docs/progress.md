@@ -2,6 +2,18 @@
 
 ## Current implementation focus
 
+SSH Hosts now discovers aliases through nested Include files, supporting absolute,
+user-config-relative and ~/ paths plus lexical filename glob expansion. Discovery
+has shared 256 KiB / 64-file / 2,048-directory-entry limits, 64 KiB per file, eight
+include levels, 4 KiB include paths and 256 aliases. Canonical file identities stop
+cycles; cancellation remains active throughout reads/traversal, and bad included
+files retain readable results with an incomplete-discovery label. Tokens, environment
+variables and named-user tilde expansion remain unsupported; conditional includes
+are inventoried without evaluating Host/Match or executing commands. Focused tests
+cover nested/glob paths, cycles, unreadable files and shared resource limits. Native
+picker/focus acceptance remains pending. Relative Include resolution follows the
+[OpenSSH configuration reference](https://man.openbsd.org/ssh_config#Include).
+
 Added File/palette SSH Hosts… and custom action `ssh_hosts`. Concrete Host aliases
 are loaded on demand into a searchable picker with Connect, Refresh and direct
 entry. The background read shares the four-file-worker budget and cancellation,

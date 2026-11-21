@@ -2,6 +2,132 @@
 pub const INPUT_HINT: &str = "SSH alias, user@host or ssh://user@host:port · Authenticate in the terminal";
 pub struct Aliases { pub names: Vec<String>, pub limited: bool }
 pub fn read_aliases(path: &std::path::Path, canceled: &std::sync::atomic::AtomicBool) -> anyhow::Result<Aliases> {
+    let base = path.parent().unwrap_or(std::path::Path::new("."));
+    let mut discovery = Discovery {
+        canceled, base, remaining: 256 * 1024, entries: 2048, attempts: 64,
+        visited: Default::default(), names: Default::default(), limited: false,
+    };
+    discovery.visit(path, 0)?;
+    Ok(Aliases { names: discovery.names.into_values().collect(), limited: discovery.limited })
+}
+
+struct Discovery<'a> {
+    canceled: &'a std::sync::atomic::AtomicBool,
+    base: &'a std::path::Path,
+    remaining: usize,
+    entries: usize,
+    attempts: usize,
+    visited: std::collections::HashSet<std::path::PathBuf>,
+    names: std::collections::BTreeMap<String, String>,
+    limited: bool,
+}
+
+impl Discovery<'_> {
+    fn check(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(!self.canceled.load(std::sync::atomic::Ordering::Acquire), "SSH host loading canceled");
+        Ok(())
+    }
+
+    fn visit(&mut self, path: &std::path::Path, depth: usize) -> anyhow::Result<()> {
+        self.check()?;
+        if depth > 8 || self.attempts == 0 || self.remaining == 0 {
+            self.limited = true;
+            return Ok(());
+        }
+        self.attempts -= 1;
+        // Canonical identities stop symlink cycles; missing literal includes are harmless.
+        let identity = match path.canonicalize() {
+            Ok(path) => path,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => return Err(error.into()),
+        };
+        if !self.visited.insert(identity) { return Ok(()); }
+        let (text, limited) = read_config(path, self.canceled, &mut self.remaining)?;
+        self.limited |= limited;
+        let aliases = parse_aliases(&text);
+        self.limited |= aliases.limited;
+        for name in aliases.names {
+            let key = name.to_ascii_lowercase();
+            if self.names.contains_key(&key) { continue; }
+            if self.names.len() == 256 { self.limited = true; break; }
+            self.names.insert(key, name);
+        }
+        for line in text.lines() {
+            self.check()?;
+            let Some(words) = config_words(line) else { continue; };
+            if !words.first().is_some_and(|word| word.eq_ignore_ascii_case("Include")) { continue; }
+            for pattern in words.iter().skip(1) {
+                for include in self.expand(pattern)? {
+                    if self.visit(&include, depth + 1).is_err() {
+                        self.check()?;
+                        // Keep readable aliases when a single included file is unavailable.
+                        self.limited = true;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn expand(&mut self, pattern: &str) -> anyhow::Result<Vec<std::path::PathBuf>> {
+        use std::path::{Component, Path, PathBuf};
+        self.check()?;
+        if self.attempts == 0 || self.remaining == 0 { self.limited = true; return Ok(Vec::new()); }
+        // Context-dependent tokens/environment/named-user homes are not guessed.
+        if pattern.len() > 4096 || pattern.contains(['%', '$']) || (pattern.starts_with('~') && !pattern.starts_with("~/")) {
+            self.limited = true;
+            return Ok(Vec::new());
+        }
+        let path = if let Some(tail) = pattern.strip_prefix("~/") {
+            self.base.parent().unwrap_or(self.base).join(tail)
+        } else if Path::new(pattern).is_absolute() { PathBuf::from(pattern) }
+        else { self.base.join(pattern) };
+        let mut paths = vec![PathBuf::new()];
+        for component in path.components() {
+            self.check()?;
+            let Component::Normal(name) = component else {
+                for path in &mut paths { path.push(component.as_os_str()); }
+                continue;
+            };
+            let name = name.to_string_lossy();
+            if !name.contains(['*', '?', '[']) {
+                for path in &mut paths { path.push(component.as_os_str()); }
+                continue;
+            }
+            if self.entries == 0 { self.limited = true; return Ok(Vec::new()); }
+            let matcher = match glob::Pattern::new(&name) {
+                Ok(matcher) => matcher,
+                Err(_) => { self.limited = true; return Ok(Vec::new()); }
+            };
+            let mut matches = Vec::new();
+            for parent in paths {
+                let entries = match std::fs::read_dir(&parent) {
+                    Ok(entries) => entries,
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                    Err(_) => { self.limited = true; continue; }
+                };
+                for entry in entries {
+                    self.check()?;
+                    if self.entries == 0 { self.limited = true; break; }
+                    self.entries -= 1;
+                    match entry {
+                        Ok(entry) if matcher.matches_path_with(&PathBuf::from(entry.file_name()), glob::MatchOptions {
+                            case_sensitive: true, require_literal_separator: true, require_literal_leading_dot: true,
+                        }) => matches.push(entry.path()),
+                        Err(_) => self.limited = true,
+                        _ => {},
+                    }
+                }
+                if self.entries == 0 { break; }
+            }
+            matches.sort();
+            paths = matches;
+        }
+        Ok(paths)
+    }
+}
+
+fn read_config(path: &std::path::Path, canceled: &std::sync::atomic::AtomicBool, remaining: &mut usize) -> anyhow::Result<(String, bool)> {
     use std::io::Read;
     let check = || -> anyhow::Result<()> {
         anyhow::ensure!(!canceled.load(std::sync::atomic::Ordering::Acquire), "SSH host loading canceled");
@@ -16,15 +142,16 @@ pub fn read_aliases(path: &std::path::Path, canceled: &std::sync::atomic::Atomic
     }
     let mut file = match options.open(path) {
         Ok(file) => file,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Aliases { names: Vec::new(), limited: false }),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok((String::new(), false)),
         Err(error) => return Err(error.into()),
     };
     anyhow::ensure!(file.metadata()?.is_file(), "SSH configuration is not a regular file");
+    let cap = (*remaining).min(65536);
     let mut bytes = Vec::new();
     let mut chunk = [0; 8192];
-    while bytes.len() < 65537 {
+    while bytes.len() < (cap + 1) {
         check()?;
-        let limit = chunk.len().min(65537 - bytes.len());
+        let limit = chunk.len().min((cap + 1) - bytes.len());
         let count = match file.read(&mut chunk[..limit]) {
             Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
             result => result?,
@@ -33,16 +160,15 @@ pub fn read_aliases(path: &std::path::Path, canceled: &std::sync::atomic::Atomic
         bytes.extend_from_slice(&chunk[..count]);
     }
     check()?;
-    let limited = bytes.len() > 65536;
+    let limited = bytes.len() > cap;
+    *remaining = remaining.saturating_sub(bytes.len().min(cap));
     if limited {
-        bytes.truncate(65536);
+        bytes.truncate(cap);
         // Never offer a host name cut in half at the read limit.
         bytes.truncate(bytes.iter().rposition(|byte| *byte == b'\n').map_or(0, |index| index + 1));
     }
     let text = std::str::from_utf8(&bytes)?;
-    let mut result = parse_aliases(text);
-    result.limited |= limited;
-    Ok(result)
+    Ok((text.to_owned(), limited))
 }
 
 fn config_words(line: &str) -> Option<Vec<String>> {
@@ -166,6 +292,71 @@ mod tests {
         assert!(aliases.limited);
         Ok(())
     }
+    #[test]
+    fn includes_expand_from_user_config_root_and_stop_cycles() -> anyhow::Result<()> {
+        use std::sync::atomic::AtomicBool;
+        let root = tempfile::tempdir()?;
+        let base = root.path().join(".ssh");
+        std::fs::create_dir_all(base.join("config.d/nested"))?;
+        std::fs::write(base.join("config"), "Host root\nInclude config.d/*.conf\nInclude ~/.ssh/extra\n")?;
+        std::fs::write(base.join("config.d/a.conf"), "Host alpha duplicate\nInclude config.d/nested/leaf\n")?;
+        std::fs::write(base.join("config.d/b.conf"), "Host beta DUPLICATE\nInclude config\n")?;
+        std::fs::write(base.join("config.d/.hidden.conf"), "Host hidden\n")?;
+        std::fs::write(base.join("config.d/nested/leaf"), "Host leaf\n")?;
+        std::fs::write(base.join("extra"), "Host extra\n")?;
+        let aliases = super::read_aliases(&base.join("config"), &AtomicBool::new(false))?;
+        assert_eq!(aliases.names, ["alpha", "beta", "duplicate", "extra", "leaf", "root"]);
+        assert!(!aliases.limited);
+        Ok(())
+    }
+
+    #[test]
+    fn include_limits_and_unreadable_files_keep_available_aliases() -> anyhow::Result<()> {
+        use std::sync::atomic::AtomicBool;
+        let root = tempfile::tempdir()?;
+        let path = root.path().join("config");
+        std::fs::write(&path, "Host available\nInclude invalid missing %h/config\nInclude chain0\n")?;
+        std::fs::write(root.path().join("invalid"), [0xff])?;
+        for index in 0..12 {
+            std::fs::write(root.path().join(format!("chain{index}")), format!("Host host{index}\nInclude chain{}\n", index + 1))?;
+        }
+        let aliases = super::read_aliases(&path, &AtomicBool::new(false))?;
+        assert!(aliases.limited);
+        assert!(aliases.names.contains(&"available".to_owned()));
+        assert!(aliases.names.contains(&"host7".to_owned()));
+        assert!(!aliases.names.contains(&"host8".to_owned()));
+        // The file-attempt budget also bounds a wide fanout.
+        let includes: String = (0..100).map(|index| format!("Include file{index}\n")).collect();
+        std::fs::write(&path, includes)?;
+        for index in 0..100 { std::fs::write(root.path().join(format!("file{index}")), format!("Host wide{index}\n"))?; }
+        let aliases = super::read_aliases(&path, &AtomicBool::new(false))?;
+        assert!(aliases.limited);
+        assert_eq!(aliases.names.len(), 63);
+        Ok(())
+    }
+
+    #[test]
+    fn include_directory_and_total_byte_budgets_are_shared() -> anyhow::Result<()> {
+        use std::sync::atomic::AtomicBool;
+        let root = tempfile::tempdir()?;
+        for index in 0..6 { std::fs::write(root.path().join(format!("file{index}")), "Host retained\n")?; }
+        let canceled = AtomicBool::new(false);
+        let mut discovery = super::Discovery {
+            canceled: &canceled, base: root.path(), remaining: 20, entries: 3, attempts: 64,
+            visited: Default::default(), names: Default::default(), limited: false,
+        };
+        assert_eq!(discovery.expand("file*")?.len(), 3);
+        assert_eq!(discovery.entries, 0);
+        assert!(discovery.limited);
+        discovery.limited = false;
+        discovery.visit(&root.path().join("file0"), 0)?;
+        discovery.visit(&root.path().join("file1"), 0)?;
+        assert_eq!(discovery.remaining, 0);
+        assert!(discovery.limited);
+        assert_eq!(discovery.names.into_values().collect::<Vec<_>>(), ["retained"]);
+        Ok(())
+    }
+
     #[test]
     fn ssh_urls_validate_ports_ipv6_and_exclude_passwords_or_paths() {
         for (destination, expected) in [

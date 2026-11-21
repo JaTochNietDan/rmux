@@ -13,10 +13,17 @@ default ports. The SSH client handles configuration, host-key
 verification, agent/key use and password prompts inside the terminal.
 **File → SSH Hosts…** (palette/custom action `ssh_hosts`) reads concrete aliases
 from `~/.ssh/config` on demand and opens a searchable picker. Enter connects;
-Refresh rereads the file, and Enter SSH destination opens the direct editor.
-Discovery reads at most 64 KiB and returns at most 256 unique aliases. It skips
-patterns/negations, does not expand Include files or execute Match commands, and
-does not read identity files. Missing configuration yields an empty picker with
+Refresh rereads the configuration, and Enter SSH destination opens the direct editor.
+Discovery follows Include paths (absolute, relative to `~/.ssh`, and `~/`) and
+filename wildcards in lexical order. Nested includes and symlink cycles are handled.
+It reads at most 64 KiB per file / 256 KiB total, attempts at most 64 files with eight
+levels of includes, scans at most 2,048 directory entries, and returns at most 256
+unique aliases. Read errors in includes retain other available aliases; the picker
+marks incomplete discovery. Host patterns/negations are skipped. Context-dependent
+Include tokens, environment variables and `~otheruser` paths are not expanded.
+Host/Match conditions are not evaluated: this is an alias inventory, so conditional
+includes may supply aliases that OpenSSH will not enable for a particular connection.
+No Match commands execute and IdentityFile directives are not followed. Missing configuration yields an empty picker with
 manual entry available. Cancellation and the shared four-file-worker limit apply;
 no idle watcher runs. OpenSSH still reads its full configuration when connecting,
 so aliases outside this discovery subset can be entered manually.

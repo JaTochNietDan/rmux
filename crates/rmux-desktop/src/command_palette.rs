@@ -536,7 +536,7 @@ impl CommandPalette {
             target: PaletteEvent::Run(Box::new(ShowSshHosts)) }];
         let summary = match result {
             Ok(aliases) => {
-                let summary = format!("{} aliases from ~/.ssh/config{} · Includes/patterns not expanded", aliases.names.len(), if aliases.limited { " · Limited to 64 KiB / 256 aliases" } else { "" });
+                let summary = format!("{} aliases from SSH config/includes{} · Host patterns not expanded", aliases.names.len(), if aliases.limited { " · Discovery incomplete" } else { "" });
                 commands.extend(aliases.names.into_iter().map(|destination| Command { title: destination.clone(), subtitle: Some("Enter opens a new SSH workspace".into()), shortcut: None,
                     target: PaletteEvent::Run(Box::new(ConnectSsh { destination })) }));
                 summary
