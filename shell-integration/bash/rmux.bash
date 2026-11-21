@@ -3,6 +3,12 @@
 [[ ${RMUX_SHELL_INTEGRATION-1} != 0 && -z ${_rmux_bash_loaded-} ]] || return 0
 
 _rmux_bash_loaded=1
+# Bash 4.4+ expands PS0 after reading a command and before executing it.
+# Preserve user pre-command prompt content without installing a DEBUG trap.
+# https://www.gnu.org/software/bash/manual/html_node/Bash-Variables.html
+if (( BASH_VERSINFO[0] > 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 4) )); then
+    PS0=$'\e]133;C\a'${PS0-}
+fi
 _rmux_bash_prompt_end=$'\\[\e]133;B\a\\]'
 
 # Run before user prompt hooks, which may overwrite the command's exit status.

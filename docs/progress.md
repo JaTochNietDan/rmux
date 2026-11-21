@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Bash 4.4+ integration now prepends the OSC 133 command-start marker to PS0,
+preserving user content and relying on the existing source-once guard. Older
+Bash leaves PS0 unchanged, and no DEBUG trap is installed. The focused shell
+fixture passed on macOS Bash 3.2, covering compatibility, prompt hooks/status,
+encoded cwd, opt-out and idempotence. A conditional fixture checks modern Bash
+PS0 preservation and emission before command output when that shell is available;
+modern-runtime acceptance is still pending. Automatic login-shell injection is
+still unresolved; existing non-login/manual loading paths carry this change.
+
 `pipe-pane --selection` now feeds the existing bounded terminal selection export
 to its local consumer, with optional `--preserve-wraps`. It leaves focus and
 selection unchanged and rejects `--lines` conflicts in either option order.

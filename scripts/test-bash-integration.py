@@ -48,6 +48,24 @@ with tempfile.TemporaryDirectory(prefix="rmux-bash-") as temporary:
     assert b"USER-STATUS:1" in status_output and b"USER-STATUS:7" in status_output
     for status in [0, 1, 7]:
         assert f"\x1b]133;D;{status}\x07".encode() in status_output, "user prompt hooks must not replace command status"
+    version = subprocess.check_output(["bash", "--noprofile", "--norc", "-c",
+                                       "printf '%s %s' ${BASH_VERSINFO[0]} ${BASH_VERSINFO[1]}"],
+                                      env=environment).decode().split()
+    supports_ps0 = tuple(map(int, version)) >= (4, 4)
+    preexec = run("\n".join([
+        "PS0='user-before>'",
+        source, source,
+        "printf 'PREEXEC:%s:END\\n' \"$PS0\"",
+        "printf 'RUNTIME-%s\\n' okay",
+    ]))
+    marker = b"\x1b]133;C\x07"
+    expected_ps0 = (marker if supports_ps0 else b"") + b"user-before>"
+    assert b"PREEXEC:" + expected_ps0 + b":END" in preexec
+    assert marker + marker not in preexec, "re-sourcing must not duplicate PS0"
+    if supports_ps0:
+        assert marker + b"user-before>RUNTIME-okay" in preexec, "PS0 must precede command output"
+    if not supports_ps0:
+        assert marker not in preexec, "old Bash must keep PS0 unchanged"
     disabled = run(source, dict(environment, RMUX_SHELL_INTEGRATION="0"))
     assert b"\x1b]133;" not in disabled and b"\x1b]7;" not in disabled
-print("bash integration: existing hook, idempotence, prompt replacement, encoded cwd, command status and opt-out passed")
+print("bash integration: existing hook, idempotence, prompt replacement, encoded cwd, command status, version-gated PS0 preservation and opt-out passed")

@@ -1500,16 +1500,19 @@ A leading hook captures the command's status and returns it unchanged for the
 first user prompt hook; the trailing integration hook emits the captured value.
 User hooks therefore cannot accidentally turn a failed command into a successful
 status report. The first prompt does not emit a synthetic completion. This does
-not add a command-start DEBUG trap or live running-command tracking.
+not install a DEBUG trap. Bash 4.4+ prepends an OSC 133 command-start marker to
+`PS0`, preserving its existing contents; Bash 3.2 retains prompt/completion markers
+without command-start reporting. Prompt themes that later replace PS0 can remove
+the start marker.
 
 Bash integration can currently be sourced manually from
 `shell-integration/bash/rmux.bash` (also included in newly built macOS bundles).
 It reports encoded working directories and prompt boundaries, preserves existing
 `PROMPT_COMMAND` hooks, and supports `RMUX_SHELL_INTEGRATION=0`. Run
-`mise run test-bash-integration` for its focused check. Automatic Bash login startup,
-and command-start markers are still pending; the
-current fixture covers macOS Bash 3.2, with modern Bash array-hook runtime
-coverage still pending.
+`mise run test-bash-integration` for its focused check. Automatic Bash login startup
+is still pending. The fixture checks command-start emission on Bash 4.4+ and
+unchanged PS0 on older versions; local execution covers macOS Bash 3.2. Modern
+Bash PS0/array-hook runtime acceptance remains pending.
 
 Unix shells launch as interactive login shells by default. Set `RMUX_SHELL_LOGIN=0`
 before launching rmux to use interactive non-login shells instead. In this mode,
