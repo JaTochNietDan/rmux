@@ -64,7 +64,10 @@ overlong link targets are disabled; opening failures appear in the terminal's
 existing error display. Ordinary Open Link and modifier-click retain their
 external-browser behavior.
 The webview is created on first navigation and uses an ephemeral profile. Closing
-the window drops its owner. Page-load callbacks coalesce through one queued wakeup.
+the window drops its owner. Page-load and document-title callbacks coalesce through one queued wakeup, retaining
+the latest value of each independently. Native window titles include the page title
+and rmux identity; page titles are capped at 256 Unicode characters with control
+characters replaced by spaces. A new load clears the previous page title.
 
 This remains experimental: native interaction is unverified, windows are not yet
 workspace surfaces, and browser windows are omitted from session snapshots.

@@ -45,6 +45,23 @@ fn rect(bounds: Bounds<Pixels>) -> wry::Rect {
         size: wry::dpi::LogicalSize::new(f64::from(f32::from(bounds.size.width)), f64::from(f32::from(bounds.size.height))).into(),
     }
 }
+// Coalesce independent native callbacks without losing a load event when a
+// title event arrives before the single queued wakeup is consumed.
+#[derive(Default)]
+struct PageUpdates {
+    load: Option<(bool, String)>,
+    title: Option<String>,
+}
+impl PageUpdates {
+    fn loaded(&mut self, finished: bool, url: String) {
+        if url.len() > 4096 { return; }
+        if !finished { self.title = Some(String::new()); }
+        self.load = Some((finished, url));
+    }
+    fn titled(&mut self, title: &str) {
+        self.title = Some(title.chars().take(256).map(|ch| if ch.is_control() { ' ' } else { ch }).collect());
+    }
+}
 #[derive(Default)]
 struct Host { view: Option<wry::WebView>, bounds: Option<Bounds<Pixels>>, pending_url: Option<String> }
 struct BrowserWindow {
@@ -52,7 +69,9 @@ struct BrowserWindow {
     input: Entity<TextField>,
     status: String,
     committed: String,
-    latest: Arc<std::sync::Mutex<Option<(bool, String)>>>,
+    page_title: String,
+    displayed_title: String,
+    latest: Arc<std::sync::Mutex<PageUpdates>>,
     wake: async_channel::Sender<()>,
     _updates: Task<()>,
 }
@@ -74,22 +93,25 @@ impl BrowserWindow {
             }
         }).detach();
         input.read(cx).focus.focus(window);
-        let latest = Arc::new(std::sync::Mutex::new(None));
+        let latest = Arc::new(std::sync::Mutex::new(PageUpdates::default()));
         let (wake, receive) = async_channel::bounded(1);
         let updates = latest.clone();
         let task = cx.spawn(async move |entity, cx| {
             while receive.recv().await.is_ok() {
-                let update = updates.lock().ok().and_then(|mut value| value.take());
-                if let Some((finished, url)) = update {
+                let update = updates.lock().ok().map(|mut value| std::mem::take(&mut *value));
+                if let Some(update) = update {
                     if entity.update(cx, |this: &mut Self, cx| {
-                        this.committed = url;
-                        this.status = if finished { "Loaded" } else { "Loading…" }.into();
+                        if let Some((finished, url)) = update.load {
+                            this.committed = url;
+                            this.status = if finished { "Loaded" } else { "Loading…" }.into();
+                        }
+                        if let Some(title) = update.title { this.page_title = title; }
                         cx.notify();
                     }).is_err() { break; }
                 }
             }
         });
-        Self { host: Rc::new(RefCell::new(Host { pending_url: initial, ..Default::default() })), input, status: "Enter an address to create an ephemeral browser.".into(), committed: String::new(), latest, wake, _updates: task }
+        Self { host: Rc::new(RefCell::new(Host { pending_url: initial, ..Default::default() })), input, status: "Enter an address to create an ephemeral browser.".into(), committed: String::new(), page_title: String::new(), displayed_title: String::new(), latest, wake, _updates: task }
     }
     fn navigate(&mut self, url: &str, window: &Window) -> anyhow::Result<()> {
         let mut host = self.host.borrow_mut();
@@ -97,14 +119,20 @@ impl BrowserWindow {
         let bounds = host.bounds.ok_or_else(|| anyhow::anyhow!("Browser layout is not ready"))?;
         let latest = self.latest.clone();
         let wake = self.wake.clone();
+        let title_latest = latest.clone();
+        let title_wake = wake.clone();
         host.view = Some(wry::WebViewBuilder::new().with_incognito(true).with_url(url)
             .with_bounds(rect(bounds)).with_navigation_handler(|url| allowed(&url))
             .with_new_window_req_handler(|_, _| wry::NewWindowResponse::Deny)
             .with_download_started_handler(|_, _| false)
+            .with_document_title_changed_handler(move |title| {
+                if let Ok(mut value) = title_latest.lock() { value.titled(&title); }
+                let _ = title_wake.try_send(());
+            })
             .with_on_page_load_handler(move |event, url| {
                 // A single coalesced wakeup and bounded URL avoid unbounded page events.
                 if url.len() <= 4096 {
-                    if let Ok(mut value) = latest.lock() { *value = Some((matches!(event, wry::PageLoadEvent::Finished), url)); }
+                    if let Ok(mut value) = latest.lock() { value.loaded(matches!(event, wry::PageLoadEvent::Finished), url); }
                     let _ = wake.try_send(());
                 }
             }).build_as_child(window)?);
@@ -133,7 +161,13 @@ impl BrowserWindow {
     }
 }
 impl Render for BrowserWindow {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let title = if self.page_title.is_empty() { "rmux · Browser (Experimental)".to_owned() }
+            else { format!("{} — rmux Browser (Experimental)", self.page_title) };
+        if self.displayed_title != title {
+            window.set_window_title(&title);
+            self.displayed_title = title;
+        }
         let host = self.host.clone();
         let entity = cx.weak_entity();
         let (back, forward, loaded) = self.host.borrow().view.as_ref().map(|view|
@@ -226,7 +260,25 @@ fn open_initial(initial: Option<String>, cx: &mut App) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{address, allowed, can_open_link};
+    use super::{address, allowed, can_open_link, PageUpdates};
+    #[test]
+    fn browser_title_updates_coalesce_without_losing_load_state() {
+        let mut updates = PageUpdates::default();
+        updates.loaded(false, "https://example.com".into());
+        updates.titled(&format!("A\nB{}", "界".repeat(1000)));
+        updates.loaded(true, "https://example.com/final".into());
+        let batch = std::mem::take(&mut updates);
+        assert_eq!(batch.load, Some((true, "https://example.com/final".into())));
+        let title = batch.title.unwrap();
+        assert_eq!(title.chars().count(), 256);
+        assert!(title.starts_with("A B"));
+        assert!(updates.load.is_none() && updates.title.is_none());
+        updates.titled("old page");
+        updates.loaded(false, "https://example.org".into());
+        assert_eq!(updates.title.as_deref(), Some(""));
+        updates.titled("");
+        assert_eq!(updates.title.as_deref(), Some(""));
+    }
     #[test]
     fn terminal_browser_link_policy_is_bounded_and_explicit() {
         assert!(can_open_link("http://localhost:3000/path?q=hello"));

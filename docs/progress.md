@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Experimental browser windows now show document titles in native window labels,
+retaining the rmux/experimental suffix. Titles are limited to 256 Unicode characters
+and control characters become spaces. Page/title callbacks share one queued wakeup
+while retaining independent latest values, so a title burst cannot overwrite load
+status/URL updates. New loads clear stale titles; empty titles use the app label.
+Five matching `browser_` tests passed, including a new Unicode/title-bound and
+coalesced-load-state regression; the browser-enabled desktop compiled. Native
+window-title and callback-order acceptance remains pending. The previous goal turn
+made progress with committed/pushed terminal-to-browser link opening.
+
 Browser-enabled terminal context menus now expose Open Link in rmux Browser.
 The menu retains its captured hyperlink target, uses the browser's scheme/credential/
 length policy for enablement, and reports opening failures through the terminal
