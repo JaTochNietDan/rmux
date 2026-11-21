@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Changed the macOS command-palette default to Cmd+P as requested; Linux/Windows
+retain Ctrl+Shift+P. Palette rows now explicitly fill the list width so selection
+backgrounds and trailing shortcut badges align. Added a padded, bordered search
+field, neutral hover color and separated concise footer. Updated user-facing
+shortcut documentation. Desktop compilation passes; native visual review of
+these unreleased changes is pending.
+
 Added the requested macOS Cmd+[ / ] split-pane cycling, alongside the existing
 Cmd+Shift+[ / ] tab cycling. Both pairs appear in the native menu. Shifted
 brackets also accept GPUI's macOS `{` / `}` events, which omit the Shift bit;

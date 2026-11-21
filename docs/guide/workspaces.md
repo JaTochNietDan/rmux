@@ -304,7 +304,7 @@ terminal's font family; Use Configured Font restores both the configured family
 and size. Custom shortcuts can bind these separately as `reset_font_size` and
 `use_configured_font`, or use `increase_font_size`/`decrease_font_size` for steps.
 
-Cmd+Shift+P opens the command palette (Ctrl+Shift+P on Linux/Windows). Type words
+Cmd+P opens the command palette (Ctrl+Shift+P on Linux/Windows). Type words
 to filter implemented actions and workspace names (abbreviations such as `splt blw`
 also match, with contiguous matches ranked first), use Up/Down and Enter to run
 an action or switch workspaces, or Escape to return to the previous focus.

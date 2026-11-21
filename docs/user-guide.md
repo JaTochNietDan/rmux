@@ -67,7 +67,7 @@ These are defaults. Custom bindings appear in menus and the command palette.
 | Rename the workspace | Cmd+Shift+R | Ctrl+Shift+R |
 | Open Settings | Cmd+, | Ctrl+, |
 
-On macOS, **Cmd+Shift+P** opens the command palette, **Cmd+T** opens a tab, and
+On macOS, **Cmd+P** opens the command palette, **Cmd+T** opens a tab, and
 **Cmd+B** toggles the sidebar. Menus and the palette also expose these actions
 without requiring a shortcut.
 

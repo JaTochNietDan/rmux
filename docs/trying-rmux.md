@@ -20,7 +20,7 @@ task. Quit an older running rmux before opening the refreshed bundle.
 
 | Task | Shortcut |
 | --- | --- |
-| Command palette and workspace/terminal search | Cmd Shift P |
+| Command palette and workspace/terminal search | Cmd P |
 | New workspace / window | Cmd N / Cmd Shift N |
 | New tab / searchable tab picker | Cmd T / Cmd Shift T |
 | Split right / below | Cmd D / Cmd Shift D |

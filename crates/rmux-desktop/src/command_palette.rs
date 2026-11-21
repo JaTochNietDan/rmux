@@ -1001,6 +1001,7 @@ impl CommandPalette {
         });
         div()
             .id(("command", command))
+            .w_full().min_w_0()
             .px_3()
             .h(px(self.command_height(command)))
             .text_sm().line_height(px(20.))
@@ -1014,7 +1015,7 @@ impl CommandPalette {
             .gap_3()
             .cursor_pointer()
             .when(selected, |row| row.bg(rgb(0x354969)))
-            .hover(move |row| row.bg(rgb(if selected { 0x40577b } else { 0x303b50 })))
+            .hover(move |row| row.bg(rgb(if selected { 0x40577b } else { 0x303030 })))
             .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
                 if !event.standard_click() { return; }
                 let Some(row) = this.search.matches.iter().position(|index| *index == command) else { return; };
@@ -1038,7 +1039,7 @@ impl CommandPalette {
                 row.child(
                     div().id(("command-shortcut", command))
                         .flex_shrink_0().max_w(relative(0.4)).truncate()
-                        .text_xs()
+                        .text_xs().px_2().py_1().rounded_sm().bg(rgb(0x2b2b2b))
                         .text_color(rgb(0xa0a0a0))
                         .tooltip({ let hint: SharedString = shortcut.clone().into(); move |_, cx| cx.new(|_| pane_view::ControlHint(hint.clone())).into() })
                         .child(shortcut),
@@ -1328,7 +1329,11 @@ impl Render for CommandPalette {
                         .child(if self.wrap_preview { "Single-line excerpts" } else { "Wrap excerpts" }))
                     .when(self.wrap_preview, |bar| bar.child(div().text_xs().text_color(rgb(0xa0a0a0)).child("Up to 4 visual lines")))
             ))
-            .child(div().flex_shrink_0().p_3().child(self.input.clone()))
+            .child(div().flex_shrink_0().p_3().child(
+                div().w_full().px_3().py_2().rounded_md()
+                    .border_1().border_color(rgb(0x4b5668)).bg(rgb(0x12141a))
+                    .child(self.input.clone())
+            ))
             .child(if self.search.matches.is_empty() {
                 div().p_3().text_sm().child(self.empty_message).into_any_element()
             } else {
@@ -1361,10 +1366,11 @@ impl Render for CommandPalette {
                     .flex_shrink_0()
                     .px_3()
                     .py_2()
+                    .border_t_1().border_color(rgb(0x363636))
                     .flex().flex_wrap().items_center().gap_2()
                     .text_xs()
                     .text_color(rgb(0xa0a0a0))
-                    .child(div().flex_1().min_w_0().child(self.feedback.unwrap_or("↑↓ select · PgUp/PgDn jump · Enter run · Esc close")))
+                    .child(div().flex_1().min_w_0().child(self.feedback.unwrap_or("↑↓ Navigate     ↵ Run     Esc Close")))
                     .when(has_preview_file, |footer| footer.child(
                         div().id("preview-selected-hex").px_2().py_1().rounded_sm()
                             .cursor_pointer().text_color(rgb(0xffffff)).bg(rgb(0x353535))

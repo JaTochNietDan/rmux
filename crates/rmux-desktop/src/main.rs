@@ -3711,7 +3711,7 @@ fn main() {
         if cfg!(target_os = "macos") {
             cx.bind_keys([
                 KeyBinding::new("cmd-q", Quit, None),
-                KeyBinding::new("cmd-shift-p", ShowCommandPalette, None),
+                KeyBinding::new("cmd-p", ShowCommandPalette, None),
                 KeyBinding::new("cmd-shift-f", ShowTerminalSearch, None),
                 KeyBinding::new("cmd-ctrl-left", FocusLeft, None),
                 KeyBinding::new("cmd-ctrl-right", FocusRight, None),
