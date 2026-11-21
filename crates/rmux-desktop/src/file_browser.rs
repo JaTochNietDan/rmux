@@ -2,6 +2,27 @@
 use std::path::PathBuf;
 use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
 #[derive(Default)]
+pub struct History { paths: Vec<PathBuf>, cursor: usize }
+impl History {
+    pub fn adjacent(&self, forward: bool) -> Option<(usize, PathBuf)> {
+        let index = if forward { self.cursor.checked_add(1)? } else { self.cursor.checked_sub(1)? };
+        self.paths.get(index).cloned().map(|path| (index, path))
+    }
+    pub fn commit(&mut self, path: PathBuf, navigation: Option<usize>) {
+        if path.as_os_str().len() > 8192 { return; }
+        if let Some(index) = navigation.filter(|index| self.paths.get(*index) == Some(&path)) {
+            self.cursor = index;
+            return;
+        }
+        if self.paths.get(self.cursor) == Some(&path) { return; }
+        self.paths.truncate(self.cursor + 1);
+        self.paths.push(path);
+        if self.paths.len() > 32 { self.paths.remove(0); }
+        self.cursor = self.paths.len() - 1;
+    }
+}
+
+#[derive(Default)]
 struct LoadLimit(AtomicUsize);
 pub struct Permit(&'static LoadLimit);
 impl LoadLimit {
@@ -352,5 +373,28 @@ mod tests {
         assert!(super::list(root.path().join("a 世界.sh")).is_err());
         assert!(super::list("relative".into()).is_err());
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod history_tests {
+    use super::*;
+    #[test]
+    fn folder_history_supports_back_forward_branching_and_bounds() {
+        let mut history = History::default();
+        assert!(history.adjacent(false).is_none());
+        for path in ["/a", "/b", "/c"] { history.commit(path.into(), None); }
+        let (index, path) = history.adjacent(false).unwrap();
+        assert_eq!(path, PathBuf::from("/b"));
+        // Failed reads do not call commit, leaving the cursor unchanged.
+        assert_eq!(history.adjacent(false).unwrap().0, index);
+        history.commit(path.clone(), Some(index));
+        history.commit(path, None); // Refresh preserves Forward.
+        assert_eq!(history.adjacent(true).unwrap().1, PathBuf::from("/c"));
+        history.commit("/branch".into(), None);
+        assert!(history.adjacent(true).is_none());
+        for index in 0..40 { history.commit(format!("/{index}").into(), None); }
+        assert_eq!(history.paths.len(), 32);
+        assert_eq!(history.paths[0], PathBuf::from("/8"));
     }
 }

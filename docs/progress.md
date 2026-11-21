@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Added bounded per-window local-folder Back/Forward navigation to the file browser,
+with visible entries only when available and custom `file_back` / `file_forward`
+actions. History commits only after successful reads are accepted by the focused
+window, retains up to 32 paths (8 KiB each), preserves Forward on refresh and drops
+the forward branch on a new destination. It adds no idle reads or persistence.
+Desktop test compilation and a focused history cursor/branch/refresh/bounds test
+passed. Native async navigation/focus and visual acceptance remain pending.
+
 SSH host picker rows now offer Edit destination and Shift+Enter, opening the
 existing validated destination editor with the selected alias/session/saved target
 prefilled and selected. Plain Enter retains direct connection. The transition

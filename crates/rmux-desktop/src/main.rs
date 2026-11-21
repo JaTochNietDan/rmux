@@ -473,6 +473,8 @@ actions!(
         ShowSshHosts,
         CopySearchExcerpt,
         OpenFolderBrowser,
+        FileBrowserBack,
+        FileBrowserForward,
         ShowTerminalMenu,
         CopySelectionWithLineBreaks,
         CopyWorkingDirectory,

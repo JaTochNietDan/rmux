@@ -120,6 +120,7 @@ pub(super) struct WorkspaceWindow {
     palette: Option<(Entity<command_palette::CommandPalette>, Option<FocusHandle>)>,
     font_picker_job: Option<Task<()>>,
     file_browser_job: Option<Task<()>>,
+    file_history: file_browser::History,
     file_browser_cancel: Option<file_browser::Cancellation>,
     terminal_search_job: Option<Task<()>>,
     terminal_search_query: String,
@@ -2568,6 +2569,14 @@ impl WorkspaceWindow {
         self.install_palette(palette, focus, window, cx);
     }
     fn browse_directory(&mut self, path: std::path::PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+        self.browse_directory_at(path, None, window, cx);
+    }
+    fn browse_history(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some((index, path)) = self.file_history.adjacent(forward) {
+            self.browse_directory_at(path, Some(index), window, cx);
+        }
+    }
+    fn browse_directory_at(&mut self, path: std::path::PathBuf, navigation: Option<usize>, window: &mut Window, cx: &mut Context<Self>) {
         if self.file_browser_job.is_some() || self.automation_available(cx).is_err() { return; }
         let Some(focus) = window.focused(cx) else { return; };
         let permit = match file_browser::Permit::acquire() {
@@ -2589,7 +2598,10 @@ impl WorkspaceWindow {
                 if focus.is_focused(window) && this.automation_available(cx).is_ok() {
                     match result {
                         Ok(listing) => {
-                            let palette = cx.new(|cx| command_palette::CommandPalette::files(listing, window, cx));
+                            this.file_history.commit(listing.path.clone(), navigation);
+                            let back = this.file_history.adjacent(false).is_some();
+                            let forward = this.file_history.adjacent(true).is_some();
+                            let palette = cx.new(|cx| command_palette::CommandPalette::files(listing, back, forward, window, cx));
                             this.install_palette(palette, Some(focus), window, cx);
                         }
                         Err(error) => {
@@ -3111,6 +3123,7 @@ impl WorkspaceWindow {
             palette: None,
             font_picker_job: None,
             file_browser_job: None,
+            file_history: Default::default(),
             file_browser_cancel: None,
             terminal_search_job: None,
             terminal_search_query: String::new(),
@@ -3322,6 +3335,7 @@ impl WorkspaceWindow {
             palette: None,
             font_picker_job: None,
             file_browser_job: None,
+            file_history: Default::default(),
             file_browser_cancel: None,
             terminal_search_job: None,
             terminal_search_query: String::new(),
@@ -4104,6 +4118,8 @@ impl Render for WorkspaceWindow {
                 }
             }))
             .on_action(cx.listener(|this, action: &SearchTerminalOutput, window, cx| this.search_terminal_output(action.query.clone(), window, cx)))
+            .on_action(cx.listener(|this, _: &FileBrowserBack, window, cx| this.browse_history(false, window, cx)))
+            .on_action(cx.listener(|this, _: &FileBrowserForward, window, cx| this.browse_history(true, window, cx)))
             .on_action(cx.listener(|this, _: &OpenFolderBrowser, window, cx| this.choose_local_path(true, window, cx)))
             .on_action(cx.listener(|this, action: &RevealLocalPath, _, cx| {
                 if this.automation_available(cx).is_ok() && action.path.is_absolute() {
