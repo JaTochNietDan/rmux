@@ -158,6 +158,7 @@ pub struct CommandPalette {
     directory_input: bool,
     terminal_search_input: bool,
     ssh_input: bool,
+    hex_preview: bool,
     input: Entity<text_field::TextField>,
     heading: &'static str,
     empty_message: &'static str,
@@ -490,6 +491,8 @@ impl CommandPalette {
         commands.push(Command { title: "Copy path".into(), subtitle: Some(path.display().to_string()), shortcut: None,
             target: PaletteEvent::Run(Box::new(CopyLocalPath { path: path.clone() })) });
         commands.push(reveal_local_path(&path));
+        if !directory { commands.push(Command { title: "Preview as Hex".into(), subtitle: Some("Read-only bytes · First 8 KiB".into()), shortcut: None,
+            target: PaletteEvent::Run(Box::new(PreviewHexFile { path: path.clone() })) }); }
         commands.push(Command { title: "Retry".into(), subtitle: Some(error), shortcut: None,
             target: PaletteEvent::Run(if directory { Box::new(BrowseDirectory { path }) } else { Box::new(PreviewLocalFile { path }) }) });
         let mut palette = Self::with_commands(commands, if directory { "Could not read directory" } else { "Could not preview file" }, "Clear the search to see recovery actions", window, cx);
@@ -507,18 +510,21 @@ impl CommandPalette {
         commands.push(Command { title: "Copy file path".into(), subtitle: Some(preview.path.display().to_string()), shortcut: None,
             target: PaletteEvent::Run(Box::new(CopyLocalPath { path: preview.path.clone() })) });
         commands.push(reveal_local_path(&preview.path));
-        commands.push(Command { title: "Copy Preview Text".into(),
-            subtitle: Some(if preview.truncated { "Copies captured text only · Preview is incomplete" } else { "Preserves original line endings" }.into()), shortcut: None,
+        commands.push(Command { title: if preview.hex { "Copy Hex Dump" } else { "Copy Preview Text" }.into(),
+            subtitle: Some(if preview.truncated { "Copies captured text only · Preview is incomplete" } else if preview.hex { "Copies the formatted hex dump, not raw bytes" } else { "Preserves original line endings" }.into()), shortcut: None,
             target: PaletteEvent::Run(Box::new(CopyPreviewText { text: preview.contents })) });
+        commands.push(Command { title: if preview.hex { "Preview as Text" } else { "Preview as Hex" }.into(), subtitle: None, shortcut: None,
+            target: PaletteEvent::Run(if preview.hex { Box::new(PreviewLocalFile { path: preview.path.clone() }) } else { Box::new(PreviewHexFile { path: preview.path.clone() }) }) });
         commands.push(Command { title: "Refresh preview".into(), subtitle: empty.then(|| "Empty file · No text to preview".into()), shortcut: None,
-            target: PaletteEvent::Run(Box::new(PreviewLocalFile { path: preview.path })) });
+            target: PaletteEvent::Run(if preview.hex { Box::new(PreviewHexFile { path: preview.path }) } else { Box::new(PreviewLocalFile { path: preview.path }) }) });
         commands.extend(preview.lines.into_iter().enumerate().map(|(index, text)| {
             let title = file_browser::preview_line_title(&text, "");
             let copy_hint = if preview.partial_line == Some(index) { "Partial line · Enter copies only the captured text" } else { "Enter copies this preview line" };
             Command { title, subtitle: Some(format!("Line {} · {copy_hint}", index + 1)), shortcut: None,
                 target: PaletteEvent::Run(Box::new(CopyPreviewLine { text })) }
         }));
-        let mut palette = Self::with_commands(commands, if preview.truncated { "Text preview · Limited to 64 KiB / 512 lines" } else if empty { "Text preview · Empty file" } else { "Text preview · Search lines · Read only" }, "No matching preview lines", window, cx);
+        let mut palette = Self::with_commands(commands, if preview.hex && preview.truncated { "Hex preview · First 8 KiB / 1,024 rows" } else if preview.hex { "Hex preview · Search bytes or ASCII · Read only" } else if preview.truncated { "Text preview · Limited to 64 KiB / 512 lines" } else if empty { "Text preview · Empty file" } else { "Text preview · Search lines · Read only" }, "No matching preview lines", window, cx);
+        palette.hex_preview = preview.hex;
         palette.location = Some(location);
         palette
     }
@@ -664,7 +670,7 @@ impl CommandPalette {
         )
         .detach();
         Self {
-            input, heading, empty_message, buffer_rename: None, feedback: None, directory_input: false, terminal_search_input: false, ssh_input: false, location: None,
+            input, heading, empty_message, buffer_rename: None, feedback: None, directory_input: false, terminal_search_input: false, ssh_input: false, hex_preview: false, location: None,
             search: palette_match::RankedSearch::new(commands
                 .iter()
                 .map(Command::search_text)
@@ -698,6 +704,7 @@ impl CommandPalette {
             .px_3()
             .h(px(result_row_height(self.commands[command].subtitle.is_some())))
             .text_sm().line_height(px(20.))
+            .when(self.hex_preview && self.commands[command].preview_line().is_some(), |row| row.font_family(FONT_FAMILY))
             .flex()
             .items_center()
             .gap_3()

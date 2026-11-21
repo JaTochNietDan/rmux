@@ -283,6 +283,13 @@ bindings. History retains at most 32 paths and is not persisted. Refresh preserv
 Forward, while opening a different folder after Back replaces the forward branch.
 Failed or canceled reads do not change history. Enter on a regular file opens a
 read-only text preview; a symbolic link copies its path. Hidden entries are included.
+**Preview as Hex** is available in text previews and file-preview errors, including
+binary/invalid-encoding errors. It displays the first 8 KiB as searchable eight-byte
+rows with hexadecimal offsets and an ASCII column; non-printable bytes appear as
+dots. Copy Hex Dump copies the formatted text, not raw file bytes. Refresh preserves
+hex mode, and Preview as Text switches back. Hex previews are read-only, capped at
+1,024 rows, and share the regular-file/symlink checks, worker limit and cancellation
+used by text previews.
 **File → Open Folder…**, the command palette, or the `open_folder` custom action
 opens the native folder chooser. This works without a terminal working directory
 and loads the selected folder asynchronously. Open Folder is also available in

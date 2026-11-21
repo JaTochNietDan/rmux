@@ -2787,6 +2787,9 @@ impl WorkspaceWindow {
         }).detach();
     }
     fn preview_local_file(&mut self, path: std::path::PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+        self.preview_file_mode(path, false, window, cx);
+    }
+    fn preview_file_mode(&mut self, path: std::path::PathBuf, hex: bool, window: &mut Window, cx: &mut Context<Self>) {
         if self.file_browser_job.is_some() || self.automation_available(cx).is_err() { return; }
         let Some(focus) = window.focused(cx) else { return; };
         let permit = match file_browser::Permit::acquire() {
@@ -2794,17 +2797,17 @@ impl WorkspaceWindow {
             Err(error) => { self.notice = Some(error.to_string()); cx.notify(); return; }
         };
         let executor = cx.background_executor().clone();
-        self.notice = Some("Loading text preview…".into());
+        self.notice = Some("Loading file preview…".into());
         let cancellation = file_browser::Cancellation::default();
         let canceled = cancellation.0.clone();
         self.file_browser_cancel = Some(cancellation);
         self.file_browser_job = Some(cx.spawn_in(window, async move |entity, cx| {
             let target = path.clone();
-            let result = executor.spawn(async move { let _permit = permit; file_browser::preview_cancellable(path, &canceled) }).await;
+            let result = executor.spawn(async move { let _permit = permit; if hex { file_browser::hex_preview_cancellable(path, &canceled) } else { file_browser::preview_cancellable(path, &canceled) } }).await;
             let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
                 this.file_browser_job = None;
                 this.file_browser_cancel = None;
-                if this.notice.as_deref() == Some("Loading text preview…") { this.notice = None; }
+                if this.notice.as_deref() == Some("Loading file preview…") { this.notice = None; }
                 if focus.is_focused(window) && this.automation_available(cx).is_ok() {
                     match result {
                         Ok(preview) => {
@@ -4090,6 +4093,7 @@ impl Render for WorkspaceWindow {
                 }
                 this.start_workspace(Some(action.path.clone()), window, cx);
             }))
+            .on_action(cx.listener(|this, action: &PreviewHexFile, window, cx| this.preview_file_mode(action.path.clone(), true, window, cx)))
             .on_action(cx.listener(|this, action: &PreviewLocalFile, window, cx| this.preview_local_file(action.path.clone(), window, cx)))
             .on_action(cx.listener(|this, _: &OpenTextPreview, window, cx| this.choose_local_path(false, window, cx)))
             .on_action(cx.listener(|this, _: &ShowTerminalSearch, window, cx| {

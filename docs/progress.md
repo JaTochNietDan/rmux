@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Added explicit read-only hexadecimal file preview from text previews and preview
+errors. A shared bounded regular-file reader serves both modes; hex reads at most
+8 KiB plus a truncation sentinel and renders 1,024 eight-byte rows with offsets,
+hex bytes and printable ASCII. Rows use monospace text, remain searchable/copyable,
+and support Copy Hex Dump, refresh-in-mode and switching back to text. Binary bytes
+never execute or decode into terminal controls. Desktop compilation and all ten
+file-browser tests passed (manual benchmark ignored), including binary formatting,
+offsets, source limits, cancellation and existing text/symlink regressions. Native
+preview navigation/visual acceptance remains pending; rich images/documents and
+remote filesystem browsing remain separate F01 gaps.
+
 Added bounded per-window local-folder Back/Forward navigation to the file browser,
 with visible entries only when available and custom `file_back` / `file_forward`
 actions. History commits only after successful reads are accepted by the focused

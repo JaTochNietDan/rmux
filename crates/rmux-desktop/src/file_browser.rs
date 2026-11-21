@@ -88,7 +88,7 @@ pub fn entered_directory(text: &str) -> Result<PathBuf, &'static str> {
 }
 pub struct Entry { pub path: PathBuf, pub directory: bool, pub symlink: bool }
 pub struct Listing { pub path: PathBuf, pub entries: Vec<Entry>, pub truncated: bool, pub unavailable: usize }
-pub struct Preview { pub path: PathBuf, pub lines: Vec<String>, pub contents: String, pub truncated: bool, pub partial_line: Option<usize> }
+pub struct Preview { pub hex: bool, pub path: PathBuf, pub lines: Vec<String>, pub contents: String, pub truncated: bool, pub partial_line: Option<usize> }
 fn decode_preview(bytes: &[u8], truncated: bool) -> anyhow::Result<std::borrow::Cow<'_, str>> {
     use std::borrow::Cow;
     let little_endian = if bytes.starts_with(&[0xff, 0xfe]) { Some(true) }
@@ -114,7 +114,7 @@ fn decode_preview(bytes: &[u8], truncated: bool) -> anyhow::Result<std::borrow::
 }
 #[cfg(test)]
 fn preview(path: PathBuf) -> anyhow::Result<Preview> { preview_cancellable(path, &AtomicBool::new(false)) }
-pub fn preview_cancellable(path: PathBuf, canceled: &AtomicBool) -> anyhow::Result<Preview> {
+fn read_preview_bytes(path: &std::path::Path, canceled: &AtomicBool, cap: usize) -> anyhow::Result<(Vec<u8>, bool)> {
     use std::io::Read;
     check_cancel(canceled)?;
     anyhow::ensure!(path.is_absolute(), "Preview requires an absolute file path");
@@ -130,9 +130,9 @@ pub fn preview_cancellable(path: PathBuf, canceled: &AtomicBool) -> anyhow::Resu
     anyhow::ensure!(file.metadata()?.is_file(), "Preview supports regular files only");
     let mut bytes = Vec::new();
     let mut chunk = [0; 8192];
-    while bytes.len() < 65537 {
+    while bytes.len() < (cap + 1) {
         check_cancel(canceled)?;
-        let limit = chunk.len().min(65537 - bytes.len());
+        let limit = chunk.len().min((cap + 1) - bytes.len());
         let count = match file.read(&mut chunk[..limit]) {
             Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
             result => result?,
@@ -141,8 +141,13 @@ pub fn preview_cancellable(path: PathBuf, canceled: &AtomicBool) -> anyhow::Resu
         bytes.extend_from_slice(&chunk[..count]);
     }
     check_cancel(canceled)?;
-    let mut truncated = bytes.len() > 65536;
-    bytes.truncate(65536);
+    let truncated = bytes.len() > cap;
+    bytes.truncate(cap);
+    Ok((bytes, truncated))
+}
+
+pub fn preview_cancellable(path: PathBuf, canceled: &AtomicBool) -> anyhow::Result<Preview> {
+    let (bytes, mut truncated) = read_preview_bytes(&path, canceled, 65536)?;
     let text = decode_preview(&bytes, truncated)?;
     anyhow::ensure!(!text.contains('\0'), "Binary files cannot be previewed as text");
     let mut source = text.lines();
@@ -154,8 +159,28 @@ pub fn preview_cancellable(path: PathBuf, canceled: &AtomicBool) -> anyhow::Resu
     // Retain original separators, including CRLF and a trailing newline, while
     // applying exactly the same line cap as the displayed preview.
     let contents = text.split_inclusive('\n').take(512).collect();
-    Ok(Preview { path, lines, contents, truncated, partial_line })
+    Ok(Preview { hex: false, path, lines, contents, truncated, partial_line })
 }
+pub fn hex_preview_cancellable(path: PathBuf, canceled: &AtomicBool) -> anyhow::Result<Preview> {
+    use std::fmt::Write;
+    let (bytes, truncated) = read_preview_bytes(&path, canceled, 8192)?;
+    let mut lines = Vec::with_capacity(bytes.len().div_ceil(8));
+    for (index, chunk) in bytes.chunks(8).enumerate() {
+        check_cancel(canceled)?;
+        let mut line = format!("{:08x}  ", index * 8);
+        for column in 0..8 {
+            if let Some(byte) = chunk.get(column) { write!(line, "{byte:02x} ")?; }
+            else { line.push_str("   "); }
+        }
+        line.push_str(" |");
+        for byte in chunk { line.push(if byte.is_ascii_graphic() || *byte == b' ' { *byte as char } else { '.' }); }
+        line.push('|');
+        lines.push(line);
+    }
+    let contents = lines.join("\n");
+    Ok(Preview { hex: true, path, lines, contents, truncated, partial_line: None })
+}
+
 #[cfg(test)]
 fn list(path: PathBuf) -> anyhow::Result<Listing> { list_cancellable(path, &AtomicBool::new(false)) }
 pub fn list_cancellable(path: PathBuf, canceled: &AtomicBool) -> anyhow::Result<Listing> {
@@ -396,5 +421,31 @@ mod history_tests {
         for index in 0..40 { history.commit(format!("/{index}").into(), None); }
         assert_eq!(history.paths.len(), 32);
         assert_eq!(history.paths[0], PathBuf::from("/8"));
+    }
+}
+
+#[cfg(test)]
+mod hex_tests {
+    use super::*;
+    #[test]
+    fn hex_preview_formats_binary_offsets_and_enforces_limits() -> anyhow::Result<()> {
+        let root = tempfile::tempdir()?;
+        let path = root.path().join("binary");
+        std::fs::write(&path, [0, 0xff, b'A', b' ', b'\n', 0x7f, b'Z', b'!', b'x'])?;
+        let preview = hex_preview_cancellable(path.clone(), &AtomicBool::new(false))?;
+        assert!(preview.hex && !preview.truncated);
+        assert!(preview.lines[0].starts_with("00000000  00 ff 41 20 0a 7f 5a 21 "));
+        assert!(preview.lines[0].ends_with("|..A ..Z!|"));
+        assert!(preview.lines[1].starts_with("00000008  78 "));
+        assert!(preview.lines[1].ends_with("|x|"));
+        assert!(preview_cancellable(path.clone(), &AtomicBool::new(false)).is_err());
+        std::fs::write(&path, vec![0xff; 8193])?;
+        let preview = hex_preview_cancellable(path.clone(), &AtomicBool::new(false))?;
+        assert!(preview.truncated);
+        assert_eq!(preview.lines.len(), 1024);
+        assert!(preview.lines.last().unwrap().starts_with("00001ff8"));
+        assert!(hex_preview_cancellable(path, &AtomicBool::new(true)).is_err());
+        assert!(hex_preview_cancellable(root.path().to_owned(), &AtomicBool::new(false)).is_err());
+        Ok(())
     }
 }
