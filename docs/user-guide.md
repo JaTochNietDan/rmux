@@ -23,6 +23,13 @@ The requested SSH destination remains available in tab tooltips and terminal
 switcher search after renaming a tab. Surface JSON includes `ssh_destination`
 (null for local terminals). It identifies the launch target, not a confirmed
 connection or authentication result, and does not enable automatic reconnect.
+Newly saved layouts, sessions and recovery checkpoints retain the SSH destination.
+Restoration still starts a fresh **Local** shell; its tooltip identifies the saved
+SSH target as **Not connected**. Surface JSON exposes that target separately as
+`saved_ssh_destination`. Open **Connect via SSH…** from that tab to pre-fill the
+target, then press Connect to start a new SSH workspace. Re-saving retains the
+target. Older snapshots without this field cannot recover an SSH destination
+from an arbitrary tab title.
 
 **Merge Workspace into…** in the menu or command palette searches other
 workspaces across this app’s windows, labeled by window. Enter moves the source's existing panes into

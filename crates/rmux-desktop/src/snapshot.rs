@@ -114,6 +114,8 @@ pub enum Node {
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct TabSnapshot {
     pub label: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_destination: Option<String>,
     #[serde(default)]
     pub custom_title: Option<String>,
     #[serde(default)]
@@ -213,6 +215,9 @@ impl Node {
                 *total_tabs += tabs.len();
                 ensure!(*total_tabs <= 256, "layout exceeds 256 tabs");
                 for tab in tabs {
+                    if let Some(destination) = &tab.ssh_destination {
+                        ensure!(crate::ssh::command(destination).is_ok(), "invalid saved SSH destination");
+                    }
                     if let Some(family) = &tab.font_family {
                         ensure!(
                             !family.trim().is_empty()
@@ -277,6 +282,7 @@ mod tests {
         let pane = || Node::Pane {
             active_tab: 0,
             tabs: vec![TabSnapshot {
+                ssh_destination: None,
                 custom_title: None,
                 font_family: None,
                 label: "日本".into(),
@@ -308,8 +314,24 @@ mod tests {
         }
     }
     #[test]
+    fn saved_ssh_destinations_round_trip_and_reject_invalid_targets() -> Result<()> {
+        let mut value = serde_json::to_value(fixture())?;
+        for destination in ["production", "ssh://user@[2001:db8::1]:2222"] {
+            value["workspaces"][0]["layout"]["children"][0]["tabs"][0]["ssh_destination"] = destination.into();
+            let snapshot = WindowSnapshot::decode(&serde_json::to_vec(&value)?)?;
+            let round_trip: serde_json::Value = serde_json::from_slice(&snapshot.encode()?)?;
+            assert_eq!(round_trip["workspaces"][0]["layout"]["children"][0]["tabs"][0]["ssh_destination"], destination);
+        }
+        for destination in ["-oProxyCommand=bad", "host command", "ssh://host:65536"] {
+            value["workspaces"][0]["layout"]["children"][0]["tabs"][0]["ssh_destination"] = destination.into();
+            assert!(WindowSnapshot::decode(&serde_json::to_vec(&value)?).is_err());
+        }
+        Ok(())
+    }
+    #[test]
     fn live_split_depth_boundary_round_trips() -> Result<()> {
         let leaf = || Node::Pane { active_tab: 0, tabs: vec![TabSnapshot {
+                ssh_destination: None,
             label: "Shell".into(), custom_title: None, font_family: None,
             directory: None, font_size: 14.,
         }] };

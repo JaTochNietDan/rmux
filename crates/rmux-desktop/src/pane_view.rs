@@ -498,6 +498,7 @@ impl PaneView {
                 })).collect::<Vec<_>>(),
                 "process_id":terminal.session.process_id(),
                 "ssh_destination":terminal.session.remote_destination(),
+                "saved_ssh_destination":terminal.saved_ssh_destination,
                 "process_exited":terminal.session.process_exited(),
             })
         }).collect()
@@ -514,17 +515,21 @@ impl PaneView {
     }
     pub fn tab_title(&self, index: usize, cx: &App) -> String {
         let view = self.terminals[index].read(cx);
-        view.custom_title.clone().unwrap_or_else(|| {
+        let title = view.custom_title.clone().unwrap_or_else(|| {
             if view.title.is_empty() {
                 self.labels[index].clone()
             } else {
                 view.title.clone()
             }
-        })
+        });
+        if view.saved_ssh_destination.is_some() { format!("Local · {title}") } else { title }
     }
     pub fn terminal_search_title(&self, index: usize, cx: &App) -> String {
         let title = self.tab_title(index, cx);
         let terminal = self.terminals[index].read(cx);
+        let title = terminal.saved_ssh_destination.as_ref()
+            .map(|destination| format!("{title} · Saved SSH: {destination} · Not connected"))
+            .unwrap_or(title);
         let title = match terminal.session.remote_destination() {
             Some(destination) if title != format!("SSH · {destination}") => format!("{title} · SSH · {destination}"),
             _ => title,
@@ -735,6 +740,8 @@ impl PaneView {
                 .zip(&self.labels)
                 .map(|(terminal, label)| snapshot::TabSnapshot {
                     label: label.clone(),
+                    ssh_destination: terminal.read(cx).session.remote_destination().map(str::to_owned)
+                        .or_else(|| terminal.read(cx).saved_ssh_destination.clone()),
                     custom_title: terminal.read(cx).custom_title.clone(),
                     font_size: terminal.read(cx).cells.font_size,
                     font_family: Some(terminal.read(cx).font_family.to_string()),
@@ -796,6 +803,10 @@ impl PaneView {
     /// New-workspace creation must not wait for the terminal parser mutex.
     pub fn cached_directory(&self, cx: &App) -> Option<std::path::PathBuf> {
         self.terminals.get(self.active)?.read(cx).snapshot_directory.clone()
+    }
+    pub fn ssh_destination(&self, cx: &App) -> Option<String> {
+        let terminal = self.terminals.get(self.active)?.read(cx);
+        terminal.session.remote_destination().map(str::to_owned).or_else(|| terminal.saved_ssh_destination.clone())
     }
 
     pub fn select(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {

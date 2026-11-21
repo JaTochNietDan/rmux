@@ -3868,7 +3868,13 @@ impl Render for WorkspaceWindow {
             .on_action(cx.listener(|this, _: &ShowSshConnection, window, cx| {
                 if this.automation_available(cx).is_err() || this.command_launching { return; }
                 let focus = window.focused(cx);
-                let palette = cx.new(|cx| command_palette::CommandPalette::ssh_connection(window, cx));
+                let destination = this.entries.get(this.active).and_then(|entry| {
+                    let workspace = entry.workspace.read(cx);
+                    let pane = workspace.panes.iter().find(|pane| Some(pane.entity_id()) == entry.last_pane)
+                        .or_else(|| workspace.panes.first())?.read(cx);
+                    pane.ssh_destination(cx)
+                }).unwrap_or_default();
+                let palette = cx.new(|cx| command_palette::CommandPalette::ssh_connection(&destination, window, cx));
                 this.install_palette(palette, focus, window, cx);
             }))
             .on_action(cx.listener(|this, action: &ConnectSsh, window, cx| {

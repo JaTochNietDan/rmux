@@ -523,9 +523,10 @@ impl CommandPalette {
         });
         palette
     }
-    pub fn ssh_connection(window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn ssh_connection(destination: &str, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let mut palette = Self::with_commands(Vec::new(), "Connect via SSH", ssh::INPUT_HINT, window, cx);
         palette.ssh_input = true;
+        palette.input.update(cx, |input, cx| { input.replace_draft(destination, cx); input.select_all_text(cx); });
         palette
     }
     pub fn memory_sort(current: memory_view::Sort, window: &mut Window, cx: &mut Context<Self>) -> Self {

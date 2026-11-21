@@ -212,6 +212,7 @@ impl Workspace {
                     terminals.push(cx.new(|cx| {
                         let mut view = TerminalView::new(session, window, cx);
                         view.custom_title = tab.custom_title;
+                        view.saved_ssh_destination = tab.ssh_destination;
                         if let Some(family) = tab.font_family {
                             view.font_family = family.into();
                         }
@@ -334,6 +335,7 @@ mod tests {
         let pane = |path| snapshot::Node::Pane {
             active_tab: 0,
             tabs: vec![snapshot::TabSnapshot {
+                ssh_destination: None,
                 custom_title: None,
                 font_family: None,
                 label: String::new(),

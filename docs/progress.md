@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Saved layout/session/recovery tabs now preserve an optional validated SSH target.
+Restore still starts fresh local shells, visibly prefixed Local with a Saved SSH /
+Not connected tooltip instead of implying an SSH connection. Re-saving preserves
+the target, and Connect via SSH pre-fills/selects the active tab's live or saved
+destination for explicit reconnection in a new workspace. Surface JSON separates
+`saved_ssh_destination` from a live-launch `ssh_destination`. All 19 snapshot tests
+passed, including target round trips and rejection of invalid/option-like targets.
+Native restore/reconnect UI and live remote persistence acceptance remain pending.
+
 SSH launch destinations now live on the session independently of editable tab
 titles. Tab tooltips and terminal switcher search retain the destination after
 renaming; surface snapshots expose `ssh_destination` (null for local sessions).
