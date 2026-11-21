@@ -1388,12 +1388,15 @@ impl Render for PaneView {
                         ))
                         .child(
                             action_control("new-tab", if self.spawning_tab.is_some() { "Starting terminal…" } else if self.terminals.get(self.active).is_some_and(|terminal| terminal.read(cx).session.remote_destination().is_some()) { "New SSH Tab" } else { "New Terminal Tab" }, NewTab, control_focus.clone())
-                                .on_click(cx.listener(|this, _, window, cx| this.add(window, cx)))
+                                .on_click(cx.listener(|this, event: &ClickEvent, window, cx| {
+                                    if event.standard_click() { this.add(window, cx); }
+                                }))
                                 .child(icons::icon("plus")),
                         )
                         .child(
                             action_control("split-right", "Split Right", Split, control_focus.clone())
-                                .on_click(cx.listener(|this, _, window, cx| {
+                                .on_click(cx.listener(|this, event: &ClickEvent, window, cx| {
+                                    if !event.standard_click() { return; }
                                     this.focus(window, cx);
                                     window.dispatch_action(Box::new(Split), cx);
                                 }))
@@ -1401,7 +1404,8 @@ impl Render for PaneView {
                         )
                         .child(
                             action_control("split-down", "Split Down", SplitBelow, control_focus.clone())
-                                .on_click(cx.listener(|this, _, window, cx| {
+                                .on_click(cx.listener(|this, event: &ClickEvent, window, cx| {
+                                    if !event.standard_click() { return; }
                                     this.focus(window, cx);
                                     window.dispatch_action(Box::new(SplitBelow), cx);
                                 }))
