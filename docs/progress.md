@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+The native SSH workspace path now passed real OpenSSH authentication against an
+isolated loopback sshd using temporary Ed25519 host/client keys and private client
+configuration. A config alias authenticated successfully; changing known_hosts
+rejected the server; removing authorized_keys rejected the client. The server
+logged exactly one accepted public key. The app/server were stopped and temporary
+files removed. `mise run smoke-ssh-loopback` reproduces this using existing macOS
+executables without installing tools or using saved user SSH credentials.
+Interactive password/agent/proxy, cross-platform and visual acceptance remain.
+
 Added and passed the native macOS `scripts/smoke-ssh.py` fixture (available as
 `mise run smoke-ssh`). A private PATH contains only the fixture SSH executable,
 so it cannot fall through to a real client. The real rmuxctl→RPC→background PTY

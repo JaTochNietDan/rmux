@@ -41,7 +41,10 @@ not confirmation of remote authentication; interact with its terminal for prompt
 This is an rmux extension to workspace creation, not cmux `workspace.ssh.open`
 compatibility. A native macOS no-network fixture verifies CLI/RPC startup,
 argument delivery, rollback, teardown and saved-target recovery (`mise run smoke-ssh`).
-Real-server authentication and visual/platform acceptance remain pending.
+`mise run smoke-ssh-loopback` also checks config aliases, successful public-key
+authentication, changed-host-key rejection and unauthorized-key rejection with
+existing macOS OpenSSH, temporary keys and a server bound to 127.0.0.1.
+Interactive password/agent/proxy flows and visual/platform acceptance remain pending.
 
 **Merge Workspace into…** in the menu or command palette searches other
 workspaces across this app’s windows, labeled by window. Enter moves the source's existing panes into
