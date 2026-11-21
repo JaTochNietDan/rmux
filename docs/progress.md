@@ -2,6 +2,12 @@
 
 ## Current implementation focus
 
+Built the current debug app for focus-history integration review. Inspected the
+existing terminal focus → pane metadata → workspace metadata notification path,
+which records terminal visits after focus changes. Prepared isolated Back/Forward
+shortcuts, but native interaction was blocked by the locked Mac; no runtime
+focus-history acceptance is claimed. Closed the temporary review process.
+
 Added bounded Back/Forward terminal focus history across a window's workspaces
 and pane tabs. Menu, palette and configurable `focus_back`/`focus_forward`
 actions reuse existing selection routing; no default bracket shortcuts changed.
