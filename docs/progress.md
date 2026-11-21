@@ -2,6 +2,18 @@
 
 ## Current implementation focus
 
+Markdown tables now parse into bounded virtualized header/body rows, preserving
+empty cells and inline styling. The reader draws equal-width separated cells,
+bold headers and search highlights. At most eight columns per row are displayed;
+wider tables have an explicit first-eight/copy-for-all label. Full tab-separated
+row text remains searchable/copyable and original Markdown source remains intact.
+Cell text sanitizes embedded tabs so they cannot create spurious columns. Eleven
+Markdown tests passed, including Unicode cell style offsets, empty rows, literal
+code tabs, visible-cell bounds and the 512-block cap. Desktop compilation passed.
+Alignment markers, horizontal scrolling and native visual acceptance remain open.
+A fresh desktop availability check confirmed the Mac is still locked. The prior
+goal turn made progress by committing/pushing selection-cache reclamation.
+
 The terminal renderer now releases selection-specific glyph/decoration variants
 when a row leaves the selection, the selection clears, or its foreground setting
 changes. Previously variants remained attached to unchanged shaped rows until a

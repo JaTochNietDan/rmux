@@ -1,7 +1,7 @@
 //! Bounded, inert CommonMark reading blocks. No HTML/web engine or asset loads.
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub enum Kind { #[default] Paragraph, Heading(u8), Code, Quote, List { depth: usize, number: Option<u64>, marker: bool, checked: Option<bool> } }
+pub enum Kind { #[default] Paragraph, Heading(u8), Code, Quote, Table { header: bool, columns: usize }, List { depth: usize, number: Option<u64>, marker: bool, checked: Option<bool> } }
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct InlineStyle { pub bold: bool, pub italic: bool, pub code: bool, pub strike: bool }
 #[derive(Clone, Debug, PartialEq)]
@@ -14,17 +14,39 @@ pub fn blocks(source: &str) -> (Vec<Block>, bool) {
     let mut spans: Vec<Span> = Vec::new();
     let (mut bold, mut italic) = (0usize, 0usize);
     let mut strike = 0usize;
+    let mut table_columns = 0usize;
+    let mut table_cell = 0usize;
     let mut quote = 0usize;
     let mut lists: Vec<Option<u64>> = Vec::new();
     let mut items: Vec<Kind> = Vec::new();
     let flush = |output: &mut Vec<Block>, text: &mut String, spans: &mut Vec<Span>, kind| {
-        if text.trim().is_empty() { text.clear(); spans.clear(); return false; }
+        if text.trim().is_empty() && !matches!(kind, Kind::Table { .. }) { text.clear(); spans.clear(); return false; }
         if output.len() >= 512 { return true; }
         output.push(Block { text: std::mem::take(text), kind, spans: std::mem::take(spans) });
         false
     };
-    for event in Parser::new_ext(source, Options::ENABLE_TASKLISTS | Options::ENABLE_STRIKETHROUGH) {
+    for event in Parser::new_ext(source, Options::ENABLE_TASKLISTS | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TABLES) {
         match event {
+            Event::Start(Tag::Table(columns)) => {
+                if flush(&mut output, &mut text, &mut spans, kind) { return (output, true); }
+                table_columns = columns.len();
+            }
+            Event::Start(Tag::TableHead) | Event::Start(Tag::TableRow) => {
+                let header = matches!(event, Event::Start(Tag::TableHead));
+                kind = Kind::Table { header, columns: table_columns };
+                table_cell = 0;
+            }
+            Event::Start(Tag::TableCell) => {
+                if table_cell > 0 { text.push('\t'); }
+                table_cell += 1;
+            }
+            Event::End(TagEnd::TableHead | TagEnd::TableRow) => {
+                if flush(&mut output, &mut text, &mut spans, kind) { return (output, true); }
+            }
+            Event::End(TagEnd::Table) => {
+                table_columns = 0;
+                kind = items.last().copied().unwrap_or(if quote > 0 { Kind::Quote } else { Kind::Paragraph });
+            }
             Event::Start(Tag::BlockQuote(_)) => quote += 1,
             Event::End(TagEnd::BlockQuote(_)) => quote = quote.saturating_sub(1),
             Event::Start(Tag::List(start)) => {
@@ -62,7 +84,8 @@ pub fn blocks(source: &str) -> (Vec<Block>, bool) {
                 let code = matches!(event, Event::Code(_));
                 let (Event::Text(value) | Event::Code(value) | Event::Html(value) | Event::InlineHtml(value)) = event else { unreachable!() };
                 let start = text.len();
-                text.push_str(&value);
+                if matches!(kind, Kind::Table { .. }) { text.extend(value.chars().map(|ch| if ch == '\t' { ' ' } else { ch })); }
+                else { text.push_str(&value); }
                 if start < text.len() && (bold > 0 || italic > 0 || strike > 0 || code) {
                     let style = InlineStyle { bold: bold > 0, italic: italic > 0, code, strike: strike > 0 };
                     if let Some(previous) = spans.last_mut() && previous.range.end == start && previous.style == style { previous.range.end = text.len(); }
@@ -103,6 +126,22 @@ pub fn excerpt_spans(text: &str, query: &str, spans: &[Span], prefix: usize) -> 
     }
     output
 }
+/// At most eight visible cells per row; callers label omitted columns and retain
+/// the complete tab-separated row for search/copy. No per-cell source copies.
+pub fn table_cells<'a>(text: &'a str, spans: &[Span], query: &str) -> Vec<(String, Vec<Span>)> {
+    let mut offset = 0;
+    text.split('\t').take(8).map(|cell| {
+        let end = offset + cell.len();
+        let styles: Vec<_> = spans.iter().filter_map(|span| {
+            let start = span.range.start.max(offset);
+            let stop = span.range.end.min(end);
+            (start < stop).then(|| Span { range: start - offset..stop - offset, style: span.style })
+        }).collect();
+        offset = end + 1;
+        (if cell.is_empty() { " ".into() } else { crate::file_browser::preview_line_title(cell, query) }, excerpt_spans(cell, query, &styles, 0))
+    }).collect()
+}
+
 /// Sorted, disjoint runs combine emphasis with search colors without overlap.
 pub fn merge_highlights(spans: &[Span], search: &[std::ops::Range<usize>]) -> Vec<(std::ops::Range<usize>, InlineStyle, bool)> {
     if spans.is_empty() { return search.iter().cloned().map(|range| (range, InlineStyle::default(), true)).collect(); }
@@ -154,6 +193,25 @@ pub fn code_excerpt(source: &str, query: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn tables_preserve_rows_empty_cells_and_inline_ranges() {
+        let (rows, limited) = blocks("| Name | Value |\n| --- | ---: |\n| **界** | `a\tb` |\n| | |\n\nafter");
+        assert!(!limited);
+        assert_eq!(rows[0].kind, Kind::Table { header: true, columns: 2 });
+        assert_eq!(rows[1].kind, Kind::Table { header: false, columns: 2 });
+        assert_eq!(rows[1].text, "界\ta b");
+        assert_eq!(rows[2].text, "\t");
+        assert_eq!(rows[3].kind, Kind::Paragraph);
+        let cells = table_cells(&rows[1].text, &rows[1].spans, "");
+        assert_eq!(cells.len(), 2);
+        assert!(cells[0].1[0].style.bold);
+        assert!(cells[1].1[0].style.code);
+        assert_eq!(&cells[0].0[cells[0].1[0].range.clone()], "界");
+        assert_eq!(table_cells(&"x\t".repeat(100), &[], "").len(), 8);
+        let (capped, limited) = blocks(&format!("| h |\n| - |\n{}", "| row |\n".repeat(512)));
+        assert_eq!(capped.len(), 512);
+        assert!(limited);
+    }
     #[test]
     fn inline_code_and_strike_preserve_literals_and_search_styles() {
         let (result, limited) = blocks("~~old **bold** `*literal*`~~ and `~~code~~`\n\nplain");

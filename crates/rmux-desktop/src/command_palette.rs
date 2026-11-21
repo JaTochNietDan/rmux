@@ -661,6 +661,7 @@ impl CommandPalette {
                     command.target = PaletteEvent::Run(Box::new(CopyPreviewLine { text: line.text.clone(), markdown: Some(block.kind), spans: block.spans }));
                     let label = match command.markdown_kind() {
                         Some(markdown_preview::Kind::Heading(level)) => format!("Heading H{level}"),
+                        Some(markdown_preview::Kind::Table { header, columns }) => format!("Table {} · {columns} columns{}", if header { "header" } else { "row" }, if columns > 8 { " · first 8 shown; copy for all" } else { "" }),
                         Some(markdown_preview::Kind::List { checked: Some(true), .. }) => "Completed task".into(),
                         Some(markdown_preview::Kind::List { checked: Some(false), .. }) => "Pending task".into(),
                         _ => "Block".into(),
@@ -951,6 +952,23 @@ impl CommandPalette {
                 markdown_preview::excerpt_spans(&line.text, self.input.read(cx).value(), &line.spans, title.len() - excerpt_len)).unwrap_or_default(),
             _ => Vec::new(),
         };
+        let table = if let Some(markdown_preview::Kind::Table { header, .. }) = markdown {
+            match &self.commands[command].target {
+                PaletteEvent::Run(action) => action.as_any().downcast_ref::<CopyPreviewLine>().map(|line| {
+                    let cells = markdown_preview::table_cells(&line.text, &line.spans, self.input.read(cx).value());
+                    div().flex().w_full().min_w_0().border_b_1().border_color(rgb(0x637894))
+                        .when(header, |row| row.font_weight(FontWeight::BOLD))
+                        .children(cells.into_iter().map(|(text, spans)| {
+                            let search = file_browser::preview_highlights(&text, self.input.read(cx).value());
+                            div().flex_1().min_w_0().px_2().border_r_1().border_color(rgb(0x637894))
+                                .when(wrapped, |cell| cell.whitespace_normal().line_clamp(4).text_ellipsis())
+                                .when(!wrapped, |cell| cell.truncate())
+                                .child(PreviewStyledText { styles: markdown_preview::merge_highlights(&spans, &search), text })
+                        })).into_any_element()
+                }),
+                _ => None,
+            }
+        } else { None };
         let title_hint: SharedString = match &self.commands[command].subtitle {
             Some(subtitle) => format!("{title}\n{subtitle}").into(),
             None => title.clone().into(),
@@ -1004,7 +1022,7 @@ impl CommandPalette {
                     .when(!wrapped, |title| title.truncate())
                     .tooltip(move |_, cx| cx.new(|_| pane_view::ControlHint(title_hint.clone())).into())
                     .child(div().flex().flex_col().gap_1()
-                        .child(if let Some(lines) = code_lines {
+                        .child(if let Some(table) = table { table } else if let Some(lines) = code_lines {
                             div().flex().flex_col().overflow_hidden().children(lines.into_iter().map(|line| div().h(px(20.)).flex_shrink_0().whitespace_nowrap().overflow_hidden().child(line))).into_any_element()
                         } else { div().when(wrapped, |title| title.whitespace_normal().line_clamp(if heading.is_some() { 2 } else { 4 }).text_ellipsis()).when(!wrapped, |title| title.truncate()).child(title).into_any_element() })
                         .when_some(subtitle, |column, subtitle| column.child(div().truncate().text_xs().line_height(px(16.)).text_color(rgb(0xa0a0a0)).child(subtitle)))),

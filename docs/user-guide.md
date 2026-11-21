@@ -372,7 +372,12 @@ Displayed excerpts remain bounded and default to four visual lines. Links displa
 their label, images display alt text, and raw HTML displays as literal text: no
 assets load and no HTML or scripts execute. Bold and italic emphasis, including nesting, render within reading blocks and
 remain visible under search highlights. Inline code uses a monospace font and shaded background, and `~~strikethrough~~` draws a strike through its text.
-Search colors take precedence over code shading while retaining emphasis and strikes. Tables,
+Search colors take precedence over code shading while retaining emphasis and strikes.
+Tables display structured header/body rows with separators and inline cell styling.
+Each row shows up to eight equal-width columns; wider tables explicitly report
+that only the first eight are shown. Row copying retains all tab-separated cells,
+and Copy Markdown Source retains the original document. Empty cells remain blank.
+Table column alignment, horizontal scrolling,
 clickable links, images, full code-block scrolling and document appearance controls
 remain unimplemented. This is a reading preview, not a complete Markdown renderer.
 
