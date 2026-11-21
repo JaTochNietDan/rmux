@@ -1063,7 +1063,7 @@ impl WorkspaceWindow {
         Ok(serde_json::json!({"pane_id":resize.pane_id,"workspace_id":workspace.entity_id().to_string(),"changed":changed}))
     }
 
-    pub(super) fn automation_prepare_ssh_split(&mut self, split: &automation::PaneSplit, target: EntityId, cx: &mut Context<Self>) -> Result<Box<dyn FnOnce() -> Result<Session> + Send>, automation::Failure> {
+    pub(super) fn automation_prepare_ssh_split(&mut self, split: &automation::PaneSplit, target: EntityId, cx: &mut Context<Self>) -> Result<Box<dyn FnOnce() -> Result<PreparedTerminal> + Send>, automation::Failure> {
         self.automation_available(cx)?;
         if self.command_launching { return Err(automation::Failure { code: -32005, message: "Command startup busy" }); }
         let (workspace, pane) = self.automation_pane_target(target, cx)
@@ -1077,18 +1077,23 @@ impl WorkspaceWindow {
         let directory = split.cwd.clone().or_else(|| pane.read(cx).cached_directory(cx))
             .or_else(|| cx.global::<InitialDirectory>().0.clone());
         let scrollback = cx.global::<Preferences>().scrollback_bytes();
+        let colors = cx.global::<Preferences>().terminal_colors();
+        let palette = cx.global::<Preferences>().terminal_palette();
         self.command_launching = true;
-        Ok(Box::new(move || ssh::launch_sibling(Some(&destination), directory.as_deref(), scrollback)))
+        Ok(Box::new(move || {
+            let session = ssh::launch_sibling(Some(&destination), directory.as_deref(), scrollback)?;
+            TerminalView::prepare(session, colors, palette)
+        }))
     }
-    pub(super) fn automation_finish_ssh_split(&mut self, split: &automation::PaneSplit, target: EntityId, session: Result<Session>, window: &mut Window, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
+    pub(super) fn automation_finish_ssh_split(&mut self, split: &automation::PaneSplit, target: EntityId, prepared: Result<PreparedTerminal>, window: &mut Window, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
         self.command_launching = false;
-        let session = session.map_err(|_| automation::Failure { code: -32005, message: "Could not start SSH; check the SSH executable and launch directory" })?;
-        self.automation_publish_split(split, target, Some((session, split.ssh_destination.as_ref().map(|destination| format!("SSH · {destination}")))), window, cx)
+        let prepared = prepared.map_err(|_| automation::Failure { code: -32005, message: "Could not start SSH; check the SSH executable and launch directory" })?;
+        self.automation_publish_split(split, target, Some(prepared), window, cx)
     }
     pub(super) fn automation_split_pane(&mut self, split: &automation::PaneSplit, target: EntityId, window: &mut Window, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
         self.automation_publish_split(split, target, None, window, cx)
     }
-    fn automation_publish_split(&mut self, split: &automation::PaneSplit, target: EntityId, prepared: Option<(Session, Option<String>)>, window: &mut Window, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
+    fn automation_publish_split(&mut self, split: &automation::PaneSplit, target: EntityId, prepared: Option<PreparedTerminal>, window: &mut Window, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
         self.automation_available(cx)?;
         let Some((workspace, target_pane)) = self.automation_pane_target(target, cx) else {
             return Err(automation::Failure { code: -32004, message: "Pane not found" });
@@ -1099,7 +1104,12 @@ impl WorkspaceWindow {
         }
         let axis = match split.direction { automation::SplitDirection::Left | automation::SplitDirection::Right => SplitAxis::Columns, automation::SplitDirection::Up | automation::SplitDirection::Down => SplitAxis::Rows };
         let before = matches!(split.direction, automation::SplitDirection::Left | automation::SplitDirection::Up);
-        let pane_id = workspace.update(cx, |workspace, cx| workspace.add_prepared_at(Some(target), axis, before, split.cwd.clone(), false, prepared, window, cx))
+        let prepared = prepared.map(|prepared| {
+            let pane = target_pane.read(cx);
+            (TerminalSeed::Ready(prepared, pane.active_cell_metrics(cx), pane.active_font_family(cx)),
+                split.ssh_destination.as_ref().map(|destination| format!("SSH · {destination}")))
+        });
+        let pane_id = workspace.update(cx, |workspace, cx| workspace.add_seed_at(Some(target), axis, before, split.cwd.clone(), false, prepared, window, cx))
             .ok_or(automation::Failure { code: -32005, message: "Could not start pane shell" })?;
         let pane = workspace.read(cx).panes.iter().find(|pane| pane.entity_id() == pane_id).unwrap();
         let surface = pane.read(cx).active_terminal_id().unwrap();

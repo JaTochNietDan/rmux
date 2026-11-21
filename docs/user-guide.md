@@ -999,7 +999,8 @@ rmuxctl pane.split '{"pane_id":"PANE_ID","direction":"right","focus":false}'
 
 Add `--ssh DESTINATION` (`ssh_destination` in RPC) to create a separate SSH session
 in the new pane. For example, `rmuxctl split-pane --pane PANE_ID --direction right --ssh production`.
-SSH PTY startup runs in the background; completion rechecks the target and limits.
+SSH PTY startup and first-frame/color preparation run in the background; completion
+rechecks the target and limits. Color changes during startup are applied before insertion.
 An unavailable executable leaves the source process and layout intact. A successful
 reply means the SSH client was started, not that remote authentication succeeded.
 Without this option, RPC splitting creates a local shell even beside an SSH tab.

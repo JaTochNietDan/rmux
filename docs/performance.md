@@ -55,8 +55,12 @@ New-tab PTY creation runs in a background task, with one pending launch per
 pane and cached directory inheritance. PTY creation plus initial frame/color preparation run off the
 UI thread for new tabs. Settings changes during launch trigger background
 re-preparation before the view is attached. Subsequent focus/layout work may
-still access the parser. Splits/workspace startup paths remain separate work; native startup
-latency and rapid create/close acceptance are still pending.
+still access the parser. Interactive splits also use background first-frame preparation.
+Explicit SSH RPC splits now pass a prepared terminal through publication, including
+background re-preparation if colors change during startup. The native SSH fixture
+covers source preservation, failure rollback and teardown, not latency or visual
+acceptance. Other workspace/local-RPC startup paths remain separate work; native
+startup latency and rapid create/close acceptance are still pending.
 
 Find selection seeding uses a nonblocking parser-lock attempt and a streaming
 4 KB export. Oversized/truncated or multiline selections fall back to the

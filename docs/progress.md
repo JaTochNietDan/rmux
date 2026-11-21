@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+SSH RPC splits now carry a PreparedTerminal from their worker through publication:
+PTY creation, initial color application and first engine snapshot all happen off
+the UI thread. Settings changes during startup trigger background re-preparation
+before insertion; publication inherits current source-pane font metrics and reuses
+the existing ready-terminal path. Native no-network split creation, source PID and
+selection preservation, failed-start rollback, teardown and recovery still pass.
+This removes known synchronous first-frame work, not all UI parser access; measured
+startup latency and native visual/theme-change acceptance remain pending.
+
 Remote session identity now stays visible when shell or custom titles replace the
 initial SSH tab label. Sidebar context shows SSH plus destination before OSC 7,
 appends the reported remote directory when available, and switches to SSH ended /

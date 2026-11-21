@@ -456,8 +456,21 @@ pub fn attach_live(cx: &mut gpui::App, stdio: bool, socket_directory: Option<std
                 }).unwrap_or(Err(Failure { code: -32004, message: "Application closed" }));
                 let result = match prepared {
                     Ok((handle, target, job)) => {
-                        let session = cx.background_executor().spawn(async move { job() }).await;
-                        handle.update(cx, |view, window, cx| view.automation_finish_ssh_split(split, target, session, window, cx))
+                        let mut prepared = cx.background_executor().spawn(async move { job() }).await;
+                        loop {
+                            let refresh = cx.update(|cx| {
+                                let prepared = prepared.as_ref().ok()?;
+                                let settings = cx.global::<super::Preferences>();
+                                let current = (settings.terminal_colors(), settings.terminal_palette());
+                                ((prepared.colors, prepared.palette) != current).then_some(current)
+                            }).ok().flatten();
+                            let Some((colors, palette)) = refresh else { break; };
+                            let session = prepared.expect("successful preparation checked above").session;
+                            prepared = cx.background_executor().spawn(async move {
+                                super::TerminalView::prepare(session, colors, palette)
+                            }).await;
+                        }
+                        handle.update(cx, |view, window, cx| view.automation_finish_ssh_split(split, target, prepared, window, cx))
                             .map_err(|_| Failure { code: -32004, message: "Pane window closed during SSH startup" })
                             .and_then(|result| result)
                     }
