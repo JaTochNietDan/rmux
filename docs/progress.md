@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Regular-file selections now expose direct hex preview through Shift+Enter and a
+compact-compatible footer button. The row hint distinguishes Enter for text from
+Shift+Enter for hex, avoiding a failed 64 KiB text read before an 8 KiB byte preview.
+Input modes and IME composition are guarded so modified submissions cannot launch
+stale file selections. Desktop compilation passed; the existing bounded hex worker
+is reused. Native keyboard/button/focus and visual acceptance remain pending.
+
 Added explicit read-only hexadecimal file preview from text previews and preview
 errors. A shared bounded regular-file reader serves both modes; hex reads at most
 8 KiB plus a truncation sentinel and renders 1,024 eight-byte rows with offsets,
