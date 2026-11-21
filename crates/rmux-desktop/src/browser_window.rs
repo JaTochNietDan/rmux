@@ -4,7 +4,15 @@ use crate::text_field::TextField;
 use wry::WebViewBuilderExtDarwin;
 use std::{cell::RefCell, rc::Rc};
 
-actions!(browser, [FocusAddress, Back, Forward, Reload]);
+actions!(browser, [FocusAddress, Back, Forward, Reload, ZoomIn, ZoomOut, ResetZoom]);
+const ZOOM_LEVELS: &[u16] = &[25, 33, 50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300, 400, 500];
+fn zoom_level(current: u16, direction: i8) -> u16 {
+    match direction.cmp(&0) {
+        std::cmp::Ordering::Greater => ZOOM_LEVELS.iter().copied().find(|level| *level > current).unwrap_or(500),
+        std::cmp::Ordering::Less => ZOOM_LEVELS.iter().rev().copied().find(|level| *level < current).unwrap_or(25),
+        std::cmp::Ordering::Equal => 100,
+    }
+}
 #[derive(Clone, Copy)]
 enum Navigation { Back, Forward, Reload }
 
@@ -79,6 +87,7 @@ struct BrowserWindow {
     page_title: String,
     displayed_title: String,
     content_failed: bool,
+    zoom_percent: u16,
     latest: Arc<std::sync::Mutex<PageUpdates>>,
     wake: async_channel::Sender<()>,
     _updates: Task<()>,
@@ -128,7 +137,7 @@ impl BrowserWindow {
                 }
             }
         });
-        Self { host: Rc::new(RefCell::new(Host { pending_url: initial, ..Default::default() })), input, status: "Enter an address to create an ephemeral browser.".into(), committed: String::new(), page_title: String::new(), displayed_title: String::new(), content_failed: false, latest, wake, _updates: task }
+        Self { host: Rc::new(RefCell::new(Host { pending_url: initial, ..Default::default() })), input, status: "Enter an address to create an ephemeral browser.".into(), committed: String::new(), page_title: String::new(), displayed_title: String::new(), content_failed: false, zoom_percent: 100, latest, wake, _updates: task }
     }
     fn navigate(&mut self, url: &str, window: &Window) -> anyhow::Result<()> {
         let mut host = self.host.borrow_mut();
@@ -140,7 +149,7 @@ impl BrowserWindow {
         let title_wake = wake.clone();
         let termination_latest = latest.clone();
         let termination_wake = wake.clone();
-        host.view = Some(wry::WebViewBuilder::new().with_incognito(true).with_url(url)
+        let view = wry::WebViewBuilder::new().with_incognito(true).with_url(url)
             .with_bounds(rect(bounds)).with_navigation_handler(|url| allowed(&url))
             .with_new_window_req_handler(|_, _| wry::NewWindowResponse::Deny)
             .with_download_started_handler(|_, _| false)
@@ -158,8 +167,23 @@ impl BrowserWindow {
                     if let Ok(mut value) = latest.lock() { value.loaded(matches!(event, wry::PageLoadEvent::Finished), url); }
                     let _ = wake.try_send(());
                 }
-            }).build_as_child(window)?);
+            }).build_as_child(window)?;
+        if self.zoom_percent != 100 { view.zoom(f64::from(self.zoom_percent) / 100.)?; }
+        host.view = Some(view);
         Ok(())
+    }
+    fn zoom(&mut self, direction: i8, cx: &mut Context<Self>) {
+        let next = zoom_level(self.zoom_percent, direction);
+        if next == self.zoom_percent { return; }
+        if let Some(view) = &self.host.borrow().view {
+            if let Err(error) = view.zoom(f64::from(next) / 100.) {
+                self.status = format!("Could not change page zoom: {error}");
+                cx.notify();
+                return;
+            }
+        }
+        self.zoom_percent = next;
+        cx.notify();
     }
     fn focus_address(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.input.read(cx).is_composing() { return; }
@@ -211,7 +235,7 @@ impl Render for BrowserWindow {
                     if let Err(error) = result { this.status = error.to_string(); }
                     cx.notify();
                 }))))
-            .child(div().h(px(28.)).flex_shrink_0().px_3().text_xs().truncate().when(self.content_failed, |status| status.text_color(rgb(0xf0b85b))).child(format!("{} · {}", self.status, self.committed)))
+            .child(div().h(px(28.)).flex_shrink_0().px_3().text_xs().truncate().when(self.content_failed, |status| status.text_color(rgb(0xf0b85b))).child(format!("{} · {}% · {}", self.status, self.zoom_percent, self.committed)))
             .child(div().flex_1().min_h_0().child(canvas(move |bounds, window, cx| {
                 let mut host = host.borrow_mut();
                 if host.bounds != Some(bounds) {
@@ -247,9 +271,15 @@ pub fn initialize(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("cmd-l", FocusAddress, Some("Browser")),
         KeyBinding::new("cmd-r", Reload, Some("Browser")),
+        KeyBinding::new("cmd-=", ZoomIn, Some("Browser")),
+        KeyBinding::new("cmd--", ZoomOut, Some("Browser")),
+        KeyBinding::new("cmd-0", ResetZoom, Some("Browser")),
         KeyBinding::new("alt-left", Back, Some("Browser")),
         KeyBinding::new("alt-right", Forward, Some("Browser")),
     ]);
+    cx.on_action(|_: &ZoomIn, cx| with_active(cx, |this, _, cx| this.zoom(1, cx)));
+    cx.on_action(|_: &ZoomOut, cx| with_active(cx, |this, _, cx| this.zoom(-1, cx)));
+    cx.on_action(|_: &ResetZoom, cx| with_active(cx, |this, _, cx| this.zoom(0, cx)));
     cx.on_action(|_: &FocusAddress, cx| with_active(cx, |this, window, cx| this.focus_address(window, cx)));
     cx.on_action(|_: &Back, cx| with_active(cx, |this, _, cx| { this.navigation(Navigation::Back); cx.notify(); }));
     cx.on_action(|_: &Forward, cx| with_active(cx, |this, _, cx| { this.navigation(Navigation::Forward); cx.notify(); }));
@@ -261,6 +291,9 @@ pub fn menu() -> Menu {
         MenuItem::action("Back", Back),
         MenuItem::action("Forward", Forward),
         MenuItem::action("Reload", Reload),
+        MenuItem::action("Zoom In", ZoomIn),
+        MenuItem::action("Zoom Out", ZoomOut),
+        MenuItem::action("Actual Size", ResetZoom),
     ] }
 }
 
@@ -283,7 +316,18 @@ fn open_initial(initial: Option<String>, cx: &mut App) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{address, allowed, can_open_link, PageUpdates};
+    use super::{address, allowed, can_open_link, PageUpdates, zoom_level};
+    #[test]
+    fn browser_zoom_walk_is_bounded_and_returns_to_actual_size() {
+        let mut level = 100;
+        for _ in 0..100 { level = zoom_level(level, 1); }
+        assert_eq!(level, 500);
+        for _ in 0..100 { level = zoom_level(level, -1); }
+        assert_eq!(level, 25);
+        assert_eq!(zoom_level(level, 0), 100);
+        assert_eq!(zoom_level(100, 1), 110);
+        assert_eq!(zoom_level(100, -1), 90);
+    }
     #[test]
     fn browser_termination_survives_late_finish_and_recovers_on_new_load() {
         let mut updates = PageUpdates::default();

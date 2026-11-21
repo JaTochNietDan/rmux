@@ -1236,7 +1236,11 @@
         "RPC"
       ],
       "acceptance": "Capture correct pixels at requested scale without changing other panes.",
-      "rmux_status": "not_started"
+      "rmux_status": "in_progress",
+      "implementation": "Optional macOS browser windows support bounded 25–500% page zoom, reset to actual size, browser-context shortcuts/menu actions and a visible percentage. Zoom is per window, applies on lazy view creation and only commits after native success. Focused zoom-bound/reset regression and browser-enabled compilation pass.",
+      "remaining": "Native zoom/shortcut/layout acceptance, workspace-pane integration, persistence, screenshots, viewport sizing/emulation, highlighting, RPC and cross-platform coverage.",
+      "implementation_sources": ["crates/rmux-desktop/src/browser_window.rs"],
+      "progress_record": "docs/progress.md"
     },
     {
       "id": "B10",

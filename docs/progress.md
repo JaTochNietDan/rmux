@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Experimental browser windows now have per-window 25–500% page zoom with discrete
+steps, Cmd+=/Cmd+-/Cmd+0 bindings and native Browser menu actions. The status line
+shows the current percentage; actual size resets to 100%. Native zoom failures
+retain the previous setting, and pre-navigation choices apply when creating the
+webview. The focused zoom bounds/reset test and browser-enabled compilation passed.
+A fresh desktop availability check still reports the Mac locked, so native zoom,
+shortcut/focus, clipping and adjacent-terminal acceptance remain open. B09 now
+records this partial zoom implementation without claiming screenshots/viewport/
+highlighting support. The preceding turn made progress with committed/pushed
+browser process-recovery UI.
+
 The experimental macOS browser now observes WRY content-process termination and
 shows a clear reload recovery message, removes stale page titles and labels the
 reload control Reload Page. Failure state persists across late finish/title events;

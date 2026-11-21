@@ -50,7 +50,10 @@ default to HTTPS. Explicit HTTP/HTTPS schemes remain unchanged; private LAN
 addresses require an explicit HTTP scheme if their server does not support HTTPS. The address field retains
 the navigation draft; the status line reports the page-load URL after redirects.
 Browser-context defaults are Cmd+L (select the loaded address), Cmd+R (reload),
-Alt+Left/Right (history). The native Browser menu routes the same actions to the
+Alt+Left/Right (history), and Cmd+=/Cmd+-/Cmd+0 (page zoom in/out/actual size).
+Zoom uses discrete 25–500% steps per browser window, appears in the status line,
+and also has Browser menu actions. A choice made before first navigation is
+applied when the native view is created; native errors retain the previous setting. The native Browser menu routes the same actions to the
 active browser window; other window types are unaffected by those menu actions.
 Escape in the address field restores the loaded URL and returns native focus to
 the page. Back/Forward buttons dim and no-op when history is unavailable. Reload
