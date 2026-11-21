@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Added GitHub-hosted macOS CI for the optional browser feature, using the existing
+pinned mise/Xcode runner setup. Relevant pushes/PRs run focused browser tests, link
+the native composition probe, and check that WRY is absent from default builds.
+The workflow has read-only repository permissions, no signing/publish steps,
+separate compilation caches and cancellation of outdated runs. Pushed as 248f09c.
+The first run, https://github.com/JaTochNietDan/rmux/actions/runs/44859718234,
+is confirmed in progress (mise setup at last observation); its result is pending.
+No hosted-build success is claimed yet. The previous goal turn made progress with
+committed/pushed browser metadata throttling.
+
 Browser metadata publication now has a 100 ms minimum interval during bursts,
 independent latest-value coalescing and change-only redraw notification. A page
 rapidly changing its title can no longer notify rmux chrome on every callback.

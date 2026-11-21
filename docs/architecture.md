@@ -87,6 +87,16 @@ search-engine queries, split integration and automation remain work items. No
 browser code or runtime is enabled in a default build. The macOS feature build and
 focused URL policy test pass; that does not prove interactive browsing acceptance.
 
+## Browser CI
+
+The Experimental browser GitHub Actions workflow runs on relevant main-branch
+pushes, pull requests and manual dispatch. It uses the pinned mise toolchain on
+macOS, runs focused browser tests, links the composition probe, and rejects WRY
+in the default dependency tree. Compilation caches are separate from release
+caches, concurrent outdated runs are canceled, and no signing secrets or publish
+permissions are involved. This is build/policy coverage, not interactive browser
+or cross-platform acceptance.
+
 ## Native browser composition probe
 
 `mise run browser-probe` builds and opens the optional macOS GPUI/WRY example.
