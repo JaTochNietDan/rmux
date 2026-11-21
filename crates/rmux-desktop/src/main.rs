@@ -478,6 +478,7 @@ actions!(
         ShowSshConnection,
         ShowSshHosts,
         CopySearchExcerpt,
+        TogglePreviewWrap,
         OpenFolderBrowser,
         FileBrowserBack,
         FileBrowserForward,
@@ -3786,6 +3787,7 @@ fn main() {
         }));
         app_menu::initialize(cx);
         cx.bind_keys([KeyBinding::new(if cfg!(target_os = "macos") { "cmd-shift-c" } else { "ctrl-shift-c" }, CopySearchExcerpt, Some("CommandPalette"))]);
+        cx.bind_keys([KeyBinding::new("ctrl-alt-w", TogglePreviewWrap, Some("TextPreview"))]);
         shortcuts::initialize(cx);
         cx.on_action(|_: &Quit, cx| request_quit(cx));
         cx.on_action(|_: &NewWindow, cx| {

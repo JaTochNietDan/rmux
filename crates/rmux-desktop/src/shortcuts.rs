@@ -62,8 +62,8 @@ pub struct Binding {
 }
 #[derive(Clone, Copy, Default, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Scope { #[default] Terminal, Window, Settings, Find }
-impl Scope { fn context(self) -> Option<&'static str> { match self { Self::Terminal => Some("Terminal"), Self::Window => None, Self::Settings => Some("Settings"), Self::Find => Some("FindInput") } } }
+pub enum Scope { #[default] Terminal, Window, Settings, Find, Preview }
+impl Scope { fn context(self) -> Option<&'static str> { match self { Self::Terminal => Some("Terminal"), Self::Window => None, Self::Settings => Some("Settings"), Self::Find => Some("FindInput"), Self::Preview => Some("TextPreview") } } }
 struct Defaults(Vec<KeyBinding>);
 impl Global for Defaults {}
 fn action(name: &str) -> Option<Box<dyn Action>> {
@@ -129,6 +129,7 @@ fn action(name: &str) -> Option<Box<dyn Action>> {
         "rename_buffer" => Box::new(ShowRenameBufferPicker),
         "copy_buffer" => Box::new(ShowCopyBufferPicker),
         "browse_files" => Box::new(BrowseTerminalFiles),
+        "toggle_preview_wrap" => Box::new(TogglePreviewWrap),
         "open_text_preview" => Box::new(OpenTextPreview),
         "search_terminal_output" => Box::new(ShowTerminalSearch),
         "connect_ssh" => Box::new(ShowSshConnection),
@@ -280,6 +281,22 @@ mod tests {
     use crate::{preferences::Preferences, ShowCommandPalette, ToggleSettings};
     use gpui::{KeyBinding, KeyContext, Keymap, Keystroke};
     fn settings(value: serde_json::Value) -> Preferences { serde_json::from_value(value).unwrap() }
+    #[test]
+    fn preview_wrap_bindings_are_scoped_and_remappable() {
+        let mut map = Keymap::new(vec![KeyBinding::new("ctrl-alt-w", crate::TogglePreviewWrap, Some("TextPreview"))]);
+        let prefs = settings(serde_json::json!({"keybindings":[
+            {"key":"ctrl-alt-w","action":"disabled","context":"preview"},
+            {"key":"ctrl-alt-r","action":"toggle_preview_wrap","context":"preview"}
+        ]}));
+        map.add_bindings(compile(&prefs).unwrap());
+        let preview = [KeyContext::parse("CommandPalette TextPreview").unwrap()];
+        assert!(map.bindings_for_input(&[Keystroke::parse("ctrl-alt-w").unwrap()], &preview).0.is_empty());
+        let replacement = [Keystroke::parse("ctrl-alt-r").unwrap()];
+        assert!(map.bindings_for_input(&replacement, &preview).0[0].action().as_any().is::<crate::TogglePreviewWrap>());
+        for context in ["Terminal", "CommandPalette", "Settings"] {
+            assert!(map.bindings_for_input(&replacement, &[KeyContext::parse(context).unwrap()]).0.is_empty());
+        }
+    }
     #[test]
     fn find_bindings_override_only_the_search_field() {
         let key = if cfg!(target_os = "macos") { "cmd-g" } else { "f3" };

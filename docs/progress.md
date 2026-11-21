@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Replaced the hardcoded wrap-excerpts key handler with a registered action and
+text-preview-only shortcut scope. `toggle_preview_wrap` accepts custom bindings
+under `context: preview`; Ctrl+Alt+W remains the default and can be disabled.
+Button hints resolve the active keymap instead of advertising a stale key.
+The focused keymap test passed for disable/remap and exclusion from Terminal,
+ordinary CommandPalette and Settings contexts, with desktop test compilation.
+IME guarding remains in the shared action handler; native key dispatch and
+visual hints remain pending.
+
 Same-file/same-mode preview refresh now retains the query, wrapped-excerpt mode
 and selected command/line identity. Input updates rebuild ranking before deferred
 selection restoration; removed/nonmatching lines fall back to the first result.

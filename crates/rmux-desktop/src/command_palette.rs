@@ -970,10 +970,12 @@ impl Render for CommandPalette {
         let has_search_excerpt = self.selected_search_excerpt().is_some();
         let has_ssh_destination = self.selected_ssh_destination().is_some();
         let has_preview_file = self.selected_preview_file().is_some();
+        let wrap_hint = shortcuts::hint(&TogglePreviewWrap, &self.input.read(cx).focus, window);
         let copy_hint = shortcuts::hint(&CopySearchExcerpt, &self.input.read(cx).focus, window);
         div()
             .id("command-palette")
-            .key_context("CommandPalette")
+            .key_context(if self.preview_navigation.is_some() && !self.hex_preview { "CommandPalette TextPreview" } else { "CommandPalette" })
+            .on_action(cx.listener(|this, _: &TogglePreviewWrap, _, cx| this.toggle_preview_wrap(cx)))
             .on_action(cx.listener(|this, _: &CopySearchExcerpt, _, cx| this.copy_search_excerpt(cx)))
             .w(px(520.))
             .max_w(relative(0.9))
@@ -993,14 +995,6 @@ impl Render for CommandPalette {
                     return;
                 }
                 let key = event.keystroke.key.as_str();
-                let modifiers = event.keystroke.modifiers;
-                if key == "w" && modifiers.control && modifiers.alt && !modifiers.platform && !modifiers.shift
-                    && this.preview_navigation.is_some() && !this.hex_preview {
-                    this.toggle_preview_wrap(cx);
-                    cx.stop_propagation();
-                    return;
-                }
-
                 let selected = if matches!(key, "pageup" | "pagedown") {
                     paged_result(this.selected, this.search.matches.len(), key == "pageup",
                         f32::from(this.scroll.viewport_bounds().size.height),
@@ -1055,9 +1049,10 @@ impl Render for CommandPalette {
                         .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
                             if event.standard_click() { this.toggle_preview_wrap(cx); }
                         }))
-                        .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("Toggle wrapped excerpts · Ctrl+Alt+W · Copy retains the full captured line".into())).into())
+                        .tooltip({ let hint: SharedString = format!("Toggle wrapped excerpts{} · Copy retains the full captured line", wrap_hint.as_ref().map(|hint| format!(" · {hint}")).unwrap_or_default()).into();
+                            move |_, cx| cx.new(|_| pane_view::ControlHint(hint.clone())).into() })
                         .child(if self.wrap_preview { "Single-line excerpts" } else { "Wrap excerpts" }))
-                    .when(self.wrap_preview, |bar| bar.child(div().text_xs().text_color(rgb(0xa0a0a0)).child("4-line excerpts · Ctrl+Alt+W toggles")))
+                    .when(self.wrap_preview, |bar| bar.child(div().text_xs().text_color(rgb(0xa0a0a0)).child("Up to 4 visual lines")))
             ))
             .child(div().flex_shrink_0().p_3().child(self.input.clone()))
             .child(if self.search.matches.is_empty() {

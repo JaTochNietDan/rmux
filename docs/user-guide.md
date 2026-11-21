@@ -569,6 +569,12 @@ Cmd+S on macOS or Ctrl+S elsewhere saves the settings through the same action as
 **Save these settings**. This binding leaves terminal input unchanged. Customize
 it with `{"key":"ctrl-alt-s","action":"save_appearance","context":"settings"}`;
 use `action: "disabled"` in the same context to disable the default key.
+Use `preview` for text-file preview shortcuts. Wrap excerpts defaults to
+Ctrl+Alt+W and can be remapped with
+`{"key":"ctrl-alt-r","action":"toggle_preview_wrap","context":"preview"}`.
+Disable the original key separately with `action: "disabled"` in that context.
+The button tooltip reflects the active binding. This scope excludes hex previews,
+ordinary command palettes, terminal input and Settings.
 The first stroke must use Ctrl/Cmd/Alt or F1–F24; one- and two-stroke bindings are
 supported. The second stroke may be unmodified, for example
 `{"key":"ctrl-k t","action":"new_tab"}`. Bare `t` remains normal typing.
