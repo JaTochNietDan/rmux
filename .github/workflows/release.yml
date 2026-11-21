@@ -36,8 +36,10 @@ jobs:
             ~/.cargo/git
             target/release
             .deps
-          key: macos-arm64-release-${{ hashFiles('Cargo.lock', 'mise.toml') }}
-          restore-keys: macos-arm64-release-
+          key: macos-arm64-release-${{ hashFiles('Cargo.lock', 'mise.toml') }}-${{ github.sha }}
+          restore-keys: |
+            macos-arm64-release-${{ hashFiles('Cargo.lock', 'mise.toml') }}-
+            macos-arm64-release-
       - name: Prepare pinned Ghostty dependency
         run: mise run bootstrap
       - name: Build release on GitHub runner
@@ -51,7 +53,7 @@ jobs:
             ~/.cargo/git
             target/release
             .deps
-          key: macos-arm64-release-${{ hashFiles('Cargo.lock', 'mise.toml') }}
+          key: macos-arm64-release-${{ hashFiles('Cargo.lock', 'mise.toml') }}-${{ github.sha }}
       - name: Sign, notarize and prepare Sparkle update
         env:
           MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
@@ -100,15 +102,18 @@ jobs:
         if: matrix.platform == 'windows'
         shell: pwsh
         run: '"LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV'
-      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+      - id: build-cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target/release
             .deps
-          key: ${{ matrix.platform }}-release-${{ hashFiles('Cargo.lock', 'mise.toml') }}
-          restore-keys: ${{ matrix.platform }}-release-
+          key: ${{ matrix.platform }}-release-${{ hashFiles('Cargo.lock', 'mise.toml') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ matrix.platform }}-release-${{ hashFiles('Cargo.lock', 'mise.toml') }}-
+            ${{ matrix.platform }}-release-
       - name: Prepare Linux Ghostty
         if: matrix.platform == 'linux'
         run: mise exec -- sh scripts/bootstrap-ghostty.sh
@@ -118,7 +123,7 @@ jobs:
       - name: Build native release
         run: mise exec -- cargo build --locked --release -p rmux-desktop -p rmux-cli
       - name: Save native build cache
-        if: always()
+        if: always() && steps.build-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
           path: |

@@ -2,6 +2,18 @@
 
 ## Current implementation focus
 
+Published v0.1.1 with signed/notarized macOS DMG and Sparkle ZIP, plus Linux
+and Windows archives built on GitHub. Reorganized the user guide into a short
+task guide and linked topic references. Release caches now use matching
+commit-specific restore/save keys on all platforms, preferring the current
+dependency/toolchain hash before broader fallback. This allows macOS to save
+new compiled workspace state after source changes instead of repeatedly restoring
+an immutable older cache; exact retries skip redundant cache uploads. Cache
+changes have focused diff review; their time savings await a subsequent release.
+The local-only Cloudflare site infrastructure is prepared, but deployment is
+waiting for a token with Pages write permission. The preceding turn made progress
+by committing that configuration and identifying the API permission failure.
+
 Browser address chrome now follows native navigation/redirect URLs when unfocused
 and unchanged since its last synchronization or successful submission. Focused
 edits, IME composition and unsent drafts survive metadata updates and blur; Escape
