@@ -1,5 +1,18 @@
 # rmux performance acceptance plan
 
+Incremental history-probe baseline (`9aa6f0f` plus harness, macOS arm64 debug):
+five batches at each of 1/8/32 terminal engines, each containing 2,000 fixture
+lines and a final Unicode needle. Match medians were 0.307/1.882/5.048 ms;
+miss medians were 1.387/7.836/26.331 ms. Maximum 32-terminal miss batch was
+26.611 ms. [Raw summaries](benchmarks/history-probe-debug.jsonl).
+Repeat with `mise run bench-history-search`. The `late_match` fixture is late
+in chronological export but newest in terminal history, so it exercises early
+search termination, not a worst-case match location. Misses scan the retained
+fixture to completion. Timings include search registration/query/scan/cleanup,
+exclude fixture setup, preview exports, PTYs and UI rendering, and have no
+concurrent output. They are not release, contention, maximum-retention or
+input-to-pixel acceptance measurements.
+
 Incremental Find feeds now use opportunistic parser locking. A busy feed retains
 the refresh request, backs off for 1 ms and rechecks cancellation/supersession
 instead of waiting inside the feed mutex acquisition. Completed searches still

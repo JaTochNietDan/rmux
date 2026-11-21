@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Added `mise run bench-history-search` and recorded 1/8/32-engine retained-history
+probe timings with five samples per match/miss case. The 32-engine debug median
+was 5.048 ms for a newest-line match and 26.331 ms for a full fixture miss;
+all probes returned the expected result within their per-terminal work budget.
+Raw summaries and scope limits are in docs/performance.md. This measures engine
+work on idle 2,000-line fixtures, not PTY contention or native UI latency.
+
 Global search now reports preview progress, matching-terminal count and remaining
 deep scans in its loading notice. Scanner progress uses a one-slot nonblocking
 channel and at most one publication per 50 ms, without an idle polling task.

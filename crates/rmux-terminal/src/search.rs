@@ -298,6 +298,36 @@ impl Drop for Search {
 mod tests {
     use super::*;
     #[test]
+    #[ignore = "manual multi-terminal retained-history search baseline"]
+    fn history_probe_scaling() -> Result<()> {
+        use std::{sync::atomic::AtomicBool, time::{Duration, Instant}};
+        for count in [1, 8, 32] {
+            let mut terminals = Vec::new();
+            for _ in 0..count {
+                let mut terminal = Terminal::new(80, 24)?;
+                terminal.set_scrollback_limit(8 * 1024 * 1024)?;
+                for _ in 0..2000 { terminal.write(b"ordinary output with enough characters to exceed the preview cap\r\n"); }
+                terminal.write("unique-needle-世界".as_bytes());
+                terminals.push(Arc::new(Mutex::new(terminal)));
+            }
+            for (kind, query, expected) in [("late_match", "unique-needle-世界", true), ("miss", "absent-search-token", false)] {
+                let mut elapsed = Vec::new();
+                for _ in 0..5 {
+                    let start = Instant::now();
+                    for terminal in &terminals {
+                        assert_eq!(Search::probe(terminal.clone(), query, &AtomicBool::new(false), Instant::now() + Duration::from_millis(250))?, Some(expected));
+                    }
+                    elapsed.push(start.elapsed().as_secs_f64() * 1000.);
+                }
+                let first = elapsed[0];
+                elapsed.sort_by(f64::total_cmp);
+                let profile = if cfg!(debug_assertions) { "debug" } else { "release" };
+                println!("{{\"benchmark\":\"history_probe\",\"terminals\":{count},\"case\":\"{kind}\",\"rows_per_terminal\":2000,\"columns\":80,\"viewport_rows\":24,\"samples\":5,\"first_ms\":{first},\"p50_ms\":{},\"max_ms\":{},\"profile\":\"{profile}\",\"os\":\"{}\",\"arch\":\"{}\"}}", elapsed[2], elapsed[4], std::env::consts::OS, std::env::consts::ARCH);
+            }
+        }
+        Ok(())
+    }
+    #[test]
     fn history_probe_finds_beyond_export_prefix_without_changing_selection() -> Result<()> {
         use std::{sync::atomic::AtomicBool, time::{Duration, Instant}};
         let terminal = Arc::new(Mutex::new(Terminal::new(80, 24)?));
