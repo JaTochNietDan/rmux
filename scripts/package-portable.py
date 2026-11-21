@@ -27,6 +27,7 @@ with tempfile.TemporaryDirectory(prefix='rmux-package-') as temporary:
         shutil.copy2(Path('.deps/ghostty-vt/bin/ghostty-vt.dll'), root / 'ghostty-vt.dll')
     shutil.copytree('shell-integration', root / 'shell-integration')
     shutil.copy2('README.md', root / 'README.md')
+    shutil.copy2('LICENSE', root / 'LICENSE')
     subprocess.run([sys.executable, 'scripts/release-notices.py', str(root / 'THIRD-PARTY-NOTICES.txt')], check=True)
     if platform == 'linux':
         shutil.copy2('packaging/linux/rmux.desktop', root / 'rmux.desktop')

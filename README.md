@@ -76,3 +76,8 @@ Please report bugs and feature requests in
 Powered by [Ghostty](https://ghostty.org/), [GPUI](https://www.gpui.rs/), and
 [Sparkle](https://sparkle-project.org/). Third-party notices are included in the
 macOS app bundle.
+
+## License
+
+rmux is licensed under the [MIT License](LICENSE). Dependencies retain their
+own licenses; release packages include third-party notices.
