@@ -246,7 +246,7 @@ impl Preferences {
             let preset = Self { terminal_theme: self.terminal_theme, ..Self::default() };
             let base = match preset.terminal_palette() {
                 Some(colors) => colors,
-                None => rmux_terminal::default_ansi_palette()?,
+                None => rmux_terminal::default_ansi_palette(),
             };
             theme.palette = Some(std::array::from_fn(|index| theme.palette_entries[index].unwrap_or_else(|| {
                 let rmux_terminal::Color(r, g, b) = base[index];
@@ -525,7 +525,7 @@ mod tests {
         std::fs::write(&path, "palette=1=010203\n")?;
         for theme in [TerminalTheme::Dark, TerminalTheme::Nord] {
             let original = Preferences { terminal_theme: theme, ..Preferences::default() };
-            let defaults = original.terminal_palette().unwrap_or(rmux_terminal::default_ansi_palette()?);
+            let defaults = original.terminal_palette().unwrap_or(rmux_terminal::default_ansi_palette());
             let first = original.import_theme(path.clone())?;
             let colors = first.terminal_palette().unwrap();
             assert_eq!(colors[1], rmux_terminal::Color(1,2,3));

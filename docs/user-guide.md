@@ -840,8 +840,8 @@ selection-background = 4c566a
 selection-foreground = eceff4
 ```
 
-Optional `palette = N=RRGGBB` entries override individual ANSI slots (decimal
-0–15). Omitted slots inherit the selected built-in preset; Dark uses the pinned
+Optional `palette = N=COLOR` entries override individual ANSI slots 0–15. Indices
+accept decimal or `0x`, `0o`, and `0b` prefixes (for example `palette = 0xf=red`). Omitted slots inherit the selected built-in preset; Dark uses the pinned
 Ghostty engine defaults. A new import never inherits entries from the previous
 import. Theme colors use the pinned Ghostty parser: X11 names (for example `red`),
 3/6-digit hex with optional `#`, 9/12-digit hex with `#`, and `rgb:`/`rgbi:`

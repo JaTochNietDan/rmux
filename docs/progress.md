@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Palette assignments now use the pinned Ghostty parser for decimal, hexadecimal,
+octal and binary indices and literal colors, while retaining rmux's 0–15 ANSI
+limit. The bounded FFI wrapper rejects oversized/control-containing entries.
+Also replaced the temporary terminal used for factory palette discovery with
+Ghostty's direct default-palette API: only the resulting 16 colors are cached.
+Four focused engine/import tests passed for numeric bases, invalid/overflow
+indices, sparse inheritance, factory-color agreement and OSC/extended-color
+preservation. Native visuals and extended palette overrides remain pending.
+
 Theme import now delegates literal color parsing to the pinned Ghostty engine,
 adding X11 names, short/wide hex and rgb:/rgbi: specifications without a duplicate
 color-name table or temporary terminal. The Rust boundary caps input at 256 bytes

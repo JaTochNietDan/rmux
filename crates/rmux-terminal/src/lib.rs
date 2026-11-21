@@ -31,19 +31,27 @@ pub fn parse_color(value: &str) -> Result<Color> {
     Ok(parsed.into())
 }
 
-/// Query the pinned engine's factory ANSI palette once, without a PTY or UI.
-/// Theme import calls this off the UI thread only when a sparse palette needs it.
-pub fn default_ansi_palette() -> Result<[Color; 16]> {
+/// Parse a bounded N=COLOR palette assignment with Ghostty's numeric grammar.
+pub fn parse_palette_entry(value: &str) -> Result<(u8, Color)> {
+    ensure!(!value.is_empty() && value.len() <= 272 && !value.chars().any(|ch| ch.is_control() && ch != '\t'), "palette entry must fit 272 bytes without control characters");
+    let mut index = 0;
+    let mut parsed = GhosttyColorRgb::default();
+    // SAFETY: valid length-delimited input and correctly sized writable outputs;
+    // the parser does not retain input or output pointers.
+    let result = unsafe { ghostty_color_parse_palette_entry(value.as_ptr().cast(), value.len(), &mut index, &mut parsed) };
+    ensure!(result == GHOSTTY_SUCCESS, "invalid palette index or color");
+    Ok((index, parsed.into()))
+}
+
+/// Read the pinned engine's factory ANSI palette without allocating a terminal.
+pub fn default_ansi_palette() -> [Color; 16] {
     static DEFAULTS: std::sync::OnceLock<[Color; 16]> = std::sync::OnceLock::new();
-    if let Some(colors) = DEFAULTS.get() { return Ok(*colors); }
-    let terminal = Terminal::new(1, 1)?;
-    let mut palette = [GhosttyColorRgb::default(); 256];
-    // SAFETY: live exclusively owned handle; this tagged getter writes exactly
-    // 256 RGB entries into the correctly sized output array.
-    unsafe { check(ghostty_terminal_get(terminal.terminal, GHOSTTY_TERMINAL_DATA_COLOR_PALETTE_DEFAULT, out(&mut palette)))?; }
-    let colors = std::array::from_fn(|index| palette[index].into());
-    let _ = DEFAULTS.set(colors);
-    Ok(colors)
+    *DEFAULTS.get_or_init(|| {
+        let mut palette = [GhosttyColorRgb::default(); 256];
+        // SAFETY: this function fills exactly 256 RGB entries and retains no pointer.
+        unsafe { ghostty_color_palette_default(palette.as_mut_ptr()); }
+        std::array::from_fn(|index| palette[index].into())
+    })
 }
 
 
@@ -1841,11 +1849,24 @@ mod tests {
     }
 
     #[test]
+    fn palette_entry_parser_accepts_radices_and_bounds() -> Result<()> {
+        for index in ["15", "0xf", "0o17", "0b1111"] {
+            assert_eq!(parse_palette_entry(&format!(" {index} = red "))?, (15, Color(255,0,0)));
+        }
+        assert_eq!(parse_palette_entry("255=#010203")?, (255, Color(1,2,3)));
+        for value in ["256=red", "-1=red", "0x100=red", "0b2=red", "1=invalid", "1=red\0"] {
+            assert!(parse_palette_entry(value).is_err(), "{value:?}");
+        }
+        assert!(parse_palette_entry(&"x".repeat(273)).is_err());
+        Ok(())
+    }
+
+    #[test]
     fn ansi_palette_updates_existing_cells_and_preserves_extended_colors() -> Result<()> {
         let mut terminal = Terminal::new(20, 3)?;
         terminal.write(b"\x1b[31mR\x1b[91mB\x1b[38;5;200mE\x1b[38;2;9;8;7mT");
         let original = terminal.frame()?;
-        let defaults = default_ansi_palette()?;
+        let defaults = default_ansi_palette();
         assert_eq!(original.rows[0][0].foreground, defaults[1]);
         assert_eq!(original.rows[0][1].foreground, defaults[9]);
         let mut colors = [Color(20, 30, 40); 16];
