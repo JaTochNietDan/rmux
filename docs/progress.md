@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Added the requested macOS Cmd+[ / ] split-pane cycling, alongside the existing
+Cmd+Shift+[ / ] tab cycling. Both pairs appear in the native menu. Shifted
+brackets also accept GPUI's macOS `{` / `}` events, which omit the Shift bit;
+the previous bindings covered only explicit Shift events. A focused matching
+test passes for all six forms and distinguishes pane from tab actions. Existing
+cycle handlers wrap within the workspace/pane and preserve zoomed navigation.
+These changes are on main; installed-release native acceptance remains pending.
+
 Restored SSH tabs now show a compact Not connected banner with a Connect SSH
 action. It opens the saved destination in a new workspace through the existing
 guarded asynchronous launch path and preserves the restored local shell. Long

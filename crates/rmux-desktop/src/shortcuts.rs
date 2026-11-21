@@ -1,6 +1,20 @@
 use super::*;
 use anyhow::{Result, ensure};
 
+/// macOS reports shifted punctuation as its resulting character (`{` / `}`),
+/// without the Shift modifier. Keep explicit Shift bindings for other layouts.
+#[cfg(target_os = "macos")]
+pub(super) fn bracket_navigation() -> Vec<KeyBinding> {
+    vec![
+        KeyBinding::new("cmd-[", PreviousPane, Some("Terminal")),
+        KeyBinding::new("cmd-]", NextPane, Some("Terminal")),
+        KeyBinding::new("cmd-{", PreviousTab, Some("Terminal")),
+        KeyBinding::new("cmd-}", NextTab, Some("Terminal")),
+        KeyBinding::new("cmd-shift-[", PreviousTab, Some("Terminal")),
+        KeyBinding::new("cmd-shift-]", NextTab, Some("Terminal")),
+    ]
+}
+
 /// Resolve the current binding at the terminal that will receive the action.
 /// This respects custom overrides, disabled bindings and multi-stroke chords.
 pub(super) fn hint(action: &dyn Action, focus: &FocusHandle, window: &Window) -> Option<String> {
@@ -266,6 +280,26 @@ pub fn install(cx: &mut App) {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn bracket_navigation_distinguishes_panes_from_tabs() {
+        use super::*;
+        let bindings = bracket_navigation();
+        for (stroke, expected) in [
+            ("cmd-[", Box::new(PreviousPane) as Box<dyn Action>),
+            ("cmd-]", Box::new(NextPane)),
+            ("cmd-{", Box::new(PreviousTab)),
+            ("cmd-}", Box::new(NextTab)),
+            ("cmd-shift-[", Box::new(PreviousTab)),
+            ("cmd-shift-]", Box::new(NextTab)),
+        ] {
+            let event = Keystroke::parse(stroke).unwrap();
+            let matched: Vec<_> = bindings.iter().filter(|binding|
+                binding.match_keystrokes(&[event.clone()]) == Some(false)).collect();
+            assert_eq!(matched.len(), 1, "{stroke}");
+            assert_eq!(matched[0].action().type_id(), expected.as_ref().type_id(), "{stroke}");
+        }
+    }
     #[test]
     fn resolved_shortcuts_are_searchable_by_symbols_and_key_names() {
         use crate::palette_match::RankedSearch;

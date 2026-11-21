@@ -3727,9 +3727,7 @@ fn main() {
                 KeyBinding::new("cmd-shift-g", GroupSelectedWorkspaces, None),
                 KeyBinding::new("cmd-shift-r", RenameWorkspace, None),
                 KeyBinding::new("cmd-t", NewTab, Some("Terminal")),
-                KeyBinding::new("cmd-shift-]", NextTab, Some("Terminal")),
                 KeyBinding::new("cmd-shift-t", ShowTabPicker, Some("Terminal")),
-                KeyBinding::new("cmd-shift-[", PreviousTab, Some("Terminal")),
                 KeyBinding::new("cmd-alt-down", NextWorkspace, None),
                 KeyBinding::new("cmd-shift-u", NextUnreadTerminal, None),
                 KeyBinding::new("cmd-alt-up", PreviousWorkspace, None),
@@ -3853,6 +3851,8 @@ fn main() {
             KeyBinding::new("ctrl-tab", NextPane, Some("Terminal")),
             KeyBinding::new("ctrl-shift-tab", PreviousPane, Some("Terminal")),
         ]);
+        #[cfg(target_os = "macos")]
+        cx.bind_keys(shortcuts::bracket_navigation());
         cx.bind_keys((1..=9).map(|number| {
             let modifier = if cfg!(target_os = "macos") {
                 "cmd-shift"
@@ -4034,6 +4034,10 @@ fn main() {
                     MenuItem::action("Focus Right", FocusRight),
                     MenuItem::action("Focus Up", FocusUp),
                     MenuItem::action("Focus Down", FocusDown),
+                    MenuItem::action("Previous Pane", PreviousPane),
+                    MenuItem::action("Next Pane", NextPane),
+                    MenuItem::action("Previous Tab", PreviousTab),
+                    MenuItem::action("Next Tab", NextTab),
                     MenuItem::action("Toggle Sidebar", ToggleSidebar),
                     MenuItem::action("Next Workspace", NextWorkspace),
                     MenuItem::action("Last Workspace", LastWorkspace),

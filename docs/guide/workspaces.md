@@ -337,6 +337,9 @@ confirmation policy and three-second cleanup deadline.
 ## Tabs and tab switching
 
 Cmd+T creates a tab in the focused pane; Cmd+Shift+[ / ] switches tabs.
+Starting with the next release, Cmd+[ / ] cycles split panes on macOS.
+Ctrl+Tab / Ctrl+Shift+Tab also cycles panes. Pane and tab navigation appear
+in the application menu, and their actions can be rebound in settings.
 Right-click a tab to select it and open a menu with Rename, Copy/Reveal Working
 Directory, Move Tab Left/Right,
 Close, Close Other Tabs and Close Tabs to the Right. Arrow keys navigate, Enter/Space activates,
