@@ -1,0 +1,3 @@
+{"trees":true,"shells":1,"children_per_shell":4,"application_processes":1,"cold_us":28474,"warm_samples":5,"warm_p50_us":42014,"warm_max_us":42846}
+{"trees":true,"shells":8,"children_per_shell":4,"application_processes":1,"cold_us":20377,"warm_samples":5,"warm_p50_us":41833,"warm_max_us":46427}
+{"trees":true,"shells":32,"children_per_shell":4,"application_processes":1,"cold_us":21547,"warm_samples":5,"warm_p50_us":50199,"warm_max_us":51324}

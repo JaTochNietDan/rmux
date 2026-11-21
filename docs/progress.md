@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Extended process-tree sampling measurements to live child workloads: each of
+1/8/32 shells owns four idle children, with explicit startup readiness and
+parent-managed child cleanup. The ignored mise benchmark checks complete tree
+ownership, exact sample counts and valid CPU baselines. Warm debug medians were
+42.014/41.833/50.199 ms over five samples per size; raw summaries and limitations
+are recorded in performance.md. Native UI remains locked, confirmed this cycle;
+no visual/interaction acceptance is claimed. Deep/churning/capped trees and
+release/UI performance remain open.
+
 Text previews now offer wrapped excerpts through a persistent control and
 Ctrl+Alt+W. Up to four visual lines per row improve readability while retaining
 bounded excerpts and virtualized rendering. Toggling resets measured row sizes,

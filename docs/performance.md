@@ -92,6 +92,21 @@ This is not release-build, memory-allocation or cross-platform acceptance eviden
 Each parent-child index is now built once per refresh instead of once per root;
 aggregation also streams samples without a temporary vector per tree.
 
+Process-tree child workload (`fd3f0c1` plus child-fixture harness, macOS arm64,
+debug profile): 1/8/32 shells with four idle child processes each measured warm
+medians of 42.014/41.833/50.199 ms and maxima of 42.846/46.427/51.324 ms.
+Each size uses one cold and five warm samples. The sampler also includes rmux's
+test process, for 6/41/161 expected samples. All root totals were complete, with
+five owned processes per shell and finite nonnegative CPU values after baseline.
+[Raw summaries](benchmarks/process-tree-children-debug.jsonl); repeat with
+`mise run bench-process-tree-children`. Fixture startup/readiness and teardown are
+outside timings; parent shells terminate and reap their children on stdin EOF,
+including assertion unwind. These shallow idle trees exercise descendant
+attribution beyond the prior childless fixture. They do not cover deep trees,
+process churn, cap saturation, UI responsiveness, or release-build performance.
+Host load differs from the earlier baseline, so these numbers are not a controlled
+measurement of the incremental cost of children.
+
 Local file-loader baseline (`1794455` plus the benchmark harness, macOS arm64,
 debug profile): 40 reads of a freshly generated 2,048-entry directory measured
 2.486 ms p50 / 2.608 ms p95. A 128 KiB Unicode fixture, capped to a 64 KiB read

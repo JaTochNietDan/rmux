@@ -125,6 +125,10 @@ run = "cargo test -p rmux-desktop process_metrics::tests::sampling_scaling -- --
 description = "Manual Unix debug-build process-tree sampling baseline for 1/8/32 shells"
 run = "cargo test -p rmux-desktop process_metrics::tests::tree_sampling_scaling -- --ignored --nocapture"
 
+[tasks.bench-process-tree-children]
+description = "Manual Unix process-tree baseline for 1/8/32 shells with four children each"
+run = "cargo test -p rmux-desktop process_metrics::tests::tree_children_sampling_scaling -- --ignored --nocapture"
+
 [tasks.bench-history-search]
 description = "Manual incremental history-search baseline for 1/8/32 terminals"
 run = "cargo test -p rmux-terminal history_probe_scaling -- --ignored --nocapture"

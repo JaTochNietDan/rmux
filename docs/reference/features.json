@@ -1616,8 +1616,8 @@
       ],
       "acceptance": "Attribute CPU and memory to surfaces and helper processes using bounded sampling.",
       "rmux_status": "in_progress",
-      "implementation": "On-demand surface.memory_usage RPC and a manual-refresh memory panel sample Ghostty storage with nonblocking engine access. Panel includes root-shell and shell-tree RSS/CPU, bounded to 256 terminals and 4,096 sampled processes, background sampling, sorting, focus navigation and JSON copy. Tree ownership is checked before/after sampling; partial totals carry counts and withhold CPU.",
-      "remaining": "Reparented helper attribution, GPU allocation accounting, native panel visual/interaction acceptance and tree-sampling performance measurements.",
+      "implementation": "On-demand surface.memory_usage RPC and a manual-refresh memory panel sample Ghostty storage with nonblocking engine access. Panel includes root-shell and shell-tree RSS/CPU, bounded to 256 terminals and 4,096 sampled processes, background sampling, sorting, focus navigation and JSON copy. Tree ownership is checked before/after sampling; partial totals carry counts and withhold CPU. A manual debug benchmark covers 1/8/32 shells with four live children each, complete ownership and valid CPU baselines; measured warm medians are recorded in performance.md.",
+      "remaining": "Reparented helper attribution, GPU allocation accounting, native panel visual/interaction acceptance and release/deep-tree/churn/cap-saturation sampling measurements.",
       "progress_record": "docs/progress.md"
     },
     {

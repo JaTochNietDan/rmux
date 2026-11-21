@@ -200,20 +200,27 @@ mod tests {
     #[cfg(unix)]
     #[test]
     #[ignore = "manual process sampling benchmark"]
-    fn sampling_scaling() { sampling_baseline(false); }
+    fn sampling_scaling() { sampling_baseline(false, 0); }
 
     #[cfg(unix)]
     #[test]
     #[ignore = "manual process tree sampling benchmark"]
-    fn tree_sampling_scaling() { sampling_baseline(true); }
+    fn tree_sampling_scaling() { sampling_baseline(true, 0); }
 
     #[cfg(unix)]
-    fn sampling_baseline(trees: bool) {
+    #[test]
+    #[ignore = "manual process tree benchmark with child processes"]
+    fn tree_children_sampling_scaling() { sampling_baseline(true, 4); }
+
+    #[cfg(unix)]
+    fn sampling_baseline(trees: bool, children: usize) {
+        use std::io::Read;
         struct Shells(Vec<std::process::Child>);
         impl Drop for Shells {
             fn drop(&mut self) {
                 for child in &mut self.0 {
-                    let _ = child.kill();
+                    // Closing stdin lets the fixture's trap reap its own children.
+                    drop(child.stdin.take());
                     let _ = child.wait();
                 }
             }
@@ -221,12 +228,19 @@ mod tests {
         for count in [1, 8, 32] {
             let mut shells = Shells(Vec::new());
             for _ in 0..count {
-                shells.0.push(std::process::Command::new("/bin/sh")
-                    .args(["-c", "read line"])
+                // Child PID list is private to this fixture. The EXIT trap both
+                // terminates and reaps them, including on assertion unwind.
+                let script = format!("kids=''; trap 'for pid in $kids; do kill $pid 2>/dev/null; done; wait' EXIT; i=0; while [ $i -lt {children} ]; do sleep 60 & kids=\"$kids $!\"; i=$((i+1)); done; printf R; read line");
+                let child = std::process::Command::new("/bin/sh")
+                    .args(["-c", &script])
                     .stdin(std::process::Stdio::piped())
-                    .stdout(std::process::Stdio::null())
+                    .stdout(std::process::Stdio::piped())
                     .stderr(std::process::Stdio::null())
-                    .spawn().unwrap());
+                    .spawn().unwrap();
+                shells.0.push(child);
+                let mut ready = [0];
+                shells.0.last_mut().unwrap().stdout.as_mut().unwrap().read_exact(&mut ready).unwrap();
+                assert_eq!(ready, [b'R']);
             }
             let pids: Vec<_> = std::iter::once(std::process::id())
                 .chain(shells.0.iter().map(|child| child.id())).collect();
@@ -237,13 +251,13 @@ mod tests {
                 if trees {
                     let (samples, totals) = sampler.sample_with_trees(pids.iter().copied(), pids.iter().copied().skip(1), &canceled);
                     assert_eq!(totals.len(), count);
-                    assert!(totals.values().all(|tree| tree.complete && tree.sampled_processes == 1));
+                    assert!(totals.values().all(|tree| tree.complete && tree.sampled_processes == children + 1));
                     samples
                 } else { sampler.sample(pids.iter().copied()) }
             };
             let first = sample(&mut sampler);
             let cold_us = started.elapsed().as_micros();
-            assert_eq!(first.len(), count + 1);
+            assert_eq!(first.len(), count * (children + 1) + 1);
             assert!(first.values().all(|sample| sample.cpu_percent.is_none()));
             let mut times = Vec::new();
             for _ in 0..5 {
@@ -251,11 +265,11 @@ mod tests {
                 let started = Instant::now();
                 let samples = sample(&mut sampler);
                 times.push(started.elapsed().as_micros());
-                assert_eq!(samples.len(), count + 1);
+                assert_eq!(samples.len(), count * (children + 1) + 1);
                 assert!(samples.values().all(|sample| sample.cpu_percent.is_some_and(|cpu| cpu.is_finite() && cpu >= 0.)));
             }
             times.sort_unstable();
-            println!("{{\"trees\":{trees},\"shells\":{count},\"application_processes\":1,\"cold_us\":{cold_us},\"warm_samples\":5,\"warm_p50_us\":{},\"warm_max_us\":{}}}", times[2], times[4]);
+            println!("{{\"trees\":{trees},\"shells\":{count},\"children_per_shell\":{children},\"application_processes\":1,\"cold_us\":{cold_us},\"warm_samples\":5,\"warm_p50_us\":{},\"warm_max_us\":{}}}", times[2], times[4]);
         }
     }
 
