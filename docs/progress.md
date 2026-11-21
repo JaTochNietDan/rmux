@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Added explicit `split-pane --ssh DESTINATION` / `pane.split.ssh_destination`, with
+CLI help/completion support and validation before request queueing. SSH PTY startup
+runs off the UI thread under the command-launch guard; completion rechecks target
+ownership/capacity and publishes the prepared session with its SSH identity/label.
+Default RPC splits remain local and focus/activation stay opt-in. The native
+no-network fixture passed CLI split creation, distinct child PID, preservation of
+the source PID and selected workspace, failed-spawn rollback, teardown of both
+children, and restore of both targets as local shells. Desktop/CLI compilation and
+the focused CLI split test passed. Native visual/focus and remote authentication
+through this particular split path remain pending.
+
 Added New Local Tab to the File menu, command palette and custom `new_local_tab`
 action so remote panes can host an explicit local shell without another workspace.
 It shares normal background tab preparation, cancellation and focus preservation,

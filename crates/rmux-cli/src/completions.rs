@@ -31,7 +31,7 @@ const COMMANDS: &[(&str, &[&str])] = &[
     ("equalize-panes", &["--workspace"]),
     ("swap-panes", &["--pane", "--other-pane"]),
     ("resize-pane", &["--pane", "--direction"]),
-    ("split-pane", &["--pane", "--direction", "--cwd", "--focus", "--activate"]),
+    ("split-pane", &["--pane", "--direction", "--ssh", "--cwd", "--focus", "--activate"]),
     ("set-pane-zoom", &["--pane", "--zoomed"]),
     ("completions", &[]),
 ];

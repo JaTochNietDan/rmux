@@ -197,6 +197,7 @@ pub(super) enum SplitDirection { Left, Right, Up, Down }
 #[derive(serde::Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub(super) struct PaneSplit {
+    pub ssh_destination: Option<String>,
     pub pane_id: String,
     pub direction: SplitDirection,
     pub cwd: Option<std::path::PathBuf>,
@@ -432,6 +433,32 @@ pub fn attach_live(cx: &mut gpui::App, stdio: bool, socket_directory: Option<std
                         let session = cx.background_executor().spawn(async move { job() }).await;
                         handle.update(cx, |view, window, cx| view.automation_finish_ssh(create, session, window, cx))
                             .map_err(|_| Failure { code: -32004, message: "Window closed during SSH startup" })
+                            .and_then(|result| result)
+                    }
+                    Err(error) => Err(error),
+                };
+                let _ = request.reply.try_send(result);
+                continue;
+            }
+            if let Some(split) = request.pane_split.as_ref().filter(|split| split.ssh_destination.is_some()) {
+                let prepared = cx.update(|cx| {
+                    if !request.pending.start() { return Err(Failure { code: -32001, message: "Request expired before execution" }); }
+                    let target = target_id(&split.pane_id)?;
+                    for handle in cx.windows() {
+                        let Some(handle) = handle.downcast::<super::window_view::WorkspaceWindow>() else { continue; };
+                        if handle.read(cx).is_ok_and(|view| view.automation_pane_target(target, cx).is_some()) {
+                            let job = handle.update(cx, |view, _, cx| view.automation_prepare_ssh_split(split, target, cx))
+                                .map_err(|_| Failure { code: -32004, message: "Pane window closed" })??;
+                            return Ok((handle, target, job));
+                        }
+                    }
+                    Err(Failure { code: -32004, message: "Pane not found" })
+                }).unwrap_or(Err(Failure { code: -32004, message: "Application closed" }));
+                let result = match prepared {
+                    Ok((handle, target, job)) => {
+                        let session = cx.background_executor().spawn(async move { job() }).await;
+                        handle.update(cx, |view, window, cx| view.automation_finish_ssh_split(split, target, session, window, cx))
+                            .map_err(|_| Failure { code: -32004, message: "Pane window closed during SSH startup" })
                             .and_then(|result| result)
                     }
                     Err(error) => Err(error),
@@ -1049,8 +1076,9 @@ fn dispatch_inner(
     let pane_split = if method == "pane.split" {
         match request.get("params").cloned().and_then(|params| serde_json::from_value::<PaneSplit>(params).ok()) {
             Some(split) if target_id(&split.pane_id).is_ok()
+                && split.ssh_destination.as_ref().is_none_or(|destination| crate::ssh::command(destination).is_ok())
                 && split.cwd.as_ref().is_none_or(|path| path.is_absolute() && path.as_os_str().len() <= 8192) => Some(split),
-            _ => return respond(error(id, -32602, "Expected pane_id, direction left|right|up|down, optional absolute cwd, focus and activate booleans")),
+            _ => return respond(error(id, -32602, "Expected pane_id, direction left|right|up|down, optional SSH destination, absolute cwd, focus and activate booleans")),
         }
     } else { None };
     let pane_zoom = if method == "pane.zoom.set" {
@@ -1551,6 +1579,16 @@ mod tests {
             assert_eq!(response["result"]["revision"].as_u64(), Some(u64::MAX), "{response}");
         }
         worker.join().unwrap();
+    }
+
+    #[test]
+    fn ssh_split_rejects_invalid_destinations_before_queueing() {
+        let (sender, receiver) = async_channel::bounded::<LiveRequest>(1);
+        for destination in ["", "-oProxyCommand=bad", "host command", "ssh://host:0", "ssh://host/path"] {
+            let request = json!({"jsonrpc":"2.0","id":1,"method":"pane.split", "params":{"pane_id":"4294967297","direction":"right","ssh_destination":destination}});
+            assert_eq!(dispatch_inner(&serde_json::to_vec(&request).unwrap(), Some(&sender)).unwrap()["error"]["code"], -32602);
+            assert!(receiver.is_empty());
+        }
     }
 
     #[test]

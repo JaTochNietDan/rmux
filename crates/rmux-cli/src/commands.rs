@@ -25,7 +25,7 @@ pub const HELP: &str = "Commands (JSON output except pipe-pane; explicit opaque 
   equalize-panes --workspace ID
   swap-panes --pane ID --other-pane ID
   resize-pane --pane ID --direction left|right|up|down
-  split-pane --pane ID --direction left|right|up|down [--cwd PATH] [--focus true|false] [--activate]
+  split-pane --pane ID --direction left|right|up|down [--ssh DESTINATION] [--cwd PATH] [--focus true|false] [--activate]
   set-pane-zoom --pane ID --zoomed true|false
   send-key --surface ID KEY  (Enter, Up, Ctrl-c, Alt-Left, Shift-Tab)
   send --surface ID [--paste] TEXT
@@ -67,7 +67,7 @@ pub fn help(command: &str) -> Result<String, String> {
         "equalize-panes" => ("--workspace ID", "Balance every split in a workspace without changing focus. Rejects zoomed or busy layouts."),
         "swap-panes" => ("--pane ID --other-pane ID", "Exchange two panes in the same workspace without changing focus or restarting terminals."),
         "resize-pane" => ("--pane ID --direction left|right|up|down", "Move a shared divider one step without changing focus. Rejects zoomed or busy layouts."),
-        "split-pane" => ("--pane ID --direction left|right|up|down [--cwd PATH] [--focus true|false] [--activate]", "Create a terminal beside an explicit pane. Inherits its directory and font; focus and OS activation are opt-in."),
+        "split-pane" => ("--pane ID --direction left|right|up|down [--ssh DESTINATION] [--cwd PATH] [--focus true|false] [--activate]", "Create a terminal beside an explicit pane. Inherits its directory and font; focus and OS activation are opt-in."),
         "set-pane-zoom" => ("--pane ID --zoomed true|false", "Set pane zoom explicitly without toggling. Zooming selects its terminal within the window, without OS window activation."),
         "completions" => ("bash|zsh|fish", "Print an offline shell completion script. No app connection is made."),
         _ => return Err(format!("no local help for {command}; use --help for supported commands or system.capabilities to discover RPC methods")),
@@ -239,7 +239,7 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
                 continue;
             }
             if (command == "new-workspace" && matches!(arg.as_str(), "--name" | "--description" | "--cwd" | "--focus" | "--ssh"))
-                || (command == "split-pane" && matches!(arg.as_str(), "--cwd" | "--focus"))
+                || (command == "split-pane" && matches!(arg.as_str(), "--cwd" | "--focus" | "--ssh"))
             {
                 let value = args
                     .next()
@@ -575,6 +575,9 @@ mod tests {
 
     #[test]
     fn split_command_keeps_target_direction_and_focus_explicit() {
+        assert_eq!(expand("split-pane", args(&["--pane", "12", "--direction", "right", "--ssh", "user@host"])).unwrap(),
+            ("pane.split".into(), serde_json::json!({"pane_id":"12", "direction":"right", "ssh_destination":"user@host"})));
+
         for direction in ["left", "right", "up", "down"] {
             assert_eq!(expand("split-pane", args(&["--pane", "12", "--direction", direction])).unwrap(),
                 ("pane.split".into(), serde_json::json!({"pane_id":"12", "direction":direction})));

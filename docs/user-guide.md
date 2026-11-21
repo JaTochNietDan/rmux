@@ -850,8 +850,8 @@ New Local Tab uses the local cached directory when available, otherwise the app'
 initial directory; it never inherits a remote path or saved SSH destination.
 It shares the normal background startup/cancel controls and has no default shortcut.
 The tab-bar plus tooltip says New SSH Tab when the active tab supplies an SSH target.
-The RPC `pane.split` shell-creation contract remains local;
-automation can explicitly create an SSH workspace with `workspace.create`.
+RPC `pane.split` creates a local shell by default; its optional `ssh_destination`
+explicitly starts SSH, as does `workspace.create.ssh_destination`.
 Interactive split commands prepare the terminal and its first frame in the background and show
 “Starting split terminal…” while pending. Each workspace permits one pending
 split. Completion splits the original pane; switching focus during launch keeps
@@ -991,6 +991,14 @@ rmuxctl split-pane --pane PANE_ID --direction right --focus false
 # Equivalent raw RPC:
 rmuxctl pane.split '{"pane_id":"PANE_ID","direction":"right","focus":false}'
 ```
+
+Add `--ssh DESTINATION` (`ssh_destination` in RPC) to create a separate SSH session
+in the new pane. For example, `rmuxctl split-pane --pane PANE_ID --direction right --ssh production`.
+SSH PTY startup runs in the background; completion rechecks the target and limits.
+An unavailable executable leaves the source process and layout intact. A successful
+reply means the SSH client was started, not that remote authentication succeeded.
+Without this option, RPC splitting creates a local shell even beside an SSH tab.
+The optional cwd is always a local launch directory, never a remote path.
 
 Use `left` or `right` for a side-by-side split, and `up` or `down` for a stacked
 split. The new pane appears on the requested side of the target. Optional `--cwd` (`cwd` in RPC)

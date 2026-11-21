@@ -67,14 +67,29 @@ def main():
                         wait_for(lambda: call("surface.list", {"workspace_id": created})["surfaces"][0]["remote_directory"] == "/tmp", "remote directory label did not arrive")
                         assert surfaces[0]["process_id"] == int((root / "pid").read_text())
                         assert [row["id"] for row in call("workspace.list")["workspaces"] if row["selected"]] == [original]
+                        original_surface = surfaces[0]
+                        result = subprocess.run([str(cli), "--socket", str(endpoint), "split-pane", "--pane", original_surface["pane_id"], "--direction", "right", "--ssh", target],
+                                                capture_output=True, text=True, timeout=10)
+                        assert result.returncode == 0, (result.stdout, result.stderr)
+                        split = json.loads(result.stdout)["result"]
+                        surfaces = call("surface.list", {"workspace_id": created})["surfaces"]
+                        assert len(surfaces) == 2 and all(row["ssh_destination"] == target for row in surfaces)
+                        sibling = next(row for row in surfaces if row["id"] == split["surface_id"])
+                        assert sibling["process_id"] != original_surface["process_id"]
+                        assert any(row["id"] == original_surface["id"] and row["process_id"] == original_surface["process_id"] for row in surfaces)
+                        assert [row["id"] for row in call("workspace.list")["workspaces"] if row["selected"]] == [original]
+                        fixture_pids = [row["process_id"] for row in surfaces]
                         fixture.unlink()
+                        call("pane.split", {"pane_id": original_surface["pane_id"], "direction": "down", "ssh_destination": "missing-client"}, fail=True)
+                        assert len(call("surface.list", {"workspace_id": created})["surfaces"]) == 2
+
                         call("workspace.create", {"window_id": window, "ssh_destination": "missing-client"}, fail=True)
                         assert len(call("workspace.list")["workspaces"]) == 2
                     else:
                         surfaces = call("surface.list")["surfaces"]
                         saved = [row for row in surfaces if row["saved_ssh_destination"] == target]
-                        assert len(saved) == 1 and saved[0]["ssh_destination"] is None, surfaces
-                        assert saved[0]["title"].startswith("Local · "), saved
+                        assert len(saved) == 2 and all(row["ssh_destination"] is None for row in saved), surfaces
+                        assert all(row["title"].startswith("Local · ") for row in saved), saved
                     call("system.quit")
                     app.wait(timeout=8)
                     assert app.returncode == 0
@@ -87,16 +102,17 @@ def main():
                             app.kill()
                             app.wait(timeout=5)
                 if not restored:
-                    pid = int((root / "pid").read_text())
                     def stopped():
-                        try:
-                            os.kill(pid, 0)
-                            return False
-                        except ProcessLookupError:
-                            return True
+                        for pid in fixture_pids:
+                            try:
+                                os.kill(pid, 0)
+                                return False
+                            except ProcessLookupError:
+                                pass
+                        return True
                     wait_for(stopped, "fixture process survived app shutdown")
                     assert target in session.read_text(), "SSH target missing from recovery"
-        print("PASS: native SSH CLI/RPC creation, literal argv, metadata isolation, background selection, failed-spawn rollback, teardown and local recovery. No network or visual validation.")
+        print("PASS: native SSH CLI/RPC workspace and split creation, source-process preservation, literal argv, metadata isolation, background selection, failed-spawn rollback, teardown and local recovery. No network or visual validation.")
 
 
 if __name__ == "__main__":
