@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Added native Stop Loading to the optional browser. Reload becomes Stop during a
+load; Browser menu and Cmd+. expose the same action. The action checks native
+loading state to cover metadata-delivery delay, cancels via WKWebView, and clears
+queued pre-cancel start/finish events. Separate loading/stopped state prevents a
+late finish from replacing cancellation status and preserves process-failure
+recovery messages; a new start re-enables normal loading, including coalesced
+start/finish callbacks. Eleven focused browser tests pass, covering cancellation,
+late finish, reload and process-failure precedence; native slow-load/redirect/error
+races remain pending. The preceding goal turn made progress with weak native-view
+lifetime instrumentation and correction of the retain-call interpretation.
+
 Corrected the previous turn's native-retention concern after tracing objc2 0.6.5:
 Message::retain returns a Retained guard, whose destructor releases the object.
 WRY's standalone retain expressions therefore balance immediately and do not

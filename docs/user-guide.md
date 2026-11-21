@@ -2284,3 +2284,8 @@ In experimental browser builds, **Browser → Toggle Web Inspector**, Cmd+Option
 or the **{}** toolbar button opens/closes WebKit's developer tools for that browser
 window. Open a page first. Native inspector interaction still needs acceptance;
 console output is not yet exposed through rmux's CLI/RPC.
+
+While a browser page loads, its Reload button becomes **Stop**. Click it or use
+**Browser → Stop Loading** / Cmd+. to cancel. The page can be reloaded afterward;
+Escape remains available for canceling address edits and closing Find. Native
+slow-network/cancellation behavior remains pending acceptance.

@@ -4,7 +4,7 @@ use crate::text_field::TextField;
 use wry::{WebViewBuilderExtDarwin, WebViewExtMacOS};
 use std::{cell::RefCell, rc::Rc};
 
-actions!(browser, [FocusAddress, Back, Forward, Reload, ZoomIn, ZoomOut, ResetZoom, FindInPage, FindNext, FindPrevious, ToggleInspector]);
+actions!(browser, [FocusAddress, Back, Forward, Reload, ZoomIn, ZoomOut, ResetZoom, FindInPage, FindNext, FindPrevious, ToggleInspector, StopLoading]);
 const ZOOM_LEVELS: &[u16] = &[25, 33, 50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300, 400, 500];
 fn zoom_level(current: u16, direction: i8) -> u16 {
     match direction.cmp(&0) {
@@ -130,8 +130,15 @@ struct PageState {
     committed: String,
     title: String,
     failed: bool,
+    loading: bool,
+    stopped: bool,
 }
 impl PageState {
+    fn stop(&mut self) {
+        self.loading = false;
+        self.stopped = true;
+        if !self.failed { self.status = "Loading stopped".into(); }
+    }
     /// Returns whether a native metadata batch changed visible chrome.
     fn apply(&mut self, update: PageUpdates) -> bool {
         let mut changed = false;
@@ -139,7 +146,13 @@ impl PageState {
             let failed = !alive;
             changed |= self.failed != failed;
             self.failed = failed;
+            if alive {
+                changed |= self.stopped;
+                self.stopped = false;
+            }
             if !alive {
+                changed |= self.loading;
+                self.loading = false;
                 changed |= !self.title.is_empty();
                 self.title.clear();
                 let status = "Browser content process stopped. Reload to recover.";
@@ -147,7 +160,10 @@ impl PageState {
             }
         }
         if !self.failed {
-            if let Some((finished, url)) = update.load {
+            if let Some((finished, url)) = update.load.filter(|(finished, _)| !*finished || !self.stopped) {
+                changed |= self.loading != !finished;
+                self.loading = !finished;
+                if !finished { self.stopped = false; }
                 if self.committed != url { self.committed = url; changed = true; }
                 let status = if finished { "Loaded" } else { "Loading…" };
                 if self.status != status { self.status = status.into(); changed = true; }
@@ -342,6 +358,22 @@ impl BrowserView {
         host.view = Some(view);
         Ok(())
     }
+    fn stop_loading(&mut self, cx: &mut Context<Self>) {
+        if let Some(view) = &self.host.borrow().view {
+            // The native query covers the interval before the coalesced start
+            // callback reaches our chrome. A completed idle page is a no-op.
+            if !self.page.loading && !unsafe { view.webview().isLoading() } { return; }
+            // GPUI dispatches this action on the main thread. Stop native work
+            // before dropping any queued pre-cancel loading notification.
+            unsafe { view.webview().stopLoading(); }
+            if let Ok(mut update) = self.latest.lock() {
+                update.load = None;
+                if update.process_alive == Some(true) { update.process_alive = None; }
+            }
+            self.page.stop();
+            cx.notify();
+        }
+    }
     fn toggle_inspector(&mut self, cx: &mut Context<Self>) {
         let mut host = self.host.borrow_mut();
         if let Some(view) = &host.view {
@@ -401,6 +433,14 @@ impl Render for BrowserView {
         let find_enabled = loaded && !self.page.failed && self.find.pending.is_none()
             && !self.find_input.read(cx).value().is_empty();
         let focus = Some(self.input.read(cx).focus.clone());
+        let reload_control = if self.page.loading {
+            pane_view::action_control("browser-stop", "Stop Loading", StopLoading, focus.clone()).child("×")
+                .on_click(cx.listener(|this, _, _, cx| this.stop_loading(cx)))
+        } else {
+            pane_view::action_control("browser-reload", if self.page.failed { "Reload page to recover" } else { "Reload" }, Reload, focus.clone()).child("↻")
+                .when(!loaded, |button| button.opacity(0.4).cursor_default())
+                .when(loaded, |button| button.on_click(cx.listener(|this, _, _, cx| { this.navigation(Navigation::Reload); cx.notify(); })))
+        };
         let detail = format!("{} · {}", self.page.status, self.page.committed);
         div().size_full().flex().flex_col().key_context("Browser")
             .bg(rgb(0x202733)).text_color(rgb(0xe8edf5)).text_size(px(14.))
@@ -411,9 +451,7 @@ impl Render for BrowserView {
                 .child(pane_view::action_control("browser-forward", "Forward", Forward, focus.clone()).child("›")
                     .when(!forward, |button| button.opacity(0.4).cursor_default())
                     .when(forward, |button| button.on_click(cx.listener(|this, _, _, cx| { this.navigation(Navigation::Forward); cx.notify(); }))))
-                .child(pane_view::action_control("browser-reload", if self.page.failed { "Reload page to recover" } else { "Reload" }, Reload, focus.clone()).child("↻")
-                    .when(!loaded, |button| button.opacity(0.4).cursor_default())
-                    .when(loaded, |button| button.on_click(cx.listener(|this, _, _, cx| { this.navigation(Navigation::Reload); cx.notify(); }))))
+                .child(reload_control)
                 .child(div().flex_1().min_w_0().px_2().py_1().rounded_md().border_1().border_color(rgb(0x465063)).bg(rgb(0x242a36)).child(self.input.clone()))
                 .child(pane_view::action_control("browser-inspector", "Toggle Web Inspector", ToggleInspector, focus.clone()).child("{}")
                     .when(!loaded, |button| button.opacity(0.4).cursor_default())
@@ -518,6 +556,7 @@ fn with_active(cx: &mut App, update: impl FnOnce(&mut BrowserView, &mut Window, 
 }
 pub fn initialize(cx: &mut App) {
     cx.bind_keys([
+        KeyBinding::new("cmd-.", StopLoading, Some("Browser")),
         KeyBinding::new("cmd-alt-i", ToggleInspector, Some("Browser")),
         KeyBinding::new("cmd-f", FindInPage, Some("Browser")),
         KeyBinding::new("cmd-g", FindNext, Some("Browser")),
@@ -530,6 +569,7 @@ pub fn initialize(cx: &mut App) {
         KeyBinding::new("alt-left", Back, Some("Browser")),
         KeyBinding::new("alt-right", Forward, Some("Browser")),
     ]);
+    cx.on_action(|_: &StopLoading, cx| with_active(cx, |this, _, cx| this.stop_loading(cx)));
     cx.on_action(|_: &ToggleInspector, cx| with_active(cx, |this, _, cx| this.toggle_inspector(cx)));
     cx.on_action(|_: &FindInPage, cx| with_active(cx, |this, window, cx| this.open_find(window, cx)));
     cx.on_action(|_: &FindNext, cx| with_active(cx, |this, window, cx| {
@@ -558,6 +598,7 @@ pub fn menu() -> Menu {
         MenuItem::action("Back", Back),
         MenuItem::action("Forward", Forward),
         MenuItem::action("Reload", Reload),
+        MenuItem::action("Stop Loading", StopLoading),
         MenuItem::action("Zoom In", ZoomIn),
         MenuItem::action("Zoom Out", ZoomOut),
         MenuItem::action("Actual Size", ResetZoom),
@@ -584,6 +625,38 @@ fn open_initial(initial: Option<String>, cx: &mut App) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{FindState, address, allowed, can_open_link, PageUpdates, PageState, zoom_level, navigation_error};
+    #[test]
+    fn browser_stop_ignores_late_finish_and_resets_on_new_navigation() {
+        let mut state = PageState::default();
+        let mut started = PageUpdates::default();
+        started.loaded(false, "https://example.com/".into());
+        state.apply(started);
+        assert!(state.loading);
+        state.stop();
+        assert!(!state.loading);
+        let mut late = PageUpdates::default();
+        late.loaded(true, "https://example.com/".into());
+        assert!(!state.apply(late));
+        assert_eq!(state.status, "Loading stopped");
+        let mut next = PageUpdates::default();
+        next.loaded(false, "https://example.com/next".into());
+        state.apply(next);
+        assert!(state.loading && !state.stopped);
+        let mut finished = PageUpdates::default();
+        finished.loaded(true, "https://example.com/next".into());
+        state.apply(finished);
+        assert!(!state.loading);
+        assert_eq!(state.status, "Loaded");
+        let mut failed = PageUpdates::default();
+        failed.terminated(); state.apply(failed); state.stop();
+        assert!(state.status.contains("process stopped"));
+        let mut coalesced = PageUpdates::default();
+        coalesced.loaded(false, "https://example.com/new".into());
+        coalesced.loaded(true, "https://example.com/new".into());
+        state.apply(coalesced);
+        assert!(!state.loading && !state.stopped && !state.failed);
+        assert_eq!(state.status, "Loaded");
+    }
     #[test]
     fn browser_blocked_navigation_has_bounded_nonsecret_feedback() {
         assert_eq!(navigation_error("https://user:secret@example.com"), Some("Use an address without embedded credentials."));

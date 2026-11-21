@@ -41,6 +41,14 @@ Prototype terminal/browser composition, focus, clipping, drag overlays, resizing
 
 ## Experimental browser window
 
+During page loading the Reload control becomes Stop; Browser → Stop Loading or
+Cmd+. invokes the same native WKWebView cancellation. Chrome tracks loading
+separately from status text, clears queued pre-cancel load events, and ignores a
+late finish while stopped. A new start (including a coalesced start/finish) clears
+the stopped state. Process-failure recovery messages retain precedence. An idle
+completed page is a no-op, and cancellation adds no polling timer. Native slow-load,
+redirect, network-error and cancellation-race acceptance remain pending.
+
 Browser → Toggle Web Inspector, Cmd+Option+I, and the `{}` toolbar control toggle
 WRY's native inspector for the active browser window. The toolbar control is
 unavailable before a page exists; menu invocation then gives a status hint. The
