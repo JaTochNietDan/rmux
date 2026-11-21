@@ -345,6 +345,10 @@ are not highlighted. Copying includes
 the whole retained line. **Wrap excerpts** (Ctrl+Alt+W) shows up to four visual
 lines per text row; toggle again for single-line excerpts. This changes only the
 current preview display, preserves search/selection and leaves copying unchanged.
+Refreshing the same file in the same preview mode restores its query, wrapping
+and selected line number when that line still matches. If it no longer matches,
+the first result is selected. Opening another file or switching text/hex modes
+starts a fresh view.
 Hex rows retain their fixed layout. Preview never executes files
 or interprets escape sequences. UTF-8 (with or without a BOM) and BOM-marked
 UTF-16 little/big endian are supported. BOMs are omitted from display and copy;

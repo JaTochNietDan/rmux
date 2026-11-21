@@ -152,6 +152,17 @@ pub enum PaletteEvent {
 #[derive(Clone, Copy, PartialEq)]
 pub enum BufferMode { Paste, Delete, Rename, Copy }
 
+pub struct PreviewState {
+    path: std::path::PathBuf,
+    hex: bool,
+    query: String,
+    wrapped: bool,
+    command: Option<usize>,
+}
+impl PreviewState {
+    pub fn matches(&self, path: &std::path::Path, hex: bool) -> bool { self.path == path && self.hex == hex }
+}
+
 pub struct CommandPalette {
     location: Option<SharedString>,
     feedback: Option<&'static str>,
@@ -689,6 +700,24 @@ impl CommandPalette {
             commands,
             selected: 0,
         }
+    }
+    pub fn preview_state(&self, cx: &App) -> Option<PreviewState> {
+        let (path, hex) = self.preview_navigation.as_ref()?;
+        Some(PreviewState { path: path.clone(), hex: *hex, query: self.input.read(cx).value().to_owned(), wrapped: self.wrap_preview, command: self.search.matches.get(self.selected).copied() })
+    }
+    pub fn restore_preview(&mut self, state: PreviewState, cx: &mut Context<Self>) {
+        if !self.preview_navigation.as_ref().is_some_and(|(path, hex)| state.matches(path, *hex)) { return; }
+        self.wrap_preview = state.wrapped;
+        self.input.update(cx, |input, cx| input.replace_draft(&state.query, cx));
+        // The input's Changed event updates ranking and resets selection first.
+        let entity = cx.entity();
+        cx.defer(move |cx| entity.update(cx, |this, cx| {
+            this.search.update(&state.query);
+            this.selected = state.command.and_then(|command| this.search.matches.iter().position(|index| *index == command)).unwrap_or(0);
+            this.scroll.reset(this.search.matches.len());
+            crate::list_navigation::reveal(&this.scroll, this.selected);
+            cx.notify();
+        }));
     }
     fn command_height(&self, command: usize) -> f32 {
         if self.wrap_preview && self.commands[command].preview_line().is_some() { 116. }

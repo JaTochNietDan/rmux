@@ -120,6 +120,7 @@ pub(super) struct WorkspaceWindow {
     palette: Option<(Entity<command_palette::CommandPalette>, Option<FocusHandle>)>,
     font_picker_job: Option<Task<()>>,
     file_browser_job: Option<Task<()>>,
+    preview_restore: Option<command_palette::PreviewState>,
     file_history: file_browser::History,
     file_browser_cancel: Option<file_browser::Cancellation>,
     terminal_search_job: Option<Task<()>>,
@@ -2841,6 +2842,7 @@ impl WorkspaceWindow {
         self.preview_file_mode(path, false, window, cx);
     }
     fn preview_file_mode(&mut self, path: std::path::PathBuf, hex: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let restore = self.preview_restore.take().filter(|state| state.matches(&path, hex));
         if self.file_browser_job.is_some() || self.automation_available(cx).is_err() { return; }
         let Some(focus) = window.focused(cx) else { return; };
         let permit = match file_browser::Permit::acquire() {
@@ -2862,7 +2864,11 @@ impl WorkspaceWindow {
                 if focus.is_focused(window) && this.automation_available(cx).is_ok() {
                     match result {
                         Ok(preview) => {
-                            let palette = cx.new(|cx| command_palette::CommandPalette::file_preview(preview, window, cx));
+                            let palette = cx.new(|cx| {
+                                let mut palette = command_palette::CommandPalette::file_preview(preview, window, cx);
+                                if let Some(state) = restore { palette.restore_preview(state, cx); }
+                                palette
+                            });
                             this.install_palette(palette, Some(focus), window, cx);
                         }
                         Err(error) => {
@@ -2901,6 +2907,11 @@ impl WorkspaceWindow {
             &palette,
             window,
             |this, _, event: &command_palette::PaletteEvent, window, cx| {
+                this.preview_restore = match event {
+                    command_palette::PaletteEvent::Run(action) if action.as_any().is::<PreviewLocalFile>() || action.as_any().is::<PreviewHexFile>() =>
+                        this.palette.as_ref().and_then(|(palette, _)| palette.read(cx).preview_state(cx)),
+                    _ => None,
+                };
                 this.close_palette(window, cx);
                 match event {
                     command_palette::PaletteEvent::Run(action) => {
@@ -3177,6 +3188,7 @@ impl WorkspaceWindow {
             palette: None,
             font_picker_job: None,
             file_browser_job: None,
+            preview_restore: None,
             file_history: Default::default(),
             file_browser_cancel: None,
             terminal_search_job: None,
@@ -3389,6 +3401,7 @@ impl WorkspaceWindow {
             palette: None,
             font_picker_job: None,
             file_browser_job: None,
+            preview_restore: None,
             file_history: Default::default(),
             file_browser_cancel: None,
             terminal_search_job: None,

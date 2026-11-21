@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Same-file/same-mode preview refresh now retains the query, wrapped-excerpt mode
+and selected command/line identity. Input updates rebuild ranking before deferred
+selection restoration; removed/nonmatching lines fall back to the first result.
+State is captured before closing the old palette, consumed by the next preview
+request and never carried into a different path or text/hex mode. Existing async
+focus/cancellation gates still control publication. Desktop compilation passed;
+native refresh/query/scroll/focus acceptance remains pending.
+
 File-preview search now highlights contiguous query-word matches in both compact
 and wrapped excerpts, including hex preview text. Lowercase expansion maps back
 to original UTF-8 scalar boundaries; overlapping/adjacent highlights merge. Work
