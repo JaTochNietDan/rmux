@@ -343,6 +343,10 @@ starts a fresh filter.
 
 **Read Markdown** in a file preview opens a bounded reading view. Headings are
 bold, code blocks use the terminal font, and lists/quotes receive a visual marker.
+Ordered lists retain their starting number and nested lists are indented (visual
+indentation stops increasing after eight levels). Continuation paragraphs do not
+repeat the item marker. Block copying returns its text without added list markers;
+source copying preserves the original Markdown.
 Search and highlight operate on reading text; Enter copies a block, while
 **Copy Markdown Source** keeps the captured original Markdown. **View Source**
 returns to the ordinary text preview. Refresh/F5 keeps Markdown mode and restores

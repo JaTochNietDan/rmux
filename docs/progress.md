@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Markdown reading blocks now retain list depth, ordered start/next numbers and
+item-marker identity. Rows display numbered/bullet markers and bounded nested
+indentation; loose continuation paragraphs do not repeat markers. Nested list
+transitions flush parent content before changing context and restore parent-item
+state afterward. Three parser regressions passed, including ordered starts,
+nested bullets, loose continuations, bounds and inert content. Native list layout
+and full document rendering remain pending.
+
 Started F03 with an explicit Markdown reading mode from file previews, using
 pinned pulldown-cmark 0.13.6 without default features. Parsing runs on the bounded
 file worker; the existing source cap and a 512-block cap limit retained work.

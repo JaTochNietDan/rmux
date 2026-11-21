@@ -849,6 +849,11 @@ impl CommandPalette {
         let title = self.commands[command].preview_line()
             .map(|text| file_browser::preview_line_title(text, self.input.read(cx).value()))
             .unwrap_or_else(|| self.commands[command].title.clone());
+        let title = match markdown {
+            Some(markdown_preview::Kind::List { number: Some(number), marker: true, .. }) => format!("{number}. {title}"),
+            Some(markdown_preview::Kind::List { marker: true, .. }) => format!("• {title}"),
+            _ => title,
+        };
         let title_hint: SharedString = match &self.commands[command].subtitle {
             Some(subtitle) => format!("{title}\n{subtitle}").into(),
             None => title.clone().into(),
@@ -876,7 +881,8 @@ impl CommandPalette {
             .when(self.hex_preview && self.commands[command].preview_line().is_some(), |row| row.font_family(FONT_FAMILY))
             .when(markdown == Some(markdown_preview::Kind::Heading), |row| row.font_weight(FontWeight::BOLD))
             .when(markdown == Some(markdown_preview::Kind::Code), |row| row.font_family(FONT_FAMILY))
-            .when(matches!(markdown, Some(markdown_preview::Kind::Quote | markdown_preview::Kind::List)), |row| row.border_l_2().border_color(rgb(0x637894)))
+            .when_some(match markdown { Some(markdown_preview::Kind::List { depth, .. }) => Some(depth), _ => None }, |row, depth| row.pl(px(12. + depth.saturating_sub(1).min(8) as f32 * 12.)))
+            .when(matches!(markdown, Some(markdown_preview::Kind::Quote | markdown_preview::Kind::List { .. })), |row| row.border_l_2().border_color(rgb(0x637894)))
             .flex()
             .items_center()
             .gap_3()
