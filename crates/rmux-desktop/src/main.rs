@@ -1053,6 +1053,7 @@ impl TerminalView {
     }
     fn release_render_cache(&mut self) {
         if !self.render_snapshot_released {
+            if let Some(metrics) = &mut self.metrics { metrics.snapshot_releases.record(&self.frame); }
             row_cache::release_frame_cells(&mut self.frame);
             self.render_snapshot_released = true;
         }

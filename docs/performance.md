@@ -8,6 +8,15 @@ shown until the scheduled retry succeeds. Focused ownership tests prove old cell
 are no longer retained by the placeholder and engine text survives. Native refocus
 latency/blank-frame behavior and RSS impact remain unmeasured acceptance work.
 
+Opt-in render metrics include `snapshot_release_totals` with cumulative `frames`,
+`cell_capacity_bytes` and `heap_text_payload_bytes`. Accounting runs once when a
+retained desktop snapshot is released, and only when diagnostics are enabled.
+Repeated release/rebuild cycles count repeatedly; shared engine/paint allocations
+are not deduplicated. These counters describe dropped desktop references, not
+allocator frees or RSS reductions. Compare them with process/engine measurements
+when assessing actual memory reclamation.
+
+
 Experimental browser metadata uses one queued wakeup, independently coalesced
 load/title/process state, a 100 ms minimum interval between UI publications, and
 change-only redraw notification. Timers are event-driven and stop at idle. This

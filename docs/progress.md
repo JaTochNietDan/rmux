@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Opt-in render metrics now include cumulative snapshot_release_totals (frames, cell
+capacity and heap text payload bytes) recorded before hidden desktop snapshots are
+released. The existing retained-snapshot flag prevents repeated accounting while
+hidden, and storage scanning runs only with diagnostics enabled. Counters saturate
+and are explicitly logical, non-deduplicated totals rather than claimed RSS savings.
+The focused accounting/serialization regression passed and desktop compilation
+succeeded. Native RSS/refocus measurements remain pending. GitHub browser CI for
+18f5012 completed successfully; 9893146 is active and cb3786d is queued at the last
+observation. The preceding goal turn made progress with committed/pushed hidden
+snapshot reclamation.
+
 Hidden terminal cache cleanup now also releases desktop-owned frame cell snapshots,
 using shared empty-row placeholders that preserve viewport dimensions. A retained
 snapshot flag makes cleanup idempotent even when shaping never occurred; successful

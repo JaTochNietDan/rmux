@@ -32,6 +32,23 @@ impl Timing {
     }
 }
 
+/// Cumulative logical storage whose desktop references were dropped. Engine or
+/// paint-frame references may still own allocations; these are not RSS savings.
+#[derive(Default, serde::Serialize)]
+pub struct SnapshotReleases {
+    frames: u64,
+    cell_capacity_bytes: u64,
+    heap_text_payload_bytes: u64,
+}
+impl SnapshotReleases {
+    pub fn record(&mut self, frame: &rmux_terminal::Frame) {
+        let storage = frame.storage();
+        self.frames = self.frames.saturating_add(1);
+        self.cell_capacity_bytes = self.cell_capacity_bytes.saturating_add(storage.cell_capacity_bytes as u64);
+        self.heap_text_payload_bytes = self.heap_text_payload_bytes.saturating_add(storage.heap_text_payload_bytes as u64);
+    }
+}
+
 pub struct Metrics {
     id: u64,
     started: Instant,
@@ -45,6 +62,7 @@ pub struct Metrics {
     pub cursor_glyphs_rebuilt: u64,
     pub cache_releases: u64,
     pub rows_released: u64,
+    pub snapshot_releases: SnapshotReleases,
     pub prepaint: Timing,
     pub paint: Timing,
 }
@@ -63,6 +81,7 @@ impl Metrics {
             cursor_glyphs_rebuilt: 0,
             cache_releases: 0,
             rows_released: 0,
+            snapshot_releases: SnapshotReleases::default(),
             prepaint: Timing::default(),
             paint: Timing::default(),
         })
@@ -98,6 +117,7 @@ impl Metrics {
                 })
             })
             .unwrap_or(serde_json::Value::Null);
+        let snapshot_release_totals = serde_json::to_value(&self.snapshot_releases).expect("serialize snapshot counters");
         let snapshot_busy = self.snapshot_busy;
         let metadata_busy = self.metadata_busy;
         let resize_busy = self.resize_busy;
@@ -122,7 +142,29 @@ impl Metrics {
         );
         // Append the bounded snapshot accounting object before the closing brace.
         output.truncate(output.len() - 2);
-        output.push_str(&format!(",\"resize_busy\":{resize_busy},\"metadata_busy\":{metadata_busy},\"snapshot_busy\":{snapshot_busy},\"snapshot_storage\":{snapshot_storage}}}\n"));
+        output.push_str(&format!(",\"resize_busy\":{resize_busy},\"metadata_busy\":{metadata_busy},\"snapshot_busy\":{snapshot_busy},\"snapshot_storage\":{snapshot_storage},\"snapshot_release_totals\":{snapshot_release_totals}}}\n"));
         output
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SnapshotReleases;
+    #[test]
+    fn snapshot_release_accounting_is_cumulative_and_serializable() -> anyhow::Result<()> {
+        let mut terminal = rmux_terminal::Terminal::new(40, 3)?;
+        terminal.write("retained 世界".as_bytes());
+        let frame = terminal.frame()?;
+        let storage = frame.storage();
+        assert!(storage.cell_capacity_bytes > 0);
+        let mut releases = SnapshotReleases::default();
+        releases.record(&frame);
+        releases.record(&frame);
+        let value = serde_json::to_value(&releases)?;
+        assert_eq!(value["frames"], 2);
+        assert_eq!(value["cell_capacity_bytes"], (2 * storage.cell_capacity_bytes) as u64);
+        assert_eq!(value["heap_text_payload_bytes"], (2 * storage.heap_text_payload_bytes) as u64);
+        assert_eq!(terminal.frame()?.text(), frame.text());
+        Ok(())
     }
 }
