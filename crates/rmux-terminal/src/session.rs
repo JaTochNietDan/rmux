@@ -896,6 +896,9 @@ impl Session {
     pub fn set_default_colors(&self, colors: [Option<crate::Color>; 3]) -> Result<()> {
         self.terminal.lock().unwrap_or_else(|e| e.into_inner()).set_default_colors(colors)
     }
+    pub fn set_palette(&self, colors: Option<[crate::Color; 256]>) -> Result<()> {
+        self.terminal.lock().unwrap_or_else(|e| e.into_inner()).set_palette(colors)
+    }
     pub fn set_ansi_palette(&self, colors: Option<[crate::Color; 16]>) -> Result<()> {
         self.terminal.lock().unwrap_or_else(|e| e.into_inner()).set_ansi_palette(colors)
     }

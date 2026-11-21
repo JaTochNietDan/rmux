@@ -5,7 +5,7 @@ pub(super) fn prepare_terminal_launch(
     canceled: &AtomicBool,
     launch: impl FnOnce() -> Result<Session>,
     colors: [Option<Color>; 3],
-    palette: Option<[Color; 16]>,
+    palette: Option<[Color; 256]>,
 ) -> Result<PreparedTerminal> {
     anyhow::ensure!(!canceled.load(Ordering::Relaxed), "terminal launch canceled");
     let session = launch()?;
@@ -878,7 +878,7 @@ impl PaneView {
         let previous_default_family = cx.global::<Preferences>().font_family.clone();
         let scrollback = cx.global::<Preferences>().scrollback_bytes();
         let colors = cx.global::<Preferences>().terminal_colors();
-        let palette = cx.global::<Preferences>().terminal_palette();
+        let palette = cx.global::<Preferences>().effective_palette();
         let origin = window.focused(cx);
         let executor = cx.background_executor().clone();
         self.error = None;
@@ -898,7 +898,7 @@ impl PaneView {
                 let refresh = cx.update(|_, cx| {
                     let prepared = result.as_ref().ok()?;
                     let settings = cx.global::<Preferences>();
-                    let current = (settings.terminal_colors(), settings.terminal_palette());
+                    let current = (settings.terminal_colors(), settings.effective_palette());
                     ((prepared.colors, prepared.palette) != current).then_some(current)
                 }).ok().flatten();
                 let Some((colors, palette)) = refresh else { break; };

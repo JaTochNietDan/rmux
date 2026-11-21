@@ -43,15 +43,21 @@ pub fn parse_palette_entry(value: &str) -> Result<(u8, Color)> {
     Ok((index, parsed.into()))
 }
 
-/// Read the pinned engine's factory ANSI palette without allocating a terminal.
-pub fn default_ansi_palette() -> [Color; 16] {
-    static DEFAULTS: std::sync::OnceLock<[Color; 16]> = std::sync::OnceLock::new();
+/// Factory indexed palette, obtained without allocating a terminal.
+pub fn default_palette() -> [Color; 256] {
+    static DEFAULTS: std::sync::OnceLock<[Color; 256]> = std::sync::OnceLock::new();
     *DEFAULTS.get_or_init(|| {
         let mut palette = [GhosttyColorRgb::default(); 256];
-        // SAFETY: this function fills exactly 256 RGB entries and retains no pointer.
+        // SAFETY: the API writes exactly 256 RGB values into this stack array.
         unsafe { ghostty_color_palette_default(palette.as_mut_ptr()); }
-        std::array::from_fn(|index| palette[index].into())
+        palette.map(Into::into)
     })
+}
+
+/// Read the pinned engine's factory ANSI palette without allocating a terminal.
+pub fn default_ansi_palette() -> [Color; 16] {
+    let palette = default_palette();
+    std::array::from_fn(|index| palette[index])
 }
 
 
@@ -859,6 +865,13 @@ impl Terminal {
             }
         }
         Ok(())
+    }
+    pub fn set_palette(&mut self, colors: Option<[Color; 256]>) -> Result<()> {
+        self.revision = self.revision.wrapping_add(1);
+        let palette = colors.map(|colors| colors.map(|Color(r,g,b)| GhosttyColorRgb { r,g,b }));
+        // SAFETY: the tagged option reads exactly 256 RGB entries synchronously;
+        // null restores factory defaults. Engine-owned OSC overrides are retained.
+        unsafe { check(ghostty_terminal_set(self.terminal, GHOSTTY_TERMINAL_OPT_COLOR_PALETTE, palette.as_ref().map_or(ptr::null(), input))) }
     }
     pub fn set_ansi_palette(&mut self, colors: Option<[Color; 16]>) -> Result<()> {
         self.revision = self.revision.wrapping_add(1);
@@ -1879,6 +1892,26 @@ mod tests {
         assert!(terminal.frame()?.cursor_color_explicit);
         terminal.set_default_colors([None; 3])?;
         assert!(!terminal.frame()?.cursor_color_explicit);
+        Ok(())
+    }
+
+    #[test]
+    fn extended_palette_reload_preserves_osc_and_truecolor() -> Result<()> {
+        let mut terminal = Terminal::new(20, 3)?;
+        terminal.write(b"\x1b[38;5;200mE\x1b[38;2;9;8;7mT");
+        let mut colors = default_palette();
+        colors[200] = Color(1,2,3);
+        terminal.set_palette(Some(colors))?;
+        assert_eq!(terminal.frame()?.rows[0][0].foreground, colors[200]);
+        assert_eq!(terminal.frame()?.rows[0][1].foreground, Color(9,8,7));
+        terminal.write(b"\x1b]4;200;#112233\x07");
+        colors[200] = Color(4,5,6);
+        terminal.set_palette(Some(colors))?;
+        assert_eq!(terminal.frame()?.rows[0][0].foreground, Color(17,34,51));
+        terminal.write(b"\x1b]104;200\x07");
+        assert_eq!(terminal.frame()?.rows[0][0].foreground, colors[200]);
+        terminal.set_palette(None)?;
+        assert_eq!(terminal.frame()?.rows[0][0].foreground, default_palette()[200]);
         Ok(())
     }
 

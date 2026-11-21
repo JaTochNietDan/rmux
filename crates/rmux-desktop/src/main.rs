@@ -564,7 +564,7 @@ struct TerminalView {
     attention: attention::Attention,
     session: Session,
     applied_colors: Option<[Option<Color>; 3]>,
-    applied_palette: Option<[Color; 16]>,
+    applied_palette: Option<[Color; 256]>,
     focus: FocusHandle,
     frame: Frame,
     composition: composition::Composition,
@@ -588,9 +588,9 @@ struct PreparedTerminal {
     session: Session,
     frame: Frame,
     colors: [Option<Color>; 3],
-    palette: Option<[Color; 16]>,
+    palette: Option<[Color; 256]>,
     applied_colors: Option<[Option<Color>; 3]>,
-    applied_palette: Option<[Color; 16]>,
+    applied_palette: Option<[Color; 256]>,
     color_error: Option<String>,
 }
 struct TabMetadataChanged;
@@ -719,9 +719,9 @@ impl TerminalView {
                     Err(error) => view.error = Some(error.to_string()),
                 }
             }
-            let palette = cx.global::<Preferences>().terminal_palette();
+            let palette = cx.global::<Preferences>().effective_palette();
             if view.applied_palette != palette {
-                match view.session.set_ansi_palette(palette) {
+                match view.session.set_palette(palette) {
                     Ok(()) => view.applied_palette = palette,
                     Err(error) => view.error = Some(error.to_string()),
                 }
@@ -758,10 +758,10 @@ impl TerminalView {
         self.cursor_cache = row_cache::CursorCache::default();
         cx.notify();
     }
-    fn prepare(session: Session, colors: [Option<Color>; 3], palette: Option<[Color; 16]>) -> Result<PreparedTerminal> {
+    fn prepare(session: Session, colors: [Option<Color>; 3], palette: Option<[Color; 256]>) -> Result<PreparedTerminal> {
         let color_error = session.set_default_colors(colors).err().map(|error| error.to_string());
         let applied_colors = color_error.is_none().then_some(colors);
-        let palette_error = session.set_ansi_palette(palette).err();
+        let palette_error = session.set_palette(palette).err();
         let applied_palette = if palette_error.is_none() { palette } else { None };
         let color_error = color_error.or_else(|| palette_error.map(|error| error.to_string()));
         let frame = session.frame()?;
@@ -769,7 +769,7 @@ impl TerminalView {
     }
     fn new(session: Session, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let settings = cx.global::<Preferences>();
-        let prepared = Self::prepare(session, settings.terminal_colors(), settings.terminal_palette())
+        let prepared = Self::prepare(session, settings.terminal_colors(), settings.effective_palette())
             .expect("initial terminal frame");
         Self::from_prepared(prepared, window, cx)
     }
@@ -3026,7 +3026,7 @@ impl Workspace {
             .or_else(|| cx.global::<InitialDirectory>().0.clone());
         let scrollback = cx.global::<Preferences>().scrollback_bytes();
         let colors = cx.global::<Preferences>().terminal_colors();
-        let palette = cx.global::<Preferences>().terminal_palette();
+        let palette = cx.global::<Preferences>().effective_palette();
         let origin = window.focused(cx);
         let executor = cx.background_executor().clone();
         self.error = None;
@@ -3044,7 +3044,7 @@ impl Workspace {
                 let refresh = cx.update(|_, cx| {
                     let prepared = result.as_ref().ok()?;
                     let settings = cx.global::<Preferences>();
-                    let current = (settings.terminal_colors(), settings.terminal_palette());
+                    let current = (settings.terminal_colors(), settings.effective_palette());
                     ((prepared.colors, prepared.palette) != current).then_some(current)
                 }).ok().flatten();
                 let Some((colors, palette)) = refresh else { break; };
@@ -3133,7 +3133,7 @@ impl Workspace {
                     )
                 };
                 let settings = cx.global::<Preferences>();
-                session.and_then(|session| TerminalView::prepare(session, settings.terminal_colors(), settings.terminal_palette()))
+                session.and_then(|session| TerminalView::prepare(session, settings.terminal_colors(), settings.effective_palette()))
             }
         };
         match prepared {

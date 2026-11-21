@@ -3,15 +3,21 @@ use crate::preferences::{HexColor, CellColor};
 use anyhow::{Context, Result, ensure};
 use std::{io::Read, path::Path};
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Theme {
     pub colors: [Option<HexColor>; 3],
     pub palette: Option<[HexColor; 16]>,
-    pub palette_entries: [Option<HexColor>; 16],
+    pub palette_entries: [Option<HexColor>; 256],
     pub selection_background: Option<CellColor>,
     pub selection_foreground: Option<CellColor>,
     pub cursor_text: Option<CellColor>,
     pub cursor_color: Option<CellColor>,
+}
+
+impl Default for Theme {
+    fn default() -> Self {
+        Self { colors: [None; 3], palette: None, palette_entries: [None; 256], selection_background: None, selection_foreground: None, cursor_text: None, cursor_color: None }
+    }
 }
 
 pub fn read(path: &Path) -> Result<Theme> {
@@ -33,7 +39,7 @@ pub fn read(path: &Path) -> Result<Theme> {
 
 fn parse(text: &str) -> Result<Theme> {
     let mut theme = Theme::default();
-    let mut palette = [None; 16];
+    let mut palette = [None; 256];
     for (index, line) in text.trim_start_matches('\u{feff}').lines().enumerate() {
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') { continue; }
@@ -48,7 +54,6 @@ fn parse(text: &str) -> Result<Theme> {
             ensure!(matches!(key, "foreground" | "background" | "palette"), "unsupported theme setting: {key}");
             if key == "palette" {
                 let (slot, color) = rmux_terminal::parse_palette_entry(value.trim())?;
-                ensure!(slot < 16, "only ANSI palette indices 0–15 are supported");
                 Ok((key, HexColor::from(color), Some(usize::from(slot))))
             } else {
                 Ok((key, HexColor::from(rmux_terminal::parse_color(value.trim())?), None))
@@ -59,8 +64,8 @@ fn parse(text: &str) -> Result<Theme> {
         else { theme.colors[match key { "foreground" => 0, "background" => 1, _ => 2 }] = Some(color); }
     }
     theme.palette_entries = palette;
-    if palette.iter().all(Option::is_some) {
-        theme.palette = Some(palette.map(Option::unwrap));
+    if palette[..16].iter().all(Option::is_some) {
+        theme.palette = Some(std::array::from_fn(|index| palette[index].unwrap()));
     }
     ensure!(theme.palette_entries.iter().any(Option::is_some) || theme.selection_background.is_some() || theme.selection_foreground.is_some() || theme.cursor_text.is_some() || theme.cursor_color.is_some() || theme.colors.iter().any(Option::is_some), "theme contains no supported colors");
     Ok(theme)
@@ -98,7 +103,7 @@ mod tests {
         assert!(sparse.palette_entries[0].is_none());
         assert_eq!(String::from(sparse.palette_entries[15].unwrap()), "#ff0000");
         assert_eq!(String::from(sparse.palette_entries[1].unwrap()), "#123456");
-        for invalid in ["", "foreground=not-a-color", "background=##112233", "palette=16=112233", "command=echo hello", "cursor-opacity=0.5"] {
+        for invalid in ["", "foreground=not-a-color", "background=##112233", "palette=256=112233", "command=echo hello", "cursor-opacity=0.5"] {
             assert!(parse(invalid).is_err(), "{invalid}");
         }
         Ok(())

@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Imported palettes now cover all 256 indexed colors. Terminal creation, async
+preparation/stale-settings checks and live reloads use the complete palette;
+ANSI JSON overrides retain priority for slots 0–15 without erasing imported
+extended entries. Missing extended entries and replacement imports resolve from
+cached engine defaults. Engine regression coverage confirms existing-cell updates,
+truecolor preservation, OSC override priority/reset and default reset. Thirteen
+focused desktop/engine tests passed; native extended-color visuals remain pending.
+Settings swatches continue showing the 16 ANSI colors.
+
 Dynamic selection foregrounds now complete cell-reference support for imported
 cursor and selection colors. Selected text runs split at background changes when
 using cell-background; underlines and cached overline spans follow the same

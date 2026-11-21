@@ -596,7 +596,7 @@ impl WorkspaceWindow {
         });
         let scrollback = cx.global::<Preferences>().scrollback_bytes();
         let colors = cx.global::<Preferences>().terminal_colors();
-        let palette = cx.global::<Preferences>().terminal_palette();
+        let palette = cx.global::<Preferences>().effective_palette();
         self.command_launching = true;
         Ok(Box::new(move || {
             let session = ssh::launch_sibling(destination.as_deref(), directory.as_deref(), scrollback)?;
@@ -1090,7 +1090,7 @@ impl WorkspaceWindow {
             .or_else(|| cx.global::<InitialDirectory>().0.clone());
         let scrollback = cx.global::<Preferences>().scrollback_bytes();
         let colors = cx.global::<Preferences>().terminal_colors();
-        let palette = cx.global::<Preferences>().terminal_palette();
+        let palette = cx.global::<Preferences>().effective_palette();
         self.command_launching = true;
         Ok(Box::new(move || {
             let session = ssh::launch_sibling(destination.as_deref(), directory.as_deref(), scrollback)?;
@@ -1265,7 +1265,7 @@ impl WorkspaceWindow {
         }));
         let scrollback = cx.global::<Preferences>().scrollback_bytes();
         let colors = cx.global::<Preferences>().terminal_colors();
-        let palette = cx.global::<Preferences>().terminal_palette();
+        let palette = cx.global::<Preferences>().effective_palette();
         let executor = cx.background_executor().clone();
         self.command_launching = true;
         self.notice = Some(format!("Starting {}…", command.name));
@@ -1283,7 +1283,7 @@ impl WorkspaceWindow {
                 let refresh = cx.update(|_, cx| {
                     let prepared = result.as_ref().ok()?;
                     let settings = cx.global::<Preferences>();
-                    let current = (settings.terminal_colors(), settings.terminal_palette());
+                    let current = (settings.terminal_colors(), settings.effective_palette());
                     ((prepared.colors, prepared.palette) != current).then_some(current)
                 }).ok().flatten();
                 let Some((colors, palette)) = refresh else { break; };
@@ -3627,7 +3627,7 @@ impl WorkspaceWindow {
         let settings = cx.global::<Preferences>();
         let scrollback = settings.scrollback_bytes();
         let colors = settings.terminal_colors();
-        let palette = settings.terminal_palette();
+        let palette = settings.effective_palette();
         let executor = cx.background_executor().clone();
         let cancellation = file_browser::Cancellation::default();
         let canceled = cancellation.0.clone();
@@ -3647,7 +3647,7 @@ impl WorkspaceWindow {
                 let refresh = cx.update(|_, cx| {
                     let prepared = result.as_ref().ok()?;
                     let settings = cx.global::<Preferences>();
-                    let current = (settings.terminal_colors(), settings.terminal_palette());
+                    let current = (settings.terminal_colors(), settings.effective_palette());
                     ((prepared.colors, prepared.palette) != current).then_some(current)
                 }).ok().flatten();
                 let Some((colors, palette)) = refresh else { break; };

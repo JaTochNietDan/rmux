@@ -435,7 +435,7 @@ pub fn attach_live(cx: &mut gpui::App, stdio: bool, socket_directory: Option<std
                             let refresh = cx.update(|cx| {
                                 let prepared = prepared.as_ref().ok()?;
                                 let settings = cx.global::<super::Preferences>();
-                                let current = (settings.terminal_colors(), settings.terminal_palette());
+                                let current = (settings.terminal_colors(), settings.effective_palette());
                                 ((prepared.colors, prepared.palette) != current).then_some(current)
                             }).ok().flatten();
                             let Some((colors, palette)) = refresh else { break; };
@@ -474,7 +474,7 @@ pub fn attach_live(cx: &mut gpui::App, stdio: bool, socket_directory: Option<std
                             let refresh = cx.update(|cx| {
                                 let prepared = prepared.as_ref().ok()?;
                                 let settings = cx.global::<super::Preferences>();
-                                let current = (settings.terminal_colors(), settings.terminal_palette());
+                                let current = (settings.terminal_colors(), settings.effective_palette());
                                 ((prepared.colors, prepared.palette) != current).then_some(current)
                             }).ok().flatten();
                             let Some((colors, palette)) = refresh else { break; };

@@ -841,14 +841,16 @@ selection-background = 4c566a
 selection-foreground = eceff4
 ```
 
-Optional `palette = N=COLOR` entries override individual ANSI slots 0–15. Indices
+Optional `palette = N=COLOR` entries override indexed colors 0–255. Indices
 accept decimal or `0x`, `0o`, and `0b` prefixes (for example `palette = 0xf=red`). Omitted slots inherit the selected built-in preset; Dark uses the pinned
-Ghostty engine defaults. A new import never inherits entries from the previous
+Ghostty engine defaults. Slots 16–255 inherit engine defaults unless imported.
+Explicit JSON `ansi_palette` overrides slots 0–15 while retaining imported extended
+colors. Application OSC overrides remain active across reloads until reset. A new import never inherits entries from the previous
 import. Theme colors use the pinned Ghostty parser: X11 names (for example `red`),
 3/6-digit hex with optional `#`, 9/12-digit hex with `#`, and `rgb:`/`rgbi:`
 specifications. Color values are capped at 256 bytes. Blank lines and whole-line
 `#` comments are allowed. Repeated supported assignments use the last value.
-Extended palette slots, includes and other settings
+Includes and other settings
 are rejected with a line-specific error rather than silently ignored. Files must
 be regular UTF-8 files, not symlinks, and at most 64 KiB. This is not a full Ghostty
 configuration importer. No files are watched or downloaded.

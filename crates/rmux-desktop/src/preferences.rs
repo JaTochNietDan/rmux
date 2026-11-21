@@ -297,6 +297,20 @@ impl Preferences {
         self.theme_file = None;
         self.imported_theme = None;
     }
+    /// Complete defaults for the engine; ANSI JSON overrides only affect slots 0–15.
+    pub fn effective_palette(&self) -> Option<[rmux_terminal::Color; 256]> {
+        let ansi = self.terminal_palette();
+        let imported = self.imported_theme.as_ref();
+        if ansi.is_none() && imported.is_none_or(|theme| !theme.palette_entries.iter().any(Option::is_some)) { return None; }
+        let mut palette = rmux_terminal::default_palette();
+        if let Some(theme) = imported {
+            for (slot, entry) in palette.iter_mut().zip(theme.palette_entries.iter()) {
+                if let Some(color) = entry { *slot = color.rgb(); }
+            }
+        }
+        if let Some(ansi) = ansi { palette[..16].copy_from_slice(&ansi); }
+        Some(palette)
+    }
     pub fn terminal_palette(&self) -> Option<[rmux_terminal::Color; 16]> {
         self.ansi_palette.or_else(|| self.imported_theme.as_ref().and_then(|theme| theme.palette)).map(|colors| colors.map(HexColor::rgb)).or_else(|| {
             match self.terminal_theme {
@@ -642,6 +656,28 @@ mod tests {
         let explicit = Preferences::decode(br##"{"cursor_text":"#abcdef"}"##)?.import_theme(path)?;
         assert_eq!(explicit.cursor_text(fg, bg), rmux_terminal::Color(171,205,239));
         assert_eq!(serde_json::to_value(&explicit)?["cursor_text"], "#abcdef");
+        Ok(())
+    }
+
+    #[test]
+    fn extended_palette_import_override_and_replacement() -> Result<()> {
+        use rmux_terminal::Color;
+        let directory = tempfile::tempdir()?;
+        let path = directory.path().join("theme");
+        std::fs::write(&path, "palette=1=010203\npalette=200=112233\npalette=255=abcdef\n")?;
+        let settings = Preferences::decode(&serde_json::to_vec(&serde_json::json!({"ansi_palette": vec!["#445566";16]}))?)?.import_theme(path.clone())?;
+        let colors = settings.effective_palette().unwrap();
+        assert_eq!(colors[1], Color(68,85,102));
+        assert_eq!(colors[200], Color(17,34,51));
+        assert_eq!(colors[255], Color(171,205,239));
+        assert_eq!(colors[199], rmux_terminal::default_palette()[199]);
+        std::fs::write(&path, "palette=16=123456\n")?;
+        let mut replaced = settings.import_theme(path)?;
+        assert_eq!(replaced.effective_palette().unwrap()[200], rmux_terminal::default_palette()[200]);
+        assert_eq!(replaced.effective_palette().unwrap()[16], Color(18,52,86));
+        replaced.select_theme(TerminalTheme::Dark);
+        assert_eq!(replaced.effective_palette().unwrap()[16], rmux_terminal::default_palette()[16]);
+        assert!(Preferences::default().effective_palette().is_none());
         Ok(())
     }
 
