@@ -23,6 +23,8 @@ pub struct Job {
 pub struct Hit { pub window: Option<gpui::AnyWindowHandle>, pub workspace: EntityId, pub terminal: EntityId, pub name: String, pub snippet: String }
 #[derive(Default)]
 pub struct Report { pub hits: Vec<Hit>, pub scanned: usize, pub unavailable: usize, pub limited: usize }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Progress { pub previews: usize, pub total: usize, pub matches: usize, pub deep_remaining: usize }
 pub fn validate(query: &str) -> Result<(), &'static str> {
     if query.trim().is_empty() || query.len() > 4096 || query.chars().any(char::is_control) {
         Err("Enter 1–4096 bytes of search text without control characters")
@@ -33,8 +35,14 @@ fn matching_line(text: &str, query: &str) -> Option<String> {
     text.lines().find(|line| line.to_ascii_lowercase().contains(query))
         .map(|line| crate::file_browser::preview_line_title(line, query))
 }
-pub fn scan(jobs: Vec<Job>, query: &str, canceled: &AtomicBool) -> Report {
+#[cfg(test)]
+fn scan(jobs: Vec<Job>, query: &str, canceled: &AtomicBool) -> Report {
+    scan_with_progress(jobs, query, canceled, |_| {})
+}
+pub fn scan_with_progress(jobs: Vec<Job>, query: &str, canceled: &AtomicBool, mut publish: impl FnMut(Progress)) -> Report {
     let mut report = Report::default();
+    let mut progress = Progress { previews: 0, total: jobs.len().min(MAX_TERMINALS), matches: 0, deep_remaining: 0 };
+    publish(progress);
     let query = query.to_ascii_lowercase();
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     let mut pending = Vec::new();
@@ -57,10 +65,15 @@ pub fn scan(jobs: Vec<Job>, query: &str, canceled: &AtomicBool) -> Report {
             Ok(None) => { report.scanned += 1; pending.push((index, hit, probe)); }
             _ => report.unavailable += 1,
         }
+        progress.previews += 1;
+        progress.matches = hits.len();
+        progress.deep_remaining = pending.len();
+        publish(progress);
     }
     for (index, mut hit, probe) in pending {
         if canceled.load(Ordering::Relaxed) { break; }
-        if std::time::Instant::now() >= deadline { report.limited += 1; continue; }
+        progress.deep_remaining = progress.deep_remaining.saturating_sub(1);
+        if std::time::Instant::now() >= deadline { report.limited += 1; publish(progress); continue; }
         let terminal_deadline = deadline.min(std::time::Instant::now() + std::time::Duration::from_millis(250));
         match probe(&query, canceled, terminal_deadline) {
             Ok(Some(true)) => {
@@ -71,6 +84,8 @@ pub fn scan(jobs: Vec<Job>, query: &str, canceled: &AtomicBool) -> Report {
             Ok(None) => report.limited += 1,
             Err(_) => report.unavailable += 1,
         }
+        progress.matches = hits.len();
+        publish(progress);
     }
     hits.sort_unstable_by_key(|(index, _)| *index);
     report.hits = hits.into_iter().map(|(_, hit)| hit).collect();
@@ -97,7 +112,11 @@ mod tests {
                 }),
             }
         }).collect();
-        let report = super::scan(jobs, "needle", &super::AtomicBool::new(false));
+        let mut updates = Vec::new();
+        let report = super::scan_with_progress(jobs, "needle", &super::AtomicBool::new(false), |progress| updates.push(progress));
+        assert_eq!(updates.first().unwrap().previews, 0);
+        assert!(updates.contains(&super::Progress { previews: 3, total: 3, matches: 1, deep_remaining: 2 }));
+        assert_eq!(updates.last(), Some(&super::Progress { previews: 3, total: 3, matches: 3, deep_remaining: 0 }));
         assert_eq!(report.hits.iter().map(|hit| hit.name.as_str()).collect::<Vec<_>>(), ["0", "1", "2"]);
         assert_eq!(report.limited, 0);
     }

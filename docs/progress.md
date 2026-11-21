@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Global search now reports preview progress, matching-terminal count and remaining
+deep scans in its loading notice. Scanner progress uses a one-slot nonblocking
+channel and at most one publication per 50 ms, without an idle polling task.
+Cancellation clears the changing notice; completion closes the progress channel
+before installing the final result palette. Existing unrelated notices are not
+overwritten. Four scanner tests passed; the preview-first regression also checks
+phase and completion counts. Native progress/cancel presentation remains pending.
+
 Global search now collects bounded preview matches across the selected terminals
 before starting deep-history fallbacks. A busy early terminal therefore cannot
 spend the deep-scan budget before later preview hits are collected. Deferred work

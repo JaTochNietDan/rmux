@@ -1746,7 +1746,8 @@ Select a result to activate its window, focus that terminal and open Find with t
 use Find navigation to move between live matches. Results contain one excerpt
 per matching terminal, not every occurrence. Output may have changed since the
 snapshot. Search again refreshes the result set; typing in results only filters
-that snapshot. The loading notice offers cancellation. This currently excludes
+that snapshot. The loading notice shows preview/match counts and remaining deep
+scans, and offers cancellation. This currently excludes
 external agent-session archives; full global-search parity remains in progress.
 
 When a terminal application enables mouse reporting, clicks, movement and vertical wheel events are sent through Ghostty's mouse encoder. Hold Shift while scrolling to browse local history instead.

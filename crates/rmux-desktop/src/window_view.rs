@@ -2561,11 +2561,31 @@ impl WorkspaceWindow {
         let executor = cx.background_executor().clone();
         self.terminal_search_job = Some(cx.spawn_in(window, async move |entity, cx| {
             let scan_query = query.clone();
-            let report = executor.spawn(async move { let _permit = permit; terminal_search::scan(jobs, &scan_query, &canceled) }).await;
+            let (progress_tx, progress_rx) = async_channel::bounded(1);
+            let scan = executor.spawn(async move {
+                let _permit = permit;
+                let mut published = None;
+                terminal_search::scan_with_progress(jobs, &scan_query, &canceled, |progress| {
+                    let now = std::time::Instant::now();
+                    if published.is_none_or(|then| now.duration_since(then) >= std::time::Duration::from_millis(50)) {
+                        if progress_tx.try_send(progress).is_ok() { published = Some(now); }
+                    }
+                })
+            });
+            while let Ok(progress) = progress_rx.recv().await {
+                let _ = cx.update(|_, cx| entity.update(cx, |this, cx| {
+                    if this.notice.as_deref().is_some_and(|notice| notice.starts_with("Searching terminal output…")) {
+                        this.notice = Some(format!("Searching terminal output… {}/{} previews · {} matches · {} deep scans remaining",
+                            progress.previews, progress.total, progress.matches, progress.deep_remaining));
+                        cx.notify();
+                    }
+                }));
+            }
+            let report = scan.await;
             let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
                 this.terminal_search_job = None;
                 this.terminal_search_cancel = None;
-                if this.notice.as_deref() == Some("Searching terminal output…") { this.notice = None; }
+                if this.notice.as_deref().is_some_and(|notice| notice.starts_with("Searching terminal output…")) { this.notice = None; }
                 if focus.is_focused(window) && this.automation_available(cx).is_ok() {
                     let palette = cx.new(|cx| command_palette::CommandPalette::terminal_search_results(report, query, extra, window, cx));
                     this.install_palette(palette, Some(focus), window, cx);
@@ -4252,7 +4272,7 @@ impl Render for WorkspaceWindow {
                                 if !event.standard_click() { return; }
                                 this.terminal_search_cancel = None;
                                 this.terminal_search_job = None;
-                                if this.notice.as_deref() == Some("Searching terminal output…") { this.notice = None; }
+                                if this.notice.as_deref().is_some_and(|notice| notice.starts_with("Searching terminal output…")) { this.notice = None; }
                                 cx.notify();
                             })).child(icons::icon("close"))))
                         .when(self.file_browser_job.is_some(), |row| row.child(pane_view::pane_control("cancel-file-load", "Cancel file loading")
