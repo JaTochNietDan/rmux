@@ -90,6 +90,7 @@ fn action(name: &str) -> Option<Box<dyn Action>> {
         "custom_command_picker" => Box::new(ShowCustomCommandPicker),
         "layout_preset_picker" => Box::new(ShowLayoutPresetPicker),
         "open_settings_file" => Box::new(OpenSettingsFile),
+        "import_theme" => Box::new(ImportTerminalTheme),
         "save_appearance" => Box::new(SaveAppearanceSettings),
         "terminal_memory" => Box::new(RefreshTerminalMemory),
         "close_terminal_memory" => Box::new(CloseTerminalMemory),

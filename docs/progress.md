@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Added Import Terminal Theme to the menu, command palette, keyboard-navigable
+Settings row and custom `import_theme` action. The native single-file picker uses
+the shared prompt gate; bounded theme parsing runs off the UI thread under the
+settings-operation gate. Invalid/canceled imports preserve settings, newer edits
+win over delayed results, and a closed originating window cannot publish an import.
+Successful imports apply to the session and persist only with Save. Desktop
+compilation, import/override/save test and Settings navigation test passed. Native
+picker/focus/visual acceptance and broader Ghostty theme syntax remain pending.
+
 Added configuration-driven `theme_file` import for a strict Ghostty-style color
 subset: foreground/background/cursor RGB and complete 16-entry ANSI palettes.
 Reads are explicit at startup/reload, capped at 64 KiB and regular-file only;

@@ -332,6 +332,7 @@ impl CommandPalette {
         command!("Close Finished Terminal Tabs…", CloseFinishedTabs);
         command!("Close Workspace", CloseWorkspace);
         command!("Close Window", CloseWindow);
+        command!("Import Terminal Theme…", ImportTerminalTheme);
         for theme in preferences::TerminalTheme::ALL {
             commands.push(Command {
                 title: format!("Terminal Theme: {}", theme.label()),

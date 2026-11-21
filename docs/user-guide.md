@@ -820,8 +820,15 @@ palette values override the preset. This changes terminal content only, not the
 sidebar or other application controls, and does not automatically follow OS
 appearance changes.
 
-Set `"theme_file": "/absolute/path/to/colors.theme"` to import a local color
-file, then Reload Settings. This supports a strict subset of
+Choose **Import Terminal Theme…** in the menu/palette, or **Import terminal theme →
+Choose file…** in Settings, to select a local color file. The Settings row supports
+keyboard navigation; custom action `import_theme` can also be bound to a shortcut.
+Imports load in the background and apply for this session; **Save these settings**
+persists the selected path. Canceling or selecting an invalid file leaves current
+colors unchanged. Newer settings edits take precedence over a pending import.
+
+Alternatively set `"theme_file": "/absolute/path/to/colors.theme"` and Reload
+Settings. This supports a strict subset of
 [Ghostty color assignments](https://ghostty.org/docs/config/reference):
 
 ```text

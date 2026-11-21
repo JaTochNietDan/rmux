@@ -1348,6 +1348,11 @@ impl WorkspaceWindow {
         } else if matches!(key, "left" | "right" | "enter" | "space") {
             let selected = state.selected;
             if selected < settings_view::KEYS.len() {
+                if settings_view::KEYS[selected] == "import_theme" {
+                    self.choose_terminal_theme(window, cx);
+                    cx.stop_propagation();
+                    return;
+                }
                 if settings_view::KEYS[selected] == "font_family" {
                     self.show_font_picker(true, window, cx);
                     cx.stop_propagation();
@@ -1398,6 +1403,52 @@ impl WorkspaceWindow {
         }).detach();
     }
 
+    fn choose_terminal_theme(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if cx.global::<preferences::ReloadState>().0 { return; }
+        let Some(permit) = cx.global::<PromptGate>().acquire() else { return; };
+        let picker = cx.prompt_for_paths(PathPromptOptions {
+            files: true, directories: false, multiple: false, prompt: Some("Import Terminal Theme".into()),
+        });
+        cx.spawn_in(window, async move |entity, cx| {
+            let result: anyhow::Result<Option<std::path::PathBuf>> = async {
+                Ok(picker.await??.and_then(|paths| paths.into_iter().next()))
+            }.await;
+            drop(permit);
+            let _ = cx.update(|_, cx| entity.update(cx, |this, cx| match result {
+                Ok(Some(path)) => this.import_terminal_theme(path, cx),
+                Ok(None) => {},
+                Err(error) => { this.notice = Some(format!("Choose theme: {error:#}")); cx.notify(); },
+            }));
+        }).detach();
+    }
+    fn import_terminal_theme(&mut self, path: std::path::PathBuf, cx: &mut Context<Self>) {
+        if cx.global::<preferences::ReloadState>().0 { return; }
+        cx.global_mut::<preferences::ReloadState>().0 = true;
+        let current = cx.global::<Preferences>().clone();
+        let executor = cx.background_executor().clone();
+        self.notice = Some("Importing terminal theme…".into());
+        cx.notify();
+        cx.spawn(async move |entity, cx| {
+            let snapshot = current.clone();
+            let result = executor.spawn(async move { snapshot.import_theme(path) }).await;
+            let _ = cx.update(|cx| {
+                cx.global_mut::<preferences::ReloadState>().0 = false;
+                // A closed originating window must not apply a delayed import.
+                let _ = entity.update(cx, |this, cx| {
+                    this.notice = Some(match result {
+                        Ok(_) if !current.same_saved_appearance(cx.global::<Preferences>()) =>
+                            "Settings changed during import; your newer edits were kept.".into(),
+                        Ok(next) => {
+                            cx.set_global(next);
+                            "Theme imported for this session. Save these settings to keep it; configured color overrides remain active.".into()
+                        },
+                        Err(error) => format!("Theme unchanged: {error:#}"),
+                    });
+                    cx.notify();
+                });
+            });
+        }).detach();
+    }
     fn reload_settings(&mut self, cx: &mut Context<Self>) {
         if cx.global::<preferences::ReloadState>().0 {
             return;
@@ -4196,6 +4247,10 @@ impl Render for WorkspaceWindow {
                     state.focus.focus(window);
                 }
                 let mut settings = cx.global::<Preferences>().clone();
+                if change.key == "import_theme" {
+                    this.choose_terminal_theme(window, cx);
+                    return;
+                }
                 if change.key == "font_family" {
                     this.show_font_picker(true, window, cx);
                     return;
@@ -4211,6 +4266,7 @@ impl Render for WorkspaceWindow {
             .on_action(cx.listener(|this, _: &SaveAppearanceSettings, _, cx| this.save_appearance_settings(cx)))
             .on_action(cx.listener(|this, _: &ReloadSettings, _, cx| this.reload_settings(cx)))
             .on_action(cx.listener(|this, _: &OpenSettingsFile, _, cx| this.open_settings_file(cx)))
+            .on_action(cx.listener(|this, _: &ImportTerminalTheme, window, cx| this.choose_terminal_theme(window, cx)))
             .on_action(cx.listener(|this, _: &RenameWorkspace, window, cx| this.edit_metadata(MetadataField::Name, window, cx)))
             .on_action(cx.listener(|this, _: &ShowWorkspaceMenu, window, cx| {
                 if let Some(entry) = this.entries.get(this.active) {

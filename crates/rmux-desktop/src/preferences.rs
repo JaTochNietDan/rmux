@@ -228,6 +228,13 @@ impl Preferences {
     pub fn cursor_shape(&self, focused: bool, composing: bool, application: rmux_terminal::CursorShape) -> Option<rmux_terminal::CursorShape> {
         self.unfocused_cursor.shape(focused, composing, self.focused_cursor.shape(application))
     }
+    pub fn import_theme(mut self, path: std::path::PathBuf) -> Result<Self> {
+        ensure!(path.is_absolute() && path.as_os_str().len() <= 8192, "theme_file must be an absolute path up to 8192 bytes");
+        let theme = crate::theme_file::read(&path).with_context(|| format!("theme {}", path.display()))?;
+        self.theme_file = Some(path);
+        self.imported_theme = Some(theme);
+        Ok(self)
+    }
     pub fn select_theme(&mut self, theme: TerminalTheme) {
         self.terminal_theme = theme;
         self.theme_file = None;
@@ -490,6 +497,10 @@ mod tests {
         let config = directory.path().join("config.json");
         std::fs::write(&theme, "foreground=112233\nbackground=445566\ncursor-color=778899\n")?;
         std::fs::write(&config, serde_json::to_vec(&serde_json::json!({"theme_file":theme, "foreground_color":"#aabbcc"}))?)?;
+        let imported = Preferences::default().import_theme(theme.clone())?;
+        assert_eq!(imported.theme_file.as_ref(), Some(&theme));
+        assert_eq!(imported.terminal_colors()[0], Some(rmux_terminal::Color(17,34,51)));
+        assert!(Preferences::default().import_theme("relative.theme".into()).is_err());
         let mut settings = Preferences::read(&config, true)?;
         settings.source = Some(config.clone());
         assert_eq!(settings.terminal_colors(), [Some(rmux_terminal::Color(170,187,204)), Some(rmux_terminal::Color(68,85,102)), Some(rmux_terminal::Color(119,136,153))]);
