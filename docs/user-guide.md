@@ -281,8 +281,8 @@ choose Parent/Refresh. Back/Forward entries navigate successfully visited folder
 in this window; custom actions `file_back` and `file_forward` provide keyboard
 bindings. History retains at most 32 paths and is not persisted. Refresh preserves
 Forward, while opening a different folder after Back replaces the forward branch.
-Failed or canceled reads do not change history. You can Enter on a regular file opens a read-only text
-preview; a symbolic link copies its path. Hidden entries are included.
+Failed or canceled reads do not change history. Enter on a regular file opens a
+read-only text preview; a symbolic link copies its path. Hidden entries are included.
 **File → Open Folder…**, the command palette, or the `open_folder` custom action
 opens the native folder chooser. This works without a terminal working directory
 and loads the selected folder asynchronously. Open Folder is also available in
