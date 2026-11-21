@@ -297,6 +297,28 @@ mod tests {
     use super::text_run;
 
     #[test]
+    fn dynamic_selection_background_runs_follow_cells_and_clip() -> anyhow::Result<()> {
+        use super::*;
+        use crate::preferences::CellColor;
+        let mut terminal = rmux_terminal::Terminal::new(6, 1)?;
+        terminal.write(b"\x1b[31;44mab\x1b[32mcd\x1b[45mef");
+        let frame = terminal.frame()?;
+        let source = &frame.rows[0];
+        let collect = |selection, setting| {
+            let mut runs = Vec::new();
+            selection_spans(source, selection, setting, |start, end, color| runs.push((start, end, color)));
+            runs
+        };
+        assert_eq!(collect((1, 4), Some(CellColor::CellForeground)), vec![(1,2,Some(source[1].foreground)), (2,5,Some(source[2].foreground))]);
+        assert_eq!(collect((0, u16::MAX), Some(CellColor::CellBackground)), vec![(0,4,Some(source[0].background)), (4,6,Some(source[4].background))]);
+        assert_eq!(collect((1,4), None), vec![(1,5,None)]);
+        assert!(collect((5,2), Some(CellColor::CellForeground)).is_empty());
+        assert!(collect((9,12), None).is_empty());
+        Ok(())
+    }
+
+
+    #[test]
     fn releasing_cache_drops_rows_and_backing_capacity() {
         use super::*;
         let row = Arc::new(ShapedRow {
@@ -365,11 +387,34 @@ mod tests {
     }
 }
 
+// Emit half-open runs without allocating a second cell/background buffer.
+fn selection_spans(source: &[Cell], selection: (u16, u16), setting: Option<crate::preferences::CellColor>, mut emit: impl FnMut(usize, usize, Option<Color>)) {
+    let start = usize::from(selection.0).min(source.len());
+    let end = (usize::from(selection.1) + 1).min(source.len());
+    if start >= end { return; }
+    let resolve = |cell: &Cell| setting.map(|setting| setting.resolve(cell.foreground, cell.background));
+    let mut run_start = start;
+    let mut background = resolve(&source[start]);
+    if matches!(setting, None | Some(crate::preferences::CellColor::Literal(_))) {
+        emit(start, end, background);
+        return;
+    }
+    for index in start + 1..end {
+        let next = resolve(&source[index]);
+        if next != background {
+            emit(run_start, index, background);
+            run_start = index;
+            background = next;
+        }
+    }
+    emit(run_start, end, background);
+}
+
 pub fn paint_row(
     row: &ShapedRow,
     origin: Point<Pixels>,
     selection: Option<(u16, u16)>,
-    selection_background: Hsla,
+    selection_background: Option<crate::preferences::CellColor>,
     cells: CellMetrics,
     window: &mut Window,
     cx: &mut App,
@@ -383,14 +428,16 @@ pub fn paint_row(
             color(background.color),
         ));
     }
-    if let Some((start, end)) = selection {
-        window.paint_quad(fill(
-            Bounds::new(
-                origin + point(px(start as f32 * cells.width), px(0.)),
-                size(px((end - start + 1) as f32 * cells.width), px(cells.height)),
-            ),
-            selection_background,
-        ));
+    if let Some(selection) = selection {
+        selection_spans(&row.source, selection, selection_background, |start, end, background| {
+            window.paint_quad(fill(
+                Bounds::new(
+                    origin + point(px(start as f32 * cells.width), px(0.)),
+                    size(px((end - start) as f32 * cells.width), px(cells.height)),
+                ),
+                background.map(color).unwrap_or_else(|| rgba(0x668fca80).into()),
+            ));
+        });
     }
     let paint = |texts: &[RowText], foreground: Option<Color>, window: &mut Window, cx: &mut App| {
         for text in texts {

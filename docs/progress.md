@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Selection backgrounds now accept dynamic cell-foreground/cell-background in JSON
+and imported themes, with explicit settings taking precedence. Painting merges
+adjacent matching cell colors into spans without allocating a background buffer;
+literal/default selections retain a single-quad fast path. Settings preview uses
+the same cell-color resolution. Fourteen selection-related tests passed, including
+new import/override/serialization and mixed-color span/clipping cases. Native
+selection visual acceptance and dynamic selection foregrounds remain pending.
+
 Cursor fill now supports dynamic cell-foreground/cell-background references in
 JSON and imported themes. Dynamic settings clear the engine's configured cursor
 default; snapshots expose whether an explicit engine color is present so

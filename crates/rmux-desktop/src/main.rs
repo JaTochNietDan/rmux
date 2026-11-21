@@ -2474,7 +2474,7 @@ impl Element for TerminalElement {
                 window.paint_quad(quad);
             }
         });
-        let selection_background = cx.global::<Preferences>().selection_background_fill();
+        let selection_background = cx.global::<Preferences>().selection_background();
         window.with_content_mask(Some(ContentMask { bounds: state.content_bounds }), |window| {
             for (y, row) in state.rows.iter().enumerate() {
                 row_cache::paint_row(

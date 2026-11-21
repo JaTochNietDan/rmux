@@ -862,8 +862,9 @@ and hollow cursor shapes are unaffected by cursor-text settings.
 
 Cursor fill also accepts `cell-foreground`/`cell-background` via `cursor_color`
 in JSON or `cursor-color` in themes. Application OSC cursor colors take precedence;
-resetting them restores the configured dynamic reference. Dynamic selection-color
-references are not yet supported.
+resetting them restores the configured dynamic reference. Selection backgrounds
+also accept `cell-foreground` and `cell-background`, resolving independently for
+each selected cell. Dynamic selection foreground references remain unsupported.
 
 `selection_background` in rmux JSON also accepts `"#RRGGBB"` and overrides the
 imported selection background. Configured selection backgrounds are opaque; with
