@@ -396,6 +396,7 @@ actions!(
         ShowWorkspaceWindowPicker,
         ShowWorkspaceMergePicker,
         NewWorkspace,
+        CancelNewWorkspace,
         RefreshTerminalMemory,
         CloseTerminalMemory,
         CopyTerminalMemory,
@@ -3790,6 +3791,7 @@ fn main() {
                 items: vec![
                     MenuItem::action("New Window", NewWindow),
                     MenuItem::action("New Workspace", NewWorkspace),
+                    MenuItem::action("Cancel New Workspace", CancelNewWorkspace),
                     MenuItem::action("Connect via SSH…", ShowSshConnection),
                     MenuItem::action("SSH Hosts…", ShowSshHosts),
                     MenuItem::action("New Empty Workspace Group", NewWorkspaceGroup),

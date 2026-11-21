@@ -191,6 +191,7 @@ impl CommandPalette {
             };
         }
         command!("New Workspace", NewWorkspace);
+        command!("Cancel New Workspace", CancelNewWorkspace);
         command!("Show / Refresh Terminal Memory", RefreshTerminalMemory);
         command!("Cycle Terminal Memory Sort", CycleTerminalMemorySort);
         command!("New Empty Workspace Group", NewWorkspaceGroup);

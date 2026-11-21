@@ -98,6 +98,7 @@ fn action(name: &str) -> Option<Box<dyn Action>> {
         "refresh_git_context" => Box::new(RefreshGitContext),
         "toggle_program_status" => Box::new(ToggleProgramStatus),
         "dismiss_all_notifications" => Box::new(DismissAllNotifications),
+        "cancel_new_workspace" => Box::new(CancelNewWorkspace),
         "cancel_new_tab" => Box::new(CancelNewTab),
         "cancel_queued_paste" => Box::new(CancelQueuedPaste),
         "cancel_split" => Box::new(CancelSplit),

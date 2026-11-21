@@ -155,6 +155,7 @@ pub(super) struct WorkspaceWindow {
     notification_navigation: Option<NotificationNavigation>,
     settings_state: Option<settings_view::State>,
     command_launching: bool,
+    workspace_launch_cancel: Option<file_browser::Cancellation>,
     next_number: usize,
     sidebar: bool,
     sidebar_width: f32,
@@ -3147,6 +3148,7 @@ impl WorkspaceWindow {
             notification_navigation: None,
             settings_state: None,
             command_launching: false,
+            workspace_launch_cancel: None,
             next_number: snapshot.workspaces.len() + 1,
             sidebar: snapshot.sidebar,
             sidebar_width: snapshot.sidebar_width,
@@ -3357,6 +3359,7 @@ impl WorkspaceWindow {
             notification_navigation: None,
             settings_state: None,
             command_launching: false,
+            workspace_launch_cancel: None,
             next_number: 1,
             sidebar: panes.is_none(),
             sidebar_width: 200.,
@@ -3529,6 +3532,14 @@ impl WorkspaceWindow {
         self.add_with_directory(panes, inherit_group, placement, None, window, cx);
     }
 
+    fn cancel_workspace_launch(&mut self, cx: &mut Context<Self>) {
+        if let Some(cancel) = &self.workspace_launch_cancel {
+            cancel.0.store(true, std::sync::atomic::Ordering::Release);
+            self.notice = Some("Canceling workspace startup…".into());
+            cx.notify();
+        }
+    }
+
     fn start_workspace(&mut self, directory: Option<std::path::PathBuf>, window: &mut Window, cx: &mut Context<Self>) {
         if self.command_launching || self.automation_available(cx).is_err() || self.entries.len() >= 64 { return; }
         let Some(entry) = self.entries.get(self.active) else { return; };
@@ -3550,15 +3561,21 @@ impl WorkspaceWindow {
         let colors = settings.terminal_colors();
         let palette = settings.terminal_palette();
         let executor = cx.background_executor().clone();
+        let cancellation = file_browser::Cancellation::default();
+        let canceled = cancellation.0.clone();
+        let launch_canceled = canceled.clone();
+        self.workspace_launch_cancel = Some(cancellation);
         self.command_launching = true;
         self.notice = Some("Starting workspace…".into());
         cx.notify();
         cx.spawn_in(window, async move |entity, cx| {
             let mut result = executor.spawn(async move {
-                let session = Session::shell_in_with_scrollback(80, 24, directory.as_deref(), scrollback)?;
-                TerminalView::prepare(session, colors, palette)
+                pane_view::prepare_terminal_launch(&launch_canceled, || {
+                    Session::shell_in_with_scrollback(80, 24, directory.as_deref(), scrollback)
+                }, colors, palette)
             }).await;
             loop {
+                if canceled.load(std::sync::atomic::Ordering::Acquire) { break; }
                 let refresh = cx.update(|_, cx| {
                     let prepared = result.as_ref().ok()?;
                     let settings = cx.global::<Preferences>();
@@ -3570,8 +3587,11 @@ impl WorkspaceWindow {
                 result = executor.spawn(async move { TerminalView::prepare(session, colors, palette) }).await;
             }
             let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
+                let was_canceled = canceled.load(std::sync::atomic::Ordering::Acquire);
+                this.workspace_launch_cancel = None;
                 this.command_launching = false;
-                if this.notice.as_deref() == Some("Starting workspace…") { this.notice = None; }
+                if matches!(this.notice.as_deref(), Some("Starting workspace…" | "Canceling workspace startup…")) { this.notice = None; }
+                if was_canceled { cx.notify(); return; }
                 match result {
                     Ok(prepared) if this.automation_available(cx).is_ok() && this.entries.len() < 64
                         && this.entries.iter().any(|entry| entry.workspace.entity_id() == origin)
@@ -4182,6 +4202,7 @@ impl Render for WorkspaceWindow {
             .on_action(cx.listener(|this, _: &EditWorkspaceDescription, window, cx| this.edit_metadata(MetadataField::Description, window, cx)))
             .on_action(cx.listener(|this, _: &EditWorkspaceIcon, window, cx| this.edit_metadata(MetadataField::Icon, window, cx)))
             .on_action(cx.listener(|this, _: &EditWorkspaceColor, window, cx| this.edit_metadata(MetadataField::Color, window, cx)))
+            .on_action(cx.listener(|this, _: &CancelNewWorkspace, _, cx| this.cancel_workspace_launch(cx)))
             .on_action(cx.listener(|this, _: &NewWorkspace, window, cx| this.start_workspace(None, window, cx)))
             .on_action(cx.listener(|this, _: &RefreshTerminalMemory, window, cx| this.refresh_memory(window, cx)))
             .on_action(cx.listener(|this, _: &CycleTerminalMemorySort, _, cx| this.sort_memory(cx)))
@@ -4506,9 +4527,13 @@ impl Render for WorkspaceWindow {
                             .on_click(move |event, _, cx| {
                                 if event.standard_click() { clipboard::write(ClipboardItem::new_string(notice.clone()), cx); }
                             }).child(icons::icon("copy")))
-                        .when(self.restore_job.is_none() && self.file_browser_job.is_none() && self.terminal_search_job.is_none(), |row| row.child(pane_view::pane_control("dismiss-notice", "Dismiss message")
+                        .when(self.restore_job.is_none() && self.file_browser_job.is_none() && self.terminal_search_job.is_none() && self.workspace_launch_cancel.is_none(), |row| row.child(pane_view::pane_control("dismiss-notice", "Dismiss message")
                             .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
                                 if event.standard_click() { this.notice = None; cx.notify(); }
+                            })).child(icons::icon("close"))))
+                        .when(self.workspace_launch_cancel.is_some(), |row| row.child(pane_view::pane_control("cancel-workspace-startup", "Cancel New Workspace")
+                            .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
+                                if event.standard_click() { this.cancel_workspace_launch(cx); }
                             })).child(icons::icon("close"))))
                         .when(self.terminal_search_job.is_some(), |row| row.child(pane_view::pane_control("cancel-terminal-search", "Cancel terminal search")
                             .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {

@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Pending interactive workspace startup now supports cancellation through its notice,
+File menu, palette and custom `cancel_new_workspace` action. A cancellation owner
+also signals when the window drops. The shared launch helper checks before spawn
+and before first-frame preparation; completion checks before insertion. The busy
+slot remains reserved until completion, preventing canceled retries from accumulating
+workers. Canceling status replaces Starting, and only startup-owned notices clear
+on completion. Desktop test compilation and the existing native child-reaping
+regression passed. OS spawn already in progress is not interruptible; native cancel
+button/menu/focus acceptance remains pending.
+
 Interactive New Workspace, sidebar/group plus controls and New Workspace in
 Directory now prepare PTY/colors/first frame off-thread. Startup captures directory,
 placement and origin; insertion resolves that original workspace instead of the
