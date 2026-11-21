@@ -44,13 +44,18 @@ or automatically reconnect. Live authentication/platform acceptance is pending.
 Sessions launched by this SSH action do not expose a local working directory:
 remote shell directory reports cannot drive local file browsing, git metadata,
 or new-shell directory inheritance. When the remote shell emits OSC 7, the sidebar
-shows **Remote · /path**, and surface JSON provides `remote_directory` separately
+shows **SSH · destination · /path**, and surface JSON provides `remote_directory` separately
 from local directory metadata. This is display text, not a local filesystem path;
 remote file browsing and automatic remote shell integration remain unimplemented.
 **Copy Working Directory** copies the most recently reported remote path as text.
 It reports an error if no remote path is known. SSH context menus disable
 **Reveal Working Directory**, since a remote path is not a local folder.
-The requested SSH destination remains available in tab tooltips and terminal
+Remote tab titles retain an **SSH** prefix when renamed by you or the shell.
+The sidebar shows the destination before any directory report arrives; after the
+client exits it says **SSH ended**, marking a retained path as **Last**. An SSH
+label denotes a launched client, not successful authentication. The full destination
+and path remain available in the sidebar tooltip when the row is truncated.
+The requested SSH destination also remains available in tab tooltips and terminal
 switcher search after renaming a tab. Surface JSON includes `ssh_destination`
 (null for local terminals). It identifies the launch target, not a confirmed
 connection or authentication result, and does not enable automatic reconnect.

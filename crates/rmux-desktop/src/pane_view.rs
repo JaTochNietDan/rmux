@@ -525,7 +525,11 @@ impl PaneView {
                 view.title.clone()
             }
         });
-        if view.saved_ssh_destination.is_some() { format!("Local · {title}") } else { title }
+        if view.saved_ssh_destination.is_some() {
+            format!("Local · {title}")
+        } else if view.session.remote_destination().is_some() && !title.starts_with("SSH · ") {
+            format!("SSH · {title}")
+        } else { title }
     }
     pub fn terminal_search_title(&self, index: usize, cx: &App) -> String {
         let title = self.tab_title(index, cx);
@@ -680,8 +684,18 @@ impl PaneView {
 
     pub fn context_label(&self, cx: &App) -> Option<(Option<String>, Option<String>)> {
         let terminal = self.terminals.get(self.active)?.read(cx);
-        let directory = terminal.remote_directory_label.as_ref().map(|path| format!("Remote · {path}"))
-            .or_else(|| terminal.directory_label.clone()).or_else(|| terminal.snapshot_directory.as_ref().map(|path| path.to_string_lossy().into_owned()));
+        if let Some(destination) = terminal.session.remote_destination() {
+            let ended = terminal.process_exit.is_some();
+            let status = if ended { "SSH ended" } else { "SSH" };
+            let directory = match terminal.remote_directory_label.as_deref() {
+                Some(path) if ended => format!("{status} · {destination} · Last: {path}"),
+                Some(path) => format!("{status} · {destination} · {path}"),
+                None => format!("{status} · {destination}"),
+            };
+            return Some((None, Some(directory)));
+        }
+        let directory = terminal.directory_label.clone()
+            .or_else(|| terminal.snapshot_directory.as_ref().map(|path| path.to_string_lossy().into_owned()));
         (terminal.git_branch.is_some() || directory.is_some()).then(|| (terminal.git_branch.clone(), directory))
     }
     pub fn needs_attention(&self, cx: &App) -> bool {

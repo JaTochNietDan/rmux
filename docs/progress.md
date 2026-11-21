@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Remote session identity now stays visible when shell or custom titles replace the
+initial SSH tab label. Sidebar context shows SSH plus destination before OSC 7,
+appends the reported remote directory when available, and switches to SSH ended /
+Last path after client exit. The existing full context tooltip handles truncated
+rows. Local/restored tabs retain their existing behavior; remote context returns
+no local git branch. These use existing metadata/exit notifications without new
+polling or filesystem work. Desktop compilation passed; native visual acceptance
+and screenshots remain pending while the desktop is locked.
+
 Added explicit `split-pane --ssh DESTINATION` / `pane.split.ssh_destination`, with
 CLI help/completion support and validation before request queueing. SSH PTY startup
 runs off the UI thread under the command-launch guard; completion rechecks target
