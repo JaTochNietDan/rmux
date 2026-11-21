@@ -1179,7 +1179,11 @@
         "BROWSER"
       ],
       "acceptance": "Open tools for the addressed pane and expose bounded console/error records.",
-      "rmux_status": "not_started"
+      "rmux_status": "in_progress",
+      "implementation": "Optional macOS browser windows expose native Web Inspector toggle through toolbar, Browser menu and Cmd+Option+I. Inspector closure is requested before host release; WRY devtools is enabled explicitly for browser-feature release builds. Browser-feature compilation passes.",
+      "remaining": "Native inspector interaction/cleanup, workspace-pane addressing, bounded console/error records, RPC and cross-platform coverage. WRY macOS native retention requires a separate reclamation gate.",
+      "implementation_sources": ["crates/rmux-desktop/src/browser_window.rs"],
+      "progress_record": "docs/progress.md"
     },
     {
       "id": "B05",

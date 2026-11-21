@@ -2,6 +2,18 @@
 
 ## Current implementation focus
 
+Added native Web Inspector toggle controls to the optional macOS browser: toolbar,
+Browser menu and Cmd+Option+I target the active browser window, with a status hint
+before page creation. WRY devtools support is explicit for browser-enabled release
+builds. The host requests inspector closure before releasing its webview. Focused
+browser-feature compilation passes; no redundant unit test was added for this thin
+native API dispatch. Native inspector/shortcut/cleanup acceptance remains pending
+while the desktop is locked. Console/error recording and workspace-pane routing
+are still open. Source review also found WRY 0.57.3's macOS drop path explicitly
+retains its native webview and manager; the performance plan now records this as a
+reclamation gate rather than assuming Rust host drop frees native memory. The
+preceding goal turn made progress by shipping browser Find controls.
+
 Added a compact Find bar to the optional macOS browser: Cmd+F/menu/toolbar entry,
 Enter or Cmd+G next, Shift+Enter or Cmd+Shift+G previous, case toggle, wraparound,
 status and Escape-to-page focus. Search uses native WKWebView find configuration

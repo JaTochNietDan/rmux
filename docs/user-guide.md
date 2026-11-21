@@ -2279,3 +2279,8 @@ for the previous one. Cmd+G/Cmd+Shift+G and the arrow buttons also navigate matc
 The search runs when submitted, rather than on each keystroke. Native shortcut,
 focus and highlight behavior still need visual acceptance. Browser windows remain
 experimental and separate from workspace panes.
+
+In experimental browser builds, **Browser → Toggle Web Inspector**, Cmd+Option+I,
+or the **{}** toolbar button opens/closes WebKit's developer tools for that browser
+window. Open a page first. Native inspector interaction still needs acceptance;
+console output is not yet exposed through rmux's CLI/RPC.

@@ -4,7 +4,7 @@ use crate::text_field::TextField;
 use wry::{WebViewBuilderExtDarwin, WebViewExtMacOS};
 use std::{cell::RefCell, rc::Rc};
 
-actions!(browser, [FocusAddress, Back, Forward, Reload, ZoomIn, ZoomOut, ResetZoom, FindInPage, FindNext, FindPrevious]);
+actions!(browser, [FocusAddress, Back, Forward, Reload, ZoomIn, ZoomOut, ResetZoom, FindInPage, FindNext, FindPrevious, ToggleInspector]);
 const ZOOM_LEVELS: &[u16] = &[25, 33, 50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300, 400, 500];
 fn zoom_level(current: u16, direction: i8) -> u16 {
     match direction.cmp(&0) {
@@ -165,7 +165,15 @@ impl PageState {
     }
 }
 #[derive(Default)]
-struct Host { view: Option<wry::WebView>, bounds: Option<Bounds<Pixels>>, pending_url: Option<String> }
+struct Host { view: Option<wry::WebView>, bounds: Option<Bounds<Pixels>>, pending_url: Option<String>, inspector_used: bool }
+impl Drop for Host {
+    fn drop(&mut self) {
+        // Close a detached inspector before releasing its owning page.
+        if self.inspector_used {
+            if let Some(view) = &self.view { view.close_devtools(); }
+        }
+    }
+}
 struct BrowserView {
     host: Rc<RefCell<Host>>,
     input: Entity<TextField>,
@@ -226,7 +234,7 @@ impl BrowserView {
                 }
             }
         });
-        Self { host: Rc::new(RefCell::new(Host { pending_url: initial, ..Default::default() })), input, find_input, find: FindState::default(), page: PageState { status: "Enter an address to create an ephemeral browser.".into(), ..Default::default() }, zoom_percent: 100, latest, wake, _updates: task }
+        Self { host: Rc::new(RefCell::new(Host { pending_url: initial, view: None, bounds: None, inspector_used: false })), input, find_input, find: FindState::default(), page: PageState { status: "Enter an address to create an ephemeral browser.".into(), ..Default::default() }, zoom_percent: 100, latest, wake, _updates: task }
     }
     fn open_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(view) = &self.host.borrow().view { let _ = view.focus_parent(); }
@@ -303,7 +311,7 @@ impl BrowserView {
         };
         let blocked_popup = blocked.clone();
         let blocked_download = blocked.clone();
-        let view = wry::WebViewBuilder::new().with_incognito(true).with_url(url)
+        let view = wry::WebViewBuilder::new().with_incognito(true).with_devtools(true).with_url(url)
             .with_bounds(rect(bounds)).with_navigation_handler(move |url| {
                 if let Some(reason) = navigation_error(&url) { blocked(reason); false } else { true }
             })
@@ -333,6 +341,17 @@ impl BrowserView {
         if self.zoom_percent != 100 { view.zoom(f64::from(self.zoom_percent) / 100.)?; }
         host.view = Some(view);
         Ok(())
+    }
+    fn toggle_inspector(&mut self, cx: &mut Context<Self>) {
+        let mut host = self.host.borrow_mut();
+        if let Some(view) = &host.view {
+            if view.is_devtools_open() { view.close_devtools(); }
+            else { view.open_devtools(); }
+            host.inspector_used = true;
+        } else {
+            self.page.status = "Open a page before opening Web Inspector.".into();
+        }
+        cx.notify();
     }
     fn zoom(&mut self, direction: i8, cx: &mut Context<Self>) {
         let next = zoom_level(self.zoom_percent, direction);
@@ -396,6 +415,9 @@ impl Render for BrowserView {
                     .when(!loaded, |button| button.opacity(0.4).cursor_default())
                     .when(loaded, |button| button.on_click(cx.listener(|this, _, _, cx| { this.navigation(Navigation::Reload); cx.notify(); }))))
                 .child(div().flex_1().min_w_0().px_2().py_1().rounded_md().border_1().border_color(rgb(0x465063)).bg(rgb(0x242a36)).child(self.input.clone()))
+                .child(pane_view::action_control("browser-inspector", "Toggle Web Inspector", ToggleInspector, focus.clone()).child("{}")
+                    .when(!loaded, |button| button.opacity(0.4).cursor_default())
+                    .when(loaded, |button| button.on_click(cx.listener(|this, _, _, cx| this.toggle_inspector(cx)))))
                 .child(pane_view::action_control("browser-find", "Find in Page", FindInPage, focus.clone()).child("⌕")
                     .on_click(cx.listener(|this, _, window, cx| this.open_find(window, cx))))
                 .child(pane_view::control_button("browser-go").child("→")
@@ -496,6 +518,7 @@ fn with_active(cx: &mut App, update: impl FnOnce(&mut BrowserView, &mut Window, 
 }
 pub fn initialize(cx: &mut App) {
     cx.bind_keys([
+        KeyBinding::new("cmd-alt-i", ToggleInspector, Some("Browser")),
         KeyBinding::new("cmd-f", FindInPage, Some("Browser")),
         KeyBinding::new("cmd-g", FindNext, Some("Browser")),
         KeyBinding::new("cmd-shift-g", FindPrevious, Some("Browser")),
@@ -507,6 +530,7 @@ pub fn initialize(cx: &mut App) {
         KeyBinding::new("alt-left", Back, Some("Browser")),
         KeyBinding::new("alt-right", Forward, Some("Browser")),
     ]);
+    cx.on_action(|_: &ToggleInspector, cx| with_active(cx, |this, _, cx| this.toggle_inspector(cx)));
     cx.on_action(|_: &FindInPage, cx| with_active(cx, |this, window, cx| this.open_find(window, cx)));
     cx.on_action(|_: &FindNext, cx| with_active(cx, |this, window, cx| {
         if !this.find.visible { this.open_find(window, cx); }
@@ -526,6 +550,7 @@ pub fn initialize(cx: &mut App) {
 }
 pub fn menu() -> Menu {
     Menu { name: "Browser".into(), items: vec![
+        MenuItem::action("Toggle Web Inspector", ToggleInspector),
         MenuItem::action("Find in Page", FindInPage),
         MenuItem::action("Find Next", FindNext),
         MenuItem::action("Find Previous", FindPrevious),

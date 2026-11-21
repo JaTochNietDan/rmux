@@ -36,7 +36,7 @@ objc2 = { version = "=0.6.5", optional = true }
 objc2-foundation = { version = "=0.3.2", default-features = false, features = ["NSString"], optional = true }
 objc2-web-kit = { version = "=0.3.2", default-features = false, features = ["WKFindConfiguration", "WKFindResult", "WKWebView", "block2"], optional = true }
 url = { version = "=2.5.8", optional = true }
-wry = { version = "=0.57.3", default-features = false, features = ["os-webview"], optional = true }
+wry = { version = "=0.57.3", default-features = false, features = ["os-webview", "devtools"], optional = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = "=0.2.191"

@@ -1,5 +1,13 @@
 # rmux performance acceptance plan
 
+Browser reclamation is an unresolved dependency gate: WRY 0.57.3's macOS
+`InnerWebView::drop` removes the view but explicitly retains the native webview
+and manager. Dropping rmux's Rust host is therefore not evidence of native-object
+reclamation. Before enabling browser panes by default, measure repeated create/
+close cycles including inspector windows and WebKit helper processes, and resolve
+upstream lifetime constraints without reintroducing callback crashes. Inspector
+closure is requested before host release, but its memory effect is unmeasured.
+
 Unmounted terminal views release both shaped glyph caches and their desktop-owned
 cell snapshots. A shared empty-row placeholder retains viewport dimensions; engine
 contents, scrollback and processes are unchanged. The next prepaint requests a

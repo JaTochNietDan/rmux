@@ -41,6 +41,15 @@ Prototype terminal/browser composition, focus, clipping, drag overlays, resizing
 
 ## Experimental browser window
 
+Browser → Toggle Web Inspector, Cmd+Option+I, and the `{}` toolbar control toggle
+WRY's native inspector for the active browser window. The toolbar control is
+unavailable before a page exists; menu invocation then gives a status hint. The
+optional browser dependency enables WRY's devtools feature explicitly so this is
+available in release builds with `browser`, too. Closing the host requests inspector
+closure before dropping the webview. WRY 0.57.3 implements this on macOS through
+private WebKit inspector selectors. Native inspector interaction, detached-window
+cleanup, console/error capture and browser-pane routing remain unverified or open.
+
 The optional macOS browser includes an explicit-submit Find bar. Cmd+F opens it;
 Enter/Cmd+G finds the next match, Shift+Enter/Cmd+Shift+G finds the previous one.
 Aa toggles case sensitivity and Escape closes the field and returns focus to the
