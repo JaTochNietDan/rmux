@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Added a path-filtered GitHub Linux shell-integration workflow with pinned actions
+and mise-managed Python, using the runner's existing Bash. Actionlint passed.
+[Run 44850857084](https://github.com/JaTochNietDan/rmux/actions/runs/44850857084)
+passed on Bash 5.2.21, including PS0 command-start emission before command output,
+user PS0 preservation, idempotence, prompt replacement, cwd encoding, command exit
+status and opt-out. The macOS Bash 3.2 compatibility fixture also passed locally
+in the prior iteration. Automatic Bash login injection, modern array-hook coverage
+and native shell/prompt-theme acceptance remain open.
+
 Bash 4.4+ integration now prepends the OSC 133 command-start marker to PS0,
 preserving user content and relying on the existing source-once guard. Older
 Bash leaves PS0 unchanged, and no DEBUG trap is installed. The focused shell

@@ -1511,8 +1511,9 @@ It reports encoded working directories and prompt boundaries, preserves existing
 `PROMPT_COMMAND` hooks, and supports `RMUX_SHELL_INTEGRATION=0`. Run
 `mise run test-bash-integration` for its focused check. Automatic Bash login startup
 is still pending. The fixture checks command-start emission on Bash 4.4+ and
-unchanged PS0 on older versions; local execution covers macOS Bash 3.2. Modern
-Bash PS0/array-hook runtime acceptance remains pending.
+unchanged PS0 on older versions. It passed locally on macOS Bash 3.2 and in
+[GitHub CI on Linux Bash 5.2.21](https://github.com/JaTochNietDan/rmux/actions/runs/44850857084).
+Modern array-hook and native prompt-theme acceptance remain pending.
 
 Unix shells launch as interactive login shells by default. Set `RMUX_SHELL_LOGIN=0`
 before launching rmux to use interactive non-login shells instead. In this mode,
