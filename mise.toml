@@ -193,3 +193,7 @@ run = "cargo run -p rmux-desktop --features browser-probe --example browser-prob
 [tasks.browser]
 description = "Run rmux with experimental macOS browser windows enabled"
 run = "cargo run -p rmux-desktop --features browser --bin rmux"
+
+[tasks.test-powershell-integration]
+description = "Check opt-in PowerShell prompt hooks using a mise-managed runtime"
+run = "mise exec powershell@7.5.4 -- pwsh -NoProfile -NonInteractive -File scripts/test-powershell-integration.ps1"

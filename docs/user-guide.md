@@ -1677,7 +1677,13 @@ Fish automatically loads its hooks after normal shell configuration for both
 login and non-login sessions. For `RMUX_SHELL=pwsh` on Unix, login startup uses
 `-Login` before `-Interactive`; `RMUX_SHELL_LOGIN=0` uses only `-Interactive`.
 This fixes PowerShell flag ordering without changing user profiles. PowerShell
-prompt/directory integration and native runtime acceptance remain pending. Run
+prompt/directory hooks are opt-in: dot-source `shell-integration/powershell/rmux.ps1`
+after defining your prompt (`. ./shell-integration/powershell/rmux.ps1`). The macOS
+bundle includes that script under `Contents/Resources/shell-integration/powershell/`.
+The wrapper preserves prompt output and emits OSC 7 plus OSC 133 A/B; it does not
+yet emit command-start/completion markers. Automatic injection, interactive PTY
+and Windows acceptance remain pending. Run `mise run test-powershell-integration`
+for the focused mise-managed runtime check. Run
 `mise run test-zsh-integration` for the focused hook check.
 
 Bash reports completed-command status through OSC 133 D before the next prompt.

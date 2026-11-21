@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Added opt-in PowerShell prompt/directory integration and bundled its script on
+macOS. It invokes the original prompt first, then returns escaped filesystem OSC 7
+and OSC 133 A/B boundaries; non-filesystem providers omit file URIs. Repeated sourcing
+is idempotent and RMUX_SHELL_INTEGRATION=0 opts out. Installed PowerShell 7.5.4 through
+mise only and ran the focused runtime fixture successfully: original prompt text,
+failed-command $? visibility, LASTEXITCODE, Unicode/space/percent paths, duplicate
+source and non-filesystem handling pass. The test is pinned in a mise task and a
+Linux GitHub job; no Windows validation was added. Automatic injection, PSReadLine/
+interactive PTY compatibility and command start/completion remain open. The previous
+goal turn made progress with corrected PowerShell Unix login argument ordering.
+
 Reviewing PowerShell integration exposed an existing Unix launch-order bug:
 PowerShell requires -Login first, but the common launcher appended -i then -l.
 Recognized pwsh basenames now receive -Login/-Interactive in the documented order;

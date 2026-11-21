@@ -5,11 +5,15 @@ on:
     branches: [main]
     paths:
       - shell-integration/bash/**
+      - shell-integration/powershell/**
+      - scripts/test-powershell-integration.ps1
       - scripts/test-bash-integration.py
       - .github/workflows/shell-integration.yml
   pull_request:
     paths:
       - shell-integration/bash/**
+      - shell-integration/powershell/**
+      - scripts/test-powershell-integration.ps1
       - scripts/test-bash-integration.py
       - .github/workflows/shell-integration.yml
 permissions:
@@ -31,3 +35,17 @@ jobs:
         run: |
           bash --version
           mise exec -- python scripts/test-bash-integration.py
+
+  powershell:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db
+        with:
+          version: 2026.11.8
+          mise_toml: |
+            [tools]
+            powershell = "7.5.4"
+      - name: Check PowerShell prompt integration
+        run: mise exec -- pwsh -NoProfile -NonInteractive -File scripts/test-powershell-integration.ps1
