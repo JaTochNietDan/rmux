@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+SSH workspace creation is now available through `new-workspace --ssh DESTINATION`
+and optional `workspace.create.ssh_destination`. Validation happens before queueing;
+the UI reserves command startup, prepares the PTY on a background executor, then
+rechecks window/capacity/modal state before publication. Success returns the local
+workspace snapshot, with focus/activation opt-in; authentication remains terminal
+interactive. The existing local workspace path is unchanged. Desktop/CLI checks
+and focused request-validation/CLI option tests passed. Native end-to-end startup
+and cmux workspace.ssh.open compatibility remain unverified/unimplemented.
+
 Saved layout/session/recovery tabs now preserve an optional validated SSH target.
 Restore still starts fresh local shells, visibly prefixed Local with a Saved SSH /
 Not connected tooltip instead of implying an SSH connection. Re-saving preserves

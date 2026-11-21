@@ -215,6 +215,7 @@ struct WindowCreate {
 #[serde(deny_unknown_fields)]
 pub(super) struct WorkspaceCreate {
     pub window_id: String,
+    pub ssh_destination: Option<String>,
     pub name: Option<String>,
     pub description: Option<String>,
     pub cwd: Option<std::path::PathBuf>,
@@ -411,6 +412,33 @@ pub fn attach_live(cx: &mut gpui::App, stdio: bool, socket_directory: Option<std
     }
     cx.spawn(async move |cx| {
         while let Ok(request) = receiver.recv().await {
+            if let Some(create) = request.workspace_create.as_ref().filter(|create| create.ssh_destination.is_some()) {
+                let prepared = cx.update(|cx| {
+                    if !request.pending.start() { return Err(Failure { code: -32001, message: "Request expired before execution" }); }
+                    let target = target_id(&create.window_id)?;
+                    for handle in cx.windows() {
+                        let Some(handle) = handle.downcast::<super::window_view::WorkspaceWindow>() else { continue; };
+                        let any: gpui::AnyWindowHandle = handle.into();
+                        if any.read::<super::window_view::WorkspaceWindow, _, _>(cx, |entity, _| entity.entity_id() == target).unwrap_or(false) {
+                            let job = handle.update(cx, |view, _, cx| view.automation_prepare_ssh(create, cx))
+                                .map_err(|_| Failure { code: -32004, message: "Window closed" })??;
+                            return Ok((handle, job));
+                        }
+                    }
+                    Err(Failure { code: -32004, message: "Window not found" })
+                }).unwrap_or(Err(Failure { code: -32004, message: "Application closed" }));
+                let result = match prepared {
+                    Ok((handle, job)) => {
+                        let session = cx.background_executor().spawn(async move { job() }).await;
+                        handle.update(cx, |view, window, cx| view.automation_finish_ssh(create, session, window, cx))
+                            .map_err(|_| Failure { code: -32004, message: "Window closed during SSH startup" })
+                            .and_then(|result| result)
+                    }
+                    Err(error) => Err(error),
+                };
+                let _ = request.reply.try_send(result);
+                continue;
+            }
             if let Some(sample) = &request.surface_memory {
                 let job = cx.update(|cx| {
                     if !request.pending.start() { return Err(Failure { code: -32001, message: "Request expired before execution" }); }
@@ -1093,6 +1121,7 @@ fn dispatch_inner(
     let workspace_create = if method == "workspace.create" {
         match serde_json::from_value::<WorkspaceCreate>(request.get("params").cloned().unwrap_or_else(|| json!({}))) {
             Ok(mut create) if target_id(&create.window_id).is_ok()
+                && create.ssh_destination.as_ref().is_none_or(|destination| super::ssh::command(destination).is_ok())
                 && create.cwd.as_ref().is_none_or(|path| path.is_absolute())
                 && create.description.as_ref().is_none_or(|text| text.len() <= 4096 && !text.contains('\0')) => {
                 if let Some(name) = &create.name {
@@ -1101,7 +1130,7 @@ fn dispatch_inner(
                 }
                 Some(create)
             }
-            _ => return respond(error(id, -32602, "Expected window_id, optional name, description, absolute cwd, focus and activate booleans")),
+            _ => return respond(error(id, -32602, "Expected window_id, optional valid ssh_destination, name, description, absolute cwd, focus and activate booleans")),
         }
     } else { None };
     let surface_memory = if method == "surface.memory_usage" {
@@ -1521,6 +1550,28 @@ mod tests {
             assert_eq!(response["id"], "notification-test");
             assert_eq!(response["result"]["revision"].as_u64(), Some(u64::MAX), "{response}");
         }
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn ssh_workspace_requests_validate_before_queueing() {
+        let (sender, receiver) = async_channel::bounded::<LiveRequest>(1);
+        for destination in ["-oProxyCommand=bad", "host command", "ssh://host:0", "ssh://host/path"] {
+            let request = json!({"jsonrpc":"2.0","id":1,"method":"workspace.create", "params":{"window_id":"4294967297","ssh_destination":destination}});
+            let response = dispatch_inner(&serde_json::to_vec(&request).unwrap(), Some(&sender)).unwrap();
+            assert_eq!(response["error"]["code"], -32602);
+            assert!(receiver.try_recv().is_err());
+        }
+        let worker = std::thread::spawn(move || {
+            let request = receiver.recv_blocking().unwrap();
+            assert!(request.pending.start());
+            let create = request.workspace_create.unwrap();
+            assert_eq!(create.ssh_destination.as_deref(), Some("ssh://user@[2001:db8::1]:2222"));
+            assert!(!create.focus && !create.activate);
+            request.reply.send(Ok(json!({"id":"fixture"}))).unwrap();
+        });
+        let request = json!({"jsonrpc":"2.0","id":2,"method":"workspace.create", "params":{"window_id":"4294967297","ssh_destination":"ssh://user@[2001:db8::1]:2222"}});
+        assert_eq!(dispatch_inner(&serde_json::to_vec(&request).unwrap(), Some(&sender)).unwrap()["result"]["id"], "fixture");
         worker.join().unwrap();
     }
 

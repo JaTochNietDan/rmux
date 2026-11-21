@@ -578,10 +578,33 @@ impl WorkspaceWindow {
     }
 
     pub(super) fn automation_create_workspace(&mut self, create: &automation::WorkspaceCreate, window: &mut Window, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
+        self.automation_publish_workspace(create, None, window, cx)
+    }
+    pub(super) fn automation_prepare_ssh(&mut self, create: &automation::WorkspaceCreate, cx: &mut Context<Self>) -> Result<Box<dyn FnOnce() -> Result<Session> + Send>, automation::Failure> {
+        self.automation_available(cx)?;
+        if self.command_launching || self.entries.len() >= 64 { return Err(automation::Failure { code: -32005, message: "Command startup busy or workspace limit reached" }); }
+        let destination = create.ssh_destination.clone().ok_or(automation::Failure { code: -32602, message: "SSH destination required" })?;
+        let command = ssh::command(&destination).map_err(|message| automation::Failure { code: -32602, message })?;
+        let directory = create.cwd.clone();
+        let scrollback = cx.global::<Preferences>().scrollback_bytes();
+        self.command_launching = true;
+        Ok(Box::new(move || {
+            let argv: Vec<_> = command.argv.into_iter().map(std::ffi::OsString::from).collect();
+            let mut session = Session::command_in_with_scrollback(&argv, 80, 24, directory.as_deref(), scrollback)?;
+            session.set_remote_destination(&destination)?;
+            Ok(session)
+        }))
+    }
+    pub(super) fn automation_finish_ssh(&mut self, create: &automation::WorkspaceCreate, session: Result<Session>, window: &mut Window, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
+        self.command_launching = false;
+        let session = session.map_err(|_| automation::Failure { code: -32005, message: "Could not start SSH; check the SSH executable and launch directory" })?;
+        self.automation_publish_workspace(create, Some((session, create.ssh_destination.as_ref().map(|destination| format!("SSH · {destination}")))), window, cx)
+    }
+    fn automation_publish_workspace(&mut self, create: &automation::WorkspaceCreate, prepared: Option<(Session, Option<String>)>, window: &mut Window, cx: &mut Context<Self>) -> Result<serde_json::Value, automation::Failure> {
         self.automation_available(cx)?;
         if self.entries.len() >= 64 { return Err(automation::Failure { code: -32005, message: "Window workspace limit reached" }); }
         let next_number = self.next_number;
-        let index = self.add_configured(1, false, None, create.cwd.clone(), false, None, window, cx)
+        let index = self.add_configured(1, false, None, create.cwd.clone(), false, prepared, window, cx)
             .ok_or(automation::Failure { code: -32005, message: "Window is shutting down" })?;
         if self.entries[index].workspace.read(cx).panes.is_empty() {
             self.entries.remove(index);
@@ -591,6 +614,7 @@ impl WorkspaceWindow {
             return Err(automation::Failure { code: -32005, message: "Could not start workspace shell" });
         }
         if let Some(name) = &create.name { self.entries[index].name = name.clone(); }
+        else if let Some(destination) = &create.ssh_destination { self.entries[index].name = format!("SSH · {destination}"); }
         if let Some(description) = &create.description { self.entries[index].description = description.clone(); }
         let id = self.entries[index].workspace.entity_id().to_string();
         if create.focus || create.activate { self.select(index, window, cx); }

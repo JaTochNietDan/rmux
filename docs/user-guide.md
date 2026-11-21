@@ -31,6 +31,16 @@ target, then press Connect to start a new SSH workspace. Re-saving retains the
 target. Older snapshots without this field cannot recover an SSH destination
 from an arbitrary tab title.
 
+CLI: `rmuxctl new-workspace --window WINDOW_ID --ssh user@host --focus true`
+creates the same kind of SSH terminal. `--ssh` also accepts an SSH URL; `--name`
+overrides the default workspace label. Focus and OS activation remain opt-in.
+Raw `workspace.create` accepts optional `ssh_destination` alongside its existing
+parameters. SSH process startup runs off the UI thread, with window/busy/capacity
+checks before preparation and publication. Success returns the created workspace,
+not confirmation of remote authentication; interact with its terminal for prompts.
+This is an rmux extension to workspace creation, not cmux `workspace.ssh.open`
+compatibility. Native end-to-end CLI connection acceptance remains pending.
+
 **Merge Workspace into…** in the menu or command palette searches other
 workspaces across this app’s windows, labeled by window. Enter moves the source's existing panes into
 the destination, preserving both nested split trees with the source on the right,

@@ -13,7 +13,7 @@ pub const HELP: &str = "Commands (JSON output except pipe-pane; explicit opaque 
   read-notification --surface ID --revision NUMBER
   close-workspace --workspace ID
   new-window [--activate]
-  new-workspace --window ID [--name NAME] [--description TEXT] [--cwd PATH]
+  new-workspace --window ID [--name NAME] [--description TEXT] [--cwd PATH] [--ssh DESTINATION]
                 [--focus true|false] [--activate]
   list-windows | list-workspaces | list-panes | list-panels
   select-workspace --workspace ID [--activate]
@@ -50,7 +50,7 @@ pub fn help(command: &str) -> Result<String, String> {
         "list-notifications" => ("[--window ID] [--workspace ID]", "List retained notifications, newest first within each terminal."),
         "close-workspace" => ("--workspace ID", "Close a workspace through the app's close policy. No force option is supported."),
         "new-window" => ("[--activate]", "Create a window. Activating it requires --activate."),
-        "new-workspace" => ("--window ID [--name NAME] [--description TEXT] [--cwd PATH] [--focus true|false] [--activate]", "Create a workspace in an existing window. Selection and activation are opt-in."),
+        "new-workspace" => ("--window ID [--name NAME] [--description TEXT] [--cwd PATH] [--ssh DESTINATION] [--focus true|false] [--activate]", "Create a workspace in an existing window. Selection and activation are opt-in."),
         "list-windows" => ("", "List windows in the connected app process."),
         "list-workspaces" => ("[--window ID]", "List workspaces, optionally limited to one window."),
         "list-panes" | "list-panels" => ("[--window ID] [--workspace ID]", "List panes or terminal surfaces, optionally limited to a window or workspace."),
@@ -238,7 +238,7 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
                 }
                 continue;
             }
-            if (command == "new-workspace" && matches!(arg.as_str(), "--name" | "--description" | "--cwd" | "--focus"))
+            if (command == "new-workspace" && matches!(arg.as_str(), "--name" | "--description" | "--cwd" | "--focus" | "--ssh"))
                 || (command == "split-pane" && matches!(arg.as_str(), "--cwd" | "--focus"))
             {
                 let value = args
@@ -246,7 +246,7 @@ pub fn expand(command: &str, args: Vec<OsString>) -> Result<(String, Value), Str
                     .ok_or("option requires a value")?
                     .into_string()
                     .map_err(|_| "value must be UTF-8")?;
-                let key = arg.trim_start_matches("--");
+                let key = if arg == "--ssh" { "ssh_destination" } else { arg.trim_start_matches("--") };
                 let value = if key == "focus" {
                     Value::Bool(match value.as_str() {
                         "true" => true,
@@ -610,6 +610,12 @@ mod tests {
 
     #[test]
     fn creation_keeps_selection_opt_in() {
+        let (method, params) = expand("new-workspace", args(&["--window", "42", "--ssh", "ssh://user@[2001:db8::1]:2222"])).unwrap();
+        assert_eq!(method, "workspace.create");
+        assert_eq!(params["ssh_destination"], "ssh://user@[2001:db8::1]:2222");
+        assert!(params.get("focus").is_none() && params.get("activate").is_none());
+        assert!(expand("new-workspace", args(&["--window", "42", "--ssh", "one", "--ssh", "two"])).is_err());
+        assert!(expand("new-workspace", args(&["--window", "42", "--ssh"])).is_err());
         let (method, params) = expand(
             "new-workspace",
             args(&["--window", "42", "--name", "世界", "--focus", "false"]),
