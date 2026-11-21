@@ -530,20 +530,28 @@ impl CommandPalette {
         palette.input.update(cx, |input, cx| { input.replace_draft(destination, cx); input.select_all_text(cx); });
         palette
     }
-    pub fn ssh_hosts(result: anyhow::Result<ssh::Aliases>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn ssh_hosts(result: anyhow::Result<ssh::Aliases>, session_targets: Vec<ssh::HostTarget>, truncated: bool, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let mut commands = vec![Command { title: "Enter SSH destination…".into(), subtitle: None, shortcut: None,
             target: PaletteEvent::Run(Box::new(ShowSshConnection)) }, Command { title: "Refresh SSH hosts".into(), subtitle: None, shortcut: None,
             target: PaletteEvent::Run(Box::new(ShowSshHosts)) }];
-        let summary = match result {
+        let (aliases, mut summary) = match result {
             Ok(aliases) => {
-                let summary = format!("{} aliases from SSH config/includes{} · Host patterns not expanded", aliases.names.len(), if aliases.limited { " · Discovery incomplete" } else { "" });
-                commands.extend(aliases.names.into_iter().map(|destination| Command { title: destination.clone(), subtitle: Some("Enter opens a new SSH workspace".into()), shortcut: None,
-                    target: PaletteEvent::Run(Box::new(ConnectSsh { destination })) }));
-                summary
+                let summary = format!("SSH config/includes{} · Targets from this window", if aliases.limited { " · Discovery incomplete" } else { "" });
+                (aliases.names, summary)
             }
-            Err(error) => format!("Could not read SSH hosts: {error}"),
+            Err(error) => (Vec::new(), format!("Config unavailable: {error} · Targets from this window")),
         };
-        let mut palette = Self::with_commands(commands, "SSH hosts · Choose a destination", "No matching aliases · Clear search to enter a destination", window, cx);
+        if truncated { summary.push_str(" · First 256 terminals"); }
+        commands.extend(ssh::host_targets(session_targets, &aliases).into_iter().map(|target| Command {
+            title: target.destination.clone(),
+            subtitle: Some(match target.source {
+                ssh::TargetSource::Session => "Session target · Enter opens a new SSH workspace",
+                ssh::TargetSource::Saved => "Saved target · Not connected · Enter opens a new SSH workspace",
+                ssh::TargetSource::Config => "Config alias · Enter opens a new SSH workspace",
+            }.into()), shortcut: None,
+            target: PaletteEvent::Run(Box::new(ConnectSsh { destination: target.destination })),
+        }));
+        let mut palette = Self::with_commands(commands, "SSH hosts · Choose a destination", "No matching hosts · Clear search to enter a destination", window, cx);
         palette.location = Some(summary.into());
         if palette.commands.len() > 2 { palette.selected = 2; }
         palette

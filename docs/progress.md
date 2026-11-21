@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+SSH Hosts now merges current-window session targets and restored saved targets
+with discovered config aliases. Session/saved targets sort first; restored targets
+are labelled Not connected, and all selections explicitly open a new workspace.
+Exact deduplication preserves case-sensitive usernames. The on-demand UI snapshot
+inspects at most 256 terminals and merges at most 256 config aliases; no watcher or
+separate history store is added. Config-read/home-directory failures still show
+available session targets and manual entry. Desktop compilation and a focused
+merge/order/case/limit test passed. A fresh native-desktop check reports the Mac
+locked, so picker screenshots and native visual/focus acceptance remain pending.
+
 Extended and passed the native macOS loopback SSH fixture with a configured
 ProxyCommand using SSH forwarding and a passphrase-protected temporary Ed25519
 key. The encrypted-key prompt is observed through surface text, answered through

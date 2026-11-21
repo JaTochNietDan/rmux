@@ -2549,25 +2549,46 @@ impl WorkspaceWindow {
         if self.file_browser_job.is_some() || self.automation_available(cx).is_err() { return; }
         let Some(focus) = window.focused(cx) else { return; };
         let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(std::path::PathBuf::from);
-        let Some(home) = home.filter(|path| path.is_absolute()) else { self.notice = Some("Home directory unavailable for SSH configuration".into()); cx.notify(); return; };
+        let path = home.filter(|path| path.is_absolute()).map(|home| home.join(".ssh/config"));
         let permit = match file_browser::Permit::acquire() {
             Ok(permit) => permit,
             Err(error) => { self.notice = Some(error.to_string()); cx.notify(); return; }
         };
-        let path = home.join(".ssh/config");
         self.notice = Some("Loading SSH hosts…".into());
         let executor = cx.background_executor().clone();
         let cancellation = file_browser::Cancellation::default();
         let canceled = cancellation.0.clone();
         self.file_browser_cancel = Some(cancellation);
         self.file_browser_job = Some(cx.spawn_in(window, async move |entity, cx| {
-            let result = executor.spawn(async move { let _permit = permit; ssh::read_aliases(&path, &canceled) }).await;
+            let result = executor.spawn(async move { let _permit = permit;
+                match path {
+                    Some(path) => ssh::read_aliases(&path, &canceled),
+                    None => Err(anyhow::anyhow!("Home directory unavailable for SSH configuration")),
+                } }).await;
             let _ = cx.update(|window, cx| entity.update(cx, |this, cx| {
                 this.file_browser_job = None;
                 this.file_browser_cancel = None;
                 if this.notice.as_deref() == Some("Loading SSH hosts…") { this.notice = None; }
                 if focus.is_focused(window) && this.automation_available(cx).is_ok() {
-                    let palette = cx.new(|cx| command_palette::CommandPalette::ssh_hosts(result, window, cx));
+                    let mut targets = Vec::new();
+                    let mut inspected = 0;
+                    let mut truncated = false;
+                    'workspaces: for entry in &this.entries {
+                        for pane in &entry.workspace.read(cx).panes {
+                            for terminal in &pane.read(cx).terminals {
+                                if inspected == 256 { truncated = true; break 'workspaces; }
+                                inspected += 1;
+                                let terminal = terminal.read(cx);
+                                let target = terminal.session.remote_destination().map(|destination| ssh::HostTarget {
+                                    destination: destination.to_owned(), source: ssh::TargetSource::Session,
+                                }).or_else(|| terminal.saved_ssh_destination.as_ref().map(|destination| ssh::HostTarget {
+                                    destination: destination.clone(), source: ssh::TargetSource::Saved,
+                                }));
+                                if let Some(target) = target { targets.push(target); }
+                            }
+                        }
+                    }
+                    let palette = cx.new(|cx| command_palette::CommandPalette::ssh_hosts(result, targets, truncated, window, cx));
                     this.install_palette(palette, Some(focus), window, cx);
                 }
                 cx.notify();

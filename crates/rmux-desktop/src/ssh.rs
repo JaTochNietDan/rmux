@@ -1,6 +1,23 @@
 //! Launch OpenSSH directly; authentication/configuration remain client-owned.
 pub const INPUT_HINT: &str = "SSH alias, user@host or ssh://user@host:port · Authenticate in the terminal";
 pub struct Aliases { pub names: Vec<String>, pub limited: bool }
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum TargetSource { Session, Saved, Config }
+pub struct HostTarget { pub destination: String, pub source: TargetSource }
+
+/// Exact deduplication preserves case-sensitive usernames in explicit destinations.
+pub fn host_targets(session_targets: Vec<HostTarget>, aliases: &[String]) -> Vec<HostTarget> {
+    let mut targets = std::collections::BTreeMap::<String, TargetSource>::new();
+    for target in session_targets.into_iter().take(256).chain(aliases.iter().take(256).map(|destination|
+        HostTarget { destination: destination.clone(), source: TargetSource::Config })) {
+        if command(&target.destination).is_err() { continue; }
+        targets.entry(target.destination).and_modify(|source| *source = (*source).min(target.source)).or_insert(target.source);
+    }
+    let mut targets: Vec<_> = targets.into_iter().map(|(destination, source)| HostTarget { destination, source }).collect();
+    targets.sort_by(|a, b| a.source.cmp(&b.source).then_with(|| a.destination.cmp(&b.destination)));
+    targets
+}
+
 pub fn read_aliases(path: &std::path::Path, canceled: &std::sync::atomic::AtomicBool) -> anyhow::Result<Aliases> {
     let base = path.parent().unwrap_or(std::path::Path::new("."));
     let mut discovery = Discovery {
@@ -266,6 +283,25 @@ fn validate_url_host(host: &str) -> Result<(&str, Option<&str>), &'static str> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn host_picker_merges_sources_without_folding_usernames() {
+        use super::{HostTarget, TargetSource, host_targets};
+        let targets = host_targets(vec![
+            HostTarget { destination: "prod".into(), source: TargetSource::Saved },
+            HostTarget { destination: "prod".into(), source: TargetSource::Session },
+            HostTarget { destination: "Alice@host".into(), source: TargetSource::Saved },
+            HostTarget { destination: "alice@host".into(), source: TargetSource::Saved },
+            HostTarget { destination: "-option".into(), source: TargetSource::Saved },
+        ], &["prod".into(), "dev".into()]);
+        assert_eq!(targets.iter().map(|target| (target.destination.as_str(), target.source)).collect::<Vec<_>>(), [
+            ("prod", TargetSource::Session), ("Alice@host", TargetSource::Saved),
+            ("alice@host", TargetSource::Saved), ("dev", TargetSource::Config),
+        ]);
+        let targets = host_targets((0..300).map(|i| HostTarget { destination: format!("session{i}"), source: TargetSource::Session }).collect(),
+            &(0..300).map(|i| format!("config{i}")).collect::<Vec<_>>());
+        assert_eq!(targets.len(), 512);
+    }
+
     #[test]
     fn host_aliases_are_literal_sorted_deduplicated_and_bounded() {
         let aliases = super::parse_aliases("# Hosts\nHost \"Production\" dev *.example !blocked\n HostName internal\nhOsT=DEV staging # comment\nInclude elsewhere\nMatch exec something\nHost \"unterminated\nHost user@host -option\n");
