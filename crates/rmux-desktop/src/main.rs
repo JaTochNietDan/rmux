@@ -70,6 +70,10 @@ struct SetTerminalFont { family: String }
 
 #[derive(Clone, Debug, Default, PartialEq, Action)]
 #[action(namespace = rmux, no_json)]
+struct SetTerminalMemorySort { sort: memory_view::Sort }
+
+#[derive(Clone, Debug, Default, PartialEq, Action)]
+#[action(namespace = rmux, no_json)]
 struct SetDefaultFont { family: String }
 
 #[derive(Clone, Debug, Default, PartialEq, Action)]
@@ -391,6 +395,7 @@ actions!(
         CloseTerminalMemory,
         CopyTerminalMemory,
         CycleTerminalMemorySort,
+        ShowTerminalMemorySort,
         NewWorkspaceGroup,
         UseCurrentDirectoryForGroup,
         ResetGroupDirectory,

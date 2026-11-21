@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum Sort {
     #[default]
     Storage,
@@ -13,10 +13,11 @@ pub enum Sort {
 }
 
 impl Sort {
+    pub const ALL: [Self; 7] = [Self::Storage, Self::ShellMemory, Self::ShellCpu, Self::ForegroundMemory, Self::ForegroundCpu, Self::TreeMemory, Self::TreeCpu];
     pub fn next(self) -> Self {
         match self { Self::Storage => Self::ShellMemory, Self::ShellMemory => Self::ShellCpu, Self::ShellCpu => Self::ForegroundMemory, Self::ForegroundMemory => Self::ForegroundCpu, Self::ForegroundCpu => Self::TreeMemory, Self::TreeMemory => Self::TreeCpu, Self::TreeCpu => Self::Storage }
     }
-    fn label(self) -> &'static str {
+    pub fn label(self) -> &'static str {
         match self { Self::Storage => "Screen storage ↓", Self::ShellMemory => "Shell RSS ↓", Self::ShellCpu => "Shell CPU ↓", Self::ForegroundMemory => "Foreground RSS ↓", Self::ForegroundCpu => "Foreground CPU ↓", Self::TreeMemory => "Shell tree RSS ↓", Self::TreeCpu => "Shell tree CPU ↓" }
     }
     pub(super) fn indices(self, rows: &[Row]) -> Vec<usize> {
@@ -97,9 +98,9 @@ pub fn panel(rows: &[Row], application: Option<process_metrics::Sample>, sort: S
             .child(application.map(|sample| format!("rmux · RSS {} · CPU {} · all windows", mib(sample.resident_bytes), sample.cpu_percent.map(|cpu| format!("{cpu:.1}%")).unwrap_or_else(|| "— refresh after baseline".into()))).unwrap_or_else(|| "rmux process sample unavailable".into())))
         .child(div().id("memory-sort").mx_3().mb_1().text_xs().cursor_pointer()
             .text_color(rgb(0xb4c7ef)).hover(|style| style.text_color(rgb(0xffffff)))
-            .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("Cycle sort: screen storage, shell RSS/CPU, foreground RSS/CPU, shell tree RSS/CPU".into())).into())
-            .on_click(|event, window, cx| { if event.standard_click() { window.dispatch_action(Box::new(CycleTerminalMemorySort), cx); } })
-            .child(sort.label()))
+            .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("Choose memory sort order".into())).into())
+            .on_click(|event, window, cx| { if event.standard_click() { window.dispatch_action(Box::new(ShowTerminalMemorySort), cx); } })
+            .child(format!("{} · Choose…", sort.label())))
         .child(div().px_3().pb_2().text_xs().text_color(rgb(0xa0a0a0))
             .child("Shell tree includes descendants; RSS may count shared pages more than once · up to 256 terminals / 4,096 processes · manual refresh"))
         .child(list(scroll, move |index, _, cx| {

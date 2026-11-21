@@ -521,6 +521,15 @@ impl CommandPalette {
         });
         palette
     }
+    pub fn memory_sort(current: memory_view::Sort, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let commands = memory_view::Sort::ALL.into_iter().map(|sort| Command {
+            title: sort.label().into(), subtitle: (sort == current).then(|| "Current sort order".into()), shortcut: None,
+            target: PaletteEvent::Run(Box::new(SetTerminalMemorySort { sort })),
+        }).collect();
+        let mut palette = Self::with_commands(commands, "Sort terminal memory · Highest first", "No matching sort modes", window, cx);
+        palette.selected = memory_view::Sort::ALL.iter().position(|sort| *sort == current).unwrap_or(0);
+        palette
+    }
     pub fn terminal_search_results(report: terminal_search::Report, query: String, extra: usize, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let summary = format!("{} matching terminals · {} scanned · {} unavailable · {} incomplete · {extra} beyond terminal limit", report.hits.len(), report.scanned, report.unavailable, report.limited);
         let mut commands = vec![Command { title: "Search again".into(), subtitle: Some(query.clone()), shortcut: None,

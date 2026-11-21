@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+The task manager's sort control and S key now open a searchable seven-mode picker,
+with the current mode marked and selected. Users can jump directly to shell-tree
+RSS/CPU instead of cycling every mode. Applying keeps the same terminal selected
+and reveals its new row, reusing current samples without another process scan.
+Existing cycle action remains available. Desktop compilation passed; native
+picker focus/keyboard acceptance remains pending.
+
 Search excerpts can now be copied with Cmd+Shift+C on macOS or Ctrl+Shift+C
 elsewhere while the palette is focused. A dedicated CommandPalette key context
 keeps this separate from terminal copy and ordinary text-field copy; the footer

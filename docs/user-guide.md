@@ -1118,14 +1118,16 @@ The View menu and command palette also offer Show / Refresh Terminal Memory.
 Opening or refreshing focuses the panel. Use ↑/↓, Home/End to select a row,
 or Page Up/Page Down to move by the visible list height (using measured row sizes).
 Copying a report preserves a manually scrolled position.
-Use Enter to focus its terminal, R to refresh, S to cycle sorting, C to copy the JSON
+Use Enter to focus its terminal, R to refresh, S to choose sorting, C to copy the JSON
 report, and Esc to close. Selection follows the terminal through sorting and
 refreshes while it remains in the sample; Esc restores prior focus when the panel
 still owns focus. Rows are virtualized for larger terminal lists.
 Its panel samples up to 256 terminals in the current window and provides manual
 Refresh/Close controls, including explicit busy or unavailable rows.
-Rows initially sort by resident storage; use the sort control or command palette's
-Cycle Terminal Memory Sort to switch to shell, foreground or shell-tree RSS/CPU, descending with missing
+Rows initially sort by resident storage; click the sort control or press S to
+search and choose screen storage, shell, foreground or shell-tree RSS/CPU. The
+current mode is marked; Enter applies and Escape cancels. The command palette's
+Cycle Terminal Memory Sort remains available. All modes sort descending with missing
 samples last. Sorting reuses existing samples without another process scan.
 Click a row to focus its terminal. Copy exports the last sample as JSON in the
 displayed order, with raw byte counts and explicit unavailable values.

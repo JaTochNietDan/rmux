@@ -318,7 +318,7 @@ impl WorkspaceWindow {
         match key {
             "escape" => self.close_memory(window, cx),
             "r" => self.refresh_memory(window, cx),
-            "s" => self.sort_memory(cx),
+            "s" => self.show_memory_sort(window, cx),
             "c" => { if let Some(rows) = &self.memory_rows { clipboard::write(ClipboardItem::new_string(memory_view::report(rows, self.memory_application, self.memory_sort)), cx); } },
             "up" if count > 0 => self.memory_selected = (self.memory_selected + count - 1) % count,
             "down" if count > 0 => self.memory_selected = (self.memory_selected + 1) % count,
@@ -344,9 +344,18 @@ impl WorkspaceWindow {
         cx.notify();
     }
     fn sort_memory(&mut self, cx: &mut Context<Self>) {
+        self.set_memory_sort(self.memory_sort.next(), cx);
+    }
+    fn show_memory_sort(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.memory_rows.is_none() || self.automation_available(cx).is_err() { return; }
+        let focus = window.focused(cx);
+        let palette = cx.new(|cx| command_palette::CommandPalette::memory_sort(self.memory_sort, window, cx));
+        self.install_palette(palette, focus, window, cx);
+    }
+    fn set_memory_sort(&mut self, sort: memory_view::Sort, cx: &mut Context<Self>) {
         let rows = self.memory_rows.as_deref().unwrap_or_default();
         let selected = self.memory_sort.indices(rows).get(self.memory_selected).copied();
-        self.memory_sort = self.memory_sort.next();
+        self.memory_sort = sort;
         self.memory_selected = selected.and_then(|selected| self.memory_sort.indices(rows).iter().position(|index| *index == selected)).unwrap_or(0);
         self.memory_scroll.reset(rows.len());
         if !rows.is_empty() { crate::list_navigation::reveal(&self.memory_scroll, self.memory_selected); }
@@ -3948,6 +3957,8 @@ impl Render for WorkspaceWindow {
             .on_action(cx.listener(|this, _: &NewWorkspace, window, cx| this.add(1, window, cx)))
             .on_action(cx.listener(|this, _: &RefreshTerminalMemory, window, cx| this.refresh_memory(window, cx)))
             .on_action(cx.listener(|this, _: &CycleTerminalMemorySort, _, cx| this.sort_memory(cx)))
+            .on_action(cx.listener(|this, _: &ShowTerminalMemorySort, window, cx| this.show_memory_sort(window, cx)))
+            .on_action(cx.listener(|this, action: &SetTerminalMemorySort, _, cx| this.set_memory_sort(action.sort, cx)))
             .on_action(cx.listener(|this, _: &CopyTerminalMemory, _, cx| {
                 if let Some(rows) = &this.memory_rows { clipboard::write(ClipboardItem::new_string(memory_view::report(rows, this.memory_application, this.memory_sort)), cx); }
             }))
