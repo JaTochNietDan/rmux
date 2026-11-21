@@ -2,6 +2,12 @@
 
 ## Current implementation focus
 
+The command palette now opens with workspace/tab creation, splitting, zoom,
+Find, SSH and Settings before diagnostic and group-management commands.
+Cancel New Workspace is included only when a workspace launch is pending at
+palette creation; its existing execution guard still handles completion races.
+Search retains the remaining commands. Focused desktop compilation passes.
+
 Changed the macOS command-palette default to Cmd+P as requested; Linux/Windows
 retain Ctrl+Shift+P. Palette rows now explicitly fill the list width so selection
 backgrounds and trailing shortcut badges align. Added a padded, bordered search

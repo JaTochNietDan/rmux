@@ -2521,6 +2521,7 @@ impl WorkspaceWindow {
                 self.groups.entries().iter().filter(|group| !group.members.contains(&active_workspace))
                     .map(|group| (group.id, group.name.clone())).collect(),
                 active_workspace,
+                self.workspace_launch_cancel.is_some(),
                 window,
                 cx,
             )

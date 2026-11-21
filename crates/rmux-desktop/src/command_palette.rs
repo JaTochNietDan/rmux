@@ -283,6 +283,7 @@ impl CommandPalette {
         external_workspaces: Vec<(AnyWindowHandle, EntityId, String)>,
         groups: Vec<(u64, String)>,
         active_workspace: EntityId,
+        workspace_launch_pending: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -299,7 +300,14 @@ impl CommandPalette {
             };
         }
         command!("New Workspace", NewWorkspace);
-        command!("Cancel New Workspace", CancelNewWorkspace);
+        command!("New Terminal Tab", NewTab);
+        command!("Split Right", Split);
+        command!("Split Below", SplitBelow);
+        command!("Toggle Pane Zoom", TogglePaneZoom);
+        command!("Find in Terminal", Find);
+        command!("Connect via SSH…", ShowSshConnection);
+        command!("Settings", ToggleSettings);
+        if workspace_launch_pending { command!("Cancel New Workspace", CancelNewWorkspace); }
         command!("Show / Refresh Terminal Memory", RefreshTerminalMemory);
         command!("Cycle Terminal Memory Sort", CycleTerminalMemorySort);
         command!("New Empty Workspace Group", NewWorkspaceGroup);
@@ -323,17 +331,13 @@ impl CommandPalette {
                 subtitle: None,
             });
         }
-        command!("New Terminal Tab", NewTab);
         command!("New Local Tab", NewLocalTab);
         command!("Cancel New Terminal Tab", CancelNewTab);
         command!("Cancel Queued Paste", CancelQueuedPaste);
         command!("Cancel Split Terminal", CancelSplit);
         command!("New Window", NewWindow);
-        command!("Split Right", Split);
-        command!("Split Below", SplitBelow);
         command!("Split Left", SplitLeft);
         command!("Split Above", SplitAbove);
-        command!("Toggle Pane Zoom", TogglePaneZoom);
         command!("Equalize Pane Sizes", EqualizePanes);
         command!("Resize Pane Left", ResizePaneLeft);
         command!("Resize Pane Right", ResizePaneRight);
@@ -385,7 +389,6 @@ impl CommandPalette {
         command!("Toggle Program Status", ToggleProgramStatus);
         command!("Show Listening Ports", ShowListeningPorts);
         command!("Close Listening Ports", CloseListeningPorts);
-        command!("Find in Terminal", Find);
         command!("Find Older Match", FindOlder);
         command!("Find Newer Match", FindNewer);
         command!("Select All", EditorSelectAll);
@@ -411,7 +414,6 @@ impl CommandPalette {
         command!("Open Text Preview…", OpenTextPreview);
         command!("Cancel File / SSH Host Loading", CancelFileLoading);
         command!("Search Terminal Output…", ShowTerminalSearch);
-        command!("Connect via SSH…", ShowSshConnection);
         command!("SSH Hosts…", ShowSshHosts);
         command!("Open Folder…", OpenFolderBrowser);
         command!("Choose Terminal Font…", ShowFontPicker);
@@ -423,7 +425,6 @@ impl CommandPalette {
         command!("Open Layout Preset…", ShowLayoutPresetPicker);
         command!("Run Configured Command…", ShowCustomCommandPicker);
         command!("Cancel Layout / Session Restore", CancelRestore);
-        command!("Settings", ToggleSettings);
         command!("Save Appearance Settings", SaveAppearanceSettings);
         command!("Reload Settings", ReloadSettings);
         command!("Open Settings File", OpenSettingsFile);
