@@ -12,7 +12,17 @@ import tempfile
 import time
 
 
-def sample(panes, iteration, binary, cli, settle_seconds, measure_close=False):
+def cpu_seconds(pid):
+    value = subprocess.run(["/bin/ps", "-o", "time=", "-p", str(pid)],
+                           check=True, capture_output=True, text=True).stdout.strip()
+    days, clock = value.split("-", 1) if "-" in value else ("0", value)
+    seconds = 0.0
+    for part in clock.split(":"):
+        seconds = seconds * 60 + float(part)
+    return int(days) * 86400 + seconds
+
+
+def sample(panes, iteration, binary, cli, settle_seconds, measure_close=False, idle_seconds=0):
     with tempfile.TemporaryDirectory(prefix="rmux-split-bench-") as directory:
         root = Path(directory)
         shell = root / "shell"
@@ -62,6 +72,15 @@ def sample(panes, iteration, binary, cli, settle_seconds, measure_close=False):
                                          check=True, capture_output=True, text=True).stdout.strip())
                 result = {"panes": panes, "iteration": iteration, "split_ms": timings,
                           "split_total_ms": sum(timings), "app_rss_kib": rss}
+                if idle_seconds:
+                    before_cpu = cpu_seconds(app.pid)
+                    before_wall = time.monotonic()
+                    time.sleep(idle_seconds)
+                    after_cpu = cpu_seconds(app.pid)
+                    elapsed = time.monotonic() - before_wall
+                    result["idle_wall_seconds"] = elapsed
+                    result["idle_app_cpu_seconds"] = max(0, after_cpu - before_cpu)
+                    result["idle_app_cpu_percent_one_core"] = 100 * result["idle_app_cpu_seconds"] / elapsed
                 if measure_close:
                     # Keep one fresh terminal alive so closing the measured workspace
                     # does not also close the last window/application.
@@ -102,9 +121,12 @@ if __name__ == "__main__":
     parser.add_argument("--label", default="local-debug")
     parser.add_argument("--settle-seconds", type=float, default=0)
     parser.add_argument("--measure-close", action="store_true")
+    parser.add_argument("--idle-seconds", type=float, default=0)
     args = parser.parse_args()
     if not 0 <= args.settle_seconds <= 60:
         parser.error("settle-seconds must be between 0 and 60")
+    if not 0 <= args.idle_seconds <= 60:
+        parser.error("idle-seconds must be between 0 and 60")
     binary, cli = args.binary.resolve(strict=True), args.cli.resolve(strict=True)
     with binary.open("rb") as stream:
         binary_sha256 = hashlib.file_digest(stream, "sha256").hexdigest()
@@ -112,7 +134,7 @@ if __name__ == "__main__":
     revision = subprocess.run(["git", "rev-parse", "--short", "HEAD"], check=True,
                               capture_output=True, text=True).stdout.strip()
     for panes in [1, 8, 32]:
-        samples = [sample(panes, iteration, binary, cli, args.settle_seconds, args.measure_close) for iteration in range(3)]
+        samples = [sample(panes, iteration, binary, cli, args.settle_seconds, args.measure_close, args.idle_seconds) for iteration in range(3)]
         timings = [value for row in samples for value in row["split_ms"]]
         print(json.dumps({"harness_revision": revision, "binary_label": args.label,
                           "binary_sha256": binary_sha256, "settle_seconds": args.settle_seconds,

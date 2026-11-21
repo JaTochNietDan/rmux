@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Inspected terminal redraw scheduling: output waits on channel notifications,
+animation-frame retries occur on parser contention, and compression scheduling
+stops when complete. No unconditional terminal idle repaint loop was found in
+those paths. Added optional app CPU-time delta sampling to the existing release
+split harness and exercised it with short windows. Startup variance is retained
+in raw evidence, with explicit exclusion from steady-state idle acceptance.
+The preceding turn restored native UI observation and recorded a real baseline.
+
 Native inspection now succeeds for the installed v0.1.2 main app. Captured the
 actual 4096×2560 single-workspace layout without changing user sessions. Sidebar
 selection, directory/shortcut metadata and neutral terminal/tab chrome render;

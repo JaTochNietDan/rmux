@@ -2,6 +2,16 @@
 
 ## Published v0.1.1 macOS split baseline
 
+The harness also accepts `--idle-seconds` (0–60) and records app process CPU-time
+deltas normalized to one core. A short instrumentation check used two-second
+windows after one-second settling at 1/8/32 panes, three runs each. [Raw CPU samples](benchmarks/rpc-idle-release-v0.1.1.jsonl).
+The first single-pane samples varied substantially (about 18.9%, 8.9%, 1.0%);
+these short post-launch windows include startup work and are **not** steady-state
+idle acceptance. Child/helper CPU and GPU time are excluded; macOS ps CPU time is
+quantized. Desktop/HUD conditions were uncontrolled. Use the documented quiet
+60-second protocol for acceptance rather than interpreting these samples as a
+regression or rerunning until a desired value appears.
+
 An additional `--measure-close` run creates a fresh survivor workspace, closes
 the measured workspace, waits until only the survivor surface is registered, and
 samples RSS after another one-second interval. At 1/8/32 panes, median pre-close
