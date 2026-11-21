@@ -2320,9 +2320,11 @@ impl Element for TerminalElement {
         let backgrounds = vec![fill(outer_bounds, background)];
         let mut lines = Vec::new();
         let mut preedit_backgrounds = Vec::new();
+        let selection_foreground = cx.global::<Preferences>().selection_foreground();
         let shaped_rows = self.view.update(cx, |view, _| {
-            view.row_cache
-                .update(&frame, cells, &family, window, view.metrics.as_mut())
+            let rows = view.row_cache.update(&frame, cells, &family, window, view.metrics.as_mut());
+            view.row_cache.prepare_selection(&frame, selection_foreground, cells, &family, window);
+            rows
         });
         let mut cursor_text = None;
         let cursor_shape = cx.global::<Preferences>().cursor_shape(

@@ -165,6 +165,7 @@ pub struct Preferences {
     pub background_blur: bool,
     pub cursor_color: Option<HexColor>,
     pub selection_background: Option<HexColor>,
+    pub selection_foreground: Option<HexColor>,
     pub ansi_palette: Option<[HexColor; 16]>,
     pub terminal_theme: TerminalTheme,
     pub theme_file: Option<std::path::PathBuf>,
@@ -203,6 +204,7 @@ impl Default for Preferences {
             background_blur: false,
             cursor_color: None,
             selection_background: None,
+            selection_foreground: None,
             ansi_palette: None,
             terminal_theme: TerminalTheme::default(),
             theme_file: None,
@@ -268,6 +270,9 @@ impl Preferences {
                 ].map(|value| HexColor(value).rgb())),
             }
         })
+    }
+    pub fn selection_foreground(&self) -> Option<rmux_terminal::Color> {
+        self.selection_foreground.or_else(|| self.imported_theme.as_ref().and_then(|theme| theme.selection_foreground)).map(HexColor::rgb)
     }
     pub fn selection_background(&self) -> Option<rmux_terminal::Color> {
         self.selection_background.or_else(|| self.imported_theme.as_ref().and_then(|theme| theme.selection_background)).map(HexColor::rgb)
@@ -496,17 +501,22 @@ impl Preferences {
 mod tests {
     use super::*;
     #[test]
-    fn selection_background_import_override_and_preset_fallback() -> Result<()> {
+    fn selection_colors_import_override_and_preset_fallback() -> Result<()> {
         let directory = tempfile::tempdir()?;
         let path = directory.path().join("theme");
-        std::fs::write(&path, "selection-background=112233\n")?;
+        std::fs::write(&path, "selection-background=112233\nselection-foreground=445566\n")?;
         assert_eq!(Preferences::default().selection_background(), None);
+        assert_eq!(Preferences::default().selection_foreground(), None);
         let mut imported = Preferences::default().import_theme(path.clone())?;
         assert_eq!(imported.selection_background(), Some(rmux_terminal::Color(17,34,51)));
+        assert_eq!(imported.selection_foreground(), Some(rmux_terminal::Color(68,85,102)));
         imported.select_theme(TerminalTheme::Dark);
         assert_eq!(imported.selection_background(), None);
-        let explicit = Preferences::decode(br##"{"selection_background":"#abcdef"}"##)?.import_theme(path)?;
+        assert_eq!(imported.selection_foreground(), None);
+        let explicit = Preferences::decode(br##"{"selection_background":"#abcdef","selection_foreground":"#010203"}"##)?.import_theme(path)?;
         assert_eq!(explicit.selection_background(), Some(rmux_terminal::Color(171,205,239)));
+        assert_eq!(explicit.selection_foreground(), Some(rmux_terminal::Color(1,2,3)));
+        assert_eq!(serde_json::to_value(&explicit)?["selection_foreground"], "#010203");
         assert_eq!(serde_json::to_value(&explicit)?["selection_background"], "#abcdef");
         Ok(())
     }

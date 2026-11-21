@@ -5,6 +5,11 @@ scanning row identities. Unchanged snapshots take a constant-time reuse path aft
 font/scale/metrics/background validation. A weak identity reference avoids retaining
 old row data; changed snapshots retain per-row reuse. Desktop compilation and engine
 snapshot tests pass; native repaint timing remains unmeasured.
+An optional selection foreground override adds one lazily shaped text variant per
+selected visible row. Variants persist for reuse within the bounded row cache and
+clear when the override changes/disables or rows are released. It introduces a
+selection-row scan only when configured; the default path does not shape variants.
+Native selection-drag latency and additional memory are not yet measured.
 
 Snapshot glyph extraction uses a 64-byte stack buffer for the common case instead
 of a scratch heap allocation per dirty frame. Larger graphemes use a per-frame

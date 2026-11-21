@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Added imported/explicit selection foreground colors. Prepaint lazily shapes one
+alternate text variant per selected row, reusing it across selection movement;
+changing/disabling the color clears variants, and row-cache release drops them.
+Normal and selected variants paint in disjoint masks to avoid antialiased color
+bleed. Existing shaping still excludes concealed cells and preserves font styles;
+selected underlines/overlines follow the override. Desktop compilation, the
+selection-color precedence/persistence test and four row-cache tests passed.
+Native glyph clipping, decorations, drag latency and memory acceptance remain
+pending: the Mac was confirmed locked. Alternate shaping is opt-in and bounded by
+visible cached rows, not scrollback.
+
 Added imported `selection-background` and explicit JSON `selection_background`.
 The renderer resolves the configured color once per paint and applies it to the
 existing selection quad, without changing shaped-row cache identities or copying

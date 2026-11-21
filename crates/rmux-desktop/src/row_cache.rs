@@ -1,6 +1,6 @@
 use gpui::*;
 use rmux_terminal::{Cell, Color, Frame};
-use std::sync::{Arc, Weak};
+use std::{cell::RefCell, sync::{Arc, Weak}};
 
 use crate::{CellMetrics, color};
 
@@ -46,6 +46,7 @@ pub struct RowBackground {
 pub struct ShapedRow {
     source: Arc<Vec<Cell>>,
     pub texts: Vec<RowText>,
+    selected_texts: RefCell<Option<(Color, Vec<RowText>)>>,
     pub backgrounds: Vec<RowBackground>,
     overlines: Vec<RowBackground>,
 }
@@ -54,6 +55,7 @@ pub struct ShapedRow {
 pub struct RowCache {
     rows: Arc<Vec<Arc<ShapedRow>>>,
     source: Weak<Vec<Arc<Vec<Cell>>>>,
+    selection_color: Option<Color>,
     environment: Option<(Color, f32, CellMetrics, SharedString)>,
 }
 impl RowCache {
@@ -65,6 +67,21 @@ impl RowCache {
         let released = self.rows.len();
         *self = Self::default();
         released
+    }
+
+    pub fn prepare_selection(&mut self, frame: &Frame, foreground: Option<Color>, cells: CellMetrics, family: &SharedString, window: &Window) {
+        if self.selection_color != foreground {
+            for row in self.rows.iter() { row.selected_texts.borrow_mut().take(); }
+            self.selection_color = foreground;
+        }
+        let Some(foreground) = foreground else { return; };
+        for (row, selection) in self.rows.iter().zip(frame.selections.iter()) {
+            if selection.is_none() { continue; }
+            let mut cached = row.selected_texts.borrow_mut();
+            if cached.as_ref().is_none_or(|(color, _)| *color != foreground) {
+                *cached = Some((foreground, shape_texts(&row.source, cells, family, window, Some(foreground))));
+            }
+        }
     }
 
     pub fn update(
@@ -147,7 +164,6 @@ fn shape_row(
     family: &SharedString,
     window: &Window,
 ) -> ShapedRow {
-    let mut texts = Vec::new();
     let mut backgrounds: Vec<RowBackground> = Vec::new();
     let mut overlines = Vec::new();
     // Visit every cell, independently of text grouping. A wide glyph's trailing
@@ -178,6 +194,12 @@ fn shape_row(
             });
         }
     }
+    let texts = shape_texts(&source, cells, family, window, None);
+    ShapedRow { source, texts, selected_texts: RefCell::default(), backgrounds, overlines }
+}
+
+fn shape_texts(source: &[Cell], cells: CellMetrics, family: &SharedString, window: &Window, foreground: Option<Color>) -> Vec<RowText> {
+    let mut texts = Vec::new();
     let mut i = 0;
     while i < source.len() {
         let cell = &source[i];
@@ -188,7 +210,7 @@ fn shape_row(
             i += 1;
             continue;
         }
-        let (text, end) = text_run(&source, i);
+        let (text, end) = text_run(source, i);
         if !text.is_empty() {
             let mut run_font = font(family.clone());
             if cell.bold {
@@ -200,11 +222,11 @@ fn shape_row(
             let run = TextRun {
                 len: text.len(),
                 font: run_font,
-                color: color(cell.foreground),
+                color: color(foreground.unwrap_or(cell.foreground)),
                 background_color: None,
                 underline: cell.underline.then_some(UnderlineStyle {
                     thickness: px(1.),
-                    color: Some(color(cell.underline_color)),
+                    color: Some(color(foreground.unwrap_or(cell.underline_color))),
                     wavy: cell.underline_curly,
                 }),
                 strikethrough: cell.strikethrough.then_some(StrikethroughStyle {
@@ -224,12 +246,7 @@ fn shape_row(
         }
         i = end;
     }
-    ShapedRow {
-        source,
-        texts,
-        backgrounds,
-        overlines,
-    }
+    texts
 }
 
 /// Empty engine cells still occupy one column and may carry decorations.
@@ -285,6 +302,7 @@ mod tests {
         let row = Arc::new(ShapedRow {
             source: Arc::new(Vec::new()),
             texts: Vec::new(),
+            selected_texts: RefCell::default(),
             backgrounds: Vec::new(),
             overlines: Vec::new(),
         });
@@ -374,16 +392,32 @@ pub fn paint_row(
             selection_background,
         ));
     }
-    for text in &row.texts {
-        let _ = text
-            .line
-            .paint(origin + point(text.x, px(0.)), px(cells.height), window, cx);
-    }
-    for span in &row.overlines {
-        window.paint_quad(fill(
-            Bounds::new(origin + point(span.x, px(1.)), size(span.width, px(1.))),
-            color(span.color),
-        ));
+    let paint = |texts: &[RowText], foreground: Option<Color>, window: &mut Window, cx: &mut App| {
+        for text in texts {
+            let _ = text.line.paint(origin + point(text.x, px(0.)), px(cells.height), window, cx);
+        }
+        for span in &row.overlines {
+            window.paint_quad(fill(
+                Bounds::new(origin + point(span.x, px(1.)), size(span.width, px(1.))),
+                color(foreground.unwrap_or(span.color)),
+            ));
+        }
+    };
+    let selected_texts = row.selected_texts.borrow();
+    if let (Some((start, end)), Some((foreground, texts))) = (selection, selected_texts.as_ref()) {
+        // Clip both variants so antialiased glyph edges never blend with the
+        // original foreground underneath the selected variant.
+        let left = start as f32 * cells.width;
+        let right = (end as f32 + 1.) * cells.width;
+        let width = row.source.len() as f32 * cells.width;
+        for (x, width) in [(0., left), (right, (width - right).max(0.))] {
+            if width > 0. {
+                window.with_content_mask(Some(ContentMask { bounds: Bounds::new(origin + point(px(x), px(0.)), size(px(width), px(cells.height))) }), |window| paint(&row.texts, None, window, cx));
+            }
+        }
+        window.with_content_mask(Some(ContentMask { bounds: Bounds::new(origin + point(px(left), px(0.)), size(px(right - left), px(cells.height))) }), |window| paint(texts, Some(*foreground), window, cx));
+    } else {
+        paint(&row.texts, None, window, cx);
     }
 }
 fn append_span(spans: &mut Vec<RowBackground>, x: Pixels, color: Color, cells: CellMetrics) {
