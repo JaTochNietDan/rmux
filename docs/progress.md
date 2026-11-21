@@ -6,8 +6,9 @@ Fixed Bash prompt-hook detection for exported indexed arrays (`declare -ax`).
 Attribute-aware detection preserves array elements and order instead of applying
 the scalar rewrite to element zero. The fixture now checks plain/exported array
 structure and source-twice idempotence on all Bash versions, plus user-hook order
-and command-status preservation on Bash 5.1+. Local Bash 3.2 compatibility passed;
-the GitHub modern-Bash result will be recorded after the run completes.
+and command-status preservation on Bash 5.1+. Local Bash 3.2 compatibility and
+[GitHub Linux Bash 5.2.21 run 44851031041](https://github.com/JaTochNietDan/rmux/actions/runs/44851031041)
+passed. Native prompt-theme acceptance and automatic login injection remain open.
 
 Added a path-filtered GitHub Linux shell-integration workflow with pinned actions
 and mise-managed Python, using the runner's existing Bash. Actionlint passed.

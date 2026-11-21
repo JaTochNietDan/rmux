@@ -1513,7 +1513,9 @@ It reports encoded working directories and prompt boundaries, preserves existing
 is still pending. The fixture checks command-start emission on Bash 4.4+ and
 unchanged PS0 on older versions. It passed locally on macOS Bash 3.2 and in
 [GitHub CI on Linux Bash 5.2.21](https://github.com/JaTochNietDan/rmux/actions/runs/44850857084).
-Modern array-hook and native prompt-theme acceptance remain pending.
+Plain and exported prompt-hook arrays also passed order/status/idempotence checks
+on [Linux Bash 5.2.21](https://github.com/JaTochNietDan/rmux/actions/runs/44851031041).
+Native prompt-theme acceptance remains pending.
 
 Unix shells launch as interactive login shells by default. Set `RMUX_SHELL_LOGIN=0`
 before launching rmux to use interactive non-login shells instead. In this mode,
