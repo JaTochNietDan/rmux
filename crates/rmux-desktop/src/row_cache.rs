@@ -291,7 +291,7 @@ mod tests {
         let weak = Arc::downgrade(&row);
         let mut cache = RowCache {
             rows: Arc::new(vec![row]),
-            environment: None,
+            ..Default::default()
         };
         assert!(!cache.is_empty());
         cache.release();
