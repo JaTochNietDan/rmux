@@ -440,14 +440,14 @@ pub fn attach_live(cx: &mut gpui::App, stdio: bool, socket_directory: Option<std
                 let _ = request.reply.try_send(result);
                 continue;
             }
-            if let Some(split) = request.pane_split.as_ref().filter(|split| split.ssh_destination.is_some()) {
+            if let Some(split) = request.pane_split.as_ref() {
                 let prepared = cx.update(|cx| {
                     if !request.pending.start() { return Err(Failure { code: -32001, message: "Request expired before execution" }); }
                     let target = target_id(&split.pane_id)?;
                     for handle in cx.windows() {
                         let Some(handle) = handle.downcast::<super::window_view::WorkspaceWindow>() else { continue; };
                         if handle.read(cx).is_ok_and(|view| view.automation_pane_target(target, cx).is_some()) {
-                            let job = handle.update(cx, |view, _, cx| view.automation_prepare_ssh_split(split, target, cx))
+                            let job = handle.update(cx, |view, _, cx| view.automation_prepare_split(split, target, cx))
                                 .map_err(|_| Failure { code: -32004, message: "Pane window closed" })??;
                             return Ok((handle, target, job));
                         }
@@ -470,8 +470,8 @@ pub fn attach_live(cx: &mut gpui::App, stdio: bool, socket_directory: Option<std
                                 super::TerminalView::prepare(session, colors, palette)
                             }).await;
                         }
-                        handle.update(cx, |view, window, cx| view.automation_finish_ssh_split(split, target, prepared, window, cx))
-                            .map_err(|_| Failure { code: -32004, message: "Pane window closed during SSH startup" })
+                        handle.update(cx, |view, window, cx| view.automation_finish_split(split, target, prepared, window, cx))
+                            .map_err(|_| Failure { code: -32004, message: "Pane window closed during terminal startup" })
                             .and_then(|result| result)
                     }
                     Err(error) => Err(error),
@@ -835,17 +835,6 @@ pub fn attach_live(cx: &mut gpui::App, stdio: bool, socket_directory: Option<std
                         let Some(handle) = handle.downcast::<super::window_view::WorkspaceWindow>() else { continue; };
                         if handle.read(cx).is_ok_and(|view| view.automation_pane_target(target, cx).is_some()) {
                             return handle.update(cx, |view, _, cx| view.automation_resize_pane(resize, target, cx))
-                                .map_err(|_| Failure { code: -32004, message: "Pane window closed" })?;
-                        }
-                    }
-                    return Err(Failure { code: -32004, message: "Pane not found" });
-                }
-                if let Some(split) = &request.pane_split {
-                    let target = target_id(&split.pane_id)?;
-                    for handle in cx.windows() {
-                        let Some(handle) = handle.downcast::<super::window_view::WorkspaceWindow>() else { continue; };
-                        if handle.read(cx).is_ok_and(|view| view.automation_pane_target(target, cx).is_some()) {
-                            return handle.update(cx, |view, window, cx| view.automation_split_pane(split, target, window, cx))
                                 .map_err(|_| Failure { code: -32004, message: "Pane window closed" })?;
                         }
                     }

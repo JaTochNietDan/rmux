@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Ordinary RPC splits now share the background PTY/first-frame preparation pipeline
+with SSH splits. Removed the synchronous fallback dispatcher and made publication
+require a prepared terminal, preventing accidental UI-thread shell startup. Local
+splits remain local even beside SSH sources; explicit cwd and current source font
+inheritance are preserved. The native fixture now records the local child's real
+cwd to a per-PID temporary file, verifies invalid-cwd rollback, and passes alongside
+remote/source preservation, teardown and recovery. Initial label/output-based cwd
+assertions were replaced because display metadata/wrapping do not prove process cwd.
+Compilation and the focused native fixture passed; latency and visual acceptance
+remain pending.
+
 SSH RPC splits now carry a PreparedTerminal from their worker through publication:
 PTY creation, initial color application and first engine snapshot all happen off
 the UI thread. Settings changes during startup trigger background re-preparation

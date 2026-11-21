@@ -28,10 +28,13 @@ def main():
         fixture = root / "ssh"
         fixture.write_text('#!/bin/sh\ntrap "exit 0" HUP TERM\nprintf "%s\\n" "$@" > "$RMUX_TEST_ROOT/argv"\nprintf "%s" "$$" > "$RMUX_TEST_ROOT/pid"\nprintf "\\033]7;file://localhost/tmp\\007SSH-fixture-ready\\n"\nwhile IFS= read -r line; do printf "fixture-input:%s\\n" "$line"; done\n')
         fixture.chmod(0o700)
+        local_shell = root / "local-shell"
+        local_shell.write_text('#!/bin/sh\nprintf "%s" "$PWD" > "$RMUX_TEST_ROOT/local-cwd-$$"\n')
+        local_shell.chmod(0o700)
         env = {key: value for key, value in os.environ.items() if not key.startswith("RMUX_")}
         # Only the fixture can resolve as ssh. Even a missing fixture cannot
         # fall through to a real SSH client or make a network connection.
-        env.update(PATH=str(root), RMUX_CONFIG=str(config), RMUX_SHELL="/usr/bin/true",
+        env.update(PATH=str(root), RMUX_CONFIG=str(config), RMUX_SHELL=str(local_shell),
                    RMUX_SOCKET_DIR=str(endpoint.parent), RMUX_TEST_ROOT=str(root))
         target = "ssh://fixture-user@[2001:db8::1]:2222"
 
@@ -79,9 +82,17 @@ def main():
                         assert any(row["id"] == original_surface["id"] and row["process_id"] == original_surface["process_id"] for row in surfaces)
                         assert [row["id"] for row in call("workspace.list")["workspaces"] if row["selected"]] == [original]
                         fixture_pids = [row["process_id"] for row in surfaces]
+                        local = call("pane.split", {"pane_id": original_surface["pane_id"], "direction": "down", "cwd": str(root)})
+                        local_surface = next(row for row in call("surface.list", {"workspace_id": created})["surfaces"] if row["id"] == local["surface_id"])
+                        assert local_surface["ssh_destination"] is None and local_surface["saved_ssh_destination"] is None
+                        cwd_record = root / f"local-cwd-{local_surface['process_id']}"
+                        wait_for(cwd_record.exists, "local shell did not record its cwd")
+                        assert Path(cwd_record.read_text()).resolve() == root.resolve()
+                        call("pane.split", {"pane_id": original_surface["pane_id"], "direction": "down", "cwd": str(root / "missing-directory")}, fail=True)
+                        assert len(call("surface.list", {"workspace_id": created})["surfaces"]) == 3
                         fixture.unlink()
                         call("pane.split", {"pane_id": original_surface["pane_id"], "direction": "down", "ssh_destination": "missing-client"}, fail=True)
-                        assert len(call("surface.list", {"workspace_id": created})["surfaces"]) == 2
+                        assert len(call("surface.list", {"workspace_id": created})["surfaces"]) == 3
 
                         call("workspace.create", {"window_id": window, "ssh_destination": "missing-client"}, fail=True)
                         assert len(call("workspace.list")["workspaces"]) == 2
@@ -112,7 +123,7 @@ def main():
                         return True
                     wait_for(stopped, "fixture process survived app shutdown")
                     assert target in session.read_text(), "SSH target missing from recovery"
-        print("PASS: native SSH CLI/RPC workspace and split creation, source-process preservation, literal argv, metadata isolation, background selection, failed-spawn rollback, teardown and local recovery. No network or visual validation.")
+        print("PASS: native SSH CLI/RPC workspace/remote/local split creation, invalid-cwd rollback, source-process preservation, literal argv, metadata isolation, background selection, failed-spawn rollback, teardown and local recovery. No network or visual validation.")
 
 
 if __name__ == "__main__":
