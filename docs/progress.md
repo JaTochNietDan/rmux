@@ -2,6 +2,12 @@
 
 ## Current implementation focus
 
+Palette command/workspace titles and detail rows now highlight contiguous query
+words using the existing Unicode-safe preview highlighting helper. Search ranking
+and fuzzy matching are unchanged; noncontiguous fuzzy matches may have no marked
+span. This reuses merged, original-byte-boundary ranges and virtualized visible
+rows. Desktop compilation passes; visual acceptance is pending. Unreleased.
+
 Hardened release publication after the v0.1.3 recovery: explicitly create or
 verify the release tag against the built SHA, reject mismatched existing tags,
 then invoke release creation with `--verify-tag` and no `--target`. GitHub's
