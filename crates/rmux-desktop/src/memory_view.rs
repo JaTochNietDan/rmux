@@ -4,6 +4,7 @@ use super::*;
 pub enum Sort {
     #[default]
     Storage,
+    Images,
     ShellMemory,
     ShellCpu,
     ForegroundMemory,
@@ -13,12 +14,13 @@ pub enum Sort {
 }
 
 impl Sort {
-    pub const ALL: [Self; 7] = [Self::Storage, Self::ShellMemory, Self::ShellCpu, Self::ForegroundMemory, Self::ForegroundCpu, Self::TreeMemory, Self::TreeCpu];
+    pub const ALL: [Self; 8] = [Self::Storage, Self::Images, Self::ShellMemory, Self::ShellCpu, Self::ForegroundMemory, Self::ForegroundCpu, Self::TreeMemory, Self::TreeCpu];
     pub fn next(self) -> Self {
-        match self { Self::Storage => Self::ShellMemory, Self::ShellMemory => Self::ShellCpu, Self::ShellCpu => Self::ForegroundMemory, Self::ForegroundMemory => Self::ForegroundCpu, Self::ForegroundCpu => Self::TreeMemory, Self::TreeMemory => Self::TreeCpu, Self::TreeCpu => Self::Storage }
+        let index = Self::ALL.iter().position(|sort| *sort == self).unwrap_or(0);
+        Self::ALL[(index + 1) % Self::ALL.len()]
     }
     pub fn label(self) -> &'static str {
-        match self { Self::Storage => "Screen storage ↓", Self::ShellMemory => "Shell RSS ↓", Self::ShellCpu => "Shell CPU ↓", Self::ForegroundMemory => "Foreground RSS ↓", Self::ForegroundCpu => "Foreground CPU ↓", Self::TreeMemory => "Shell tree RSS ↓", Self::TreeCpu => "Shell tree CPU ↓" }
+        match self { Self::Storage => "Screen storage ↓", Self::Images => "Image storage ↓", Self::ShellMemory => "Shell RSS ↓", Self::ShellCpu => "Shell CPU ↓", Self::ForegroundMemory => "Foreground RSS ↓", Self::ForegroundCpu => "Foreground CPU ↓", Self::TreeMemory => "Shell tree RSS ↓", Self::TreeCpu => "Shell tree CPU ↓" }
     }
     pub(super) fn indices(self, rows: &[Row]) -> Vec<usize> {
         let mut indices: Vec<_> = (0..rows.len()).collect();
@@ -27,6 +29,7 @@ impl Sort {
             match self {
             Self::Storage => b.usage.map(|s| s.primary_resident_bytes.saturating_add(s.alternate_resident_bytes))
                 .cmp(&a.usage.map(|s| s.primary_resident_bytes.saturating_add(s.alternate_resident_bytes))),
+            Self::Images => b.usage.map(|s| s.image_bytes).cmp(&a.usage.map(|s| s.image_bytes)),
             Self::ShellMemory => b.process.map(|s| s.resident_bytes).cmp(&a.process.map(|s| s.resident_bytes)),
             Self::ShellCpu => b.process.and_then(|s| s.cpu_percent).partial_cmp(&a.process.and_then(|s| s.cpu_percent)).unwrap_or(std::cmp::Ordering::Equal),
             Self::ForegroundMemory => b.foreground.map(|s| s.resident_bytes).cmp(&a.foreground.map(|s| s.resident_bytes)),
@@ -56,6 +59,27 @@ pub struct Row {
 }
 
 fn mib(bytes: u64) -> String { format!("{:.2} MiB", bytes as f64 / 1_048_576.) }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn image_sort_distinguishes_zero_missing_and_screen_storage() {
+        let rows: Vec<_> = [Some((1000, 0)), None, Some((1, 500)), Some((2, 500))]
+            .into_iter().enumerate().map(|(index, usage)| super::Row {
+                workspace_id: gpui::EntityId::from(0x100000001), surface_id: gpui::EntityId::from(0x100000002 + index as u64),
+                name: index.to_string(), pid: None, process: None, tree: None, foreground_pid: None, foreground: None,
+                usage: usage.map(|(resident, images)| rmux_terminal::MemoryUsage {
+                    primary_resident_bytes: resident, alternate_resident_bytes: 0, virtual_bytes: 0,
+                    compressed_bytes: 0, image_bytes: images, compression_supported: false,
+                }), status: "Sampled",
+            }).collect();
+        assert_eq!(super::Sort::Images.indices(&rows), [2, 3, 0, 1]);
+        assert_eq!(super::Sort::Storage.indices(&rows), [0, 3, 2, 1]);
+        let report: serde_json::Value = serde_json::from_str(&super::report(&rows, None, super::Sort::Images, Some(1234))).unwrap();
+        assert_eq!(report["surfaces"][0]["name"], "2");
+        assert_eq!(report["sample_completed_at_unix_ms"], 1234);
+    }
+}
 
 pub fn report(rows: &[Row], application: Option<process_metrics::Sample>, sort: Sort, sampled_at: Option<u64>) -> String {
     let rows: Vec<_> = sort.rows(rows).into_iter().map(|row| serde_json::json!({

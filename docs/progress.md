@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+The task manager now offers Image storage sorting alongside screen/process
+metrics. It ranks Ghostty's sampled image bytes independently of screen resident
+storage, keeps missing samples last and preserves tie order. The same sort order
+is used for copied reports. A focused regression passed for image-heavy versus
+screen-heavy rows, zero/missing values, stable ties and report timestamp/order.
+This measures engine image storage, not total GPU texture memory.
+
 Task-manager snapshots now retain their background sampling completion time.
 The panel shows a fixed UTC clock time, and copied JSON includes
 `sample_completed_at_unix_ms`. Refresh keeps the prior timestamp attached to
