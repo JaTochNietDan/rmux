@@ -28,8 +28,8 @@ if [ -n "${RMUX_SPARKLE_KEY_FILE:-}" ]; then
     set -- --ed-key-file "$RMUX_SPARKLE_KEY_FILE"
 fi
 generate_appcast "$@" --maximum-deltas 0 \
-    --download-url-prefix "https://github.com/JaTochNietDan/rmux/releases/download/v$version/" \
-    --link "https://github.com/JaTochNietDan/rmux" "$output"
+    --download-url-prefix "https://github.com/rmuxapp/rmux/releases/download/v$version/" \
+    --link "https://github.com/rmuxapp/rmux" "$output"
 # Keep Sparkle's feed pointed at the signed ZIP; create the installer afterward.
 staging="$(mktemp -d)"
 trap 'rm -rf "$staging"' EXIT HUP INT TERM

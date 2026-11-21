@@ -1,6 +1,6 @@
 # Trying rmux
 
-For packaged previews, visit [GitHub Releases](https://github.com/JaTochNietDan/rmux/releases).
+For packaged previews, visit [GitHub Releases](https://github.com/rmuxapp/rmux/releases).
 On Apple Silicon macOS, open the DMG and drag rmux.app into Applications. On Linux
 x86-64, extract the tar.gz and run `./rmux` from its directory (Ubuntu 24.04-compatible
 runtime libraries and a graphical session are required). On Windows x86-64, extract

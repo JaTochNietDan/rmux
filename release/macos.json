@@ -1,6 +1,6 @@
 {
   "bundle_id": "dev.rmux.app",
-  "feed_url": "https://raw.githubusercontent.com/JaTochNietDan/rmux/main/updates/appcast.xml",
+  "feed_url": "https://raw.githubusercontent.com/rmuxapp/rmux/main/updates/appcast.xml",
   "public_ed_key": "7Y3J3DBsRmthsPq1B4w8H+UrTMM3E2CPXIMeMGP20js=",
   "minimum_system_version": "12.0"
 }

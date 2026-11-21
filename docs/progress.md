@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Prepared v0.1.2 with Windows executable icon resource 1 (the ID GPUI loads),
+multi-resolution ICO generation, and matching Linux window application IDs.
+macOS cargo check passed; native release jobs will verify platform linking.
+Documented mise prerelease filtering for issue #2 and verified macOS ZIP
+installation plus CLI execution in isolated mise directories, including a
+preserved .app layout. Transferred the repository to rmuxapp/rmux, confirmed
+release assets and secret names transferred, and updated repository/feed links.
+The previous turn made progress by deploying performance-focused website copy.
+
 Linux release packaging now includes the new SVG mark and a maintained desktop
 entry with Icon, TryExec and search keywords. Optional per-user launcher setup is
 included in LINUX-DESKTOP.txt; portable execution still needs no installation.
@@ -215,7 +224,7 @@ pinned mise/Xcode runner setup. Relevant pushes/PRs run focused browser tests, l
 the native composition probe, and check that WRY is absent from default builds.
 The workflow has read-only repository permissions, no signing/publish steps,
 separate compilation caches and cancellation of outdated runs. Pushed as 248f09c.
-The first run, https://github.com/JaTochNietDan/rmux/actions/runs/44859718234,
+The first run, https://github.com/rmuxapp/rmux/actions/runs/44859718234,
 is confirmed in progress (mise setup at last observation); its result is pending.
 No hosted-build success is claimed yet. The previous goal turn made progress with
 committed/pushed browser metadata throttling.
@@ -690,12 +699,12 @@ Attribute-aware detection preserves array elements and order instead of applying
 the scalar rewrite to element zero. The fixture now checks plain/exported array
 structure and source-twice idempotence on all Bash versions, plus user-hook order
 and command-status preservation on Bash 5.1+. Local Bash 3.2 compatibility and
-[GitHub Linux Bash 5.2.21 run 44851031041](https://github.com/JaTochNietDan/rmux/actions/runs/44851031041)
+[GitHub Linux Bash 5.2.21 run 44851031041](https://github.com/rmuxapp/rmux/actions/runs/44851031041)
 passed. Native prompt-theme acceptance and automatic login injection remain open.
 
 Added a path-filtered GitHub Linux shell-integration workflow with pinned actions
 and mise-managed Python, using the runner's existing Bash. Actionlint passed.
-[Run 44850857084](https://github.com/JaTochNietDan/rmux/actions/runs/44850857084)
+[Run 44850857084](https://github.com/rmuxapp/rmux/actions/runs/44850857084)
 passed on Bash 5.2.21, including PS0 command-start emission before command output,
 user PS0 preservation, idempotence, prompt replacement, cwd encoding, command exit
 status and opt-out. The macOS Bash 3.2 compatibility fixture also passed locally

@@ -13,7 +13,7 @@ def run(*args):
 
 version = tomllib.loads(Path('Cargo.toml').read_text())['workspace']['package']['version']
 tag = 'v' + version
-repo = 'JaTochNietDan/rmux'
+repo = 'rmuxapp/rmux'
 output = Path('target/releases')/version
 assets = [output / f'rmux-{version}-{suffix}' for suffix in (
     'macos-arm64.zip', 'macos-arm64.dmg', 'linux-x86_64.tar.gz', 'windows-x86_64.zip')]

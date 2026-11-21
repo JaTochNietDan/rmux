@@ -24,7 +24,7 @@ and scripting instructions have their own pages.
 
 ## Install and open rmux
 
-Download a package from [GitHub Releases](https://github.com/JaTochNietDan/rmux/releases).
+Download a package from [GitHub Releases](https://github.com/rmuxapp/rmux/releases).
 Use the assets available for that release:
 
 | Platform | Package | What to do |
@@ -39,6 +39,7 @@ packages are unsigned. On macOS, use **rmux → Check for Updates…** for Spark
 updates. Linux and Windows currently require manual updates.
 
 Building from source? Use [Building rmux](building.md).
+Using mise? See [Install with mise](install-with-mise.md), including the prerelease setting.
 
 ## Your first workspace
 
@@ -177,4 +178,4 @@ can be dismissed; they do not imply that a failed action succeeded.
 | [Experimental browser](guide/browser.md) | Source-build-only Find, Inspector, and navigation controls |
 
 For development status, see the [roadmap](roadmap.md) and [progress log](progress.md).
-Report problems in [GitHub Issues](https://github.com/JaTochNietDan/rmux/issues).
+Report problems in [GitHub Issues](https://github.com/rmuxapp/rmux/issues).

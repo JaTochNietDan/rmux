@@ -3418,6 +3418,7 @@ fn open_window_with_activation(benchmark_panes: Option<usize>, activate: bool, c
     let handle = cx.open_window(
         WindowOptions {
                         titlebar: workspace_titlebar(),
+                    app_id: Some("rmux".into()),
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             focus: activate,
             ..Default::default()
@@ -4060,6 +4061,7 @@ fn main() {
                 let handle = cx.open_window(
                     WindowOptions {
                         titlebar: workspace_titlebar(),
+                    app_id: Some("rmux".into()),
                         focus: index == active,
                         window_bounds: Some(prepared.snapshot.geometry.map(|geometry| geometry.restore(cx)).unwrap_or_else(|| WindowBounds::centered(size(px(1000.), px(680.)), cx))),
                         ..Default::default()
@@ -4075,6 +4077,7 @@ fn main() {
             cx.open_window(
                 WindowOptions {
                         titlebar: workspace_titlebar(),
+                    app_id: Some("rmux".into()),
                     window_bounds: Some(bounds),
                     ..Default::default()
                 },

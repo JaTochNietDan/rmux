@@ -45,6 +45,9 @@ libc = "=0.2.191"
 browser = ["dep:wry", "dep:url", "dep:block2", "dep:objc2", "dep:objc2-foundation", "dep:objc2-web-kit"]
 browser-probe = ["browser"]
 
+[build-dependencies]
+embed-resource = "=3.0.12"
+
 [[example]]
 name = "browser-probe"
 path = "examples/browser_probe.rs"

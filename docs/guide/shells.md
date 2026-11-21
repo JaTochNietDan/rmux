@@ -86,9 +86,9 @@ It reports encoded working directories and prompt boundaries, preserves existing
 `mise run test-bash-integration` for its focused check. Automatic Bash login startup
 is still pending. The fixture checks command-start emission on Bash 4.4+ and
 unchanged PS0 on older versions. It passed locally on macOS Bash 3.2 and in
-[GitHub CI on Linux Bash 5.2.21](https://github.com/JaTochNietDan/rmux/actions/runs/44850857084).
+[GitHub CI on Linux Bash 5.2.21](https://github.com/rmuxapp/rmux/actions/runs/44850857084).
 Plain and exported prompt-hook arrays also passed order/status/idempotence checks
-on [Linux Bash 5.2.21](https://github.com/JaTochNietDan/rmux/actions/runs/44851031041).
+on [Linux Bash 5.2.21](https://github.com/rmuxapp/rmux/actions/runs/44851031041).
 Native prompt-theme acceptance remains pending.
 
 ## Login shells and fish integration

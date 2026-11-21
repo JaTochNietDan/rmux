@@ -14,7 +14,7 @@ for the current evidence; cross-platform performance acceptance is still in prog
 
 ![rmux with project workspaces and split terminals](docs/images/rmux.png)
 
-[Download rmux](https://github.com/JaTochNietDan/rmux/releases) ·
+[Download rmux](https://github.com/rmuxapp/rmux/releases) ·
 [Getting started](docs/trying-rmux.md) · [User guide](docs/user-guide.md)
 
 ## A home for your terminal work
@@ -34,7 +34,7 @@ for the current evidence; cross-platform performance acceptance is still in prog
 
 ## Install
 
-Download a preview from [Releases](https://github.com/JaTochNietDan/rmux/releases):
+Download a preview from [Releases](https://github.com/rmuxapp/rmux/releases):
 
 | Platform | Download | Install |
 | --- | --- | --- |
@@ -71,7 +71,7 @@ footprint on every workload.
 Development tools are managed with **mise**. See [Building](docs/building.md),
 [Progress](docs/progress.md), and [Performance measurements](docs/performance.md).
 Please report bugs and feature requests in
-[Issues](https://github.com/JaTochNietDan/rmux/issues).
+[Issues](https://github.com/rmuxapp/rmux/issues).
 
 Powered by [Ghostty](https://ghostty.org/), [GPUI](https://www.gpui.rs/), and
 [Sparkle](https://sparkle-project.org/). Third-party notices are included in the
