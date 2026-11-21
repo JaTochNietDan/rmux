@@ -1368,7 +1368,10 @@ The separate **Shell tree** row includes the shell and its descendants, includin
 background workers. JSON exports it under `shell_tree`, with sampled/expected
 process counts and a `complete` flag. Sampling retains at most 4,096 process
 metrics across the window. Oversized trees are unavailable; capped, exited or
-changed members produce a partial total. Parent/start-time snapshots before and
+changed members produce a partial total. Children arriving during the sampling
+window also make the total partial: expected counts include membership observed
+in either snapshot, and aggregate CPU is withheld until a stable refresh.
+Parent/start-time snapshots before and
 after sampling exclude changed ownership chains. Process discovery still reads
 the host process table. Reparented helpers outside the shell tree are excluded.
 Tree CPU is unavailable until all members have valid baselines. Summed RSS can

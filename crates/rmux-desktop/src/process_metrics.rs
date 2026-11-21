@@ -53,15 +53,14 @@ impl Sampler {
         if stopped() { return Default::default(); }
         let after = process_snapshot();
         let stable_trees = stable_index(&before, &after);
+        let current_trees = TreeIndex::new(after.iter().map(|(pid, identity)| (*pid, identity.parent)));
         let mut totals = HashMap::new();
         for (root, owned) in trees {
             if stopped() { return Default::default(); }
             if ensure_stable_root(root, &before, &after).is_err() { continue; }
             let Ok(stable) = stable_trees.descendants(root) else { continue; };
-            let valid = owned.iter().filter(|pid| stable.contains(pid)).filter_map(|pid| {
-                samples.get(pid).filter(|sample| before.get(pid).is_some_and(|identity| identity.started == sample.start_time_seconds))
-            });
-            totals.insert(root, aggregate_tree(owned.len(), valid));
+            let Ok(current) = current_trees.descendants(root) else { continue; };
+            totals.insert(root, aggregate_owned_tree(&owned, &current, &stable, &samples, &before));
         }
         (samples, totals)
     }
@@ -140,6 +139,22 @@ impl Sampler {
     }
 }
 
+fn aggregate_owned_tree(
+    owned: &std::collections::HashSet<u32>,
+    current: &std::collections::HashSet<u32>,
+    stable: &std::collections::HashSet<u32>,
+    samples: &HashMap<u32, Sample>,
+    before: &HashMap<u32, crate::process_tree::Identity>,
+) -> TreeSample {
+    // Include arrivals as missing samples, not as silently omitted descendants.
+    // Departures remain expected too; only unchanged ancestry contributes RSS.
+    let expected = owned.len() + current.difference(owned).count();
+    let valid = owned.iter().filter(|pid| stable.contains(pid)).filter_map(|pid| {
+        samples.get(pid).filter(|sample| before.get(pid).is_some_and(|identity| identity.started == sample.start_time_seconds))
+    });
+    aggregate_tree(expected, valid)
+}
+
 fn aggregate_tree<'a>(expected: usize, samples: impl Iterator<Item = &'a Sample>) -> TreeSample {
     let mut result = TreeSample { resident_bytes: 0, cpu_percent: Some(0.), sampled_processes: 0, expected_processes: expected, complete: false };
     for sample in samples {
@@ -155,6 +170,40 @@ fn aggregate_tree<'a>(expected: usize, samples: impl Iterator<Item = &'a Sample>
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn changing_tree_membership_withholds_complete_totals() {
+        use crate::process_tree::{Identity, stable_index};
+        let root = Identity { parent: None, started: 1 };
+        let child = Identity { parent: Some(10), started: 2 };
+        let before = HashMap::from([(10, root), (20, child)]);
+        let owned = [10,20].into_iter().collect();
+        let samples = HashMap::from([
+            (10, Sample { resident_bytes: 100, cpu_percent: Some(1.), start_time_seconds: 1 }),
+            (20, Sample { resident_bytes: 200, cpu_percent: Some(2.), start_time_seconds: 2 }),
+        ]);
+        let check = |after: HashMap<u32, Identity>| {
+            let current = crate::process_tree::TreeIndex::new(after.iter().map(|(pid, value)| (*pid, value.parent))).descendants(10).unwrap();
+            let stable = stable_index(&before, &after).descendants(10).unwrap();
+            aggregate_owned_tree(&owned, &current, &stable, &samples, &before)
+        };
+        let mut after = before.clone();
+        after.insert(30, Identity { parent: Some(20), started: 3 });
+        let arrival = check(after);
+        assert!(!arrival.complete);
+        assert_eq!((arrival.sampled_processes, arrival.expected_processes, arrival.resident_bytes), (2,3,300));
+        assert_eq!(arrival.cpu_percent, None);
+        let departure = check(HashMap::from([(10, root)]));
+        assert!(!departure.complete);
+        assert_eq!((departure.sampled_processes, departure.expected_processes, departure.resident_bytes), (1,2,100));
+        let replaced = check(HashMap::from([(10,root), (20, Identity { started: 4, ..child })]));
+        assert!(!replaced.complete);
+        assert_eq!(replaced.resident_bytes, 100);
+        assert_eq!(replaced.cpu_percent, None);
+        let unchanged = check(before.clone());
+        assert!(unchanged.complete);
+        assert_eq!(unchanged.cpu_percent, Some(3.));
+    }
+
     #[test]
     fn tree_totals_require_complete_cpu_baselines() {
         let first = Sample { resident_bytes: 10, cpu_percent: Some(12.), start_time_seconds: 1 };

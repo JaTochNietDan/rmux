@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Fixed memory-tree completeness during process arrivals. Totals now compare
+before/after membership and count newly observed descendants as missing samples,
+so a child created during a refresh cannot leave an understated total labeled
+complete. Departures and PID-generation replacements remain excluded from RSS;
+changed membership withholds aggregate CPU and uses the existing partial-count
+UI/JSON. Five active sampler tests passed (three manual benchmarks skipped),
+including deterministic arrival/departure/replacement/unchanged cases. Native
+panel acceptance and broader process-churn performance remain pending.
+
 Extended process-tree sampling measurements to live child workloads: each of
 1/8/32 shells owns four idle children, with explicit startup readiness and
 parent-managed child cleanup. The ignored mise benchmark checks complete tree
