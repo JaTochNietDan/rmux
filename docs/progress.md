@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Markdown code excerpts now preserve separate source lines and indentation in
+wrapped mode, instead of flattening all whitespace into prose. Four bounded
+monospace rows are selected around the first contiguous query-word match; tabs
+expand at four-column stops with Unicode width accounting, and omitted content
+is marked. Copy/search retain original block text. Four Markdown regressions
+passed, followed by the focused updated code-excerpt test for wide/combining text.
+Native line layout/clipping and full code-block scrolling remain pending.
+
 Markdown reading blocks now retain list depth, ordered start/next numbers and
 item-marker identity. Rows display numbered/bullet markers and bounded nested
 indentation; loose continuation paragraphs do not repeat markers. Nested list

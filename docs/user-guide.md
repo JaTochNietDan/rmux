@@ -346,7 +346,10 @@ bold, code blocks use the terminal font, and lists/quotes receive a visual marke
 Ordered lists retain their starting number and nested lists are indented (visual
 indentation stops increasing after eight levels). Continuation paragraphs do not
 repeat the item marker. Block copying returns its text without added list markers;
-source copying preserves the original Markdown.
+source copying preserves the original Markdown. In wrapped mode, code excerpts
+show four separate source lines near the first matching query word, preserve
+indentation, and expand tabs at four-column stops. Long lines and omitted code
+receive clipping markers; copying retains the entire captured block.
 Search and highlight operate on reading text; Enter copies a block, while
 **Copy Markdown Source** keeps the captured original Markdown. **View Source**
 returns to the ordinary text preview. Refresh/F5 keeps Markdown mode and restores
@@ -358,7 +361,7 @@ prefix and retains at most 512 reading blocks; partial documents are labeled.
 Displayed excerpts remain bounded and default to four visual lines. Links display
 their label, images display alt text, and raw HTML displays as literal text: no
 assets load and no HTML or scripts execute. Inline emphasis styling, tables,
-clickable links, images, full code-block layout and document appearance controls
+clickable links, images, full code-block scrolling and document appearance controls
 remain unimplemented. This is a reading preview, not a complete Markdown renderer.
 
 **External Editor** opens the selected regular file from the directory browser

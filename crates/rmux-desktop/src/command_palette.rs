@@ -847,7 +847,9 @@ impl CommandPalette {
         let wrapped = self.wrap_preview && self.commands[command].preview_line().is_some();
         let markdown = match &self.commands[command].target { PaletteEvent::Run(action) => action.as_any().downcast_ref::<CopyPreviewLine>().and_then(|line| line.markdown), _ => None };
         let title = self.commands[command].preview_line()
-            .map(|text| file_browser::preview_line_title(text, self.input.read(cx).value()))
+            .map(|text| if wrapped && markdown == Some(markdown_preview::Kind::Code) {
+                markdown_preview::code_excerpt(text, self.input.read(cx).value())
+            } else { file_browser::preview_line_title(text, self.input.read(cx).value()) })
             .unwrap_or_else(|| self.commands[command].title.clone());
         let title = match markdown {
             Some(markdown_preview::Kind::List { number: Some(number), marker: true, .. }) => format!("{number}. {title}"),
@@ -861,6 +863,12 @@ impl CommandPalette {
         let title_ranges = if self.commands[command].preview_line().is_some() {
             file_browser::preview_highlights(&title, self.input.read(cx).value())
         } else { Vec::new() };
+        let code_lines = (wrapped && markdown == Some(markdown_preview::Kind::Code)).then(|| title.split('\n').map(|line| {
+            let ranges = file_browser::preview_highlights(line, self.input.read(cx).value());
+            StyledText::new(line.to_owned()).with_highlights(ranges.into_iter().map(|range| (
+                range, HighlightStyle { color: Some(rgb(0xffffff).into()), background_color: Some(rgb(0x41638c).into()), ..Default::default() }
+            )))
+        }).collect::<Vec<_>>());
         let title = StyledText::new(title).with_highlights(title_ranges.into_iter().map(|range| (
             range, HighlightStyle { color: Some(rgb(0xffffff).into()), background_color: Some(rgb(0x41638c).into()), ..Default::default() }
         )));
@@ -903,7 +911,9 @@ impl CommandPalette {
                     .when(!wrapped, |title| title.truncate())
                     .tooltip(move |_, cx| cx.new(|_| pane_view::ControlHint(title_hint.clone())).into())
                     .child(div().flex().flex_col().gap_1()
-                        .child(div().when(wrapped, |title| title.whitespace_normal().line_clamp(4).text_ellipsis()).when(!wrapped, |title| title.truncate()).child(title))
+                        .child(if let Some(lines) = code_lines {
+                            div().flex().flex_col().overflow_hidden().children(lines.into_iter().map(|line| div().h(px(20.)).flex_shrink_0().whitespace_nowrap().overflow_hidden().child(line))).into_any_element()
+                        } else { div().when(wrapped, |title| title.whitespace_normal().line_clamp(4).text_ellipsis()).when(!wrapped, |title| title.truncate()).child(title).into_any_element() })
                         .when_some(subtitle, |column, subtitle| column.child(div().truncate().text_xs().line_height(px(16.)).text_color(rgb(0xa0a0a0)).child(subtitle)))),
             )
             .when_some(self.commands[command].shortcut.clone(), |row, shortcut| {

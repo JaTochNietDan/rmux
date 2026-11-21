@@ -54,9 +54,53 @@ pub fn blocks(source: &str) -> (Vec<Block>, bool) {
     if output.len() < 512 { flush(&mut output, &mut text, kind); }
     (output, limited)
 }
+/// Four source lines around the first contiguous query-word match. Bounded
+/// display only: the block's original text remains the copy/search source.
+pub fn code_excerpt(source: &str, query: &str) -> String {
+    let query = query.to_lowercase();
+    let words: Vec<_> = query.split_whitespace().collect();
+    let found = if words.is_empty() { 0 } else {
+        source.lines().position(|line| { let line = line.to_lowercase(); words.iter().any(|word| line.contains(word)) }).unwrap_or(0)
+    };
+    let start = found.saturating_sub(1);
+    let mut lines = source.lines().skip(start).peekable();
+    let mut rendered = Vec::new();
+    for index in 0..4 {
+        let Some(line) = lines.next() else { break; };
+        let mut output = String::new();
+        let mut columns = 0usize;
+        let mut scalars = 0usize;
+        let mut clipped = false;
+        for ch in line.chars() {
+            let width = if ch == '\t' { 4 - columns % 4 } else if ch.is_control() { 1 } else { unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0) };
+            if columns + width > 256 || scalars >= 256 { clipped = true; break; }
+            if ch == '\t' { output.extend(std::iter::repeat_n(' ', width)); }
+            else { output.push(if ch.is_control() { ' ' } else { ch }); }
+            columns += width;
+            scalars += 1;
+        }
+        if start > 0 && index == 0 { output.insert_str(0, "… "); }
+        if clipped || (index == 3 && lines.peek().is_some()) { output.push_str(" …"); }
+        rendered.push(output);
+    }
+    if rendered.is_empty() { "(empty code block)".into() } else { rendered.join("\n") }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn code_excerpts_keep_lines_indent_and_original_text() {
+        let source = "zero\n\tif ready {\n\t\tprintln!(\"世界\");\n\t}\nlast\n";
+        let excerpt = code_excerpt(source, "世界");
+        assert_eq!(excerpt, "…     if ready {\n        println!(\"世界\");\n    }\nlast");
+        assert_eq!(code_excerpt("one\ntwo\nthree\nfour\nfive", ""), "one\ntwo\nthree\nfour …");
+        assert!(code_excerpt(&"界".repeat(300), "").chars().count() <= 258);
+        assert_eq!(code_excerpt("a\x1bb", ""), "a b");
+        assert!(source.contains('\t'));
+        assert_eq!(code_excerpt("界\tx", ""), "界  x");
+        assert!(code_excerpt(&"\u{301}".repeat(1000), "").chars().count() <= 258);
+    }
     #[test]
     fn nested_lists_preserve_numbers_depth_and_loose_paragraphs() {
         let (result, limited) = blocks("3. first\n\n   continuation\n\n   - nested\n   - second nested\n\n4. last\n\nafter\n");
