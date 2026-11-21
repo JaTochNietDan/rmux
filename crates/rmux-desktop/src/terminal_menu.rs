@@ -10,14 +10,20 @@ pub(super) struct Menu {
     link: Option<String>,
     typeahead: menu_navigation::Typeahead,
 }
-const LABELS: &[&str] = &["Copy", "Copy with Line Breaks", "Paste", "Select All", "Find…", "Copy Working Directory", "Reveal Working Directory", "Clear Scrollback", "Copy Link Address", "Open Link"];
+const LABELS: &[&str] = &["Copy", "Copy with Line Breaks", "Paste", "Select All", "Find…", "Copy Working Directory", "Reveal Working Directory", "Clear Scrollback", "Copy Link Address", "Open Link",
+    #[cfg(all(target_os = "macos", feature = "browser"))]
+    "Open Link in rmux Browser",
+];
 
 impl TerminalView {
-    fn menu_enabled(&self) -> [bool; 10] {
+    fn menu_enabled(&self) -> [bool; LABELS.len()] {
         let selection = self.frame.selections.iter().any(Option::is_some);
         let link = self.terminal_menu.as_ref().and_then(|menu| menu.link.as_deref());
         let local = self.session.remote_destination().is_none();
-        [selection, selection, !self.session.paste_pending(), true, true, local || self.remote_directory_label.is_some(), local, true, link.is_some(), link.is_some_and(openable_uri)]
+        [selection, selection, !self.session.paste_pending(), true, true, local || self.remote_directory_label.is_some(), local, true, link.is_some(), link.is_some_and(openable_uri),
+            #[cfg(all(target_os = "macos", feature = "browser"))]
+            link.is_some_and(browser_window::can_open_link),
+        ]
     }
     pub(super) fn show_terminal_menu(&mut self, position: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
         self.selecting = false;
@@ -67,6 +73,14 @@ impl TerminalView {
             7 => self.clear_scrollback(&ClearScrollback, window, cx),
             8 => { if let Some(link) = link { clipboard::write(ClipboardItem::new_string(link), cx); } },
             9 => { if let Some(link) = link.filter(|uri| openable_uri(uri)) { cx.open_url(&link); } },
+            #[cfg(all(target_os = "macos", feature = "browser"))]
+            10 => {
+                if let Some(link) = link {
+                    if let Err(error) = browser_window::open_link(&link, cx) {
+                        self.error = Some(error.to_string()); cx.notify();
+                    }
+                }
+            },
             _ => {},
         }
     }
@@ -74,7 +88,7 @@ impl TerminalView {
         let enabled = self.menu_enabled();
         let actions: [Box<dyn Action>; 8] = [Box::new(CopySelection), Box::new(CopySelectionWithLineBreaks), Box::new(Paste), Box::new(EditorSelectAll), Box::new(Find), Box::new(CopyWorkingDirectory), Box::new(RevealWorkingDirectory), Box::new(ClearScrollback)];
         let mut hints: Vec<_> = actions.iter().map(|action| shortcuts::hint(action.as_ref(), &self.focus, window)).collect();
-        hints.extend([None, None]);
+        hints.resize(LABELS.len(), None);
         deferred(anchored().position(menu.position).snap_to_window().child(
             div().id("terminal-context-menu").track_focus(&menu.focus).key_context("TerminalMenu")
                 .w(px(340.).min((window.viewport_size().width - px(16.)).max(px(1.)))).py_1().bg(rgb(0x292929)).text_color(rgb(0xd6d6d6))

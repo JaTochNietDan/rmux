@@ -2,6 +2,17 @@
 
 ## Current implementation focus
 
+Browser-enabled terminal context menus now expose Open Link in rmux Browser.
+The menu retains its captured hyperlink target, uses the browser's scheme/credential/
+length policy for enablement, and reports opening failures through the terminal
+error display. The new window starts with the URL in its address field and defers
+native creation/navigation until measured bounds exist. The normal menu shape and
+external Open Link/modifier-click behavior remain intact. Four focused `browser_`
+tests passed, including bounded/control/credentialed terminal-link rejection, and
+the browser-enabled desktop compiled. Native context-menu/focus/first-navigation
+acceptance remains pending. The previous turn made progress with committed/pushed
+local development-server URL normalization.
+
 Browser address entry now defaults bare localhost/subdomain-localhost and IPv4/IPv6
 loopback addresses to HTTP, while retaining HTTPS for other hosts and preserving
 explicit schemes. Reparsing the original authority retains explicit port 443 when

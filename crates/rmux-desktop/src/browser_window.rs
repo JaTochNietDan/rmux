@@ -46,7 +46,7 @@ fn rect(bounds: Bounds<Pixels>) -> wry::Rect {
     }
 }
 #[derive(Default)]
-struct Host { view: Option<wry::WebView>, bounds: Option<Bounds<Pixels>> }
+struct Host { view: Option<wry::WebView>, bounds: Option<Bounds<Pixels>>, pending_url: Option<String> }
 struct BrowserWindow {
     host: Rc<RefCell<Host>>,
     input: Entity<TextField>,
@@ -57,8 +57,8 @@ struct BrowserWindow {
     _updates: Task<()>,
 }
 impl BrowserWindow {
-    fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let input = cx.new(|cx| TextField::new("about:blank", cx));
+    fn new(initial: Option<String>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let input = cx.new(|cx| TextField::new(initial.as_deref().unwrap_or("about:blank"), cx));
         cx.subscribe_in(&input, window, |this, _, event: &text_field::EditEvent, window, cx| {
             if let text_field::EditEvent::Submitted { text, .. } = event {
                 match address(text).and_then(|url| this.navigate(&url, window)) {
@@ -89,7 +89,7 @@ impl BrowserWindow {
                 }
             }
         });
-        Self { host: Rc::default(), input, status: "Enter an address to create an ephemeral browser.".into(), committed: String::new(), latest, wake, _updates: task }
+        Self { host: Rc::new(RefCell::new(Host { pending_url: initial, ..Default::default() })), input, status: "Enter an address to create an ephemeral browser.".into(), committed: String::new(), latest, wake, _updates: task }
     }
     fn navigate(&mut self, url: &str, window: &Window) -> anyhow::Result<()> {
         let mut host = self.host.borrow_mut();
@@ -135,6 +135,7 @@ impl BrowserWindow {
 impl Render for BrowserWindow {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let host = self.host.clone();
+        let entity = cx.weak_entity();
         let (back, forward, loaded) = self.host.borrow().view.as_ref().map(|view|
             (view.can_go_back().unwrap_or(false), view.can_go_forward().unwrap_or(false), true)
         ).unwrap_or((false, false, false));
@@ -154,11 +155,26 @@ impl Render for BrowserWindow {
                     cx.notify();
                 }))))
             .child(div().h(px(28.)).flex_shrink_0().px_3().text_xs().truncate().child(format!("{} · {}", self.status, self.committed)))
-            .child(div().flex_1().min_h_0().child(canvas(move |bounds, _, _| {
+            .child(div().flex_1().min_h_0().child(canvas(move |bounds, window, cx| {
                 let mut host = host.borrow_mut();
                 if host.bounds != Some(bounds) {
                     let result = host.view.as_ref().map(|view| view.set_bounds(rect(bounds))).transpose();
                     match result { Ok(_) => host.bounds = Some(bounds), Err(error) => eprintln!("browser bounds: {error}") }
+                }
+                let pending = host.pending_url.take();
+                drop(host);
+                if let Some(url) = pending {
+                    // Native child creation needs measured bounds. Defer the
+                    // entity update until prepaint has released its host borrow.
+                    window.defer(cx, move |window, cx| {
+                        let _ = entity.update(cx, |this, cx| {
+                            match this.navigate(&url, window) {
+                                Ok(()) => this.status = "Navigation requested".into(),
+                                Err(error) => this.status = error.to_string(),
+                            }
+                            cx.notify();
+                        });
+                    });
                 }
             }, |_, _, _, _| {}).size_full()))
     }
@@ -191,18 +207,35 @@ pub fn menu() -> Menu {
     ] }
 }
 
-pub fn open(cx: &mut App) -> anyhow::Result<()> {
+pub fn open(cx: &mut App) -> anyhow::Result<()> { open_initial(None, cx) }
+pub fn can_open_link(uri: &str) -> bool {
+    uri.len() <= 4096 && !uri.chars().any(char::is_control) && allowed(uri)
+}
+pub fn open_link(uri: &str, cx: &mut App) -> anyhow::Result<()> {
+    anyhow::ensure!(can_open_link(uri), "This link cannot be opened in the rmux browser");
+    open_initial(Some(address(uri)?), cx)
+}
+fn open_initial(initial: Option<String>, cx: &mut App) -> anyhow::Result<()> {
     anyhow::ensure!(!cx.global::<Shutdowns>().quitting, "application is quitting");
-    cx.open_window(WindowOptions { window_bounds: Some(WindowBounds::centered(size(px(1000.), px(680.)), cx)), ..Default::default() }, |window, cx| {
+    cx.open_window(WindowOptions { window_bounds: Some(WindowBounds::centered(size(px(1000.), px(680.)), cx)), ..Default::default() }, move |window, cx| {
         window.set_window_title("rmux · Browser (Experimental)");
-        cx.new(|cx| BrowserWindow::new(window, cx))
+        cx.new(|cx| BrowserWindow::new(initial, window, cx))
     })?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{address, allowed};
+    use super::{address, allowed, can_open_link};
+    #[test]
+    fn terminal_browser_link_policy_is_bounded_and_explicit() {
+        assert!(can_open_link("http://localhost:3000/path?q=hello"));
+        assert!(!can_open_link("localhost:3000"));
+        assert!(!can_open_link("https://user:secret@example.com"));
+        assert!(!can_open_link("https://example.com/a\nb"));
+        assert!(!can_open_link(&format!("https://example.com/{}", "a".repeat(4096))));
+        assert!(!can_open_link("file:///tmp/test"));
+    }
     #[test]
     fn browser_addresses_choose_http_only_for_implicit_loopback() {
         for (input, expected) in [

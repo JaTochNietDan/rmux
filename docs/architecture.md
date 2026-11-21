@@ -56,6 +56,13 @@ Escape in the address field restores the loaded URL and returns native focus to
 the page. Back/Forward buttons dim and no-op when history is unavailable. Reload
 is disabled before the webview exists. Shortcut dispatch from a focused WKWebView
 and native focus transfer remain unverified.
+Terminal context menus include **Open Link in rmux Browser** in browser-enabled
+builds. The action uses the frozen hyperlink target from menu creation and opens
+an experimental window with that address. Native creation/navigation waits for
+measured browser bounds. Unsupported, credentialed, control-containing and
+overlong link targets are disabled; opening failures appear in the terminal's
+existing error display. Ordinary Open Link and modifier-click retain their
+external-browser behavior.
 The webview is created on first navigation and uses an ephemeral profile. Closing
 the window drops its owner. Page-load callbacks coalesce through one queued wakeup.
 
