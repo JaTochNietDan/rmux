@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Added New Tab to the tab context menu, using the targeted tab's existing sibling
+launch path for local directory/SSH inheritance. The action is disabled during
+another tab launch or shutdown and displays the configured New Tab shortcut.
+Menus initially select the first enabled action, so a disabled launch row does
+not trap Enter. Desktop compilation passes; native rendered-menu acceptance is
+pending. The preceding turn removed the unnecessary macOS runtime-icon change
+after the user confirmed a full restart resolved Dock/Cmd+Tab display.
+
 The user confirmed v0.1.2's Dock and Cmd+Tab icon appears after a full restart
 following the update. Removed the unnecessary explicit AppKit icon workaround,
 restored version 0.1.2, and canceled the proposed v0.1.3 release run. The bundled

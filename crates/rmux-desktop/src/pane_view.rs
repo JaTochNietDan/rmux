@@ -196,7 +196,7 @@ struct TabMenu {
     scroll: ScrollHandle,
     typeahead: menu_navigation::Typeahead,
 }
-const TAB_MENU_LABELS: &[&str] = &["Rename Tab", "Copy Working Directory", "Reveal Working Directory", "Move Tab Left", "Move Tab Right", "Close Tab", "Close Other Tabs…", "Close Tabs to the Right…", "Close Finished Tabs…"];
+const TAB_MENU_LABELS: &[&str] = &["New Tab", "Rename Tab", "Copy Working Directory", "Reveal Working Directory", "Move Tab Left", "Move Tab Right", "Close Tab", "Close Other Tabs…", "Close Tabs to the Right…", "Close Finished Tabs…"];
 
 pub(super) struct PaneView {
     // Metadata repaints preserve this offset; selection and structural edits
@@ -264,19 +264,20 @@ impl PaneView {
             }
         }));
         focus.focus(window);
-        self.tab_menu = Some(TabMenu { target, position, focus, selected: 0, scroll: ScrollHandle::new(), typeahead: Default::default() });
+        let selected = self.tab_menu_enabled(target, cx).iter().position(|enabled| *enabled).unwrap_or(0);
+        self.tab_menu = Some(TabMenu { target, position, focus, selected, scroll: ScrollHandle::new(), typeahead: Default::default() });
         cx.notify();
     }
 
     fn finished_tab_count(&self, keep: EntityId, cx: &App) -> usize {
         self.terminals.iter().filter(|terminal| terminal.entity_id() != keep && terminal.read(cx).process_exit.is_some()).count()
     }
-    fn tab_menu_enabled(&self, target: EntityId, cx: &App) -> [bool; 9] {
-        let Some(index) = self.terminals.iter().position(|terminal| terminal.entity_id() == target) else { return [false; 9]; };
+    fn tab_menu_enabled(&self, target: EntityId, cx: &App) -> [bool; 10] {
+        let Some(index) = self.terminals.iter().position(|terminal| terminal.entity_id() == target) else { return [false; 10]; };
         let batch_available = self.spawning_tab.is_none();
         let terminal = self.terminals[index].read(cx);
         let local = terminal.session.remote_destination().is_none();
-        [true, local || terminal.remote_directory_label.is_some(), local, index > 0, index + 1 < self.terminals.len(), true, batch_available && self.terminals.len() > 1, batch_available && index + 1 < self.terminals.len(), batch_available && self.finished_tab_count(target, cx) > 0]
+        [batch_available && !cx.global::<Shutdowns>().quitting, true, local || terminal.remote_directory_label.is_some(), local, index > 0, index + 1 < self.terminals.len(), true, batch_available && self.terminals.len() > 1, batch_available && index + 1 < self.terminals.len(), batch_available && self.finished_tab_count(target, cx) > 0]
     }
 
     fn show_active_tab_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -292,15 +293,16 @@ impl PaneView {
         let Some(index) = self.terminals.iter().position(|terminal| terminal.entity_id() == menu.target) else { return; };
         self.select(index, window, cx);
         match item {
-            0 => self.rename_tab(window, cx),
-            1 => self.terminals[index].update(cx, |terminal, cx| terminal.lookup_working_directory(true, cx)),
-            2 => self.terminals[index].update(cx, |terminal, cx| terminal.lookup_working_directory(false, cx)),
-            3 => self.reorder(-1, cx),
-            4 => self.reorder(1, cx),
-            5 => self.close(index, window, cx),
-            6 => self.close_tabs(TabCloseScope::Others, window, cx),
-            7 => self.close_tabs(TabCloseScope::Right, window, cx),
-            8 => self.close_tabs(TabCloseScope::Finished, window, cx),
+            0 => self.add(window, cx),
+            1 => self.rename_tab(window, cx),
+            2 => self.terminals[index].update(cx, |terminal, cx| terminal.lookup_working_directory(true, cx)),
+            3 => self.terminals[index].update(cx, |terminal, cx| terminal.lookup_working_directory(false, cx)),
+            4 => self.reorder(-1, cx),
+            5 => self.reorder(1, cx),
+            6 => self.close(index, window, cx),
+            7 => self.close_tabs(TabCloseScope::Others, window, cx),
+            8 => self.close_tabs(TabCloseScope::Right, window, cx),
+            9 => self.close_tabs(TabCloseScope::Finished, window, cx),
             _ => {},
         }
     }
@@ -308,7 +310,7 @@ impl PaneView {
     fn tab_menu_element(&self, menu: TabMenu, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let enabled = self.tab_menu_enabled(menu.target, cx);
         let focus = self.terminals.iter().find(|terminal| terminal.entity_id() == menu.target).map(|terminal| terminal.read(cx).focus.clone());
-        let actions: [Box<dyn Action>; 9] = [Box::new(RenameTab), Box::new(CopyWorkingDirectory), Box::new(RevealWorkingDirectory), Box::new(MoveTabLeft), Box::new(MoveTabRight), Box::new(ClosePane), Box::new(CloseOtherTabs), Box::new(CloseTabsToRight), Box::new(CloseFinishedTabs)];
+        let actions: [Box<dyn Action>; 10] = [Box::new(NewTab), Box::new(RenameTab), Box::new(CopyWorkingDirectory), Box::new(RevealWorkingDirectory), Box::new(MoveTabLeft), Box::new(MoveTabRight), Box::new(ClosePane), Box::new(CloseOtherTabs), Box::new(CloseTabsToRight), Box::new(CloseFinishedTabs)];
         let hints: Vec<_> = actions.iter().map(|action| focus.as_ref().and_then(|focus| shortcuts::hint(action.as_ref(), focus, window))).collect();
         deferred(anchored().position(menu.position).snap_to_window().child(
             div().id("tab-context-menu").track_focus(&menu.focus).key_context("TabMenu")
@@ -348,7 +350,7 @@ impl PaneView {
                     .max_h((window.viewport_size().height - px(26.)).max(px(1.)))
                     .overflow_y_scroll().track_scroll(&menu.scroll)
                     .children(TAB_MENU_LABELS.iter().enumerate().map(|(index, label)| {
-                    let label = if index == 8 { format!("Close Finished Tabs ({})…", self.finished_tab_count(menu.target, cx)) } else { (*label).to_owned() };
+                    let label = if index == 9 { format!("Close Finished Tabs ({})…", self.finished_tab_count(menu.target, cx)) } else { (*label).to_owned() };
                     div().id(("tab-menu-item", index)).mx_1().px_3().py_2().rounded_sm().text_size(px(13.)).flex().items_center().gap_3()
                         .when(enabled[index], |row| row.cursor_pointer()
                             .when(index == menu.selected, |row| row.bg(rgb(0x354969)))
