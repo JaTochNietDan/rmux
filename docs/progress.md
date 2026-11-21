@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Native inspection now succeeds for the installed v0.1.2 main app. Captured the
+actual 4096×2560 single-workspace layout without changing user sessions. Sidebar
+selection, directory/shortcut metadata and neutral terminal/tab chrome render;
+Metal HUD obscures the upper-right controls. The local screenshot is excluded
+from Git and does not validate unreleased controls or full cmux parity. Updated
+the visual acceptance notes to remove the stale blanket locked-desktop blocker.
+The preceding turn added sibling-tab creation to the context menu.
+
 Added New Tab to the tab context menu, using the targeted tab's existing sibling
 launch path for local directory/SSH inheritance. The action is disabled during
 another tab launch or shutdown and displays the configured New Tab shortcut.

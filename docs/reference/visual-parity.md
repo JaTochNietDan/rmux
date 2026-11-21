@@ -51,8 +51,16 @@ name. These assets are built into the executable and require no icon font or
 runtime file lookup. Rendered alignment, contrast and recognizability remain
 acceptance work.
 
-Native screenshot access is currently blocked by the locked Mac. Compilation
-does not establish polish, and the first pass must remain unaccepted until viewed.
+Native screenshot access was previously blocked by the locked Mac. Access resumed
+after the v0.1.2 release: the installed main app was captured at 4096×2560 physical
+pixels, with one workspace/tab, neutral pane chrome, blue sidebar selection and
+directory/shortcut metadata. The local capture is retained at
+`target/branding/native-v0.1.2-baseline.png`; it contains the user's actual session
+context and is not committed. The Metal HUD was enabled and obscured the upper
+right controls. This verifies the basic rendered hierarchy, not matched-size cmux
+parity, compact layouts, interaction states, or the later unreleased toolbar/menu
+changes. Do not treat historical access failures as a current blocker without
+rechecking. Compilation alone does not establish polish.
 
 Branch and path now have separate truncation budgets and a full-context tooltip.
 Pin status uses a compact icon on the title row rather than consuming another
