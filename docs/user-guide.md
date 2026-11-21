@@ -2268,3 +2268,14 @@ unchanged. The result includes both pane IDs, `workspace_id` and `changed`; swap
 a pane with itself returns false. Different-workspace targets, zoomed layouts,
 active divider drags and pending split launches are rejected. Explicit IDs also
 allow swaps in hidden workspaces without relying on old screen coordinates.
+
+### Experimental browser Find
+
+In a browser-enabled macOS build (`mise run browser`), use **Browser → Find in
+Page** or Cmd+F. Type a phrase and press Enter for the next match, or Shift+Enter
+for the previous one. Cmd+G/Cmd+Shift+G and the arrow buttons also navigate matches;
+**Aa** toggles case sensitivity. Searches wrap and report **Match found** or
+**No matches**. Escape in the Find field closes it and returns focus to the page.
+The search runs when submitted, rather than on each keystroke. Native shortcut,
+focus and highlight behavior still need visual acceptance. Browser windows remain
+experimental and separate from workspace panes.

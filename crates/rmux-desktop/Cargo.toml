@@ -31,6 +31,10 @@ sysinfo = { version = "=0.31.4", default-features = false, features = ["system"]
 mac-usernotifications = "=0.3.1"
 objc = "=0.2.7"
 raw-window-handle = "=0.6.2"
+block2 = { version = "=0.6.2", optional = true }
+objc2 = { version = "=0.6.5", optional = true }
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["NSString"], optional = true }
+objc2-web-kit = { version = "=0.3.2", default-features = false, features = ["WKFindConfiguration", "WKFindResult", "WKWebView", "block2"], optional = true }
 url = { version = "=2.5.8", optional = true }
 wry = { version = "=0.57.3", default-features = false, features = ["os-webview"], optional = true }
 
@@ -38,7 +42,7 @@ wry = { version = "=0.57.3", default-features = false, features = ["os-webview"]
 libc = "=0.2.191"
 
 [features]
-browser = ["dep:wry", "dep:url"]
+browser = ["dep:wry", "dep:url", "dep:block2", "dep:objc2", "dep:objc2-foundation", "dep:objc2-web-kit"]
 browser-probe = ["browser"]
 
 [[example]]

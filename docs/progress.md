@@ -2,6 +2,20 @@
 
 ## Current implementation focus
 
+Added a compact Find bar to the optional macOS browser: Cmd+F/menu/toolbar entry,
+Enter or Cmd+G next, Shift+Enter or Cmd+Shift+G previous, case toggle, wraparound,
+status and Escape-to-page focus. Search uses native WKWebView find configuration
+and callback APIs rather than copying the DOM. Requests are limited to one at a
+time; generation checks discard stale results after editing, close, navigation
+or process failure. The callback captures no browser owner and uses the existing
+bounded metadata channel. Matching-result counts are not exposed by this API.
+Ten focused browser tests pass, including a new stale-result/request-bound test,
+and the browser test executable links. Native visual/focus/highlight acceptance
+was attempted but the Mac remains locked; screenshot evidence is unavailable.
+GitHub shell-integration run 44861923760 also passed for the preceding PowerShell
+commit. This is standalone-window progress, not browser workspace-pane parity. The preceding
+goal turn made progress by shipping PowerShell command-start/completion hooks.
+
 PowerShell now emits command-start (OSC 133 C) after its existing console reader
 returns nonempty input, and a single completion (D) at the next prompt. The wrapper
 delegates editing/history to the original PSConsoleHostReadLine function, following

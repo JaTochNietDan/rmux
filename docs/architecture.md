@@ -41,6 +41,19 @@ Prototype terminal/browser composition, focus, clipping, drag overlays, resizing
 
 ## Experimental browser window
 
+The optional macOS browser includes an explicit-submit Find bar. Cmd+F opens it;
+Enter/Cmd+G finds the next match, Shift+Enter/Cmd+Shift+G finds the previous one.
+Aa toggles case sensitivity and Escape closes the field and returns focus to the
+page. Searches wrap through WebKit's native
+[find API](https://developer.apple.com/documentation/webkit/wkwebview/findstring%3Awithconfiguration%3Acompletionhandler%3A?language=objc),
+with no DOM copying or injected search script. One native request may be outstanding;
+results share the bounded metadata wakeup and are ignored after query changes,
+close, navigation or process failure. The bar reports Match found/No matches;
+WebKit's result does not provide a total count. Native selection highlighting,
+focus, keyboard dispatch and visual acceptance remain pending. Closing the bar
+leaves WebKit's current text selection in place. Optional objc2 bindings reuse
+versions already in WRY's dependency tree and stay outside default builds.
+
 `mise run browser` enables the optional macOS `browser` feature in rmux. File →
 New Browser Window (Experimental), also in the command palette, opens a separate
 native window with an address field, Back/Forward/Reload/Go controls and a committed

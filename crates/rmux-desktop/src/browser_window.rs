@@ -1,10 +1,10 @@
 //! Opt-in native browser window. Split-tree ownership remains a separate gate.
 use super::*;
 use crate::text_field::TextField;
-use wry::WebViewBuilderExtDarwin;
+use wry::{WebViewBuilderExtDarwin, WebViewExtMacOS};
 use std::{cell::RefCell, rc::Rc};
 
-actions!(browser, [FocusAddress, Back, Forward, Reload, ZoomIn, ZoomOut, ResetZoom]);
+actions!(browser, [FocusAddress, Back, Forward, Reload, ZoomIn, ZoomOut, ResetZoom, FindInPage, FindNext, FindPrevious]);
 const ZOOM_LEVELS: &[u16] = &[25, 33, 50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300, 400, 500];
 fn zoom_level(current: u16, direction: i8) -> u16 {
     match direction.cmp(&0) {
@@ -69,11 +69,44 @@ fn rect(bounds: Bounds<Pixels>) -> wry::Rect {
 // Coalesce independent native callbacks without losing a load event when a
 // title event arrives before the single queued wakeup is consumed.
 #[derive(Default)]
+struct FindState {
+    visible: bool,
+    case_sensitive: bool,
+    generation: u64,
+    pending: Option<u64>,
+    status: &'static str,
+}
+impl FindState {
+    fn invalidate(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
+        self.status = "";
+    }
+    fn begin(&mut self) -> Option<u64> {
+        if self.pending.is_some() { return None; }
+        self.invalidate();
+        self.pending = Some(self.generation);
+        self.status = "Searching…";
+        self.pending
+    }
+    fn complete(&mut self, generation: u64, found: bool) -> bool {
+        if self.pending != Some(generation) { return false; }
+        self.pending = None;
+        if self.generation != generation { return false; }
+        self.status = if found { "Match found" } else { "No matches" };
+        true
+    }
+    fn navigated(&mut self) {
+        self.invalidate();
+        self.pending = None;
+    }
+}
+#[derive(Default)]
 struct PageUpdates {
     load: Option<(bool, String)>,
     title: Option<String>,
     process_alive: Option<bool>,
     notice: Option<&'static str>,
+    found: Option<(u64, bool)>,
 }
 impl PageUpdates {
     fn loaded(&mut self, finished: bool, url: String) {
@@ -136,6 +169,8 @@ struct Host { view: Option<wry::WebView>, bounds: Option<Bounds<Pixels>>, pendin
 struct BrowserView {
     host: Rc<RefCell<Host>>,
     input: Entity<TextField>,
+    find_input: Entity<TextField>,
+    find: FindState,
     page: PageState,
     zoom_percent: u16,
     latest: Arc<std::sync::Mutex<PageUpdates>>,
@@ -155,6 +190,14 @@ impl BrowserView {
                 if let Some(view) = &this.host.borrow().view { let _ = view.focus(); }
             }
         }).detach();
+        let find_input = cx.new(|cx| TextField::new("", cx));
+        cx.subscribe_in(&find_input, window, |this, _, event: &text_field::EditEvent, window, cx| {
+            match event {
+                text_field::EditEvent::Submitted { reverse, .. } => this.find_page(*reverse, cx),
+                text_field::EditEvent::Cancelled => this.close_find(window, cx),
+                text_field::EditEvent::Changed(_) => { this.find.invalidate(); cx.notify(); }
+            }
+        }).detach();
         input.read(cx).focus.focus(window);
         let latest = Arc::new(std::sync::Mutex::new(PageUpdates::default()));
         let (wake, receive) = async_channel::bounded(1);
@@ -167,15 +210,70 @@ impl BrowserView {
                 if !delay.is_zero() { cx.background_executor().timer(delay).await; }
                 let update = updates.lock().ok().map(|mut value| std::mem::take(&mut *value));
                 if let Some(update) = update {
-                    if update.load.is_none() && update.title.is_none() && update.process_alive.is_none() && update.notice.is_none() { continue; }
+                    if update.load.is_none() && update.title.is_none() && update.process_alive.is_none() && update.notice.is_none() && update.found.is_none() { continue; }
                     if entity.update(cx, |this: &mut Self, cx| {
+                        if matches!(update.load, Some((false, _))) || update.process_alive == Some(false) {
+                            this.find.navigated();
+                            cx.notify();
+                        }
+                        if let Some((generation, found)) = update.found {
+                            let pending = this.find.pending;
+                            if this.find.complete(generation, found) || this.find.pending != pending { cx.notify(); }
+                        }
                         if this.page.apply(update) { cx.emit(BrowserMetadataChanged); cx.notify(); }
                     }).is_err() { break; }
                     next_update = std::time::Instant::now() + interval;
                 }
             }
         });
-        Self { host: Rc::new(RefCell::new(Host { pending_url: initial, ..Default::default() })), input, page: PageState { status: "Enter an address to create an ephemeral browser.".into(), ..Default::default() }, zoom_percent: 100, latest, wake, _updates: task }
+        Self { host: Rc::new(RefCell::new(Host { pending_url: initial, ..Default::default() })), input, find_input, find: FindState::default(), page: PageState { status: "Enter an address to create an ephemeral browser.".into(), ..Default::default() }, zoom_percent: 100, latest, wake, _updates: task }
+    }
+    fn open_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(view) = &self.host.borrow().view { let _ = view.focus_parent(); }
+        self.find.visible = true;
+        self.find_input.update(cx, |input, cx| input.select_all_text(cx));
+        self.find_input.read(cx).focus.focus(window);
+        cx.notify();
+    }
+    fn close_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.find_input.read(cx).is_composing() { return; }
+        self.find.visible = false;
+        self.find.invalidate();
+        if let Some(view) = &self.host.borrow().view { let _ = view.focus(); }
+        else { self.input.read(cx).focus.focus(window); }
+        cx.notify();
+    }
+    fn find_page(&mut self, backwards: bool, cx: &mut Context<Self>) {
+        if self.find_input.read(cx).is_composing() { return; }
+        let query = self.find_input.read(cx).value();
+        if query.is_empty() || self.page.failed { return; }
+        let host = self.host.borrow();
+        let Some(view) = &host.view else { return; };
+        let Some(main_thread) = objc2::MainThreadMarker::new() else { return; };
+        let Some(generation) = self.find.begin() else { return; };
+        let latest = self.latest.clone();
+        let wake = self.wake.clone();
+        let callback = block2::RcBlock::new(move |result: std::ptr::NonNull<objc2_web_kit::WKFindResult>| {
+            // WebKit supplies a live result object for the duration of this callback.
+            let found = unsafe { result.as_ref().matchFound() };
+            if let Ok(mut update) = latest.lock() {
+                if update.found.is_none_or(|(previous, _)| generation >= previous) {
+                    update.found = Some((generation, found));
+                }
+            }
+            let _ = wake.try_send(());
+        });
+        // Called on GPUI's main thread. WebKit copies the completion block;
+        // the callback owns only bounded metadata/channel handles, not the view.
+        unsafe {
+            let config = objc2_web_kit::WKFindConfiguration::new(main_thread);
+            config.setBackwards(backwards);
+            config.setCaseSensitive(self.find.case_sensitive);
+            config.setWraps(true);
+            view.webview().findString_withConfiguration_completionHandler(
+                &objc2_foundation::NSString::from_str(query), Some(&config), &callback);
+        }
+        cx.notify();
     }
     fn submit(&mut self, text: &str, window: &Window, cx: &mut Context<Self>) {
         if self.input.read(cx).is_composing() { return; }
@@ -281,6 +379,8 @@ impl Render for BrowserView {
         let (back, forward, loaded) = self.host.borrow().view.as_ref().map(|view|
             (view.can_go_back().unwrap_or(false), view.can_go_forward().unwrap_or(false), true)
         ).unwrap_or((false, false, false));
+        let find_enabled = loaded && !self.page.failed && self.find.pending.is_none()
+            && !self.find_input.read(cx).value().is_empty();
         let focus = Some(self.input.read(cx).focus.clone());
         let detail = format!("{} · {}", self.page.status, self.page.committed);
         div().size_full().flex().flex_col().key_context("Browser")
@@ -296,12 +396,35 @@ impl Render for BrowserView {
                     .when(!loaded, |button| button.opacity(0.4).cursor_default())
                     .when(loaded, |button| button.on_click(cx.listener(|this, _, _, cx| { this.navigation(Navigation::Reload); cx.notify(); }))))
                 .child(div().flex_1().min_w_0().px_2().py_1().rounded_md().border_1().border_color(rgb(0x465063)).bg(rgb(0x242a36)).child(self.input.clone()))
+                .child(pane_view::action_control("browser-find", "Find in Page", FindInPage, focus.clone()).child("⌕")
+                    .on_click(cx.listener(|this, _, window, cx| this.open_find(window, cx))))
                 .child(pane_view::control_button("browser-go").child("→")
                     .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("Go to address · Enter".into())).into())
                     .on_click(cx.listener(|this, _, window, cx| {
                         let text = this.input.read(cx).value().to_owned();
                         this.submit(&text, window, cx);
                     }))))
+            .when(self.find.visible, |root| root.child(div().h(px(40.)).flex_shrink_0().px_2().flex().items_center().gap_1()
+                .child(div().text_xs().px_1().child("Find"))
+                .child(div().flex_1().min_w_0().px_2().py_1().rounded_md().border_1().border_color(rgb(0x465063)).bg(rgb(0x242a36)).child(self.find_input.clone()))
+                .child(div().w(px(90.)).text_xs().truncate().child(self.find.status))
+                .child(pane_view::control_button("browser-find-case").child("Aa")
+                    .when(self.find.case_sensitive, |button| button.bg(rgb(0x465063)))
+                    .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("Match case".into())).into())
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        if this.find_input.read(cx).is_composing() { return; }
+                        this.find.case_sensitive = !this.find.case_sensitive;
+                        this.find.invalidate(); cx.notify();
+                    })))
+                .child(pane_view::action_control("browser-find-previous", "Previous Match", FindPrevious, Some(self.find_input.read(cx).focus.clone())).child("↑")
+                    .when(!find_enabled, |button| button.opacity(0.4).cursor_default())
+                    .on_click(cx.listener(|this, _, _, cx| this.find_page(true, cx))))
+                .child(pane_view::action_control("browser-find-next", "Next Match", FindNext, Some(self.find_input.read(cx).focus.clone())).child("↓")
+                    .when(!find_enabled, |button| button.opacity(0.4).cursor_default())
+                    .on_click(cx.listener(|this, _, _, cx| this.find_page(false, cx))))
+                .child(pane_view::control_button("browser-find-close").child("×")
+                    .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("Close Find · Escape".into())).into())
+                    .on_click(cx.listener(|this, _, window, cx| this.close_find(window, cx))))))
             .child(div().h(px(24.)).flex_shrink_0().px_3().flex().items_center().gap_2().text_xs()
                 .child(div().id("browser-status").flex_1().min_w_0().truncate()
                     .when(self.page.failed, |status| status.text_color(rgb(0xf0b85b)))
@@ -366,13 +489,16 @@ fn with_active(cx: &mut App, update: impl FnOnce(&mut BrowserView, &mut Window, 
     if let Some(handle) = cx.active_window().and_then(|window| window.downcast::<BrowserWindow>()) {
         let _ = handle.update(cx, |root, window, cx| {
             root.browser.update(cx, |browser, cx| {
-                if !browser.input.read(cx).is_composing() { update(browser, window, cx); }
+                if !browser.input.read(cx).is_composing() && !browser.find_input.read(cx).is_composing() { update(browser, window, cx); }
             });
         });
     }
 }
 pub fn initialize(cx: &mut App) {
     cx.bind_keys([
+        KeyBinding::new("cmd-f", FindInPage, Some("Browser")),
+        KeyBinding::new("cmd-g", FindNext, Some("Browser")),
+        KeyBinding::new("cmd-shift-g", FindPrevious, Some("Browser")),
         KeyBinding::new("cmd-l", FocusAddress, Some("Browser")),
         KeyBinding::new("cmd-r", Reload, Some("Browser")),
         KeyBinding::new("cmd-=", ZoomIn, Some("Browser")),
@@ -381,6 +507,15 @@ pub fn initialize(cx: &mut App) {
         KeyBinding::new("alt-left", Back, Some("Browser")),
         KeyBinding::new("alt-right", Forward, Some("Browser")),
     ]);
+    cx.on_action(|_: &FindInPage, cx| with_active(cx, |this, window, cx| this.open_find(window, cx)));
+    cx.on_action(|_: &FindNext, cx| with_active(cx, |this, window, cx| {
+        if !this.find.visible { this.open_find(window, cx); }
+        this.find_page(false, cx);
+    }));
+    cx.on_action(|_: &FindPrevious, cx| with_active(cx, |this, window, cx| {
+        if !this.find.visible { this.open_find(window, cx); }
+        this.find_page(true, cx);
+    }));
     cx.on_action(|_: &ZoomIn, cx| with_active(cx, |this, _, cx| this.zoom(1, cx)));
     cx.on_action(|_: &ZoomOut, cx| with_active(cx, |this, _, cx| this.zoom(-1, cx)));
     cx.on_action(|_: &ResetZoom, cx| with_active(cx, |this, _, cx| this.zoom(0, cx)));
@@ -391,6 +526,9 @@ pub fn initialize(cx: &mut App) {
 }
 pub fn menu() -> Menu {
     Menu { name: "Browser".into(), items: vec![
+        MenuItem::action("Find in Page", FindInPage),
+        MenuItem::action("Find Next", FindNext),
+        MenuItem::action("Find Previous", FindPrevious),
         MenuItem::action("Focus Address", FocusAddress),
         MenuItem::action("Back", Back),
         MenuItem::action("Forward", Forward),
@@ -420,7 +558,7 @@ fn open_initial(initial: Option<String>, cx: &mut App) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{address, allowed, can_open_link, PageUpdates, PageState, zoom_level, navigation_error};
+    use super::{FindState, address, allowed, can_open_link, PageUpdates, PageState, zoom_level, navigation_error};
     #[test]
     fn browser_blocked_navigation_has_bounded_nonsecret_feedback() {
         assert_eq!(navigation_error("https://user:secret@example.com"), Some("Use an address without embedded credentials."));
@@ -546,4 +684,25 @@ mod tests {
         assert!(!allowed("https://user@example.com"));
         assert!(allowed("https://example.com/path"));
     }
+
+#[test]
+fn browser_find_discards_stale_results_and_bounds_native_requests() {
+    let mut find = FindState::default();
+    let first = find.begin().unwrap();
+    assert!(find.begin().is_none());
+    find.invalidate(); // query edit/close while the native search is outstanding
+    assert!(!find.complete(first, true));
+    assert!(find.status.is_empty());
+    let second = find.begin().unwrap();
+    assert!(find.complete(second, false));
+    assert_eq!(find.status, "No matches");
+    let old_page = find.begin().unwrap();
+    find.navigated();
+    let new_page = find.begin().unwrap();
+    assert!(!find.complete(old_page, true));
+    assert_eq!(find.pending, Some(new_page));
+    assert!(find.complete(new_page, true));
+    assert_eq!(find.status, "Match found");
+}
+
 }

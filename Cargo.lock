@@ -5405,6 +5405,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-channel 2.5.0",
+ "block2",
  "futures-lite 2.6.1",
  "glob",
  "gpui",
@@ -5414,6 +5415,9 @@ dependencies = [
  "notify",
  "notify-rust",
  "objc",
+ "objc2",
+ "objc2-foundation",
+ "objc2-web-kit",
  "pulldown-cmark",
  "raw-window-handle",
  "rmux-terminal",
