@@ -2,7 +2,7 @@ use gpui::*;
 use rmux_terminal::{Cell, Color, Frame};
 use std::{cell::RefCell, sync::{Arc, Weak}};
 
-use crate::{CellMetrics, color};
+use crate::{CellMetrics, color, preferences::CellColor};
 
 /// One shaped glyph for the block cursor; bounded independently of row caches.
 #[derive(Default)]
@@ -46,7 +46,7 @@ pub struct RowBackground {
 pub struct ShapedRow {
     source: Arc<Vec<Cell>>,
     pub texts: Vec<RowText>,
-    selected_texts: RefCell<Option<(Color, Vec<RowText>)>>,
+    selected_texts: RefCell<Option<(CellColor, Vec<RowText>, Vec<RowBackground>)>>,
     pub backgrounds: Vec<RowBackground>,
     overlines: Vec<RowBackground>,
 }
@@ -55,7 +55,7 @@ pub struct ShapedRow {
 pub struct RowCache {
     rows: Arc<Vec<Arc<ShapedRow>>>,
     source: Weak<Vec<Arc<Vec<Cell>>>>,
-    selection_color: Option<Color>,
+    selection_color: Option<CellColor>,
     environment: Option<(Color, f32, CellMetrics, SharedString)>,
 }
 impl RowCache {
@@ -69,7 +69,7 @@ impl RowCache {
         released
     }
 
-    pub fn prepare_selection(&mut self, frame: &Frame, foreground: Option<Color>, cells: CellMetrics, family: &SharedString, window: &Window) {
+    pub fn prepare_selection(&mut self, frame: &Frame, foreground: Option<CellColor>, cells: CellMetrics, family: &SharedString, window: &Window) {
         if self.selection_color != foreground {
             for row in self.rows.iter() { row.selected_texts.borrow_mut().take(); }
             self.selection_color = foreground;
@@ -78,8 +78,12 @@ impl RowCache {
         for (row, selection) in self.rows.iter().zip(frame.selections.iter()) {
             if selection.is_none() { continue; }
             let mut cached = row.selected_texts.borrow_mut();
-            if cached.as_ref().is_none_or(|(color, _)| *color != foreground) {
-                *cached = Some((foreground, shape_texts(&row.source, cells, family, window, Some(foreground))));
+            if cached.as_ref().is_none_or(|(color, _, _)| *color != foreground) {
+                let mut overlines = Vec::new();
+                for cell in row.source.iter().filter(|cell| cell.overline && !cell.hidden) {
+                    append_span(&mut overlines, px(cell.column as f32 * cells.width), foreground.resolve(cell.foreground, cell.background), cells);
+                }
+                *cached = Some((foreground, shape_texts(&row.source, cells, family, window, Some(foreground)), overlines));
             }
         }
     }
@@ -198,7 +202,7 @@ fn shape_row(
     ShapedRow { source, texts, selected_texts: RefCell::default(), backgrounds, overlines }
 }
 
-fn shape_texts(source: &[Cell], cells: CellMetrics, family: &SharedString, window: &Window, foreground: Option<Color>) -> Vec<RowText> {
+fn shape_texts(source: &[Cell], cells: CellMetrics, family: &SharedString, window: &Window, foreground: Option<CellColor>) -> Vec<RowText> {
     let mut texts = Vec::new();
     let mut i = 0;
     while i < source.len() {
@@ -210,7 +214,7 @@ fn shape_texts(source: &[Cell], cells: CellMetrics, family: &SharedString, windo
             i += 1;
             continue;
         }
-        let (text, end) = text_run(source, i);
+        let (text, end) = text_run_with_color(source, i, foreground);
         if !text.is_empty() {
             let mut run_font = font(family.clone());
             if cell.bold {
@@ -222,11 +226,11 @@ fn shape_texts(source: &[Cell], cells: CellMetrics, family: &SharedString, windo
             let run = TextRun {
                 len: text.len(),
                 font: run_font,
-                color: color(foreground.unwrap_or(cell.foreground)),
+                color: color(foreground.map(|setting| setting.resolve(cell.foreground, cell.background)).unwrap_or(cell.foreground)),
                 background_color: None,
                 underline: cell.underline.then_some(UnderlineStyle {
                     thickness: px(1.),
-                    color: Some(color(foreground.unwrap_or(cell.underline_color))),
+                    color: Some(color(foreground.map(|setting| setting.resolve(cell.foreground, cell.background)).unwrap_or(cell.underline_color))),
                     wavy: cell.underline_curly,
                 }),
                 strikethrough: cell.strikethrough.then_some(StrikethroughStyle {
@@ -250,7 +254,11 @@ fn shape_texts(source: &[Cell], cells: CellMetrics, family: &SharedString, windo
 }
 
 /// Empty engine cells still occupy one column and may carry decorations.
+#[cfg(test)]
 fn text_run(source: &[Cell], start: usize) -> (String, usize) {
+    text_run_with_color(source, start, None)
+}
+fn text_run_with_color(source: &[Cell], start: usize, foreground: Option<CellColor>) -> (String, usize) {
     let cell = &source[start];
     if cell.hidden {
         return (String::new(), start + 1);
@@ -264,6 +272,7 @@ fn text_run(source: &[Cell], start: usize) -> (String, usize) {
                 || next.column != source[end - 1].column + 1
                 || !next.text.is_ascii()
                 || next.foreground != cell.foreground
+                || (matches!(foreground, Some(CellColor::CellBackground)) && next.background != cell.background)
                 || next.bold != cell.bold
                 || next.italic != cell.italic
                 || next.underline != cell.underline
@@ -295,6 +304,21 @@ fn text_run(source: &[Cell], start: usize) -> (String, usize) {
 #[cfg(test)]
 mod tests {
     use super::text_run;
+
+    #[test]
+    fn dynamic_selection_foreground_splits_runs_at_background_changes() -> anyhow::Result<()> {
+        use super::*;
+        let mut terminal = rmux_terminal::Terminal::new(8, 1)?;
+        terminal.write(b"\x1b[31;44mab\x1b[45mcd\x1b[8mef");
+        let frame = terminal.frame()?;
+        let source = &frame.rows[0];
+        assert_eq!(text_run_with_color(source, 0, None), ("abcd".into(), 4));
+        assert_eq!(text_run_with_color(source, 0, Some(CellColor::CellBackground)), ("ab".into(), 2));
+        assert_eq!(text_run_with_color(source, 2, Some(CellColor::CellBackground)), ("cd".into(), 4));
+        assert_eq!(text_run_with_color(source, 0, Some(CellColor::CellForeground)), ("abcd".into(), 4));
+        assert_eq!(text_run_with_color(source, 4, Some(CellColor::CellBackground)), (String::new(), 5));
+        Ok(())
+    }
 
     #[test]
     fn dynamic_selection_background_runs_follow_cells_and_clip() -> anyhow::Result<()> {
@@ -439,19 +463,19 @@ pub fn paint_row(
             ));
         });
     }
-    let paint = |texts: &[RowText], foreground: Option<Color>, window: &mut Window, cx: &mut App| {
+    let paint = |texts: &[RowText], overlines: &[RowBackground], window: &mut Window, cx: &mut App| {
         for text in texts {
             let _ = text.line.paint(origin + point(text.x, px(0.)), px(cells.height), window, cx);
         }
-        for span in &row.overlines {
+        for span in overlines {
             window.paint_quad(fill(
                 Bounds::new(origin + point(span.x, px(1.)), size(span.width, px(1.))),
-                color(foreground.unwrap_or(span.color)),
+                color(span.color),
             ));
         }
     };
     let selected_texts = row.selected_texts.borrow();
-    if let (Some((start, end)), Some((foreground, texts))) = (selection, selected_texts.as_ref()) {
+    if let (Some((start, end)), Some((_, texts, overlines))) = (selection, selected_texts.as_ref()) {
         // Clip both variants so antialiased glyph edges never blend with the
         // original foreground underneath the selected variant.
         let left = start as f32 * cells.width;
@@ -459,12 +483,12 @@ pub fn paint_row(
         let width = row.source.len() as f32 * cells.width;
         for (x, width) in [(0., left), (right, (width - right).max(0.))] {
             if width > 0. {
-                window.with_content_mask(Some(ContentMask { bounds: Bounds::new(origin + point(px(x), px(0.)), size(px(width), px(cells.height))) }), |window| paint(&row.texts, None, window, cx));
+                window.with_content_mask(Some(ContentMask { bounds: Bounds::new(origin + point(px(x), px(0.)), size(px(width), px(cells.height))) }), |window| paint(&row.texts, &row.overlines, window, cx));
             }
         }
-        window.with_content_mask(Some(ContentMask { bounds: Bounds::new(origin + point(px(left), px(0.)), size(px(right - left), px(cells.height))) }), |window| paint(texts, Some(*foreground), window, cx));
+        window.with_content_mask(Some(ContentMask { bounds: Bounds::new(origin + point(px(left), px(0.)), size(px(right - left), px(cells.height))) }), |window| paint(texts, overlines, window, cx));
     } else {
-        paint(&row.texts, None, window, cx);
+        paint(&row.texts, &row.overlines, window, cx);
     }
 }
 fn append_span(spans: &mut Vec<RowBackground>, x: Pixels, color: Color, cells: CellMetrics) {

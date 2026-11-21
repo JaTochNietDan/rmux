@@ -117,7 +117,7 @@ fn theme_preview(settings: &Preferences) -> impl IntoElement {
             .child(div().mt_1().flex().min_w_0()
                 .child(div().min_w_0().truncate().px_1().line_height(px(16.))
                     .bg(settings.selection_background_fill(colors[0].unwrap_or(DEFAULT_FOREGROUND), colors[1].unwrap_or(DEFAULT_BACKGROUND)))
-                    .text_color(rgb_color(settings.selection_foreground().unwrap_or(colors[0].unwrap_or(DEFAULT_FOREGROUND))))
+                    .text_color(rgb_color(settings.selection_foreground().map(|setting| setting.resolve(colors[0].unwrap_or(DEFAULT_FOREGROUND), colors[1].unwrap_or(DEFAULT_BACKGROUND))).unwrap_or(colors[0].unwrap_or(DEFAULT_FOREGROUND))))
                     .child("Selected text")))
             .when_some(settings.terminal_palette(), |preview, palette| preview
                 .child(div().mt_2().flex().h(px(8.)).children(palette.into_iter().map(|color|

@@ -2,6 +2,15 @@
 
 ## Current implementation focus
 
+Dynamic selection foregrounds now complete cell-reference support for imported
+cursor and selection colors. Selected text runs split at background changes when
+using cell-background; underlines and cached overline spans follow the same
+resolved colors. Explicit JSON values override imports, and Settings preview
+resolves both references. Alternate rendering remains lazy and bounded to one
+variant per cached visible row. Sixteen selection-related tests passed, including
+mixed-background run boundaries, concealed text, imports and override round-trips.
+Native inversion/decorations/drag-performance acceptance remains pending.
+
 Selection backgrounds now accept dynamic cell-foreground/cell-background in JSON
 and imported themes, with explicit settings taking precedence. Painting merges
 adjacent matching cell colors into spans without allocating a background buffer;

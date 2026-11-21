@@ -4,7 +4,7 @@ use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 use std::{io::Read, path::Path};
 
-#[derive(Clone, Copy, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct HexColor(u32);
 impl TryFrom<String> for HexColor {
@@ -31,7 +31,7 @@ impl HexColor {
     }
 }
 
-#[derive(Clone, Copy, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(try_from = "String", into = "String")]
 pub enum CellColor { Literal(HexColor), CellForeground, CellBackground }
 impl TryFrom<String> for CellColor {
@@ -206,7 +206,7 @@ pub struct Preferences {
     pub cursor_color: Option<CellColor>,
     pub cursor_text: Option<CellColor>,
     pub selection_background: Option<CellColor>,
-    pub selection_foreground: Option<HexColor>,
+    pub selection_foreground: Option<CellColor>,
     pub ansi_palette: Option<[HexColor; 16]>,
     pub terminal_theme: TerminalTheme,
     pub theme_file: Option<std::path::PathBuf>,
@@ -335,8 +335,8 @@ impl Preferences {
         self.cursor_text.or_else(|| self.imported_theme.as_ref().and_then(|theme| theme.cursor_text))
             .unwrap_or(CellColor::CellBackground).resolve(foreground, background)
     }
-    pub fn selection_foreground(&self) -> Option<rmux_terminal::Color> {
-        self.selection_foreground.or_else(|| self.imported_theme.as_ref().and_then(|theme| theme.selection_foreground)).map(HexColor::rgb)
+    pub fn selection_foreground(&self) -> Option<CellColor> {
+        self.selection_foreground.or_else(|| self.imported_theme.as_ref().and_then(|theme| theme.selection_foreground))
     }
     pub fn selection_background_fill(&self, foreground: rmux_terminal::Color, background: rmux_terminal::Color) -> gpui::Hsla {
         self.selection_background().map(|setting| crate::color(setting.resolve(foreground, background))).unwrap_or_else(|| gpui::rgba(0x668fca80).into())
@@ -646,6 +646,23 @@ mod tests {
     }
 
     #[test]
+    fn dynamic_selection_foreground_import_override_and_round_trip() -> Result<()> {
+        use rmux_terminal::Color;
+        let directory = tempfile::tempdir()?;
+        let path = directory.path().join("theme");
+        std::fs::write(&path, "selection-foreground=cell-background\n")?;
+        let imported = Preferences::default().import_theme(path.clone())?;
+        let fg = Color(1,2,3);
+        let bg = Color(4,5,6);
+        assert_eq!(imported.selection_foreground().unwrap().resolve(fg, bg), bg);
+        let explicit = Preferences::decode(br#"{"selection_foreground":"cell-foreground"}"#)?.import_theme(path)?;
+        assert_eq!(explicit.selection_foreground().unwrap().resolve(fg, bg), fg);
+        assert_eq!(serde_json::to_value(&explicit)?["selection_foreground"], "cell-foreground");
+        assert!(Preferences::decode(br#"{"selection_foreground":"cell-invalid"}"#).is_err());
+        Ok(())
+    }
+
+    #[test]
     fn dynamic_selection_background_import_and_override() -> Result<()> {
         use rmux_terminal::Color;
         let directory = tempfile::tempdir()?;
@@ -668,16 +685,16 @@ mod tests {
         let path = directory.path().join("theme");
         std::fs::write(&path, "selection-background=112233\nselection-foreground=445566\n")?;
         assert_eq!(Preferences::default().selection_background().map(|color| color.resolve(rmux_terminal::Color(0,0,0), rmux_terminal::Color(0,0,0))), None);
-        assert_eq!(Preferences::default().selection_foreground(), None);
+        assert_eq!(Preferences::default().selection_foreground().map(|color| color.resolve(rmux_terminal::Color(0,0,0), rmux_terminal::Color(0,0,0))), None);
         let mut imported = Preferences::default().import_theme(path.clone())?;
         assert_eq!(imported.selection_background().map(|color| color.resolve(rmux_terminal::Color(0,0,0), rmux_terminal::Color(0,0,0))), Some(rmux_terminal::Color(17,34,51)));
-        assert_eq!(imported.selection_foreground(), Some(rmux_terminal::Color(68,85,102)));
+        assert_eq!(imported.selection_foreground().map(|color| color.resolve(rmux_terminal::Color(0,0,0), rmux_terminal::Color(0,0,0))), Some(rmux_terminal::Color(68,85,102)));
         imported.select_theme(TerminalTheme::Dark);
         assert_eq!(imported.selection_background().map(|color| color.resolve(rmux_terminal::Color(0,0,0), rmux_terminal::Color(0,0,0))), None);
-        assert_eq!(imported.selection_foreground(), None);
+        assert_eq!(imported.selection_foreground().map(|color| color.resolve(rmux_terminal::Color(0,0,0), rmux_terminal::Color(0,0,0))), None);
         let explicit = Preferences::decode(br##"{"selection_background":"#abcdef","selection_foreground":"#010203"}"##)?.import_theme(path)?;
         assert_eq!(explicit.selection_background().map(|color| color.resolve(rmux_terminal::Color(0,0,0), rmux_terminal::Color(0,0,0))), Some(rmux_terminal::Color(171,205,239)));
-        assert_eq!(explicit.selection_foreground(), Some(rmux_terminal::Color(1,2,3)));
+        assert_eq!(explicit.selection_foreground().map(|color| color.resolve(rmux_terminal::Color(0,0,0), rmux_terminal::Color(0,0,0))), Some(rmux_terminal::Color(1,2,3)));
         assert_eq!(serde_json::to_value(&explicit)?["selection_foreground"], "#010203");
         assert_eq!(serde_json::to_value(&explicit)?["selection_background"], "#abcdef");
         Ok(())

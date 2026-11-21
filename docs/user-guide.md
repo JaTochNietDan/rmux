@@ -864,7 +864,9 @@ Cursor fill also accepts `cell-foreground`/`cell-background` via `cursor_color`
 in JSON or `cursor-color` in themes. Application OSC cursor colors take precedence;
 resetting them restores the configured dynamic reference. Selection backgrounds
 also accept `cell-foreground` and `cell-background`, resolving independently for
-each selected cell. Dynamic selection foreground references remain unsupported.
+each selected cell. Selection foregrounds accept both references too, so a theme
+can invert selection colors with `selection-background = cell-foreground` and
+`selection-foreground = cell-background`.
 
 `selection_background` in rmux JSON also accepts `"#RRGGBB"` and overrides the
 imported selection background. Configured selection backgrounds are opaque; with

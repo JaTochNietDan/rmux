@@ -9,7 +9,7 @@ pub struct Theme {
     pub palette: Option<[HexColor; 16]>,
     pub palette_entries: [Option<HexColor>; 16],
     pub selection_background: Option<CellColor>,
-    pub selection_foreground: Option<HexColor>,
+    pub selection_foreground: Option<CellColor>,
     pub cursor_text: Option<CellColor>,
     pub cursor_color: Option<CellColor>,
 }
@@ -37,15 +37,15 @@ fn parse(text: &str) -> Result<Theme> {
     for (index, line) in text.trim_start_matches('\u{feff}').lines().enumerate() {
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') { continue; }
-        if let Some((key, value)) = line.split_once('=') && matches!(key.trim(), "cursor-text" | "cursor-color" | "selection-background") {
+        if let Some((key, value)) = line.split_once('=') && matches!(key.trim(), "cursor-text" | "cursor-color" | "selection-background" | "selection-foreground") {
             let parsed = Some(CellColor::parse_theme(value.trim()).with_context(|| format!("theme line {}", index + 1))?);
-            match key.trim() { "cursor-text" => theme.cursor_text = parsed, "cursor-color" => theme.cursor_color = parsed, _ => theme.selection_background = parsed }
+            match key.trim() { "cursor-text" => theme.cursor_text = parsed, "cursor-color" => theme.cursor_color = parsed, "selection-background" => theme.selection_background = parsed, _ => theme.selection_foreground = parsed }
             continue;
         }
         let parse_line = || -> Result<(&str, HexColor, Option<usize>)> {
             let (key, value) = line.split_once('=').context("expected key = value")?;
             let key = key.trim();
-            ensure!(matches!(key, "foreground" | "background" | "selection-foreground" | "palette"), "unsupported theme setting: {key}");
+            ensure!(matches!(key, "foreground" | "background" | "palette"), "unsupported theme setting: {key}");
             if key == "palette" {
                 let (slot, color) = rmux_terminal::parse_palette_entry(value.trim())?;
                 ensure!(slot < 16, "only ANSI palette indices 0–15 are supported");
@@ -56,7 +56,6 @@ fn parse(text: &str) -> Result<Theme> {
         };
         let (key, color, slot) = parse_line().with_context(|| format!("theme line {}", index + 1))?;
         if let Some(slot) = slot { palette[slot] = Some(color); }
-        else if key == "selection-foreground" { theme.selection_foreground = Some(color); }
         else { theme.colors[match key { "foreground" => 0, "background" => 1, _ => 2 }] = Some(color); }
     }
     theme.palette_entries = palette;
