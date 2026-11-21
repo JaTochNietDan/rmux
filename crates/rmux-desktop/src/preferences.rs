@@ -236,7 +236,18 @@ impl Preferences {
     }
     pub fn import_theme(mut self, path: std::path::PathBuf) -> Result<Self> {
         ensure!(path.is_absolute() && path.as_os_str().len() <= 8192, "theme_file must be an absolute path up to 8192 bytes");
-        let theme = crate::theme_file::read(&path).with_context(|| format!("theme {}", path.display()))?;
+        let mut theme = crate::theme_file::read(&path).with_context(|| format!("theme {}", path.display()))?;
+        if theme.palette.is_none() && theme.palette_entries.iter().any(Option::is_some) {
+            let preset = Self { terminal_theme: self.terminal_theme, ..Self::default() };
+            let base = match preset.terminal_palette() {
+                Some(colors) => colors,
+                None => rmux_terminal::default_ansi_palette()?,
+            };
+            theme.palette = Some(std::array::from_fn(|index| theme.palette_entries[index].unwrap_or_else(|| {
+                let rmux_terminal::Color(r, g, b) = base[index];
+                HexColor((u32::from(r) << 16) | (u32::from(g) << 8) | u32::from(b))
+            })));
+        }
         self.theme_file = Some(path);
         self.imported_theme = Some(theme);
         Ok(self)
@@ -467,11 +478,8 @@ impl Preferences {
         Self::decode(&bytes).with_context(|| format!("configuration {}", path.display()))
     }
     fn read(path: &Path, required: bool) -> Result<Self> {
-        let mut value = Self::read_config(path, required)?;
-        if let Some(path) = &value.theme_file {
-            value.imported_theme = Some(crate::theme_file::read(path).with_context(|| format!("theme {}", path.display()))?);
-        }
-        Ok(value)
+        let value = Self::read_config(path, required)?;
+        if let Some(path) = value.theme_file.clone() { value.import_theme(path) } else { Ok(value) }
     }
     pub fn load() -> Result<Self> {
         let explicit = std::env::var_os("RMUX_CONFIG");
@@ -505,6 +513,27 @@ impl Preferences {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn sparse_theme_palette_uses_preset_not_previous_import() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        let path = directory.path().join("theme");
+        std::fs::write(&path, "palette=1=010203\n")?;
+        for theme in [TerminalTheme::Dark, TerminalTheme::Nord] {
+            let original = Preferences { terminal_theme: theme, ..Preferences::default() };
+            let defaults = original.terminal_palette().unwrap_or(rmux_terminal::default_ansi_palette()?);
+            let first = original.import_theme(path.clone())?;
+            let colors = first.terminal_palette().unwrap();
+            assert_eq!(colors[1], rmux_terminal::Color(1,2,3));
+            assert_eq!(colors[2], defaults[2]);
+            std::fs::write(&path, "palette=2=040506\n")?;
+            let second = first.import_theme(path.clone())?;
+            assert_eq!(second.terminal_palette().unwrap()[1], defaults[1]);
+            assert_eq!(second.terminal_palette().unwrap()[2], rmux_terminal::Color(4,5,6));
+            std::fs::write(&path, "palette=1=010203\n")?;
+        }
+        Ok(())
+    }
+
     #[test]
     fn cursor_text_import_override_and_preset_fallback() -> Result<()> {
         let directory = tempfile::tempdir()?;

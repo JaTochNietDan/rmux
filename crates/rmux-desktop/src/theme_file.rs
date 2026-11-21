@@ -7,6 +7,7 @@ use std::{io::Read, path::Path};
 pub struct Theme {
     pub colors: [Option<HexColor>; 3],
     pub palette: Option<[HexColor; 16]>,
+    pub palette_entries: [Option<HexColor>; 16],
     pub selection_background: Option<HexColor>,
     pub selection_foreground: Option<HexColor>,
     pub cursor_text: Option<HexColor>,
@@ -60,11 +61,11 @@ fn parse(text: &str) -> Result<Theme> {
         else if key == "selection-background" { theme.selection_background = Some(color); }
         else { theme.colors[match key { "foreground" => 0, "background" => 1, _ => 2 }] = Some(color); }
     }
-    if palette.iter().any(Option::is_some) {
-        ensure!(palette.iter().all(Option::is_some), "theme palette must define all 16 ANSI entries");
+    theme.palette_entries = palette;
+    if palette.iter().all(Option::is_some) {
         theme.palette = Some(palette.map(Option::unwrap));
     }
-    ensure!(theme.palette.is_some() || theme.selection_background.is_some() || theme.selection_foreground.is_some() || theme.cursor_text.is_some() || theme.colors.iter().any(Option::is_some), "theme contains no supported colors");
+    ensure!(theme.palette_entries.iter().any(Option::is_some) || theme.selection_background.is_some() || theme.selection_foreground.is_some() || theme.cursor_text.is_some() || theme.colors.iter().any(Option::is_some), "theme contains no supported colors");
     Ok(theme)
 }
 
@@ -86,13 +87,17 @@ mod tests {
         Ok(())
     }
     #[test]
-    fn color_import_reports_unsupported_values_and_requires_complete_palette() -> Result<()> {
+    fn color_import_reports_unsupported_values_and_retains_sparse_palette() -> Result<()> {
         let text = format!("# theme\nforeground = aabbcc\nbackground=#010203\ncursor-color=445566\n{}", (0..16).map(|i| format!("palette={i}=112233\n")).collect::<String>());
         let theme = parse(&text)?;
         assert_eq!(String::from(theme.colors[0].unwrap()), "#aabbcc");
         assert_eq!(String::from(parse("selection-background=010203")?.selection_background.unwrap()), "#010203");
         assert_eq!(String::from(theme.palette.unwrap()[15]), "#112233");
-        for invalid in ["", "foreground=red", "background=##112233", "palette=0=112233", "palette=16=112233", "command=echo hello", "cursor-opacity=0.5"] {
+        let sparse = parse("palette=1=123456")?;
+        assert!(sparse.palette.is_none());
+        assert!(sparse.palette_entries[0].is_none());
+        assert_eq!(String::from(sparse.palette_entries[1].unwrap()), "#123456");
+        for invalid in ["", "foreground=red", "background=##112233", "palette=16=112233", "command=echo hello", "cursor-opacity=0.5"] {
             assert!(parse(invalid).is_err(), "{invalid}");
         }
         Ok(())

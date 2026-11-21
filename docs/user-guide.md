@@ -840,8 +840,10 @@ selection-background = 4c566a
 selection-foreground = eceff4
 ```
 
-Optional `palette = N=RRGGBB` entries must define all 16 ANSI slots (decimal
-0–15). Colors accept six hex digits with or without `#`; blank lines and whole-line
+Optional `palette = N=RRGGBB` entries override individual ANSI slots (decimal
+0–15). Omitted slots inherit the selected built-in preset; Dark uses the pinned
+Ghostty engine defaults. A new import never inherits entries from the previous
+import. Colors accept six hex digits with or without `#`; blank lines and whole-line
 `#` comments are allowed. Repeated supported assignments use the last value.
 Named colors, extended palette slots, includes and other settings
 are rejected with a line-specific error rather than silently ignored. Files must

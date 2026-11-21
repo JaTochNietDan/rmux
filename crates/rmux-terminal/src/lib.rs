@@ -19,6 +19,22 @@ use std::{ffi::c_void, ptr, sync::Arc};
 
 const RENDER_HOLD_LIMIT: Duration = Duration::from_millis(250);
 
+/// Query the pinned engine's factory ANSI palette once, without a PTY or UI.
+/// Theme import calls this off the UI thread only when a sparse palette needs it.
+pub fn default_ansi_palette() -> Result<[Color; 16]> {
+    static DEFAULTS: std::sync::OnceLock<[Color; 16]> = std::sync::OnceLock::new();
+    if let Some(colors) = DEFAULTS.get() { return Ok(*colors); }
+    let terminal = Terminal::new(1, 1)?;
+    let mut palette = [GhosttyColorRgb::default(); 256];
+    // SAFETY: live exclusively owned handle; this tagged getter writes exactly
+    // 256 RGB entries into the correctly sized output array.
+    unsafe { check(ghostty_terminal_get(terminal.terminal, GHOSTTY_TERMINAL_DATA_COLOR_PALETTE_DEFAULT, out(&mut palette)))?; }
+    let colors = std::array::from_fn(|index| palette[index].into());
+    let _ = DEFAULTS.set(colors);
+    Ok(colors)
+}
+
+
 #[derive(Default)]
 struct Callbacks {
     replies: Vec<u8>,
@@ -1805,6 +1821,9 @@ mod tests {
         let mut terminal = Terminal::new(20, 3)?;
         terminal.write(b"\x1b[31mR\x1b[91mB\x1b[38;5;200mE\x1b[38;2;9;8;7mT");
         let original = terminal.frame()?;
+        let defaults = default_ansi_palette()?;
+        assert_eq!(original.rows[0][0].foreground, defaults[1]);
+        assert_eq!(original.rows[0][1].foreground, defaults[9]);
         let mut colors = [Color(20, 30, 40); 16];
         colors[1] = Color(100, 110, 120);
         terminal.set_ansi_palette(Some(colors))?;

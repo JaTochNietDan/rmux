@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Theme imports now accept partial ANSI palettes. Missing slots inherit the selected
+built-in preset; Dark resolves the pinned engine's factory palette through a
+one-time tiny terminal allocation without a PTY, then caches only 16 colors.
+Resolution happens during background import/reload, never painting, and a new
+import cannot inherit stale entries from the previous import. Explicit JSON
+palettes retain highest precedence. Two sparse-import tests and the engine ANSI
+palette/OSC override regression passed, including inherited slots, replacement
+imports, factory-color agreement and extended-color preservation. Native import
+and palette visuals remain pending.
+
 Added imported `cursor-text` and explicit JSON `cursor_text` for block-cursor
 glyphs. Explicit settings override imports; absent values preserve the cell's
 background fallback. The one-glyph cursor cache keys the effective color so reloads
