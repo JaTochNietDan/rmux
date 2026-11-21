@@ -68,6 +68,29 @@ pub fn entered_directory(text: &str) -> Result<PathBuf, &'static str> {
 pub struct Entry { pub path: PathBuf, pub directory: bool, pub symlink: bool }
 pub struct Listing { pub path: PathBuf, pub entries: Vec<Entry>, pub truncated: bool }
 pub struct Preview { pub path: PathBuf, pub lines: Vec<String>, pub contents: String, pub truncated: bool, pub partial_line: Option<usize> }
+fn decode_preview(bytes: &[u8], truncated: bool) -> anyhow::Result<std::borrow::Cow<'_, str>> {
+    use std::borrow::Cow;
+    let little_endian = if bytes.starts_with(&[0xff, 0xfe]) { Some(true) }
+        else if bytes.starts_with(&[0xfe, 0xff]) { Some(false) } else { None };
+    if let Some(little_endian) = little_endian {
+        let bytes = &bytes[2..];
+        anyhow::ensure!(truncated || bytes.len() % 2 == 0, "Incomplete UTF-16 code unit");
+        let mut units: Vec<u16> = bytes.chunks_exact(2).map(|pair| {
+            let pair = [pair[0], pair[1]];
+            if little_endian { u16::from_le_bytes(pair) } else { u16::from_be_bytes(pair) }
+        }).collect();
+        // A byte-limited read may split a surrogate pair; omit only that final
+        // incomplete scalar. Malformed sequences inside the prefix still fail.
+        if truncated && units.last().is_some_and(|unit| (0xd800..=0xdbff).contains(unit)) { units.pop(); }
+        return Ok(Cow::Owned(String::from_utf16(&units)?));
+    }
+    let bytes = bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(bytes);
+    Ok(Cow::Borrowed(match std::str::from_utf8(bytes) {
+        Ok(text) => text,
+        Err(error) if truncated && error.error_len().is_none() => std::str::from_utf8(&bytes[..error.valid_up_to()])?,
+        Err(_) => anyhow::bail!("Preview requires UTF-8 or BOM-marked UTF-16 text"),
+    }))
+}
 #[cfg(test)]
 fn preview(path: PathBuf) -> anyhow::Result<Preview> { preview_cancellable(path, &AtomicBool::new(false)) }
 pub fn preview_cancellable(path: PathBuf, canceled: &AtomicBool) -> anyhow::Result<Preview> {
@@ -99,11 +122,7 @@ pub fn preview_cancellable(path: PathBuf, canceled: &AtomicBool) -> anyhow::Resu
     check_cancel(canceled)?;
     let mut truncated = bytes.len() > 65536;
     bytes.truncate(65536);
-    let text = match std::str::from_utf8(&bytes) {
-        Ok(text) => text,
-        Err(error) if truncated && error.error_len().is_none() => std::str::from_utf8(&bytes[..error.valid_up_to()])?,
-        Err(_) => anyhow::bail!("Preview requires UTF-8 text"),
-    };
+    let text = decode_preview(&bytes, truncated)?;
     anyhow::ensure!(!text.contains('\0'), "Binary files cannot be previewed as text");
     let mut source = text.lines();
     let lines: Vec<String> = source.by_ref().take(512).map(str::to_owned).collect();
@@ -137,6 +156,37 @@ pub fn list_cancellable(path: PathBuf, canceled: &AtomicBool) -> anyhow::Result<
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn bom_previews_decode_unicode_and_preserve_copy_separators() -> anyhow::Result<()> {
+        let file = tempfile::NamedTempFile::new()?;
+        let text = "Hello 世界 😀\r\nsecond line\n";
+        for little in [true, false] {
+            let mut bytes = if little { vec![0xff, 0xfe] } else { vec![0xfe, 0xff] };
+            for unit in text.encode_utf16() {
+                bytes.extend_from_slice(&if little { unit.to_le_bytes() } else { unit.to_be_bytes() });
+            }
+            std::fs::write(file.path(), bytes)?;
+            let preview = super::preview(file.path().to_owned())?;
+            assert_eq!(preview.contents, text);
+            assert_eq!(preview.lines, ["Hello 世界 😀", "second line"]);
+            assert!(!preview.truncated);
+        }
+        assert_eq!(super::decode_preview(b"\xef\xbb\xbfhello", false)?, "hello");
+        assert!(super::decode_preview(&[0xff, 0xfe, 0x00, 0xd8], false).is_err());
+        assert_eq!(super::decode_preview(&[0xff, 0xfe, 0x00, 0xd8], true)?, "");
+        assert!(super::decode_preview(&[0xff, 0xfe, 0x00, 0xdc], true).is_err());
+        assert!(super::decode_preview(&[0xff, 0xfe, 0x61], false).is_err());
+        // The read cap lands between an emoji's high and low surrogate.
+        let text = format!("{}😀tail", "a".repeat(32766));
+        let mut bytes = vec![0xff, 0xfe];
+        for unit in text.encode_utf16() { bytes.extend_from_slice(&unit.to_le_bytes()); }
+        std::fs::write(file.path(), bytes)?;
+        let preview = super::preview(file.path().to_owned())?;
+        assert!(preview.truncated);
+        assert_eq!(preview.partial_line, Some(0));
+        assert_eq!(preview.contents, "a".repeat(32766));
+        Ok(())
+    }
     #[test]
     #[ignore = "manual file loader performance baseline"]
     fn file_loader_baseline() -> anyhow::Result<()> {

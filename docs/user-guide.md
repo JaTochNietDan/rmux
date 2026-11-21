@@ -189,7 +189,7 @@ Successful renames invalidate open buffer pickers, which must be reopened.
 **Browse Terminal Directory…** in the menu/palette (custom action `browse_files`)
 opens an on-demand local directory picker from the current terminal's cached
 working directory. Search names, press Enter on a directory to browse it, or
-choose Parent/Refresh. Enter on a regular file opens a read-only UTF-8 text
+choose Parent/Refresh. Enter on a regular file opens a read-only text
 preview; a symbolic link copies its path. Hidden entries are included.
 **File → Open Folder…**, the command palette, or the `open_folder` custom action
 opens the native folder chooser. This works without a terminal working directory
@@ -217,7 +217,7 @@ the browsed path takes precedence over the group's default directory.
 Directory reads run in the background and retain at most 2,048 entries per
 snapshot, sorted directories-first within that subset. A limit notice identifies
 partial listings. Switching focus during loading prevents the result from taking
-focus. Text previews retain up to 64 KiB and 512 lines, with explicit truncation
+focus. Text previews read up to 64 KiB of source text and retain up to 512 lines, with explicit truncation
 labels. A final line cut by the byte limit is labeled partial; copying it includes
 only the captured text. Search numbered lines, press Enter to copy a preview line without closing
 the preview (a confirmation appears in its footer), or choose
@@ -225,7 +225,11 @@ Back, Refresh, or Copy File Path. Search covers the full retained line. Display
 excerpts stay capped at 1,024 characters and move near the earliest contiguous
 query-word match; fuzzy-only matches retain the opening excerpt. Copying includes
 the whole retained line. Preview never executes files
-or interprets escape sequences. Binary and non-UTF-8 files are rejected. Editing,
+or interprets escape sequences. UTF-8 (with or without a BOM) and BOM-marked
+UTF-16 little/big endian are supported. BOMs are omitted from display and copy;
+line separators are preserved. UTF-16 decoding can expand the captured text to
+at most 96 KiB of UTF-8 before the line limit. Malformed text, NUL-containing
+binary files and other encodings are rejected. Editing,
 remote files, rich document rendering and a persistent explorer panel remain
 unimplemented.
 

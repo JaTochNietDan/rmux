@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+File previews now accept BOM-marked UTF-16 LE/BE and strip UTF-8 BOMs. Decoding
+runs in the existing background loader under its 64 KiB source-read/512-line
+bounds; UTF-16 may expand to at most 96 KiB of UTF-8 before line clipping.
+Byte-capped trailing surrogate halves are omitted, while malformed interior
+sequences and NUL-containing text remain rejected. Seven file-loader tests passed,
+including both endian forms, CRLF copy preservation, emoji and cutoff handling.
+The manual benchmark was not rerun; native preview presentation remains pending.
+
 Selecting a global-search preview now exposes a compact Copy excerpt footer
 button. It copies the captured displayed text (including clipping ellipses),
 keeps the result palette/filter/selection open and confirms the copy. Deep-history
