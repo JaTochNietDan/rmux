@@ -661,7 +661,7 @@ impl CommandPalette {
                     command.target = PaletteEvent::Run(Box::new(CopyPreviewLine { text: line.text.clone(), markdown: Some(block.kind), spans: block.spans }));
                     let label = match command.markdown_kind() {
                         Some(markdown_preview::Kind::Heading(level)) => format!("Heading H{level}"),
-                        Some(markdown_preview::Kind::Table { header, columns }) => format!("Table {} · {columns} columns{}", if header { "header" } else { "row" }, if columns > 8 { " · first 8 shown; copy for all" } else { "" }),
+                        Some(markdown_preview::Kind::Table { header, columns, .. }) => format!("Table {} · {columns} columns{}", if header { "header" } else { "row" }, if columns > 8 { " · first 8 shown; copy for all" } else { "" }),
                         Some(markdown_preview::Kind::List { checked: Some(true), .. }) => "Completed task".into(),
                         Some(markdown_preview::Kind::List { checked: Some(false), .. }) => "Pending task".into(),
                         _ => "Block".into(),
@@ -952,15 +952,20 @@ impl CommandPalette {
                 markdown_preview::excerpt_spans(&line.text, self.input.read(cx).value(), &line.spans, title.len() - excerpt_len)).unwrap_or_default(),
             _ => Vec::new(),
         };
-        let table = if let Some(markdown_preview::Kind::Table { header, .. }) = markdown {
+        let table = if let Some(markdown_preview::Kind::Table { header, alignment, .. }) = markdown {
             match &self.commands[command].target {
                 PaletteEvent::Run(action) => action.as_any().downcast_ref::<CopyPreviewLine>().map(|line| {
                     let cells = markdown_preview::table_cells(&line.text, &line.spans, self.input.read(cx).value());
                     div().flex().w_full().min_w_0().border_b_1().border_color(rgb(0x637894))
                         .when(header, |row| row.font_weight(FontWeight::BOLD))
-                        .children(cells.into_iter().map(|(text, spans)| {
+                        .children(cells.into_iter().enumerate().map(|(column, (text, spans))| {
                             let search = file_browser::preview_highlights(&text, self.input.read(cx).value());
                             div().flex_1().min_w_0().px_2().border_r_1().border_color(rgb(0x637894))
+                                .text_align(match alignment[column] {
+                                    markdown_preview::Alignment::Center => TextAlign::Center,
+                                    markdown_preview::Alignment::Right => TextAlign::Right,
+                                    _ => TextAlign::Left,
+                                })
                                 .when(wrapped, |cell| cell.whitespace_normal().line_clamp(4).text_ellipsis())
                                 .when(!wrapped, |cell| cell.truncate())
                                 .child(PreviewStyledText { styles: markdown_preview::merge_highlights(&spans, &search), text })

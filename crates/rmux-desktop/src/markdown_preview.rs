@@ -1,7 +1,9 @@
 //! Bounded, inert CommonMark reading blocks. No HTML/web engine or asset loads.
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+pub use pulldown_cmark::Alignment;
+pub const TABLE_VISIBLE_COLUMNS: usize = 8;
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub enum Kind { #[default] Paragraph, Heading(u8), Code, Quote, Table { header: bool, columns: usize }, List { depth: usize, number: Option<u64>, marker: bool, checked: Option<bool> } }
+pub enum Kind { #[default] Paragraph, Heading(u8), Code, Quote, Table { header: bool, columns: usize, alignment: [Alignment; TABLE_VISIBLE_COLUMNS] }, List { depth: usize, number: Option<u64>, marker: bool, checked: Option<bool> } }
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct InlineStyle { pub bold: bool, pub italic: bool, pub code: bool, pub strike: bool }
 #[derive(Clone, Debug, PartialEq)]
@@ -15,6 +17,7 @@ pub fn blocks(source: &str) -> (Vec<Block>, bool) {
     let (mut bold, mut italic) = (0usize, 0usize);
     let mut strike = 0usize;
     let mut table_columns = 0usize;
+    let mut table_alignment = [Alignment::None; TABLE_VISIBLE_COLUMNS];
     let mut table_cell = 0usize;
     let mut quote = 0usize;
     let mut lists: Vec<Option<u64>> = Vec::new();
@@ -30,10 +33,12 @@ pub fn blocks(source: &str) -> (Vec<Block>, bool) {
             Event::Start(Tag::Table(columns)) => {
                 if flush(&mut output, &mut text, &mut spans, kind) { return (output, true); }
                 table_columns = columns.len();
+                table_alignment = [Alignment::None; TABLE_VISIBLE_COLUMNS];
+                for (target, value) in table_alignment.iter_mut().zip(columns) { *target = value; }
             }
             Event::Start(Tag::TableHead) | Event::Start(Tag::TableRow) => {
                 let header = matches!(event, Event::Start(Tag::TableHead));
-                kind = Kind::Table { header, columns: table_columns };
+                kind = Kind::Table { header, columns: table_columns, alignment: table_alignment };
                 table_cell = 0;
             }
             Event::Start(Tag::TableCell) => {
@@ -130,7 +135,7 @@ pub fn excerpt_spans(text: &str, query: &str, spans: &[Span], prefix: usize) -> 
 /// the complete tab-separated row for search/copy. No per-cell source copies.
 pub fn table_cells<'a>(text: &'a str, spans: &[Span], query: &str) -> Vec<(String, Vec<Span>)> {
     let mut offset = 0;
-    text.split('\t').take(8).map(|cell| {
+    text.split('\t').take(TABLE_VISIBLE_COLUMNS).map(|cell| {
         let end = offset + cell.len();
         let styles: Vec<_> = spans.iter().filter_map(|span| {
             let start = span.range.start.max(offset);
@@ -194,11 +199,27 @@ pub fn code_excerpt(source: &str, query: &str) -> String {
 mod tests {
     use super::*;
     #[test]
+    fn table_alignment_is_shared_by_rows_and_reset_between_tables() {
+        let (rows, _) = blocks("| left | center | right | default |\n| :--- | :---: | ---: | --- |\n| a | b | 42 | d |\n\nafter\n\n| next |\n| --- |\n| plain |\n");
+        let mut expected = [Alignment::None; TABLE_VISIBLE_COLUMNS];
+        expected[..3].copy_from_slice(&[Alignment::Left, Alignment::Center, Alignment::Right]);
+        for row in &rows[..2] {
+            assert!(matches!(row.kind, Kind::Table { columns: 4, alignment, .. } if alignment == expected));
+        }
+        assert_eq!(rows[2].kind, Kind::Paragraph);
+        for row in &rows[3..] {
+            assert!(matches!(row.kind, Kind::Table { columns: 1, alignment, .. } if alignment == [Alignment::None; TABLE_VISIBLE_COLUMNS]));
+        }
+        let source = format!("|{}\n|{}\n|{}\n", " h |".repeat(100), " ---: |".repeat(100), " 1 |".repeat(100));
+        let (rows, _) = blocks(&source);
+        assert!(matches!(rows[0].kind, Kind::Table { columns: 100, alignment, .. } if alignment == [Alignment::Right; TABLE_VISIBLE_COLUMNS]));
+    }
+    #[test]
     fn tables_preserve_rows_empty_cells_and_inline_ranges() {
         let (rows, limited) = blocks("| Name | Value |\n| --- | ---: |\n| **界** | `a\tb` |\n| | |\n\nafter");
         assert!(!limited);
-        assert_eq!(rows[0].kind, Kind::Table { header: true, columns: 2 });
-        assert_eq!(rows[1].kind, Kind::Table { header: false, columns: 2 });
+        assert!(matches!(rows[0].kind, Kind::Table { header: true, columns: 2, .. }));
+        assert!(matches!(rows[1].kind, Kind::Table { header: false, columns: 2, .. }));
         assert_eq!(rows[1].text, "界\ta b");
         assert_eq!(rows[2].text, "\t");
         assert_eq!(rows[3].kind, Kind::Paragraph);

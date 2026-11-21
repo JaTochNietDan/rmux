@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Markdown table headers/body cells now honor left, center and right column markers.
+Only the eight visible columns retain alignment metadata in each row; the total
+column count and complete row/source text remain intact. Alignment resets for each
+table, avoiding leaked styles when a wide aligned table precedes a narrow/default
+one. The focused `table` test filter passed all three matching tests, including
+mixed alignments, header/body agreement, reset and a 100-column bounded fixture;
+desktop compilation passed. Native alignment/wrapping/spacing acceptance and
+horizontal table scrolling remain pending. The previous goal turn made progress
+with the committed/pushed structured-table implementation.
+
 Markdown tables now parse into bounded virtualized header/body rows, preserving
 empty cells and inline styling. The reader draws equal-width separated cells,
 bold headers and search highlights. At most eight columns per row are displayed;

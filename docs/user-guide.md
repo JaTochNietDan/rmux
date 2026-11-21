@@ -377,7 +377,8 @@ Tables display structured header/body rows with separators and inline cell styli
 Each row shows up to eight equal-width columns; wider tables explicitly report
 that only the first eight are shown. Row copying retains all tab-separated cells,
 and Copy Markdown Source retains the original document. Empty cells remain blank.
-Table column alignment, horizontal scrolling,
+Header and body cells honor left (`:---`), center (`:---:`), and right (`---:`)
+alignment markers; unspecified columns align left. Table horizontal scrolling,
 clickable links, images, full code-block scrolling and document appearance controls
 remain unimplemented. This is a reading preview, not a complete Markdown renderer.
 
