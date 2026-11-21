@@ -16,6 +16,14 @@ are not deduplicated. These counters describe dropped desktop references, not
 allocator frees or RSS reductions. Compare them with process/engine measurements
 when assessing actual memory reclamation.
 
+`snapshot_recovery` records `placeholder_frames` (prepaints that still lack a fresh
+snapshot), `completed`, `total_ns` and `max_ns`. Timing begins on the first such
+prepaint and ends when a fresh snapshot is available. Hiding the pane again cancels
+the interval, so time spent hidden is excluded. No clock sampling occurs for this
+metric unless diagnostics are enabled. These are snapshot availability counters,
+not measured input-to-photon latency or proof that every placeholder reached the
+display. Pair them with native frame/interaction observations.
+
 
 Experimental browser metadata uses one queued wakeup, independently coalesced
 load/title/process state, a 100 ms minimum interval between UI publications, and

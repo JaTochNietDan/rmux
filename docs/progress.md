@@ -2,6 +2,16 @@
 
 ## Current implementation focus
 
+Opt-in snapshot_recovery diagnostics now count placeholder prepaints and completed
+wait intervals from first placeholder to fresh engine frame. Total/max nanoseconds
+exclude time after hiding the pane again; normal frames without a preceding stall
+do not count. The focused synthetic-timeline/serialization test passed and desktop
+compilation succeeded. These counters are not input-to-photon measurements; native
+refocus/blank-frame acceptance remains open. GitHub browser CI now also runs the
+focused row-cache and diagnostics regressions. Its 9893146 run completed successfully;
+d011765 is active, superseding the previously queued cb3786d run. The prior turn
+made progress with committed/pushed logical snapshot-release accounting.
+
 Opt-in render metrics now include cumulative snapshot_release_totals (frames, cell
 capacity and heap text payload bytes) recorded before hidden desktop snapshots are
 released. The existing retained-snapshot flag prevents repeated accounting while

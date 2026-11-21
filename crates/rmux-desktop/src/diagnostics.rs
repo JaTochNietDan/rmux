@@ -49,6 +49,32 @@ impl SnapshotReleases {
     }
 }
 
+/// Time from the first placeholder prepaint to a fresh snapshot, excluding
+/// intervals canceled by hiding the pane again. This is not input-to-photon time.
+#[derive(Default, serde::Serialize)]
+pub struct SnapshotRecovery {
+    placeholder_frames: u64,
+    completed: u64,
+    total_ns: u128,
+    max_ns: u128,
+    #[serde(skip)]
+    started: Option<Instant>,
+}
+impl SnapshotRecovery {
+    pub fn observe(&mut self, placeholder: bool, now: Instant) {
+        if placeholder {
+            self.placeholder_frames = self.placeholder_frames.saturating_add(1);
+            self.started.get_or_insert(now);
+        } else if let Some(started) = self.started.take() {
+            let elapsed = now.saturating_duration_since(started).as_nanos();
+            self.completed = self.completed.saturating_add(1);
+            self.total_ns = self.total_ns.saturating_add(elapsed);
+            self.max_ns = self.max_ns.max(elapsed);
+        }
+    }
+    pub fn hide(&mut self) { self.started = None; }
+}
+
 pub struct Metrics {
     id: u64,
     started: Instant,
@@ -63,6 +89,7 @@ pub struct Metrics {
     pub cache_releases: u64,
     pub rows_released: u64,
     pub snapshot_releases: SnapshotReleases,
+    pub snapshot_recovery: SnapshotRecovery,
     pub prepaint: Timing,
     pub paint: Timing,
 }
@@ -82,6 +109,7 @@ impl Metrics {
             cache_releases: 0,
             rows_released: 0,
             snapshot_releases: SnapshotReleases::default(),
+            snapshot_recovery: SnapshotRecovery::default(),
             prepaint: Timing::default(),
             paint: Timing::default(),
         })
@@ -118,6 +146,7 @@ impl Metrics {
             })
             .unwrap_or(serde_json::Value::Null);
         let snapshot_release_totals = serde_json::to_value(&self.snapshot_releases).expect("serialize snapshot counters");
+        let snapshot_recovery = serde_json::to_value(&self.snapshot_recovery).expect("serialize recovery counters");
         let snapshot_busy = self.snapshot_busy;
         let metadata_busy = self.metadata_busy;
         let resize_busy = self.resize_busy;
@@ -142,14 +171,35 @@ impl Metrics {
         );
         // Append the bounded snapshot accounting object before the closing brace.
         output.truncate(output.len() - 2);
-        output.push_str(&format!(",\"resize_busy\":{resize_busy},\"metadata_busy\":{metadata_busy},\"snapshot_busy\":{snapshot_busy},\"snapshot_storage\":{snapshot_storage},\"snapshot_release_totals\":{snapshot_release_totals}}}\n"));
+        output.push_str(&format!(",\"resize_busy\":{resize_busy},\"metadata_busy\":{metadata_busy},\"snapshot_busy\":{snapshot_busy},\"snapshot_storage\":{snapshot_storage},\"snapshot_release_totals\":{snapshot_release_totals},\"snapshot_recovery\":{snapshot_recovery}}}\n"));
         output
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::SnapshotReleases;
+    use super::{SnapshotReleases, SnapshotRecovery};
+    #[test]
+    fn snapshot_recovery_excludes_hidden_time_and_counts_placeholder_frames() {
+        use std::time::{Instant, Duration};
+        let start = Instant::now();
+        let mut recovery = SnapshotRecovery::default();
+        recovery.observe(false, start);
+        recovery.observe(true, start);
+        recovery.observe(true, start + Duration::from_millis(5));
+        recovery.observe(false, start + Duration::from_millis(10));
+        assert_eq!(recovery.placeholder_frames, 2);
+        assert_eq!(recovery.completed, 1);
+        assert_eq!(recovery.total_ns, 10_000_000);
+        recovery.observe(true, start + Duration::from_millis(20));
+        recovery.hide();
+        recovery.observe(false, start + Duration::from_secs(30));
+        assert_eq!(recovery.completed, 1);
+        assert_eq!(recovery.max_ns, 10_000_000);
+        let value = serde_json::to_value(&recovery).unwrap();
+        assert_eq!(value["placeholder_frames"], 3);
+        assert!(value.get("started").is_none());
+    }
     #[test]
     fn snapshot_release_accounting_is_cumulative_and_serializable() -> anyhow::Result<()> {
         let mut terminal = rmux_terminal::Terminal::new(40, 3)?;

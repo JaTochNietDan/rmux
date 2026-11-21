@@ -104,7 +104,7 @@ focused URL policy test pass; that does not prove interactive browsing acceptanc
 
 The Experimental browser GitHub Actions workflow runs on relevant main-branch
 pushes, pull requests and manual dispatch. It uses the pinned mise toolchain on
-macOS, runs focused browser tests, links the composition probe, and rejects WRY
+macOS, runs focused browser, row-cache and diagnostics tests, links the composition probe, and rejects WRY
 in the default dependency tree. Compilation caches are separate from release
 caches, active runs finish and only the latest pending run is retained, and no signing secrets or publish
 permissions are involved. This is build/policy coverage, not interactive browser

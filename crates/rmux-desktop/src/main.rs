@@ -1052,6 +1052,7 @@ impl TerminalView {
         !self.render_snapshot_released || !self.row_cache.is_empty()
     }
     fn release_render_cache(&mut self) {
+        if let Some(metrics) = &mut self.metrics { metrics.snapshot_recovery.hide(); }
         if !self.render_snapshot_released {
             if let Some(metrics) = &mut self.metrics { metrics.snapshot_releases.record(&self.frame); }
             row_cache::release_frame_cells(&mut self.frame);
@@ -2342,6 +2343,9 @@ impl Element for TerminalElement {
                     }
                     Err(error) => view.error = Some(error.to_string()),
                 }
+            }
+            if let Some(metrics) = &mut view.metrics {
+                metrics.snapshot_recovery.observe(view.render_snapshot_released, std::time::Instant::now());
             }
             view.last_bounds = bounds;
             (

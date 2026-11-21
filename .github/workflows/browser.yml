@@ -53,6 +53,10 @@ jobs:
         run: mise run bootstrap
       - name: Test browser policy and state transitions
         run: mise exec -- cargo test --locked -p rmux-desktop --features browser browser_
+      - name: Test renderer reclamation and diagnostics
+        run: |
+          mise exec -- cargo test --locked -p rmux-desktop --features browser row_cache::tests
+          mise exec -- cargo test --locked -p rmux-desktop --features browser diagnostics::tests
       - name: Link native composition probe
         run: mise exec -- cargo build --locked -p rmux-desktop --features browser-probe --example browser-probe
       - name: Check default dependency isolation
