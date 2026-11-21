@@ -678,6 +678,19 @@ impl CommandPalette {
                 )
             }).into_any_element()
     }
+    fn selected_search_excerpt(&self) -> Option<&str> {
+        self.search.matches.get(self.selected)
+            .map(|index| &self.commands[*index])
+            .filter(|command| matches!(command.target, PaletteEvent::SearchTerminal { preview: true, .. }))
+            .and_then(|command| command.subtitle.as_deref())
+    }
+    fn copy_search_excerpt(&mut self, cx: &mut Context<Self>) {
+        if self.input.read(cx).is_composing() { return; }
+        let Some(excerpt) = self.selected_search_excerpt() else { return; };
+        clipboard::write(ClipboardItem::new_string(excerpt.to_owned()), cx);
+        self.feedback = Some("Copied displayed excerpt");
+        cx.notify();
+    }
     fn run(&mut self, cx: &mut Context<Self>) {
         if self.input.read(cx).is_composing() { return; }
         if self.terminal_search_input {
@@ -779,12 +792,12 @@ impl Render for CommandPalette {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let height = f32::from(window.viewport_size().height);
         let compact = height < 300.;
-        let search_excerpt = self.search.matches.get(self.selected)
-            .map(|index| &self.commands[*index])
-            .filter(|command| matches!(command.target, PaletteEvent::SearchTerminal { preview: true, .. }))
-            .and_then(|command| command.subtitle.clone());
+        let has_search_excerpt = self.selected_search_excerpt().is_some();
+        let copy_hint = shortcuts::hint(&CopySearchExcerpt, &self.input.read(cx).focus, window);
         div()
             .id("command-palette")
+            .key_context("CommandPalette")
+            .on_action(cx.listener(|this, _: &CopySearchExcerpt, _, cx| this.copy_search_excerpt(cx)))
             .w(px(520.))
             .max_w(relative(0.9))
             .h_auto()
@@ -861,7 +874,7 @@ impl Render for CommandPalette {
                             if event.standard_click() { this.run(cx); }
                         })).child(if self.terminal_search_input { "Search" } else if self.directory_input { "Open" } else { "Save" }))
             ))
-            .when((!compact || self.feedback.is_some() || search_excerpt.is_some()) && self.buffer_rename.is_none() && !self.directory_input && !self.terminal_search_input, |palette| palette.child(
+            .when((!compact || self.feedback.is_some() || has_search_excerpt) && self.buffer_rename.is_none() && !self.directory_input && !self.terminal_search_input, |palette| palette.child(
                 div()
                     .flex_shrink_0()
                     .px_3()
@@ -870,19 +883,17 @@ impl Render for CommandPalette {
                     .text_xs()
                     .text_color(rgb(0xa0a0a0))
                     .child(div().flex_1().min_w_0().child(self.feedback.unwrap_or("↑↓ select · PgUp/PgDn jump · Enter run · Esc close")))
-                    .when_some(search_excerpt, |footer, excerpt| footer.child(
+                    .when(has_search_excerpt, |footer| footer.child(
                         div().id("copy-search-excerpt").px_2().py_1().rounded_sm()
                             .cursor_pointer().text_color(rgb(0xffffff)).bg(rgb(0x353535))
                             .hover(|style| style.bg(rgb(0x454545)))
                             .tooltip(|_, cx| cx.new(|_| pane_view::ControlHint("Copy the displayed excerpt, including clipping ellipses".into())).into())
                             .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
                                 if !event.standard_click() { return; }
-                                clipboard::write(ClipboardItem::new_string(excerpt.clone()), cx);
-                                this.feedback = Some("Copied displayed excerpt");
-                                cx.notify();
+                                this.copy_search_excerpt(cx);
                                 cx.stop_propagation();
                             }))
-                            .child("Copy excerpt")
+                            .child(copy_hint.map_or_else(|| "Copy excerpt".to_owned(), |hint| format!("Copy excerpt · {hint}")))
                     )),
             ))
     }

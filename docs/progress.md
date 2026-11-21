@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Search excerpts can now be copied with Cmd+Shift+C on macOS or Ctrl+Shift+C
+elsewhere while the palette is focused. A dedicated CommandPalette key context
+keeps this separate from terminal copy and ordinary text-field copy; the footer
+uses the resolved shortcut hint. Button and keyboard use one guarded copy path,
+which preserves filtering and refuses composition/deep-history status rows.
+Desktop compilation passed; native dispatch/clipboard acceptance remains pending.
+
 Directory browsing now keeps readable entries when individual entries disappear
 or fail metadata reads. The location summary reports the omitted count and offers
 Refresh as recovery. Failed entries consume the existing 2,048-entry scan budget,

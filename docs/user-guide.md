@@ -1750,6 +1750,8 @@ these excerpts are highlighted; deep-history status messages are not excerpts.
 Select a preview result and click **Copy excerpt** to copy its captured text,
 including any clipping ellipses, while keeping the results open. This does not
 copy the full original line or reread live terminal output.
+You can also press **Cmd+Shift+C** on macOS or **Ctrl+Shift+C** on Linux/Windows
+while the result palette is focused. Normal Copy still copies selected query text.
 All selected terminals' previews are checked before deeper fallback scans begin;
 the completed batch retains terminal order rather than completion order.
 One worker scans at most 256 terminals, with the originating window first.
