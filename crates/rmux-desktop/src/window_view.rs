@@ -2719,7 +2719,7 @@ impl WorkspaceWindow {
                     command_palette::PaletteEvent::SelectTerminal(workspace, terminal) => {
                         this.focus_terminal(*workspace, *terminal, window, cx);
                     }
-                    command_palette::PaletteEvent::SearchTerminal(target, workspace, terminal, query) => {
+                    command_palette::PaletteEvent::SearchTerminal { window: target, workspace, terminal, query, .. } => {
                         let result = if let Some(target) = target {
                             target.downcast::<Self>().ok_or_else(|| anyhow::anyhow!("Search result window is unavailable"))
                                 .and_then(|target| target.update(cx, |destination, window, cx| -> Result<()> {

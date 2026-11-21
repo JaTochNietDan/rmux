@@ -7,6 +7,12 @@ pub(super) fn top_inset(height: f32) -> f32 {
 fn result_row_height(has_subtitle: bool) -> f32 {
     if has_subtitle { 56. } else { 36. }
 }
+fn literal_highlights(text: &str, query: &str) -> Vec<std::ops::Range<usize>> {
+    if query.is_empty() { return Vec::new(); }
+    // ASCII case folding preserves the original UTF-8 byte boundaries.
+    text.to_ascii_lowercase().match_indices(&query.to_ascii_lowercase())
+        .map(|(start, matched)| start..start + matched.len()).collect()
+}
 fn result_area_height(rows: impl IntoIterator<Item = bool>) -> f32 {
     let mut height = 0.;
     for subtitle in rows {
@@ -48,6 +54,15 @@ pub(super) fn paged_result(selected: usize, count: usize, backwards: bool, viewp
 #[cfg(test)]
 mod navigation_tests {
     use super::{navigated_result, paged_result, result_area_height};
+    #[test]
+    fn literal_excerpt_highlights_preserve_unicode_boundaries() {
+        let text = "…界 NEEDLE 世界 needle 世界 é É";
+        let ranges = super::literal_highlights(text, "needle 世界");
+        assert_eq!(ranges.iter().map(|range| &text[range.clone()]).collect::<Vec<_>>(), ["NEEDLE 世界", "needle 世界"]);
+        assert_eq!(super::literal_highlights(text, "É").len(), 1);
+        assert!(super::literal_highlights(text, "").is_empty());
+        assert!(super::literal_highlights(text, "needle absent").is_empty());
+    }
     #[test]
     fn preview_search_finds_text_beyond_display_cap_and_keeps_copy_source() {
         let text = format!("{}\tNeedle 世界{}", "İ界".repeat(800), "z".repeat(1400));
@@ -125,7 +140,7 @@ pub enum PaletteEvent {
     SelectWorkspace(EntityId),
     SelectWindowWorkspace(AnyWindowHandle, EntityId),
     SelectTerminal(EntityId, EntityId),
-    SearchTerminal(Option<AnyWindowHandle>, EntityId, EntityId, String),
+    SearchTerminal { window: Option<AnyWindowHandle>, workspace: EntityId, terminal: EntityId, query: String, preview: bool },
     SelectWindowTerminal(AnyWindowHandle, EntityId, EntityId),
     MoveTabToWorkspace(EntityId),
     MoveTabToWindowWorkspace(AnyWindowHandle, EntityId),
@@ -510,7 +525,7 @@ impl CommandPalette {
             target: PaletteEvent::Run(Box::new(SearchTerminalOutput { query: query.clone() })) },
             Command { title: "New search…".into(), subtitle: None, shortcut: None, target: PaletteEvent::Run(Box::new(ShowTerminalSearch)) }];
         commands.extend(report.hits.into_iter().map(|hit| Command { title: hit.name, subtitle: Some(hit.snippet), shortcut: None,
-            target: PaletteEvent::SearchTerminal(hit.window, hit.workspace, hit.terminal, query.clone()) }));
+            target: PaletteEvent::SearchTerminal { window: hit.window, workspace: hit.workspace, terminal: hit.terminal, query: query.clone(), preview: hit.preview } }));
         let mut palette = Self::with_commands(commands, "Terminal output matches · Enter opens Find", "No matching results · Clear the filter to search again", window, cx);
         palette.location = Some(summary.into());
         if palette.commands.len() > 2 { palette.selected = 2; }
@@ -613,6 +628,15 @@ impl CommandPalette {
             Some(subtitle) => format!("{title}\n{subtitle}").into(),
             None => title.clone().into(),
         };
+        let subtitle = self.commands[command].subtitle.as_ref().map(|text| {
+            let ranges = match &self.commands[command].target {
+                PaletteEvent::SearchTerminal { query, preview: true, .. } => literal_highlights(text, query),
+                _ => Vec::new(),
+            };
+            StyledText::new(text.clone()).with_highlights(ranges.into_iter().map(|range| (
+                range, HighlightStyle { color: Some(rgb(0xffffff).into()), background_color: Some(rgb(0x41638c).into()), ..Default::default() }
+            )))
+        });
         div()
             .id(("command", command))
             .px_3()
@@ -639,7 +663,7 @@ impl CommandPalette {
                     .tooltip(move |_, cx| cx.new(|_| pane_view::ControlHint(title_hint.clone())).into())
                     .child(div().flex().flex_col().gap_1()
                         .child(div().truncate().child(title))
-                        .when_some(self.commands[command].subtitle.clone(), |column, subtitle| column.child(div().truncate().text_xs().line_height(px(16.)).text_color(rgb(0xa0a0a0)).child(subtitle)))),
+                        .when_some(subtitle, |column, subtitle| column.child(div().truncate().text_xs().line_height(px(16.)).text_color(rgb(0xa0a0a0)).child(subtitle)))),
             )
             .when_some(self.commands[command].shortcut.clone(), |row, shortcut| {
                 row.child(
@@ -737,7 +761,7 @@ impl CommandPalette {
                     PaletteEvent::SelectTerminal(*workspace, *terminal)
                 }
                 PaletteEvent::SelectWindowTerminal(window, workspace, terminal) => PaletteEvent::SelectWindowTerminal(*window, *workspace, *terminal),
-                PaletteEvent::SearchTerminal(window, workspace, terminal, query) => PaletteEvent::SearchTerminal(*window, *workspace, *terminal, query.clone()),
+                PaletteEvent::SearchTerminal { window, workspace, terminal, query, preview } => PaletteEvent::SearchTerminal { window: *window, workspace: *workspace, terminal: *terminal, query: query.clone(), preview: *preview },
                 PaletteEvent::MoveTabToWorkspace(id) => PaletteEvent::MoveTabToWorkspace(*id),
                 PaletteEvent::MoveTabToWindowWorkspace(window, workspace) => PaletteEvent::MoveTabToWindowWorkspace(*window, *workspace),
                 PaletteEvent::MergeWorkspaces(source, destination, target) => PaletteEvent::MergeWorkspaces(*source, *destination, *target),

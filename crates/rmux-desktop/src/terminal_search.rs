@@ -20,7 +20,7 @@ pub struct Job {
     pub read: rmux_terminal::session::HistoryExport,
     pub probe: rmux_terminal::session::HistoryProbe,
 }
-pub struct Hit { pub window: Option<gpui::AnyWindowHandle>, pub workspace: EntityId, pub terminal: EntityId, pub name: String, pub snippet: String }
+pub struct Hit { pub window: Option<gpui::AnyWindowHandle>, pub workspace: EntityId, pub terminal: EntityId, pub name: String, pub snippet: String, pub preview: bool }
 #[derive(Default)]
 pub struct Report { pub hits: Vec<Hit>, pub scanned: usize, pub unavailable: usize, pub limited: usize }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -63,12 +63,13 @@ pub fn scan_with_progress(jobs: Vec<Job>, query: &str, canceled: &AtomicBool, mu
         if canceled.load(Ordering::Relaxed) { break; }
         if std::time::Instant::now() >= deadline { report.limited += 1; continue; }
         let Job { window, workspace, terminal, name, read, probe } = job;
-        let mut hit = Hit { window, workspace, terminal, name, snippet: String::new() };
+        let mut hit = Hit { window, workspace, terminal, name, snippet: String::new(), preview: false };
         match read() {
             Ok(Some((text, limited))) => {
                 report.scanned += 1;
                 if let Some(snippet) = matching_line(&text, &query) {
                     hit.snippet = snippet;
+                    hit.preview = true;
                     hits.push((index, hit));
                 } else if limited { pending.push((index, hit, probe)); }
             }

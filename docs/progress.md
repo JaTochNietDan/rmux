@@ -2,6 +2,13 @@
 
 ## Current implementation focus
 
+Global-search preview rows now highlight literal query occurrences using Find's
+ASCII case rules and UTF-8-safe byte ranges. Highlight work runs only for rendered
+rows over the bounded excerpt. Deep-history status messages carry explicit
+non-preview metadata and are not highlighted as terminal output. The focused
+literal-match test filter passed nine tests, including repeated Unicode excerpts.
+Native visual acceptance/screenshots remain pending: CUA confirmed the Mac locked.
+
 Terminal search excerpts now start near the actual literal phrase instead of
 using file-preview word matching. Long lines with an earlier unrelated query word
 therefore show the matching phrase; ASCII case folding preserves original Unicode
