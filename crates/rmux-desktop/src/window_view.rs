@@ -155,6 +155,7 @@ pub(super) struct WorkspaceWindow {
     window_close_prompt: bool,
     close_handler_installed: bool,
     focus_history: Vec<EntityId>,
+    focus_trail: focus_trail::FocusTrail<EntityId>,
     notification_navigation: Option<NotificationNavigation>,
     settings_state: Option<settings_view::State>,
     command_launching: bool,
@@ -1589,6 +1590,7 @@ impl WorkspaceWindow {
         let Some(id) = workspace.panes[index].read(cx).active_terminal_id() else {
             return;
         };
+        self.focus_trail.record(id);
         if self.focus_history.last() == Some(&id) {
             return;
         }
@@ -1597,6 +1599,29 @@ impl WorkspaceWindow {
         if self.focus_history.len() > 32 {
             self.focus_history.remove(0);
         }
+    }
+
+    fn navigate_focus(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
+        self.record_terminal_focus(window, cx);
+        let mut live = Vec::new();
+        for (index, entry) in self.entries.iter().enumerate() {
+            for pane in &entry.workspace.read(cx).panes {
+                for (tab, terminal) in pane.read(cx).terminals.iter().enumerate() {
+                    live.push((terminal.entity_id(), index, pane.clone(), tab));
+                }
+            }
+        }
+        let Some(target) = self.focus_trail.step(forward, |id| live.iter().any(|(candidate, ..)| *candidate == id)) else { return; };
+        let Some((_, index, pane, tab)) = live.into_iter().find(|(id, ..)| *id == target) else { return; };
+        self.remember_focus(window, cx);
+        self.entries[index].last_pane = Some(pane.entity_id());
+        self.entries[index].workspace.update(cx, |workspace, cx| {
+            workspace.zoomed = None;
+            cx.notify();
+        });
+        pane.update(cx, |pane, cx| pane.select(tab, window, cx));
+        self.select(index, window, cx);
+        self.record_terminal_focus(window, cx);
     }
 
     fn last_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -3294,6 +3319,7 @@ impl WorkspaceWindow {
             window_close_prompt: false,
             close_handler_installed: false,
             focus_history: Vec::new(),
+            focus_trail: Default::default(),
             notification_navigation: None,
             settings_state: None,
             command_launching: false,
@@ -3508,6 +3534,7 @@ impl WorkspaceWindow {
             window_close_prompt: false,
             close_handler_installed: false,
             focus_history: Vec::new(),
+            focus_trail: Default::default(),
             notification_navigation: None,
             settings_state: None,
             command_launching: false,
@@ -4405,6 +4432,8 @@ impl Render for WorkspaceWindow {
             .on_action(cx.listener(|this, _: &NextWorkspace, window, cx| this.cycle(1, window, cx)))
             .on_action(cx.listener(|this, _: &LastWorkspace, window, cx| this.last_workspace(window, cx)))
             .on_action(cx.listener(|this, _: &LastTerminal, window, cx| this.last_terminal(window, cx)))
+            .on_action(cx.listener(|this, _: &FocusBack, window, cx| this.navigate_focus(false, window, cx)))
+            .on_action(cx.listener(|this, _: &FocusForward, window, cx| this.navigate_focus(true, window, cx)))
             .on_action(cx.listener(|this, _: &DetachTab, window, cx| this.detach_tab(window, cx)))
             .on_action(cx.listener(|this, _: &DetachWorkspace, window, cx| this.detach_workspace(window, cx)))
             .on_action(cx.listener(|this, _: &ShowWorkspaceMergePicker, window, cx| this.show_workspace_merge_picker(window, cx)))

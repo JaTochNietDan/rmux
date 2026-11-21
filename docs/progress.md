@@ -2,6 +2,14 @@
 
 ## Current implementation focus
 
+Added bounded Back/Forward terminal focus history across a window's workspaces
+and pane tabs. Menu, palette and configurable `focus_back`/`focus_forward`
+actions reuse existing selection routing; no default bracket shortcuts changed.
+History holds at most 64 visits, skips closed targets, preserves forward visits
+on navigation notifications and branches on a new focus choice. Two focused
+history tests and desktop compilation pass. Native focus/zoom interaction and
+cross-platform acceptance remain pending; this is an unreleased W12 slice.
+
 Palette cancellation entries now reflect pending work at opening: workspace
 launch, focused-pane tab launch, active-workspace split, and focused-terminal
 queued/image paste. Idle cancellation commands are omitted without changing

@@ -126,6 +126,7 @@ fn action(name: &str) -> Option<Box<dyn Action>> {
         "focus_up" => Box::new(FocusUp), "focus_down" => Box::new(FocusDown),
         "next_workspace" => Box::new(NextWorkspace), "previous_workspace" => Box::new(PreviousWorkspace),
         "next_tab" => Box::new(NextTab), "previous_tab" => Box::new(PreviousTab),
+        "focus_back" => Box::new(FocusBack), "focus_forward" => Box::new(FocusForward),
         "last_workspace" => Box::new(LastWorkspace), "last_terminal" => Box::new(LastTerminal),
         "next_pane" => Box::new(NextPane), "previous_pane" => Box::new(PreviousPane),
         "move_tab_left" => Box::new(MoveTabLeft), "move_tab_right" => Box::new(MoveTabRight),

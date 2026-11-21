@@ -336,6 +336,13 @@ confirmation policy and three-second cleanup deadline.
 
 ## Tabs and tab switching
 
+In the next release, **Focus Back** and **Focus Forward** in the menu and
+command palette revisit terminal focus across this window's workspaces and
+panes. History keeps up to 64 visits and skips closed terminals. Choosing a
+different terminal after going back clears the forward path. These actions are
+unbound by default; custom shortcuts use `focus_back` and `focus_forward`.
+**Last Terminal** remains a separate toggle between recent terminals.
+
 Cmd+T creates a tab in the focused pane; Cmd+Shift+[ / ] switches tabs.
 Starting with the next release, Cmd+[ / ] cycles split panes on macOS.
 Ctrl+Tab / Ctrl+Shift+Tab also cycles panes. Pane and tab navigation appear

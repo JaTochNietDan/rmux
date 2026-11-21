@@ -265,7 +265,7 @@
       ],
       "acceptance": "Return to the previous focus location and last prompt without restoring stale handles.",
       "rmux_status": "in_progress",
-      "implementation": "Last Workspace toggles to a remembered workspace entity per window; reorder preserves the target and closing it clears history. Last Terminal records up to 32 terminal IDs per window and resolves the previous live terminal across panes, tabs and workspaces through menu/palette actions. Previous/Next Prompt use Ghostty semantic viewport navigation through menu, palette and terminal shortcuts.",
+      "implementation": "Last Workspace toggles to a remembered workspace entity per window; reorder preserves the target and closing it clears history. Last Terminal records up to 32 terminal IDs per window and resolves the previous live terminal across panes, tabs and workspaces through menu/palette actions. Previous/Next Prompt use Ghostty semantic viewport navigation through menu, palette and terminal shortcuts. Back/Forward focus actions now keep a separate bounded 64-visit per-window terminal trail, skip closed targets, and branch after a new focus choice. Exposed in menus/palette and custom shortcuts without default bindings. Focused trail tests pass; native integration acceptance remains pending.",
       "remaining": "Native focus-history and custom-shortcut acceptance, broader shell integration and native prompt-navigation acceptance. Last Terminal/Workspace and prompt navigation are now exposed as configurable shortcut actions. Last Prompt is implemented through menu/palette and jumps to the newest retained semantic prompt, with live-output fallback when no markers exist.",
       "implementation_sources": [
         "crates/rmux-desktop/src/window_view.rs"

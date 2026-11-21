@@ -35,6 +35,7 @@ mod diagnostics;
 mod memory_view;
 mod settings_view;
 mod shortcuts;
+mod focus_trail;
 mod process_metrics;
 mod ports;
 mod process_tree;
@@ -452,6 +453,8 @@ actions!(
         NextWorkspace,
         LastWorkspace,
         LastTerminal,
+        FocusBack,
+        FocusForward,
         RenameTab,
         ToggleWorkspacePin,
         NextUnreadTerminal,
@@ -4042,6 +4045,8 @@ fn main() {
                     MenuItem::action("Next Workspace", NextWorkspace),
                     MenuItem::action("Last Workspace", LastWorkspace),
                     MenuItem::action("Last Terminal", LastTerminal),
+                    MenuItem::action("Focus Back", FocusBack),
+                    MenuItem::action("Focus Forward", FocusForward),
                     MenuItem::action("Rename Tab…", RenameTab),
                     MenuItem::action("Pin / Unpin Workspace", ToggleWorkspacePin),
                     MenuItem::submenu(Menu {

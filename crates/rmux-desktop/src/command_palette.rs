@@ -381,6 +381,8 @@ impl CommandPalette {
         command!("Next Workspace", NextWorkspace);
         command!("Last Workspace", LastWorkspace);
         command!("Last Terminal", LastTerminal);
+        command!("Focus Back", FocusBack);
+        command!("Focus Forward", FocusForward);
         command!("Rename Tab…", RenameTab);
         command!("Next Tab", NextTab);
         command!("Choose Terminal Tab", ShowTabPicker);
